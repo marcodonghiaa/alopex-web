@@ -112,11 +112,12 @@ export function AllocationChart({
       <h2 id="allocation-title" className="text-lg font-semibold text-foreground">
         Breakdown
       </h2>
-      <p className="text-xs text-muted-foreground">
-        {before
-          ? `No breakdown before ${formatDay(row.snapshot_date)}.`
-          : `As of ${formatDay(row.snapshot_date)}`}
-      </p>
+      {/* No "As of" line: a stale sync is flagged at the top of the page. */}
+      {before && (
+        <p className="text-xs text-muted-foreground">
+          No breakdown before {formatDay(row.snapshot_date)}.
+        </p>
+      )}
 
       <div
         inert={before}

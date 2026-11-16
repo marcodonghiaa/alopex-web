@@ -249,12 +249,12 @@
 
 /* The headline figure on a screen: one exact number, cents set smaller by the component. */
 @utility figure-display {
-  font-family: var(--font-figure);
+  font-family: var(--font-sans);
   font-variant-numeric: tabular-nums lining-nums;
-  font-weight: 400;
+  font-weight: 700;
   font-size: clamp(2.5rem, 1.5rem + 2.8vw, 3.75rem);
   line-height: 1;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.02em;
   color: var(--color-foreground);
   /* A huge amount wraps rather than pushing the page wider than a phone. */
   overflow-wrap: anywhere;

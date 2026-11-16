@@ -31,11 +31,11 @@ colors:
   dark-loss: "oklch(0.72 0.17 20)"
 typography:
   display:
-    fontFamily: "Fragment Mono, ui-monospace, SF Mono, Menlo, monospace"
+    fontFamily: "Geist Variable, -apple-system, BlinkMacSystemFont, system-ui, sans-serif"
     fontSize: "clamp(2.5rem, 1.5rem + 2.8vw, 3.75rem)"
-    fontWeight: 400
+    fontWeight: 700
     lineHeight: 1
-    letterSpacing: "-0.04em"
+    letterSpacing: "-0.02em"
     fontFeature: "tnum, lnum"
   headline:
     fontFamily: "Geist Variable, -apple-system, BlinkMacSystemFont, system-ui, sans-serif"
@@ -85,6 +85,7 @@ rounded:
   control: "4px"
   container: "8px"
   sheet: "12px"
+  full: "9999px"
 spacing:
   row-x: "16px"
   row-y: "12px"
@@ -98,12 +99,12 @@ components:
   segmented-control:
     backgroundColor: "{colors.fill}"
     textColor: "{colors.ink-muted}"
-    rounded: "{rounded.control}"
+    rounded: "{rounded.full}"
     padding: "4px"
   segmented-control-selected:
     backgroundColor: "{colors.ink}"
     textColor: "{colors.surface}"
-    rounded: "{rounded.control}"
+    rounded: "{rounded.full}"
     height: "36px"
   focus-ring:
     outline: "2px solid {colors.ember}"
@@ -171,7 +172,7 @@ Density is calm rather than sparse. Rows are generous (40px avatar, 64px breakdo
 The tinted ground with white grouped lists was approved by the user after seeing it. Import, onboarding and setup surfaces are out of scope for this system and keep their older styling; do not treat them as reference.
 
 **Key Characteristics:**
-- One headline figure per screen that has one agreed total, in Fragment Mono 400; symbol and cents at full size, symbol muted, cents at 55%.
+- One headline figure per screen that has one agreed total, in bold Geist (700, tabular figures); symbol and cents at full size, symbol muted, cents at 55%.
 - Pale ground, white grouped lists, hairline dividers, no borders or drop shadows on containers.
 - Cold ink is the only control tint (white on dark); Ember is the only accent: focus ring, live cursor, counts.
 - Figures are mono, words are sans; a mono eyebrow (`01 OVERVIEW`) indexes sections.
@@ -215,13 +216,13 @@ A cold neutral world: snow ground, cold ink for controls, one warm Ember accent,
 
 ## Typography
 
-**Figures:** Fragment Mono 400 (`font-figure`, `figure-display`, `eyebrow`): every amount, percent, date tick, count and section index.
+**Figures:** Fragment Mono 400 (`font-figure`, `eyebrow`): every amount, percent, date tick, count and section index, except the headline figure (`figure-display`), which is bold Geist.
 **Text:** Geist Variable (`font-sans`): every word.
 
 **Character:** A ledger. Money is set in a monospace so columns align by construction and a figure is recognisable as a figure before it is read; words sit in a warm grotesk beside it. Tight negative tracking (-0.04em) on the display size keeps the mono from feeling like code.
 
 ### Hierarchy
-- **Display** (mono 400, clamp 40px to 60px, line-height 1, -0.04em): the headline figure only. Symbol, whole units and cents at one size; symbol muted, cents at 55% opacity.
+- **Display** (Geist 700, tabular figures, clamp 40px to 60px, line-height 1, -0.02em): the headline figure only. Symbol, whole units and cents at one size; symbol muted, cents at 55% opacity.
 - **Delta** (mono 13px): the change line under the figure, in gain or loss, with its range label in sans muted.
 - **Headline** (sans 600, 32px, 1.15, -0.03em): the large title on list screens without one agreed total (Transactions, Reports, Splitwise, Rules, and Income above its month switcher). 24px in the mobile menu sheet.
 - **Title** (600, 20px, -0.02em): the month name in the month switcher.
@@ -265,7 +266,7 @@ Two radii, both small: 4px on controls (segments, buttons, fields, selects, side
 ## Components
 
 ### Segmented Control
-Same-surface choice (currency, chart range). A 4px-radius Fill track with 2px padding; one Ink thumb slides under the selected option (300ms, cubic-bezier(0.32, 0.72, 0, 1), none under reduced motion). Segments are 36px tall, 13px 500; selected text takes the primary foreground, the rest are muted and darken on hover. Arrow keys move the selection.
+Same-surface choice (currency, chart range). A fully rounded (pill) Fill track with 2px padding; one Ink pill slides under the selected option (300ms, cubic-bezier(0.32, 0.72, 0, 1), none under reduced motion). Segments are 36px tall, 13px 500; selected text takes the primary foreground, the rest are muted and darken on hover. Arrow keys move the selection.
 
 ### Buttons
 - **Primary:** Ink, 4px corners, white 14px 500 text, 44px tall, 16px horizontal padding; hover drops to 90% opacity, disabled to 50%.
@@ -274,7 +275,7 @@ Same-surface choice (currency, chart range). A 4px-radius Fill track with 2px pa
 - **Focus:** a 2px Ember outline, offset 2px, for every custom control.
 
 ### Headline Figure
-The screen's one amount in the display style (`HeadlineFigure`): symbol muted, whole units in ink, cents at 55% opacity, all one size. The optional delta line underneath is mono 13px in gain or loss with its range label in sans muted.
+The screen's one amount in the display style (`HeadlineFigure`): symbol muted, whole units in ink, cents at 55% opacity, all one size. The optional delta line underneath is mono 13px in gain or loss with its range label in sans muted. Net Worth instead passes `change`: a mono 16px chip beside the figure (`▲ 25.81%` in gain or loss) that swaps to the amount on tap, with the range named once on a muted line underneath.
 
 ### Empty State
 `EmptyState({ title, hint, action? })`: a 48px outline fox (the brand path, `stroke="currentColor"` 2px, muted), a 15px 500 sans title, a 14px muted hint, an optional action. Used where a list has nothing to show (Transactions, Subscriptions, Portfolio). The fox never sits beside an amount or inside a chart, and a viewport shows at most one.
@@ -295,7 +296,7 @@ The month as a 20px 600 heading, announced politely when it changes, with two 44
 How a total splits: one 10px bar of lightness-ranked segments with 2px gaps, and a wrapped legend underneath (8px dot, label in ink, percent in muted figures). Exposed to assistive tech as one image with a text summary.
 
 ### Charts
-The net worth chart is a single 2px Ink line over a fading Ink area, no grid, no y-axis, muted 11px date ticks. Scrubbing rewrites the headline figure and change line to the hovered day; leaving restores today. Chart entry animation is off. Every chart carries a text summary as its accessible name.
+The net worth chart is a single 2.5px Ink line over a fading Ink area, no grid, no y-axis, muted 11px date ticks. Scrubbing rewrites the headline figure and change line to the hovered day; leaving restores today. Chart entry animation is off. Every chart carries a text summary as its accessible name.
 
 ### Inputs
 - **Search and filters:** 44px Surface fields, 4px corners, on the ground, 16px text, Ember ring on focus.
