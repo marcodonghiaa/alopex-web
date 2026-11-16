@@ -111,7 +111,11 @@ export function TwoFactorSection() {
   const on = (list?.length ?? 0) > 0;
 
   return (
-    <section id="two-step" aria-labelledby="two-step-heading" className="scroll-mt-6">
+    <section
+      id="two-step"
+      aria-labelledby="two-step-heading"
+      className="scroll-mt-20 md:scroll-mt-6"
+    >
       <div className="max-w-sm space-y-4 rounded-lg bg-card p-5">
         <div>
           <h3

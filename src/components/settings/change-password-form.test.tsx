@@ -41,6 +41,14 @@ describe("ChangePasswordForm", () => {
 
   // protects=a two-step session stays at its level while the password is checked;
   // fails_when=the check signs in on the main client (every tab then needs the code again)
+  it("titles the section like the rest of the app", () => {
+    render(<ChangePasswordForm />);
+    expect(screen.getByRole("heading", { level: 2 })).toHaveClass(
+      "font-semibold",
+      "text-foreground",
+    );
+  });
+
   it("never signs in on this tab's client", async () => {
     render(<ChangePasswordForm />);
     fill("oldpassword", "newpassword1", "newpassword1");

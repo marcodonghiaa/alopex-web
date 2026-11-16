@@ -27,8 +27,8 @@ export function FormatsSection({
     if (window.location.hash === "#formats") select.current?.focus();
   }, []);
   return (
-    <section id="formats" aria-labelledby="formats-heading" className="scroll-mt-6">
-      <h2 id="formats-heading" className="mb-4 text-[0.9375rem] font-medium text-muted-foreground">
+    <section id="formats" aria-labelledby="formats-heading" className="scroll-mt-20 md:scroll-mt-6">
+      <h2 id="formats-heading" className="mb-4 text-lg font-semibold text-foreground">
         Number and date format
       </h2>
       <div className="max-w-sm space-y-3 rounded-lg bg-card p-5">
@@ -57,7 +57,7 @@ export function FormatsSection({
             {/* A real minus, as in the transaction list. */}−{formatMoney(1234.5, "EUR")}
           </span>{" "}
           on <span className="text-foreground">{formatDay("2026-03-03")}</span>.{" "}
-          {value ? "Saved on this device." : `Follows your browser (${browserFormat()}).`}
+          {value ? "Only on this device." : `Follows your browser (${browserFormat()}).`}
         </p>
         {failed && (
           <p role="alert" className="text-sm text-negative">
