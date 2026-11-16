@@ -46,6 +46,7 @@ const history = (over: Partial<ValueHistory> = {}) =>
     first: point("2026-01-01", 1000),
     scrubbed: undefined,
     shownEur: 2100,
+    range: "YTD",
     ...over,
   }) as ValueHistory;
 const buy = {
@@ -63,6 +64,7 @@ const perf = (over: Partial<Parameters<typeof rangeChip>[1]> = {}) => ({
   unavailable: false,
   tradesByKey: new Map([["X", [buy]]]),
   measuredByKey: new Map([["X", { state: "ok" as const, gain: 0, base: 1, change: 0 }]]),
+  summary: { gain: 1234, change: 0.25 },
   ...over,
 });
 
@@ -111,5 +113,29 @@ describe("rangeChip", () => {
       ["Y", { state: "no_price" }],
     ]);
     expect(rangeChip(history(), perf({ measuredByKey: fine }))).toBeDefined();
+  });
+
+  // protects=ALL matches the broker's all-time gain; fails_when=imported history holds value with
+  // no trades (a bond in an old spreadsheet), whose disappearance reads as a loss (Marco: €8.6k
+  // instead of €12.6k)
+  it("on ALL is the all-time return from your trades, not from the chart's first day", () => {
+    expect(rangeChip(history({ range: "ALL" }), perf())).toEqual({
+      value: 1234,
+      percent: 0.25,
+      className: "text-positive",
+    });
+  });
+
+  it("on ALL while scrubbing is the change up to that day, like the other ranges", () => {
+    const scrubbed = point("2026-01-10", 1050);
+    expect(
+      rangeChip(history({ range: "ALL", scrubbed, shownEur: 1050 }), perf())?.value,
+    ).toBeCloseTo(50);
+  });
+
+  it("on ALL is absent when trades can't give a return", () => {
+    expect(
+      rangeChip(history({ range: "ALL" }), perf({ summary: { gain: 0, change: null } })),
+    ).toBeUndefined();
   });
 });

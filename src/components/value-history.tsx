@@ -18,7 +18,7 @@ type RangeChangeProps = Pick<ValueHistory, "delta" | "change" | "range"> &
 type ChipPerformance = Pick<
   ReturnType<typeof usePerformance>,
   "isPending" | "unavailable" | "tradesByKey" | "measuredByKey"
->;
+> & { summary: Pick<ReturnType<typeof usePerformance>["summary"], "gain" | "change"> };
 
 // A holding with no trades, or fewer shares traded than held: money added there can't be told
 // apart from gain, so no return is shown at all.
@@ -26,24 +26,31 @@ const tradesComplete = (perf: ChipPerformance) =>
   perf.tradesByKey.size > 0 &&
   [...perf.measuredByKey.values()].every((m) => m.state !== "no_trades" && m.state !== "mismatch");
 
+const chip = (gain: number, percent: number | null): HeadlineChange | undefined =>
+  percent == null
+    ? undefined
+    : { value: gain, percent, className: TONE_TEXT[toneOf(percent, RETURN_NOISE_BAND)] };
+
 /**
  * The chip beside the hero figure: the range's return with the money you added or took out
  * removed (from your trades). Absent when trades are missing, since a deposit would read as gain.
+ * ALL is the all-time return from the trades alone: imported history can hold value with no trades
+ * behind it (an old spreadsheet's bonds), and its disappearance would read as a loss.
  */
 export function rangeChip(
-  { key, chartData, first, scrubbed, shownEur }: ValueHistory,
+  { key, chartData, first, scrubbed, shownEur, range }: ValueHistory,
   perf: ChipPerformance,
 ): HeadlineChange | undefined {
   const end = scrubbed ?? chartData.at(-1);
   if (first == null || end == null || perf.isPending || perf.unavailable) return undefined;
   if (!tradesComplete(perf)) return undefined;
+  if (range === "ALL" && scrubbed == null) return chip(perf.summary.gain, perf.summary.change);
   const { gain, percent } = rangeReturn(
     { date: first.snapshot_date, value: first[key] },
     { date: end.snapshot_date, value: shownEur },
     [...perf.tradesByKey.values()].flat(),
   );
-  if (percent == null) return undefined;
-  return { value: gain, percent, className: TONE_TEXT[toneOf(percent, RETURN_NOISE_BAND)] };
+  return chip(gain, percent);
 }
 
 /**
