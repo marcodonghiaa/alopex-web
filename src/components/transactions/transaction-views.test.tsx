@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render as rtlRender, screen } from "@testing-library/react";
+import { render as rtlRender, screen, within } from "@testing-library/react";
 import { queryWrapper } from "@/test/query-wrapper";
 import userEvent from "@testing-library/user-event";
 import { shareToRow } from "@/lib/transactions";
@@ -237,20 +237,46 @@ describe("Table row noise", () => {
     expect(screen.queryByRole("button", { name: "Yes" })).toBeNull();
   });
 
-  it("shows a recorded answer in the second line", () => {
+  // iOS view board: an answer is counted on Spending's recap; the list stays clean.
+  it("drops a recorded answer from the second line", () => {
     const p = bank();
     renderRow({ ...p, tx: { ...p.tx, worth_it: "no" } });
-    expect(screen.getByText(/Not worth it/)).toBeInTheDocument();
-    expect(screen.queryByText("Worth it?")).toBeNull();
+    expect(screen.queryByText(/worth it/i)).toBeNull();
   });
 
-  it("card shows the hint and the recorded answer the same way", () => {
+  it("card shows the open question but not a recorded answer", () => {
     const p = bank();
     const { unmount } = render(<TransactionCardView {...p} />);
     expect(screen.getByText("Worth it?")).toBeInTheDocument();
     unmount();
     render(<TransactionCardView {...p} tx={{ ...p.tx, worth_it: "yes" }} />);
-    expect(screen.getByText("Shopping · Worth it")).toBeInTheDocument();
+    expect(screen.getByText("Shopping")).toBeInTheDocument();
+    expect(screen.queryByText(/worth it/i)).toBeNull();
+  });
+
+  // iOS view board: opening an unanswered purchase asks first, inside the sheet.
+  it("opens the sheet on the worth-it question when it is unanswered", async () => {
+    const p = bank();
+    render(<TransactionCardView {...p} />);
+    await userEvent.click(screen.getByRole("button", { name: /Zalando/ }));
+    const ask = await screen.findByRole("group", { name: "Worth it?" });
+    await userEvent.click(within(ask).getByRole("button", { name: /Yes/ }));
+    expect(p.onAnswerWorthIt).toHaveBeenCalledWith("yes");
+  });
+
+  it("asks nothing up top once answered", async () => {
+    const p = bank();
+    render(<TransactionCardView {...p} tx={{ ...p.tx, worth_it: "yes" }} />);
+    await userEvent.click(screen.getByRole("button", { name: /Zalando/ }));
+    await screen.findByRole("dialog");
+    expect(screen.queryByRole("group", { name: "Worth it?" })).toBeNull();
+  });
+
+  // iOS view board: card-processor prefixes and reference codes are trimmed for display.
+  it("shows a cleaned merchant name", () => {
+    const p = bank();
+    render(<TransactionCardView {...p} tx={{ ...p.tx, creditor_name: "Sq *veniero's" }} />);
+    expect(screen.getByText("Veniero's")).toBeInTheDocument();
   });
 });
 

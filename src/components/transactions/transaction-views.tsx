@@ -1,5 +1,6 @@
 import { useId, useState, type ReactNode } from "react";
-import { ChevronRight, Users } from "lucide-react";
+import { ChevronRight, ThumbsDown, ThumbsUp, Users } from "lucide-react";
+import { cleanMerchantName } from "@/lib/merchant-name";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { GroupedList } from "@/components/ui/grouped-list";
@@ -66,10 +67,6 @@ const tagLine = (tx: TransactionRow): string => (tx.tags ?? []).map((t) => `#${t
 const isSplit = (tx: TransactionRow): boolean =>
   tx.personal_amount != null && tx.personal_amount < Math.abs(tx.amount ?? 0);
 
-/** "Worth it" / "Not worth it" once answered, for the row's quiet second line. */
-const worthItNote = (tx: TransactionRow): string | null =>
-  tx.worth_it === "yes" ? "Worth it" : tx.worth_it === "no" ? "Not worth it" : null;
-
 /** An open "worth it?" question: a hint on the row, answered in the row's sheet. */
 function WorthItHint({ tx }: { tx: TransactionRow }) {
   if (isSplitwiseShare(tx) || !isWorthItEligible(tx)) return null;
@@ -118,9 +115,11 @@ function TransactionEditSheet({
 }: TransactionViewProps & { open: boolean; onOpenChange: (open: boolean) => void }) {
   const isMobile = useIsMobile();
   const { tx } = p;
-  const name = tx.creditor_name ?? "—";
+  const name = cleanMerchantName(tx.creditor_name) ?? "—";
   const share = isSplitwiseShare(tx);
   const fieldId = useId();
+  // An open worth-it question leads the sheet (iOS view board); answered, it sits further down.
+  const askWorthIt = !share && isWorthItEligible(tx);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -142,9 +141,30 @@ function TransactionEditSheet({
           </div>
         </SheetHeader>
         <div className="space-y-4 px-4 pb-4">
+          {askWorthIt && (
+            <div
+              role="group"
+              aria-label="Worth it?"
+              className="flex items-center justify-between gap-3 rounded-lg bg-card px-4 py-3"
+            >
+              <span className="text-[0.9375rem] font-medium text-foreground">Worth it?</span>
+              <span className="flex gap-2">
+                <Button variant="secondary" onClick={() => p.onAnswerWorthIt("yes")}>
+                  <ThumbsUp /> Yes
+                </Button>
+                <Button variant="secondary" onClick={() => p.onAnswerWorthIt("no")}>
+                  <ThumbsDown /> No
+                </Button>
+              </span>
+            </div>
+          )}
           <GroupedList>
             <Field label="Name">
-              <NameEditor name={tx.creditor_name} onSave={p.onRename} saving={p.savingRename} />
+              <NameEditor
+                name={name === "—" ? null : name}
+                onSave={p.onRename}
+                saving={p.savingRename}
+              />
             </Field>
             {p.onSaveAmount && (
               <Field label="Amount">
@@ -227,7 +247,7 @@ function TransactionEditSheet({
           )}
           {!share && (
             <GroupedList>
-              {(tx.worth_it != null || isWorthItEligible(tx)) && (
+              {tx.worth_it != null && (
                 <Field label="Worth it">
                   <WorthItPrompt tx={tx} onAnswer={p.onAnswerWorthIt} />
                 </Field>
@@ -266,7 +286,6 @@ export function TransactionRowView(props: TransactionViewProps) {
     isSplit(tx)
       ? `split, owed ${formatMoney(Math.abs(tx.amount ?? 0) - (tx.personal_amount ?? 0), tx.currency ?? "EUR")}`
       : null,
-    share ? null : worthItNote(tx),
     tagLine(tx) || null,
   ].filter(Boolean);
 
@@ -302,7 +321,7 @@ export function TransactionRowView(props: TransactionViewProps) {
           <div className="min-w-0">
             <div className="truncate font-medium text-foreground">
               <NameEditor
-                name={tx.creditor_name}
+                name={cleanMerchantName(tx.creditor_name)}
                 onSave={props.onRename}
                 saving={props.savingRename}
               />
@@ -360,7 +379,7 @@ export function TransactionCardView(props: TransactionViewProps) {
       <CategoryAvatar category={tx.category} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-[0.9375rem] font-medium text-foreground">
-          {tx.creditor_name ?? "—"}
+          {cleanMerchantName(tx.creditor_name) ?? "—"}
         </p>
         <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
           {share && (
@@ -372,7 +391,6 @@ export function TransactionCardView(props: TransactionViewProps) {
             {[
               tx.category ?? "Uncategorized",
               tx.flow_type === "refunded" ? "Refunded" : null,
-              share ? null : worthItNote(tx),
               tagLine(tx) || null,
             ]
               .filter(Boolean)

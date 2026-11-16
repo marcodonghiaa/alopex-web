@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { ChevronDown, TriangleAlert } from "lucide-react";
 import { formatMoney } from "@/lib/transactions";
 import type { ReviewGroup } from "@/lib/transfer-review";
 import type { ReviewChoice } from "./mutations";
@@ -20,46 +22,64 @@ export function ReviewSection({
   savingKey: string | undefined;
   onDecide: (group: ReviewGroup, choice: ReviewChoice) => void;
 }) {
+  const [open, setOpen] = useState(false);
   if (groups.length === 0) return null;
+  // Collapsed by default behind a quiet header (iOS view board): there, not pushy.
   return (
     <section className="mb-6 overflow-hidden rounded-lg bg-card">
-      <div className="px-4 py-3 sm:px-5">
-        <h2 className="text-sm font-semibold text-foreground">To review</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Category and counting disagree. Your answer applies to future ones too.
-        </p>
-      </div>
-      <ul className="divide-y border-t">
-        {groups.map((g) => (
-          <li key={g.key} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
-            <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
-              <div className="truncate text-sm font-medium text-foreground">
-                {g.name?.trim() || "No name"}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {g.rows.length} transaction{g.rows.length === 1 ? "" : "s"} ·{" "}
-                {g.totals.map((t) => formatMoney(t.amount, t.currency)).join(" + ")}
-              </div>
-            </div>
-            <button
-              type="button"
-              disabled={savingKey === g.key}
-              onClick={() => onDecide(g, "transfer")}
-              className={BUTTON}
-            >
-              It's a transfer
-            </button>
-            <button
-              type="button"
-              disabled={savingKey === g.key}
-              onClick={() => onDecide(g, "count")}
-              className={BUTTON}
-            >
-              {countLabel(g.direction)}
-            </button>
-          </li>
-        ))}
-      </ul>
+      <h2>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex min-h-12 w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-foreground sm:px-5"
+        >
+          <TriangleAlert aria-hidden className="size-4 shrink-0 text-warning" />
+          <span className="flex-1">To review ({groups.length})</span>
+          <ChevronDown
+            aria-hidden
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+      </h2>
+      {open && (
+        <>
+          <p className="-mt-1 px-4 pb-3 text-xs text-muted-foreground sm:px-5">
+            Category and counting disagree. Your answer applies to future ones too.
+          </p>
+          <ul className="divide-y border-t">
+            {groups.map((g) => (
+              <li key={g.key} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
+                <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
+                  <div className="truncate text-sm font-medium text-foreground">
+                    {g.name?.trim() || "No name"}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {g.rows.length} transaction{g.rows.length === 1 ? "" : "s"} ·{" "}
+                    {g.totals.map((t) => formatMoney(t.amount, t.currency)).join(" + ")}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={savingKey === g.key}
+                  onClick={() => onDecide(g, "transfer")}
+                  className={BUTTON}
+                >
+                  It's a transfer
+                </button>
+                <button
+                  type="button"
+                  disabled={savingKey === g.key}
+                  onClick={() => onDecide(g, "count")}
+                  className={BUTTON}
+                >
+                  {countLabel(g.direction)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </section>
   );
 }

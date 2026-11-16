@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReviewGroup } from "@/lib/transfer-review";
 import { ReviewSection } from "./review-section";
@@ -31,7 +31,12 @@ describe("ReviewSection", () => {
       <ReviewSection groups={[spend, income, mixed]} savingKey={undefined} onDecide={onDecide} />,
     );
 
-    expect(screen.getByText("To review")).toBeTruthy();
+    // iOS view board: collapsed behind a quiet header with a warning icon and the count.
+    const header = screen.getByRole("button", { name: /To review \(3\)/ });
+    expect(header).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("No name")).toBeNull();
+    await userEvent.click(header);
+    expect(header).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("No name")).toBeTruthy();
     expect(screen.getByText(/2 transactions/)).toBeTruthy();
     await userEvent.click(screen.getAllByRole("button", { name: "It's a transfer" })[0]!);
@@ -44,7 +49,8 @@ describe("ReviewSection", () => {
 
   it("disables the buttons of the group being saved", () => {
     render(<ReviewSection groups={[group({})]} savingKey="revolut" onDecide={vi.fn()} />);
-    for (const b of screen.getAllByRole("button"))
+    fireEvent.click(screen.getByRole("button", { name: /To review/ }));
+    for (const b of screen.getAllByRole("button", { name: /transfer|Count/ }))
       expect((b as HTMLButtonElement).disabled).toBe(true);
   });
 });
