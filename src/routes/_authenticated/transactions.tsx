@@ -32,6 +32,7 @@ import {
   nameRefunds,
   monthFromParam,
   parseTransactionsSearch,
+  withoutHighlight,
   startOfMonth,
   type AccountRow,
   type TransactionsSearch,
@@ -322,7 +323,12 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
     if (!ref) return;
     setHighlightRef(ref);
     void queryClient.invalidateQueries({ queryKey: ["transactions", monthKey] });
-    window.history.replaceState(null, "", window.location.pathname);
+    // Keep ?month and ?category: they key this page, so dropping them would remount it.
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname + withoutHighlight(window.location.search),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -7,6 +7,8 @@ const worthItBounds: Array<[string, string]> = [];
 let failTable: string | null = null;
 // v_spend_by_category_monthly rows by month ("2026-10-01").
 let spendByMonth: Record<string, Array<{ category: string | null; spend_eur: number }>> = {};
+// v_transactions_eur rows answered "not worth it".
+let regretRows: Array<Record<string, unknown>> = [];
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (table: string) => {
@@ -27,7 +29,9 @@ vi.mock("@/integrations/supabase/client", () => ({
                 data:
                   table === "v_spend_by_category_monthly"
                     ? (spendByMonth[filters["month"] ?? ""] ?? [])
-                    : [],
+                    : table === "v_transactions_eur"
+                      ? regretRows
+                      : [],
                 error: null,
               },
         );
@@ -38,7 +42,22 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tanstack/react-router")>()),
-  Link: ({ children }: { children: React.ReactNode }) => <a href="/transactions">{children}</a>,
+  Link: ({
+    children,
+    search,
+    resetScroll,
+  }: {
+    children: React.ReactNode;
+    search?: Record<string, string>;
+    resetScroll?: boolean;
+  }) => (
+    <a
+      href={`/transactions?${new URLSearchParams(search).toString()}`}
+      data-reset-scroll={String(resetScroll ?? true)}
+    >
+      {children}
+    </a>
+  ),
 }));
 vi.mock("recharts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("recharts")>()),
@@ -136,49 +155,57 @@ describe("Spending page breakdown", () => {
     expect(screen.queryByText("Total")).toBeNull();
   });
 
-  it("says a finished month cost less than the one before, in the good colour", async () => {
+  // Whiteboard: the comparison is the headline chip (like Net Worth), not a sentence.
+  it("shows a finished month's drop as a green chip, with the month it compares to", async () => {
     spendByMonth = {
       "2026-10-01": [{ category: "Housing", spend_eur: 900 }],
       "2026-09-01": [{ category: "Housing", spend_eur: 1000 }],
     };
     renderPage();
     await userEvent.click(await screen.findByRole("button", { name: "Previous month" }));
-    const line = await screen.findByText(/less than September/);
-    expect(line).toHaveTextContent("€100.00 less than September");
-    expect(line).toHaveClass("text-positive");
+    const chip = await screen.findByRole("button", { name: "Show change as amount" });
+    expect(chip).toHaveTextContent("▼ 10.00%");
+    expect(chip).toHaveClass("text-positive");
+    expect(screen.getByText("vs September")).toBeInTheDocument();
+    await userEvent.click(chip);
+    expect(chip).toHaveTextContent("▼ €100.00");
+    expect(screen.queryByText(/less than/)).toBeNull();
   });
 
-  it("says a finished month cost more, in the alarm colour", async () => {
+  it("shows a finished month that cost more in the alarm colour", async () => {
     spendByMonth = {
       "2026-10-01": [{ category: "Housing", spend_eur: 1100 }],
       "2026-09-01": [{ category: "Housing", spend_eur: 1000 }],
     };
     renderPage();
     await userEvent.click(await screen.findByRole("button", { name: "Previous month" }));
-    expect(await screen.findByText(/more than September/)).toHaveClass("text-negative");
+    const chip = await screen.findByRole("button", { name: "Show change as amount" });
+    expect(chip).toHaveTextContent("▲ 10.00%");
+    expect(chip).toHaveClass("text-negative");
   });
 
-  it("calls a sub-euro move the same", async () => {
+  it("keeps a sub-euro move neutral", async () => {
     spendByMonth = {
       "2026-10-01": [{ category: "Housing", spend_eur: 1000.4 }],
       "2026-09-01": [{ category: "Housing", spend_eur: 1000 }],
     };
     renderPage();
     await userEvent.click(await screen.findByRole("button", { name: "Previous month" }));
-    expect(await screen.findByText("About the same as September")).toHaveClass(
+    expect(await screen.findByRole("button", { name: "Show change as amount" })).toHaveClass(
       "text-muted-foreground",
     );
   });
 
-  // The running month gets the same plain line as any other: no "so far" wording.
-  it("compares the running month in the same plain words", async () => {
+  // The running month gets the same chip as any other: no "so far" wording.
+  it("compares the running month the same way", async () => {
     spendByMonth = {
       "2026-11-01": october,
       "2026-10-01": [{ category: "Housing", spend_eur: 1500 }],
     };
     renderPage();
-    const line = await screen.findByText(/less than October$/);
-    expect(line).toHaveClass("text-positive");
+    const chip = await screen.findByRole("button", { name: "Show change as amount" });
+    expect(chip).toHaveClass("text-positive");
+    expect(screen.getByText("vs October")).toBeInTheDocument();
     expect(screen.queryByText(/so far|already|all of/)).toBeNull();
   });
 
@@ -187,6 +214,7 @@ describe("Spending page breakdown", () => {
     renderPage();
     await screen.findAllByRole("link");
     expect(screen.queryByText(/October/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Show change/ })).toBeNull();
   });
 
   it("offers the previous month when this one is empty", async () => {
@@ -194,5 +222,65 @@ describe("Spending page breakdown", () => {
     await screen.findByText("No spending recorded for November 2026.");
     await userEvent.click(screen.getByText("Previous month", { selector: "button" }));
     expect(await screen.findByText("No spending recorded for October 2026.")).toBeInTheDocument();
+  });
+});
+
+// protects=regretted purchases are their own clear card and lead back to each purchase;
+// fails_when=the card is missing, rows don't open, or a purchase doesn't link to Activity
+describe("Spending page 'not worth it' card", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-11-10T12:00:00"));
+    spendByMonth = { "2026-11-01": [{ category: "Shopping", spend_eur: 100 }] };
+    regretRows = [
+      {
+        category: "Shopping",
+        personal_signed_amount_eur: -30,
+        signed_amount_eur: -30,
+        entry_reference: "r1",
+        creditor_name: "AMAZON PAYMENTS EUROPE",
+        booking_date: "2026-11-03",
+      },
+      {
+        category: "Shopping",
+        personal_signed_amount_eur: null,
+        signed_amount_eur: -12,
+        entry_reference: "r2",
+        creditor_name: null,
+        booking_date: "2026-11-05",
+      },
+    ];
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    spendByMonth = {};
+    regretRows = [];
+  });
+
+  it("titles the card with the total, closed until a category is tapped", async () => {
+    renderPage();
+    const card = await screen.findByRole("region", { name: "Not worth it" });
+    expect(card).toHaveTextContent("Not worth it€42.00");
+    const row = screen.getByRole("button", { name: /Shopping/ });
+    expect(row).toHaveAttribute("aria-expanded", "false");
+    expect(row).toHaveTextContent("2 purchases");
+    expect(screen.queryByText("Amazon")).toBeNull();
+  });
+
+  it("opens a category to its purchases, newest first, each linking to Activity", async () => {
+    renderPage();
+    const row = await screen.findByRole("button", { name: /Shopping/ });
+    await userEvent.click(row);
+    expect(row).toHaveAttribute("aria-expanded", "true");
+    const amazon = screen.getByText("Amazon").closest("a")!;
+    expect(amazon).toHaveAttribute("href", "/transactions?month=2026-11&highlight=r1");
+    expect(amazon).toHaveTextContent("€30.00");
+    // Activity scrolls to the row; the router's scroll-to-top must not undo it.
+    expect(amazon).toHaveAttribute("data-reset-scroll", "false");
+    const items = screen
+      .getAllByRole("link")
+      .filter((a) => a.getAttribute("href")?.includes("highlight"));
+    expect(items.map((a) => a.textContent?.startsWith("Amazon"))).toEqual([false, true]);
+    expect(items[0]).toHaveTextContent("—");
   });
 });
