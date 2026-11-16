@@ -269,7 +269,7 @@ function AccountsPage() {
       {/* Title and total; importing is a tool, so it is an icon, not a line of copy. */}
       <header className="mb-8 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-[0.9375rem] font-medium text-muted-foreground">Accounts</h1>
+          <h1 className="text-lg font-semibold text-foreground">Accounts</h1>
           <div className="mt-1 min-h-12">
             {bankQuery.isPending ? (
               <Skeleton className="h-16 w-72" />

@@ -116,6 +116,13 @@ beforeEach(() => {
 });
 
 describe("Subscriptions page", () => {
+  // iOS view board: page titles read like Net Worth's (white semibold), not a grey label.
+  it("titles the page like Net Worth", async () => {
+    renderPage();
+    const h1 = await screen.findByRole("heading", { level: 1, name: "Subscriptions" });
+    expect(h1).toHaveClass("font-semibold", "text-foreground");
+  });
+
   it("lists a review queue and totals only active streams", async () => {
     renderPage();
     const queue = await screen.findByRole("region", { name: "To review" });

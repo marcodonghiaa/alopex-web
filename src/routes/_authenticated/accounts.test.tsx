@@ -374,6 +374,12 @@ describe("phone layout", () => {
       </QueryClientProvider>,
     );
 
+  it("titles the page like Net Worth", async () => {
+    renderPage();
+    const h1 = await screen.findByRole("heading", { level: 1, name: "Accounts" });
+    expect(h1).toHaveClass("font-semibold", "text-foreground");
+  });
+
   it("has Import data as an icon button in the header and no subtitle", async () => {
     renderPage();
     const link = await screen.findByRole("link", { name: "Import data" });

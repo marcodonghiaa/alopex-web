@@ -199,8 +199,9 @@ function SubscriptionsPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8 md:py-12">
       <RevealDialog />
+      {/* Titled like Net Worth (iOS view board). */}
       <header className="mb-3">
-        <h1 className="text-[0.9375rem] font-medium text-muted-foreground">Subscriptions</h1>
+        <h1 className="text-lg font-semibold text-foreground">Subscriptions</h1>
       </header>
 
       {query.isError && (
@@ -208,10 +209,10 @@ function SubscriptionsPage() {
       )}
 
       {/* Estimated monthly cost */}
-      <section aria-label="Estimated monthly cost" className="mb-8">
-        <div className="min-h-16">
+      <section aria-label="Estimated monthly cost" className="mb-5">
+        <div className="min-h-12">
           {query.isPending ? (
-            <Skeleton className="h-16 w-72" />
+            <Skeleton className="h-12 w-72" />
           ) : (
             <p className="figure-display">
               {total.known === 0 ? "—" : `~${formatMoney(total.sum, "EUR")}`}
