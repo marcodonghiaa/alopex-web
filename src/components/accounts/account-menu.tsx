@@ -1,7 +1,7 @@
 import { ambiguousNumberHint, inputNumber } from "@/lib/locale";
 import { useState } from "react";
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil, Plus } from "lucide-react";
+import { ChevronRight, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -187,9 +187,10 @@ export function AccountMenu({ title, accounts }: { title: string; accounts: Arra
     >
       <PopoverTrigger
         aria-label={`Edit ${title}`}
-        className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+        // Stretched over its row (the row is `relative`): tap anywhere on the account to edit it.
+        className="inline-flex size-11 shrink-0 items-center justify-end text-muted-foreground after:absolute after:inset-0 after:rounded-lg hover:text-foreground focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-ring"
       >
-        <Pencil className="size-4" />
+        <ChevronRight aria-hidden className="size-4" />
       </PopoverTrigger>
       <PopoverContent align="end" className="space-y-4">
         {accounts.map((a) => (
