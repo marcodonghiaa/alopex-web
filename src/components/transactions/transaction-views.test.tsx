@@ -135,7 +135,23 @@ describe("Bank card rows", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: /Uber/ }));
     expect(await screen.findByLabelText(/Change category for Uber/)).toBeInTheDocument();
-    expect(screen.getByRole("checkbox")).toBeInTheDocument();
+    // iOS view board (Revolut-style sheet): Select lives in the ⋯ menu, not in the list.
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "More actions" }));
+    expect(await screen.findByRole("checkbox", { name: "Select" })).toBeInTheDocument();
+  });
+
+  // iOS view board: a Revolut-style header with the merchant's initial, the amount and the day.
+  it("opens on a header with the merchant initial, amount, and date with account", async () => {
+    render(
+      <ul>
+        <TransactionCardView {...bankProps()} />
+      </ul>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Uber/ }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByTestId("merchant-initial")).toHaveTextContent("U");
+    expect(within(dialog).getByText(/Revolut USD/)).toBeInTheDocument();
   });
 
   // protects=on a phone the sheet covers the toast, so Make a rule must be in the sheet itself

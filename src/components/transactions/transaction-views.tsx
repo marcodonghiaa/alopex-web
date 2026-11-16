@@ -1,5 +1,7 @@
 import { useId, useState, type ReactNode } from "react";
-import { ChevronRight, ThumbsDown, ThumbsUp, Users } from "lucide-react";
+import { ChevronRight, MoreHorizontal, ThumbsDown, ThumbsUp, Users } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { categoryColor } from "@/lib/categories";
 import { cleanMerchantName } from "@/lib/merchant-name";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -74,16 +76,16 @@ function WorthItHint({ tx }: { tx: TransactionRow }) {
 }
 
 /** Signed amount in the transaction's own currency, with the euro value under it if foreign. */
-function AmountText({ tx }: { tx: TransactionRow }) {
+function AmountText({ tx, large = false }: { tx: TransactionRow; large?: boolean }) {
   const native = nativeSignedAmount(tx);
   if (native == null) return <span className="text-sm text-muted-foreground">—</span>;
   const currency = tx.currency ?? "EUR";
   const positive = native >= 0;
   const eur = tx.signed_amount_eur;
   return (
-    <div className="shrink-0 text-right">
+    <div className={large ? "text-center" : "shrink-0 text-right"}>
       <div
-        className={`font-figure text-[0.9375rem] whitespace-nowrap ${
+        className={`font-figure whitespace-nowrap ${large ? "text-3xl" : "text-[0.9375rem]"} ${
           positive ? "text-positive" : "text-foreground"
         }`}
       >
@@ -131,14 +133,26 @@ function TransactionEditSheet({
           aria-hidden
           className="mx-auto mt-2 h-1 w-9 rounded-full bg-muted-foreground/40 md:hidden"
         />
-        <SheetHeader className="px-5 pt-3 pb-3 text-left md:pt-6">
-          <SheetTitle className="truncate pr-10 text-xl">{name}</SheetTitle>
-          <p className="text-sm text-muted-foreground">
+        {/* Revolut-style header (iOS view board): initial, name, the amount large, then the day. */}
+        <SheetHeader className="relative items-center px-12 pt-4 pb-5 text-center md:pt-8">
+          {!share && <SheetMoreMenu selected={p.selected} onToggleSelect={p.onToggleSelect} />}
+          <span
+            data-testid="merchant-initial"
+            aria-hidden
+            className="flex size-14 items-center justify-center rounded-full text-xl font-semibold text-foreground"
+            style={{
+              backgroundColor: `color-mix(in oklab, ${categoryColor(tx.category)} 22%, var(--color-card))`,
+            }}
+          >
+            {name === "—" ? "?" : name.charAt(0).toUpperCase()}
+          </span>
+          <SheetTitle className="mt-2 max-w-full truncate text-base font-medium">{name}</SheetTitle>
+          <div className="mt-1">
+            <AmountText tx={tx} large />
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
             {formatBookingDate(tx.booking_date)} · {p.accountLabel}
           </p>
-          <div className="pt-1 text-left">
-            <AmountText tx={tx} />
-          </div>
         </SheetHeader>
         <div className="space-y-4 px-4 pb-4">
           {askWorthIt && (
@@ -245,28 +259,52 @@ function TransactionEditSheet({
               )}
             </GroupedList>
           )}
-          {!share && (
+          {!share && tx.worth_it != null && (
             <GroupedList>
-              {tx.worth_it != null && (
-                <Field label="Worth it">
-                  <WorthItPrompt tx={tx} onAnswer={p.onAnswerWorthIt} />
-                </Field>
-              )}
-              <label className="flex min-h-12 cursor-pointer items-center justify-between gap-4 px-4 text-sm">
-                <span className="text-muted-foreground">Select</span>
-                <input
-                  type="checkbox"
-                  checked={p.selected}
-                  onChange={p.onToggleSelect}
-                  className="size-5 rounded border-border accent-primary"
-                />
-              </label>
+              <Field label="Worth it">
+                <WorthItPrompt tx={tx} onAnswer={p.onAnswerWorthIt} />
+              </Field>
             </GroupedList>
           )}
           <RefundedBadge flowType={tx.flow_type} />
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** The sheet's ⋯ menu: actions you rarely need while reading one transaction. */
+function SheetMoreMenu({
+  selected,
+  onToggleSelect,
+}: {
+  selected: boolean;
+  onToggleSelect: () => void;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="More actions"
+          className="absolute top-2 left-2 size-11"
+        >
+          <MoreHorizontal />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-56 p-1">
+        <label className="flex min-h-11 cursor-pointer items-center justify-between gap-4 rounded-sm px-3 text-sm hover:bg-accent">
+          <span>Select</span>
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            className="size-5 rounded border-border accent-primary"
+          />
+        </label>
+      </PopoverContent>
+    </Popover>
   );
 }
 
