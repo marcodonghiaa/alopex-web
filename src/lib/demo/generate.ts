@@ -72,6 +72,9 @@ const BOND_ISINS = new Set<string>(HOLDINGS.filter((h) => h.type === "Bond").map
 const COINS = [
   { symbol: "BTC", id: "bitcoin", name: "Bitcoin", amount: 0.05, base: 62000 },
   { symbol: "ETH", id: "ethereum", name: "Ethereum", amount: 1.2, base: 2600 },
+  // Leftover dust, like most exchange accounts have: shows the "small balances" link.
+  { symbol: "DOGE", id: "dogecoin", name: "Dogecoin", amount: 3, base: 0.2 },
+  // Last on purpose: no trades, so the demo shows "Add purchases".
   { symbol: "SOL", id: "solana", name: "Solana", amount: 8, base: 150 },
 ] as const;
 
