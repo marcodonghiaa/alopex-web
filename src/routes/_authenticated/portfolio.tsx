@@ -190,7 +190,7 @@ function PortfolioPage() {
           {query.isPending ? (
             <Skeleton className="h-12 w-72" />
           ) : (
-            <HeadlineFigure value={history.shownEur} currency="EUR" change={rangeChip(history)} />
+            <HeadlineFigure value={history.shownEur} currency="EUR" change={rangeChip(history, perf)} />
           )}
         </div>
         {!query.isPending && <RangeChange {...history} />}

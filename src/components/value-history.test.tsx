@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { RangeChange, rangeChip } from "./value-history";
 import type { ValueHistory } from "@/lib/use-value-history";
+import type { Measured } from "@/lib/trades";
 
 type Point = NonNullable<ValueHistory["first"]>;
 const day = (snapshot_date: string) => ({ snapshot_date }) as Point;
@@ -36,17 +37,79 @@ describe("RangeChange", () => {
   });
 });
 
+const point = (snapshot_date: string, portfolio_total_eur: number) =>
+  ({ snapshot_date, portfolio_total_eur }) as Point;
+const history = (over: Partial<ValueHistory> = {}) =>
+  ({
+    key: "portfolio_total_eur",
+    chartData: [point("2026-01-01", 1000), point("2026-01-31", 2100)],
+    first: point("2026-01-01", 1000),
+    scrubbed: undefined,
+    shownEur: 2100,
+    ...over,
+  }) as ValueHistory;
+const buy = {
+  kind: "stock",
+  key: "X",
+  side: "buy",
+  trade_date: "2026-01-16",
+  shares: 10,
+  price_eur: 100,
+  fee_eur: 0,
+  id: "1",
+};
+const perf = (over: Partial<Parameters<typeof rangeChip>[1]> = {}) => ({
+  isPending: false,
+  unavailable: false,
+  tradesByKey: new Map([["X", [buy]]]),
+  measuredByKey: new Map([["X", { state: "ok" as const, gain: 0, base: 1, change: 0 }]]),
+  ...over,
+});
+
+// protects=the chip is the return, not money added; fails_when=a savings plan reads as +75% YTD
 describe("rangeChip", () => {
-  it("is the change beside the figure, toned by the return band", () => {
-    expect(rangeChip({ delta: 200, change: 0.2 })).toEqual({
-      value: 200,
-      percent: 0.2,
+  it("is the return without money added, toned by the return band", () => {
+    expect(rangeChip(history(), perf())).toEqual({
+      value: 100,
+      percent: 100 / 1500,
       className: "text-positive",
     });
-    expect(rangeChip({ delta: -50, change: -0.05 })?.className).toBe("text-negative");
+    expect(rangeChip(history({ shownEur: 1900 }), perf())?.className).toBe("text-negative");
+  });
+
+  it("ends on the scrubbed day", () => {
+    const scrubbed = point("2026-01-10", 1050);
+    expect(rangeChip(history({ scrubbed, shownEur: 1050 }), perf())?.value).toBeCloseTo(50);
   });
 
   it("is absent without a start to compare with", () => {
-    expect(rangeChip({ delta: null, change: null })).toBeUndefined();
+    expect(rangeChip(history({ first: undefined, chartData: [] }), perf())).toBeUndefined();
+  });
+
+  it("is absent while trades load, or when they can't", () => {
+    expect(rangeChip(history(), perf({ isPending: true }))).toBeUndefined();
+    expect(rangeChip(history(), perf({ unavailable: true }))).toBeUndefined();
+  });
+
+  it("is absent when no trades are imported", () => {
+    expect(rangeChip(history(), perf({ tradesByKey: new Map() }))).toBeUndefined();
+  });
+
+  it("is absent when some holdings miss trades, so money added would read as gain", () => {
+    const missing = new Map<string, Measured>([
+      ["X", { state: "ok", gain: 0, base: 1, change: 0 }],
+      ["Y", { state: "no_trades" }],
+    ]);
+    expect(rangeChip(history(), perf({ measuredByKey: missing }))).toBeUndefined();
+    const off = new Map<string, Measured>([["X", { state: "mismatch", traded: 5, held: 10 }]]);
+    expect(rangeChip(history(), perf({ measuredByKey: off }))).toBeUndefined();
+  });
+
+  it("still shows when the only gap is a leftover or a missing price", () => {
+    const fine = new Map<string, Measured>([
+      ["X", { state: "dust" }],
+      ["Y", { state: "no_price" }],
+    ]);
+    expect(rangeChip(history(), perf({ measuredByKey: fine }))).toBeDefined();
   });
 });
