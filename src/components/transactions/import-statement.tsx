@@ -43,9 +43,10 @@ const FIELD_LABELS: Array<[keyof StatementColumns, string]> = [
 // The bank's name from a file like "Fineco_movimenti_2026.csv", as the default source.
 const sourceFromFile = (name: string) => (/^[A-Za-z]+/.exec(name)?.[0] ?? "").slice(0, 60);
 
-// Adds the transactions of a bank statement saved as CSV. Rows already in the app are left out,
-// so importing the same file twice adds nothing.
-export function ImportStatement() {
+// Adds the transactions of a bank statement saved as CSV or PDF. Rows already in the app are left
+// out, so importing the same file twice adds nothing. With a label the trigger is a full button
+// (the Import page); without, an icon (the Transactions header).
+export function ImportStatement({ label }: { label?: string } = {}) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState<string | null>(null);
@@ -219,12 +220,19 @@ export function ImportStatement() {
         if (!next) reset();
       }}
     >
-      <DialogTrigger
-        aria-label="Import statement"
-        className={cn(buttonVariants({ variant: "quiet", size: "icon" }), "[&_svg]:size-5")}
-      >
-        <FileUp className="size-5" />
-      </DialogTrigger>
+      {label ? (
+        <DialogTrigger className={buttonVariants({ variant: "secondary" })}>
+          <FileUp className="size-4" />
+          {label}
+        </DialogTrigger>
+      ) : (
+        <DialogTrigger
+          aria-label="Import statement"
+          className={cn(buttonVariants({ variant: "quiet", size: "icon" }), "[&_svg]:size-5")}
+        >
+          <FileUp className="size-5" />
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Import statement</DialogTitle>
