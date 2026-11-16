@@ -251,8 +251,10 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
   );
 
   // One buy per holding at the window's first price, less a bit; the last coin has none, to show
-  // what "Add purchases" looks like.
+  // what "Add purchases" looks like. Dated before the year of history below, so no range counts
+  // the purchase as money added while the value is already there.
   const firstDay = days[0]!;
+  const boughtOn = firstDay - 400;
   const holding_trades: DemoDb["holding_trades"] = [
     ...HOLDINGS.map((h) => ({
       kind: "stock",
@@ -272,11 +274,11 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
     ...t,
     id: `demo-trade-${i}`,
     side: "buy",
-    trade_date: iso(firstDay),
+    trade_date: iso(boughtOn),
     fee_eur: 1,
     source: null,
     external_id: null,
-    created_at: stamp(iso(firstDay)),
+    created_at: stamp(iso(boughtOn)),
     user_id,
   }));
 
