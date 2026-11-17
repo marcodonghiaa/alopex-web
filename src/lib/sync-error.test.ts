@@ -80,8 +80,8 @@ describe("syncAlerts", () => {
       acc("N26", "ASPSP_RATE_LIMIT_EXCEEDED"),
     ]);
     expect(alerts).toEqual([
-      "Fineco didn't answer the last sync. Alopex tries again at the next sync, every 6 hours.",
-      "N26 limits automatic updates (often 4 a day) and refused the last one. Alopex tries again at the next sync, every 6 hours.",
+      "Fineco didn't answer the last sync. Nothing to do: Alopex tries again at the next sync, within 6 hours.",
+      "N26 limits automatic updates and refused the last one. Nothing to do: Alopex tries again at the next sync, within 6 hours.",
     ]);
   });
 
@@ -89,7 +89,7 @@ describe("syncAlerts", () => {
   // save still updated the balance); the account row already shows the real one.
   it("never adds a date, so no time zone can show the wrong day", () => {
     expect(syncAlerts([acc("Fineco", "ASPSP_TIMEOUT", "2026-11-15T00:17:00Z")])).toEqual([
-      "Fineco didn't answer the last sync. Alopex tries again at the next sync, every 6 hours.",
+      "Fineco didn't answer the last sync. Nothing to do: Alopex tries again at the next sync, within 6 hours.",
     ]);
   });
 

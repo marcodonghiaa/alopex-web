@@ -14,7 +14,7 @@ export interface SyncErrorAccount {
 }
 
 const CONSENT_ENDED = new Set(["EXPIRED_SESSION", "REVOKED_SESSION", "CLOSED_SESSION"]);
-const RETRY = "Alopex tries again at the next sync, every 6 hours.";
+const RETRY = "Nothing to do: Alopex tries again at the next sync, within 6 hours.";
 
 // `account` names the account when the bank stopped sharing one of several.
 export function syncErrorMessage(
@@ -24,7 +24,7 @@ export function syncErrorMessage(
 ): string | null {
   if (CONSENT_ENDED.has(code)) return null;
   if (code === "ASPSP_RATE_LIMIT_EXCEEDED") {
-    return `${bank} limits automatic updates (often 4 a day) and refused the last one. ${RETRY}`;
+    return `${bank} limits automatic updates and refused the last one. ${RETRY}`;
   }
   if (
     code === "ASPSP_ACCOUNT_NOT_ACCESSIBLE" ||
