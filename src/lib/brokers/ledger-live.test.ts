@@ -52,6 +52,13 @@ describe("Ledger Live operations export", () => {
     expect(out.fee_eur).toBeCloseTo(0.0001 * out.price_eur);
   });
 
+  it("a sale's fee cost is never more than the coins that left", () => {
+    const line = "2026-01-05T08:00:00.000Z,Confirmed,BTC,OUT,0.001,0.002,h,Bitcoin 1,a,USD,30,30";
+    const [out] = parseTradesCsv(row(line), ctx).trades;
+    expect(out!.shares).toBe(0.001);
+    expect(out!.fee_eur).toBeCloseTo(0.001 * out!.price_eur);
+  });
+
   it("gas paid in ETH for a token transfer lowers ETH and brings nothing back", () => {
     const gas = parseTradesCsv(sample, ctx).trades.find(
       (t) => t.key === "ETH" && t.side === "sell",
@@ -158,6 +165,24 @@ describe("Ledger Live operations export", () => {
     expect(errors).toEqual([]);
     expect(trades[0]?.price_eur).toBe(0);
     expect(notes).toContain("1 operation had no value in the file, so it was counted at €0.");
+  });
+
+  it("a fee-only row worth nothing in the file is counted at zero, and says so", () => {
+    const line = "2026-01-05T08:00:00.000Z,Confirmed,TRX,VOTE,0,0.5,h,Tron 1,a,USD,0.10,0.10";
+    const { trades, errors, notes } = parseTradesCsv(row(line), {
+      ...ctx,
+      knownKeys: new Set(["TRX"]),
+    });
+    expect(errors).toEqual([]);
+    expect(trades[0]).toMatchObject({ shares: 0.5, price_eur: 0 });
+    expect(notes).toContain("1 operation had no value in the file, so it was counted at €0.");
+  });
+
+  it("two coins with no value say so once, in the plural", () => {
+    const a = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0.01,,h1,Bitcoin 1,a,USD,,";
+    const b = "2026-01-06T08:00:00.000Z,Confirmed,BTC,IN,0.02,,h2,Bitcoin 1,a,USD,,";
+    const { notes } = parseTradesCsv(row(`${a}\n${b}`), ctx);
+    expect(notes).toContain("2 operations had no value in the file, so they were counted at €0.");
   });
 
   it("a day with no exchange rate stops the import, so no price is guessed", () => {
