@@ -191,6 +191,16 @@ describe("Ledger Live operations export", () => {
     expect(errors[0]).toMatch(/^Line 2: no USD to EUR rate for 2026-03-01/);
   });
 
+  it("a file in dollars and pounds loads the dollar rates, then stops on the pound lines", () => {
+    const usdRow = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0.01,,h1,Bitcoin 1,a,USD,300,300";
+    const gbpRow = "2026-01-06T08:00:00.000Z,Confirmed,BTC,IN,0.01,,h2,Bitcoin 1,a,GBP,250,250";
+    const file = row(`${usdRow}\n${gbpRow}`);
+    expect(parseTradesCsv(file, noRates).needsRates?.currency).toBe("USD");
+    expect(parseTradesCsv(file, ctx).errors).toEqual([
+      "Line 3: no GBP to EUR rate for 2026-01-06.",
+    ]);
+  });
+
   it("a staking reward comes in at no cost, so all its value is gain", () => {
     const line = "2026-01-05T08:00:00.000Z,Confirmed,ATOM,REWARD,2,,h,Cosmos 1,a,USD,20,20";
     const [reward] = parseTradesCsv(row(line), { ...ctx, knownKeys: new Set(["ATOM"]) }).trades;
