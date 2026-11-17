@@ -22,7 +22,8 @@ import { SplitwiseCorrections } from "@/components/import/splitwise-corrections"
 import { isShareRow, type StoredShare } from "@/lib/import/splitwise-corrections";
 import { planWrite, splitAtCheckpoint } from "@/lib/import/splitwise-plan";
 import { categorizeRow, ruleTextFor, type UserRule } from "@/lib/import/splitwise-categorize";
-import { defaultSelection, makeRate, toBankTx, type FxRow } from "@/lib/import/splitwise-review";
+import { makeRate, type FxRow } from "@/lib/fx";
+import { defaultSelection, toBankTx } from "@/lib/import/splitwise-review";
 import { addDays } from "@/lib/date";
 
 // Bank rows are read from 30 days before the first expense (late-entered ones) to a week after

@@ -1,8 +1,5 @@
 import type { BankMatch, BankTx } from "./splitwise-match";
 
-// The review screen still imports these from here.
-export { makeRate, type FxRow } from "@/lib/fx";
-
 // Small pure helpers for the Splitwise review screen: they turn database rows into what the
 // matcher and the planner expect.
 
