@@ -83,21 +83,65 @@ const words = (name: string): Array<string> =>
     .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean);
 
+// Legal forms: a payer with one of these is a company, never a friend paying you back. Dotted
+// forms ("S.r.l.") come apart into letters, so runs of single letters are joined before the check.
+const COMPANY = new Set([
+  "srl",
+  "srls",
+  "spa",
+  "snc",
+  "sas",
+  "sapa",
+  "scarl",
+  "gmbh",
+  "kg",
+  "ag",
+  "ug",
+  "ltd",
+  "llc",
+  "plc",
+  "inc",
+  "corp",
+  "co",
+  "sarl",
+  "bv",
+  "nv",
+  "slu",
+  "lda",
+  "kft",
+  "sro",
+]);
+const isCompany = (p: Array<string>): boolean => {
+  const joined: Array<string> = [];
+  let run = "";
+  for (const w of [...p, ""]) {
+    if (w.length === 1) run += w;
+    else {
+      if (run) joined.push(run);
+      run = "";
+      if (w) joined.push(w);
+    }
+  }
+  return joined.some((w) => COMPANY.has(w));
+};
+
 /**
  * Whether the bank's payer name could be the contact you wrote down. Generous on purpose: it only
- * puts a question to you. Matches "Anna" to "Anna Rossi", "Cri Fiore" to "Cristian Fiore" (each
- * word you wrote starts a different word of the payer's; 3+ letters, or the whole word), and run-
- * together nicknames like "Crifiore" (the start of the first name plus the surname).
+ * puts a question to you. Matches "Anna" to "Anna Rossi" (one word: a whole word of the payer's),
+ * "Cri Fiore" to "Cristian Fiore" (several words: each starts a different word of the payer's, 3+
+ * letters, or the whole word), and run-together nicknames like "Crifiore" (the start of the first
+ * name plus the surname). A company payer never matches.
  */
 export function namesLookAlike(payer: string | null, contact: string): boolean {
   if (!payer) return false;
   const p = words(payer);
   const c = words(contact);
-  if (p.length === 0 || c.length === 0) return false;
+  if (p.length === 0 || c.length === 0 || isCompany(p)) return false;
   const used = new Set<number>();
+  const several = c.length > 1;
   const allWords = c.every((w) => {
     const i = p.findIndex(
-      (pw, idx) => !used.has(idx) && (pw === w || (w.length >= 3 && pw.startsWith(w))),
+      (pw, idx) => !used.has(idx) && (pw === w || (several && w.length >= 3 && pw.startsWith(w))),
     );
     if (i < 0) return false;
     used.add(i);
@@ -105,7 +149,7 @@ export function namesLookAlike(payer: string | null, contact: string): boolean {
   });
   if (allWords) return true;
   const nick = c[0];
-  if (c.length !== 1 || p.length < 2 || nick === undefined) return false;
+  if (several || p.length < 2 || nick === undefined) return false;
   if (nick === p.join("")) return true;
   // First-name start + surname, either order of the payer's words ("Fiore Cristian" too).
   const ends = [p[0] ?? "", p[p.length - 1] ?? ""];
@@ -180,3 +224,9 @@ export function paybackMessage(
     result.left_eur && result.left_eur >= 0.01 ? `, ${money(result.left_eur)} left over` : "";
   return `${name} paid you back: ${bills} settled${left}.`;
 }
+
+/** The toast after "Not a payback" (or "Not Anna" on a payer you had linked). */
+export const dismissMessage = (name: string, linked: boolean): string =>
+  linked
+    ? `Got it: not ${name}. This payer is no longer linked to them.`
+    : "Got it: not a payback.";

@@ -28,6 +28,7 @@ import { PaymentsToCheck } from "@/components/splitwise/payments-to-check";
 import {
   debtorsFrom,
   fetchPaybackCandidates,
+  dismissMessage,
   paybackMessage,
   suggestPaybacks,
   type Debtor,
@@ -196,17 +197,12 @@ function SplitwisePage() {
       { payment, contact: "" },
       {
         onSuccess: () =>
-          toast.success(
-            s.reason === "linked"
-              ? `Got it: not ${s.debtor.name}. This name won't be matched to them again.`
-              : "Got it: not a payback.",
-            {
-              action: {
-                label: "Undo",
-                onClick: () => undoPayback.mutate({ payment, forget: false }),
-              },
+          toast.success(dismissMessage(s.debtor.name, s.reason === "linked"), {
+            action: {
+              label: "Undo",
+              onClick: () => undoPayback.mutate({ payment, forget: false }),
             },
-          ),
+          }),
       },
     );
   };

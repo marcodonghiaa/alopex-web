@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   debtorsFrom,
   namesLookAlike,
+  dismissMessage,
   paybackMessage,
   suggestPaybacks,
   type Debtor,
@@ -54,7 +55,20 @@ describe("namesLookAlike", () => {
     [null, "Anna"],
     ["...", "Anna"],
     ["Anna", " - "],
+    // One word you wrote must be a whole word of the payer's (or the nickname rule).
+    ["Cristian Fiore", "Cri"],
+    ["Anna Rossi", "Ross"],
+    // A company is never a person paying you back, whatever its name.
+    ["ACME SRL", "Acme"],
+    ["Rossi Anna S.r.l.", "Anna Rossi"],
+    ["Fiore Cristian S.P.A.", "Crifiore"],
+    ["Anna Rossi GmbH", "Anna"],
+    ["Bianchi & Co. Ltd", "Bianchi"],
   ])("%s is not %s", (payer, contact) => expect(namesLookAlike(payer, contact)).toBe(false));
+
+  it("a surname that looks like a company word is still a person", () => {
+    expect(namesLookAlike("Maria Sá", "Maria")).toBe(true);
+  });
 
   it("uses each payer word once", () => {
     expect(namesLookAlike("Anna", "Anna Anna")).toBe(false);
@@ -195,5 +209,14 @@ describe("paybackMessage", () => {
         money,
       ),
     ).toMatch(/No bill was fully covered/);
+  });
+});
+
+describe("dismissMessage", () => {
+  it("a linked payer is unlinked, and says so without promising more", () => {
+    expect(dismissMessage("Anna", true)).toBe(
+      "Got it: not Anna. This payer is no longer linked to them.",
+    );
+    expect(dismissMessage("Anna", false)).toBe("Got it: not a payback.");
   });
 });
