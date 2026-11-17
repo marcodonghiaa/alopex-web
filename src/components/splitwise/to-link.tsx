@@ -95,7 +95,7 @@ export function ToLink({ connected }: { connected: boolean }) {
       <SectionTitle
         action={
           count > 0 ? (
-            <span className="pb-px font-figure text-xs text-ember">
+            <span className="pb-px font-figure text-xs text-muted-foreground">
               {formatCount(count)}
               <span className="sr-only"> to link</span>
             </span>

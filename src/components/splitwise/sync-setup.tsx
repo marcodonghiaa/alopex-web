@@ -304,7 +304,6 @@ function DisconnectDialog({
           </Button>
           <Button
             variant="destructive"
-            className="bg-negative/10"
             onClick={() => disconnect.mutate(onlyDelete || deleteData)}
             disabled={disconnect.isPending}
           >

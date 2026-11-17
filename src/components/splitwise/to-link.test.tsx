@@ -492,3 +492,13 @@ describe("To link length", () => {
     expect(screen.queryByRole("button", { name: /Show all/ })).toBeNull();
   });
 });
+
+// polish-4 #7: the 12 px count was ember on white (2.9:1)
+it("draws the To link count in a text colour that reads at 12 px", async () => {
+  tables.splitwise_review = { data: [item()], error: null };
+  renderList();
+  await screen.findByRole("listitem", { name: "Groceries" });
+  const badge = screen.getByText("1", { selector: "span" });
+  expect(badge.className).not.toContain("text-ember");
+  expect(badge.className).toContain("text-muted-foreground");
+});

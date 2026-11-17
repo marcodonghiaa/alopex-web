@@ -139,7 +139,8 @@ export function ConnectDialog({
               spellCheck={false}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              className="font-figure"
+              // On the dialog's background the default fill and border vanish (1.48:1).
+              className="bg-card font-figure"
             />
             <label className="mt-4 flex cursor-pointer items-start gap-3 text-sm">
               <input

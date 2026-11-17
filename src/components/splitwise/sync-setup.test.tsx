@@ -785,3 +785,24 @@ describe("Focus after the setup changes", () => {
     expect(document.activeElement).toBe(document.body);
   });
 });
+
+// polish-4 #7: light-theme contrast (WCAG 1.4.3 text, 1.4.11 field edge)
+describe("Contrast in the dialogs", () => {
+  it("keeps the destructive confirm on its plain fill", async () => {
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
+    const dialog = screen.getByRole("dialog", { name: "Disconnect Splitwise?" });
+    const confirm = within(dialog).getByRole("button", { name: "Disconnect" });
+    // Its hover tint stays; the resting tint dropped the label to 4.4:1.
+    expect(confirm.className.split(" ")).not.toContain("bg-negative/10");
+  });
+
+  it("gives the API key field a card fill inside the dialog", async () => {
+    rpc.mockResolvedValue(notConnected());
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: "Connect Splitwise" }));
+    const dialog = screen.getByRole("dialog", { name: "Connect Splitwise" });
+    expect(within(dialog).getByLabelText("API key").className).toContain("bg-card");
+  });
+});
