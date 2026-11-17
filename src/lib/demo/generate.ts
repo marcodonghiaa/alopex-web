@@ -512,6 +512,7 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
     recurring_streams: [],
     net_worth_reconstructed,
     splitwise_balances,
+    payer_links: [],
     splitwise_expenses,
     category_budgets: [],
     // One category of the demo user's own, so Settings → Categories shows how it looks.

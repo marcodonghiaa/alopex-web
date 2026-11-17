@@ -1,4 +1,5 @@
 import { useMutation, type QueryClient } from "@tanstack/react-query";
+import type { PaybackResult } from "@/lib/payback";
 import type { SplitRow } from "@/lib/splits";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -430,6 +431,10 @@ export function useSettleSplitMutation(queryClient: QueryClient) {
         supabase.from("transactions").update({
           owed_settled: settled,
           settled_at: settled ? new Date().toISOString() : null,
+          // Settled or reopened by hand: no longer the work of a payment, so undoing that payment
+          // leaves this bill as you set it.
+          settled_by_account: null,
+          settled_by_ref: null,
         }),
         tx,
       );
@@ -537,5 +542,51 @@ export function useReviewGroupMutation(queryClient: QueryClient) {
       refetchFlows(queryClient);
       void queryClient.invalidateQueries({ queryKey: ["category-rules"] });
     },
+  });
+}
+
+type PaybackVars = { payment: TxKey; contact: string };
+const PAYBACK_KEYS = ["payback-candidates", "splits"];
+function refetchPayback(queryClient: QueryClient) {
+  refetchFlows(queryClient);
+  for (const k of PAYBACK_KEYS) void queryClient.invalidateQueries({ queryKey: [k] });
+}
+
+/**
+ * Answers "Is this Anna?" on an incoming payment: a name records it as Anna paying you back
+ * (settling her bills and remembering the payer), "" as not a payback. See record_payback.
+ */
+export function useRecordPaybackMutation(queryClient: QueryClient) {
+  return useMutation<PaybackResult, Error, PaybackVars>({
+    mutationFn: async ({ payment, contact }) => {
+      const { data, error } = await supabase.rpc("record_payback", {
+        // Bank payments always have an account; a null one is refused by the server ("Payment not found").
+        p_account: payment.account_uid as string,
+        p_ref: payment.entry_reference,
+        p_contact: contact,
+        p_remember: true,
+      });
+      if (error) throw error;
+      return data as unknown as PaybackResult;
+    },
+    onError: (error) => saveFailed("Couldn't save", error),
+    onSettled: () => refetchPayback(queryClient),
+  });
+}
+
+/** Takes an answer back: the bills it settled reopen; `forget` also unlinks a payer it linked. */
+export function useUndoPaybackMutation(queryClient: QueryClient) {
+  return useMutation<void, Error, { payment: TxKey; forget: boolean }>({
+    mutationFn: async ({ payment, forget }) => {
+      const { error } = await supabase.rpc("undo_payback", {
+        // Bank payments always have an account; a null one is refused by the server ("Payment not found").
+        p_account: payment.account_uid as string,
+        p_ref: payment.entry_reference,
+        p_forget: forget,
+      });
+      if (error) throw error;
+    },
+    onError: (error) => saveFailed("Couldn't undo", error),
+    onSettled: () => refetchPayback(queryClient),
   });
 }

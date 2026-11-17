@@ -396,9 +396,20 @@ describe("transaction mutations are scoped to one account", () => {
       queryClient.getQueryData<Array<{ owed_settled: boolean }>>(["splits"])?.[0],
     ).toMatchObject({ owed_settled: true });
     expect(calls[0]?.eq).toEqual(tx);
-    expect(calls[0]?.update).toMatchObject({ owed_settled: true, settled_at: expect.any(String) });
+    // By hand, so no longer tied to a payment: undoing that payment leaves the bill alone.
+    expect(calls[0]?.update).toMatchObject({
+      owed_settled: true,
+      settled_at: expect.any(String),
+      settled_by_account: null,
+      settled_by_ref: null,
+    });
     await act(() => result.current.mutateAsync({ tx, settled: false }));
-    expect(calls[1]?.update).toEqual({ owed_settled: false, settled_at: null });
+    expect(calls[1]?.update).toEqual({
+      owed_settled: false,
+      settled_at: null,
+      settled_by_account: null,
+      settled_by_ref: null,
+    });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["splits"] });
   });
 

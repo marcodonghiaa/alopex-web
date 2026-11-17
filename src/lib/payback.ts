@@ -1,0 +1,181 @@
+import { supabase } from "@/integrations/supabase/client";
+import type { GroupSummary } from "@/lib/import/splitwise-balances";
+import type { SplitPerson } from "@/lib/splits";
+import type { TxKey } from "@/lib/transactions";
+
+/** A recent incoming payment nobody has checked yet (see payback_candidates in the backend). */
+export interface PaybackCandidate extends TxKey {
+  booking_date: string;
+  amount: number;
+  currency: string;
+  amount_eur: number | null;
+  payer: string | null;
+  /** The contact this payer was linked to the last time you confirmed one of their payments. */
+  linked_contact: string | null;
+}
+
+/** Someone who owes you money right now, from split bills and Splitwise, in euros. */
+export interface Debtor {
+  name: string;
+  open: number;
+  /** Only a Splitwise balance: Alopex has no bills of theirs to settle. */
+  splitwiseOnly: boolean;
+}
+
+export type SuggestReason = "linked" | "name" | "amount";
+
+export interface PaybackSuggestion {
+  payment: PaybackCandidate;
+  debtor: Debtor;
+  reason: SuggestReason;
+}
+
+export const CANDIDATE_DAYS = 60;
+
+export async function fetchPaybackCandidates(): Promise<Array<PaybackCandidate>> {
+  const { data, error } = await supabase.rpc("payback_candidates", { p_days: CANDIDATE_DAYS });
+  if (error) throw error;
+  return (data ?? []) as Array<PaybackCandidate>;
+}
+
+/**
+ * Everyone who owes you, once per name (case-insensitive): open split bills plus what Splitwise
+ * says they owe you. Splitwise amounts without a euro rate are left out.
+ */
+export function debtorsFrom(
+  people: Array<SplitPerson>,
+  groups: Array<GroupSummary>,
+  rate: (currency: string) => number | null,
+): Array<Debtor> {
+  const byName = new Map<string, Debtor & { fromSplits: boolean }>();
+  const add = (name: string, value: number, fromSplits: boolean) => {
+    const key = name.trim().toLowerCase();
+    if (!key) return;
+    const hit = byName.get(key);
+    if (hit) {
+      hit.open += value;
+      hit.fromSplits ||= fromSplits;
+    } else byName.set(key, { name: name.trim(), open: value, splitwiseOnly: false, fromSplits });
+  };
+  for (const p of people) if (p.open > 0) add(p.name, p.open, true);
+  for (const g of groups) {
+    const r2e = rate(g.currency);
+    if (r2e === null) continue;
+    for (const p of g.people) if (p.owesYou) add(p.person, Math.abs(p.balance) * r2e, false);
+  }
+  return [...byName.values()]
+    .map(({ fromSplits, ...d }) => ({
+      ...d,
+      open: Math.round(d.open * 100) / 100,
+      splitwiseOnly: !fromSplits,
+    }))
+    .filter((d) => d.open >= 0.01)
+    .sort((a, b) => b.open - a.open || a.name.localeCompare(b.name));
+}
+
+// Lower case, no accents, words only: "Cristian  FIÒRE." → ["cristian", "fiore"].
+const words = (name: string): Array<string> =>
+  name
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+
+/**
+ * Whether the bank's payer name could be the contact you wrote down. Generous on purpose: it only
+ * puts a question to you. Matches "Anna" to "Anna Rossi", "Cri Fiore" to "Cristian Fiore" (each
+ * word you wrote starts a different word of the payer's; 3+ letters, or the whole word), and run-
+ * together nicknames like "Crifiore" (the start of the first name plus the surname).
+ */
+export function namesLookAlike(payer: string | null, contact: string): boolean {
+  if (!payer) return false;
+  const p = words(payer);
+  const c = words(contact);
+  if (p.length === 0 || c.length === 0) return false;
+  const used = new Set<number>();
+  const allWords = c.every((w) => {
+    const i = p.findIndex(
+      (pw, idx) => !used.has(idx) && (pw === w || (w.length >= 3 && pw.startsWith(w))),
+    );
+    if (i < 0) return false;
+    used.add(i);
+    return true;
+  });
+  if (allWords) return true;
+  const nick = c[0];
+  if (c.length !== 1 || p.length < 2 || nick === undefined) return false;
+  if (nick === p.join("")) return true;
+  // First-name start + surname, either order of the payer's words ("Fiore Cristian" too).
+  const ends = [p[0] ?? "", p[p.length - 1] ?? ""];
+  for (const [first, last] of [ends, [...ends].reverse()] as Array<[string, string]>) {
+    if (last.length < 3 || !nick.endsWith(last)) continue;
+    const head = nick.slice(0, nick.length - last.length);
+    if (head.length >= 2 && first.startsWith(head)) return true;
+  }
+  return false;
+}
+
+const sameCents = (a: number, b: number) => Math.abs(a - b) < 0.005;
+
+/**
+ * The question to ask for each payment, best guess first: a payer you linked before (only while
+ * that person still owes you), else a payer whose name looks like someone who owes you, else
+ * someone who owes you exactly this amount (only when one person does). Payments with no guess
+ * are left out: most incoming money is not a payback.
+ */
+export function suggestPaybacks(
+  payments: Array<PaybackCandidate>,
+  debtors: Array<Debtor>,
+): Array<PaybackSuggestion> {
+  const find = (name: string) =>
+    debtors.find((d) => d.name.toLowerCase() === name.trim().toLowerCase());
+  const out: Array<PaybackSuggestion> = [];
+  for (const payment of payments) {
+    if (payment.linked_contact) {
+      const debtor = find(payment.linked_contact);
+      if (debtor) out.push({ payment, debtor, reason: "linked" });
+      continue;
+    }
+    const byName = debtors.filter((d) => namesLookAlike(payment.payer, d.name));
+    if (byName.length > 0) {
+      // Several look alike: the one whose debt is closest to the amount.
+      const amount = payment.amount_eur ?? 0;
+      const [best] = [...byName].sort(
+        (a, b) => Math.abs(a.open - amount) - Math.abs(b.open - amount),
+      );
+      if (best) out.push({ payment, debtor: best, reason: "name" });
+      continue;
+    }
+    if (payment.amount_eur === null) continue;
+    const byAmount = debtors.filter((d) => sameCents(d.open, payment.amount_eur as number));
+    const [only] = byAmount;
+    if (only && byAmount.length === 1) out.push({ payment, debtor: only, reason: "amount" });
+  }
+  return out;
+}
+
+export interface PaybackResult {
+  settled: Array<string>;
+  settled_eur: number;
+  left_eur: number | null;
+  linked: boolean;
+}
+
+/** What happened, in one sentence for the toast. */
+export function paybackMessage(
+  name: string,
+  result: PaybackResult,
+  splitwiseOnly: boolean,
+  money: (eur: number) => string,
+): string {
+  const n = result.settled.length;
+  if (n === 0)
+    return splitwiseOnly
+      ? `Marked as ${name} paying you back. Record it in Splitwise too.`
+      : `Marked as ${name} paying you back. No bill was fully covered, so none was settled.`;
+  const bills = n === 1 ? "1 bill" : `${n} bills`;
+  const left =
+    result.left_eur && result.left_eur >= 0.01 ? `, ${money(result.left_eur)} left over` : "";
+  return `${name} paid you back: ${bills} settled${left}.`;
+}

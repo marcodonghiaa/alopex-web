@@ -19,7 +19,22 @@ import { summarizeBalances } from "@/lib/import/splitwise-balances";
 import { useSplitwiseBalances } from "@/lib/use-splitwise-balances";
 import { OwedView } from "@/components/splitwise/owed-view";
 import { LastImportRow } from "@/components/splitwise/last-import-row";
-import { useSettleSplitMutation } from "@/components/transactions/mutations";
+import {
+  useRecordPaybackMutation,
+  useSettleSplitMutation,
+  useUndoPaybackMutation,
+} from "@/components/transactions/mutations";
+import { PaymentsToCheck } from "@/components/splitwise/payments-to-check";
+import {
+  debtorsFrom,
+  fetchPaybackCandidates,
+  paybackMessage,
+  suggestPaybacks,
+  type Debtor,
+  type PaybackCandidate,
+  type PaybackSuggestion,
+} from "@/lib/payback";
+import { txId } from "@/lib/transactions";
 import { toast } from "sonner";
 import { fetchSplits, money, netOwed, peopleFrom, type SplitRow } from "@/lib/splits";
 import { HeadlineFigure } from "@/components/headline-figure";
@@ -56,6 +71,16 @@ function SplitwisePage() {
   const queryClient = useQueryClient();
   const splits = useQuery({ queryKey: ["splits"], queryFn: fetchSplits, staleTime: 60_000 });
   const settle = useSettleSplitMutation(queryClient);
+  // Recent incoming payments to match to who owes you. On a database without the payback
+  // functions yet this fails: the page works as before, only without the questions.
+  const candidates = useQuery({
+    queryKey: ["payback-candidates"],
+    queryFn: fetchPaybackCandidates,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const record = useRecordPaybackMutation(queryClient);
+  const undoPayback = useUndoPaybackMutation(queryClient);
 
   // The last Splitwise import, kept in this browser so it can be undone after looking at the page.
   const [userId, setUserId] = useState<string | null>(null);
@@ -132,6 +157,60 @@ function SplitwisePage() {
 
   const net = netOwed(totals.owedToYou, totals.youOwe);
 
+  const debtors = useMemo(
+    () => debtorsFrom(peopleFrom(splits.data ?? []), groups, rate),
+    [splits.data, groups, rate],
+  );
+  // Asked only once both debts and payments are in: a half-loaded list would guess wrong.
+  const suggestions = useMemo(
+    () =>
+      splits.isSuccess && balances.isSuccess && candidates.isSuccess
+        ? suggestPaybacks(candidates.data, debtors)
+        : [],
+    [splits.isSuccess, balances.isSuccess, candidates.isSuccess, candidates.data, debtors],
+  );
+  const busy = record.isPending && record.variables ? txId(record.variables.payment) : null;
+
+  const confirmPayback = (payment: PaybackCandidate, debtor: Debtor) => {
+    if (record.isPending) return;
+    record.mutate(
+      { payment, contact: debtor.name },
+      {
+        onSuccess: (result) =>
+          toast.success(
+            paybackMessage(debtor.name, result, debtor.splitwiseOnly, (v) => money(v, "EUR")),
+            {
+              duration: 10_000,
+              action: {
+                label: "Undo",
+                onClick: () => undoPayback.mutate({ payment, forget: result.linked }),
+              },
+            },
+          ),
+      },
+    );
+  };
+  const dismissPayback = (payment: PaybackCandidate, s: PaybackSuggestion) => {
+    if (record.isPending) return;
+    record.mutate(
+      { payment, contact: "" },
+      {
+        onSuccess: () =>
+          toast.success(
+            s.reason === "linked"
+              ? `Got it: not ${s.debtor.name}. This name won't be matched to them again.`
+              : "Got it: not a payback.",
+            {
+              action: {
+                label: "Undo",
+                onClick: () => undoPayback.mutate({ payment, forget: false }),
+              },
+            },
+          ),
+      },
+    );
+  };
+
   const settleAll = (name: string, rows: Array<SplitRow>) => {
     for (const r of rows) settle.mutate({ tx: r, settled: true });
     toast.success(`Settled ${rows.length} bills with ${name}`, {
@@ -185,6 +264,14 @@ function SplitwisePage() {
           Some Splitwise amounts are left out: no exchange rate for their currency yet.
         </p>
       )}
+
+      <PaymentsToCheck
+        suggestions={suggestions}
+        debtors={debtors}
+        busy={busy}
+        onConfirm={confirmPayback}
+        onDismiss={dismissPayback}
+      />
 
       <SectionTitle className="mt-8">Split bills · from your transactions</SectionTitle>
       {splits.isError ? (

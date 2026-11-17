@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // The demo client mirrors the real tables: split bills plus Splitwise groups on both sides.
@@ -47,5 +48,31 @@ describe("Who owes you", () => {
     expect(
       groups.compareDocumentPosition(importButton) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  // protects=matching a friend's bank transfer to what they owe (end to end on the demo data);
+  // fails_when=the question doesn't show, or Yes doesn't settle their oldest bill
+  it("asks whether a transfer from GIULIA BIANCHI is Giulia, and Yes settles her oldest bill", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    const section = await screen.findByRole("region", { name: "Payments to check" });
+    expect(within(section).getByText("Is this Giulia?")).toBeTruthy();
+    expect(within(section).getByText(/from GIULIA BIANCHI/)).toBeTruthy();
+    const giulia = () =>
+      screen.getByText("Giulia", { selector: "summary span span" }).closest("summary")!;
+    const billsBefore = Number(/(\d+) open bills?/.exec(giulia().textContent ?? "")?.[1]);
+
+    await userEvent.click(within(section).getByRole("button", { name: "Yes, it's Giulia" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: "Payments to check" })).toBeNull(),
+    );
+    await waitFor(() =>
+      expect(Number(/(\d+) open bills?/.exec(giulia().textContent ?? "")?.[1])).toBe(
+        billsBefore - 1,
+      ),
+    );
   });
 });
