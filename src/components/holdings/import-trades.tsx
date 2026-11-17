@@ -353,7 +353,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       <DialogTrigger className="-my-2.5 inline-flex min-h-11 items-center text-xs text-primary underline-offset-2 hover:underline">
         Import trades from CSV
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent closeDisabled={save.isPending}>
         {from !== null && (
           <button
             type="button"

@@ -534,6 +534,20 @@ describe("ImportTrades", () => {
     expect(document.activeElement).toBe(screen.getByRole("link", { name: "Ask for your broker" }));
   });
 
+  it("polish-4 UB15 the X looks disabled during a save, and not before", async () => {
+    const release = slowInsert();
+    open("stock");
+    const save = await pickTradeRepublic();
+    const close = screen.getByRole("button", { name: "Close" });
+    expect(close).not.toHaveAttribute("aria-disabled");
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+    await waitFor(() => expect(close).toHaveAttribute("aria-disabled", "true"));
+    expect(close).toHaveClass("opacity-30");
+    release();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
   it("if saved dividends and fees can't load, it says so and won't save", async () => {
     db.eventsDown = true;
     open("stock");
