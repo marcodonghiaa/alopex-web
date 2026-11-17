@@ -1,5 +1,5 @@
 import { dateLocale } from "@/lib/locale";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronLeft, ChevronRight, FileUp, Info, Lock, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -169,6 +169,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     );
   }, [parsed, saved, keys.data, kind, wallet, fileBroker]);
 
+  // Two clicks before a re-render would both start a save: only the first one counts.
+  const saving = useRef(false);
   const save = useMutation({
     mutationFn: async () => {
       // One insert is one statement: all the rows land, or none do.
@@ -204,6 +206,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       setOpen(false);
     },
     onSettled: () => {
+      saving.current = false;
       void queryClient.invalidateQueries({ queryKey: ["holding-trades"] });
       void queryClient.invalidateQueries({ queryKey: ["holding-keys", kind] });
       void queryClient.invalidateQueries({ queryKey: ["holding-performance"] });
@@ -550,7 +553,11 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               (fresh.length === 0 && updates.length === 0) ||
               save.isPending
             }
-            onClick={() => save.mutate()}
+            onClick={() => {
+              if (saving.current) return;
+              saving.current = true;
+              save.mutate();
+            }}
           >
             {save.isPending && <Loader2 className="size-4 animate-spin" />}
             {fresh.length > 0

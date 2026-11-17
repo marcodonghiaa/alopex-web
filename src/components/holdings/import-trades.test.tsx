@@ -15,6 +15,8 @@ const db = vi.hoisted(() => ({
   rpcError: null as null | Record<string, unknown>,
   updateError: null as null | Record<string, unknown>,
   signedOut: false,
+  /** Set, the insert waits for it. */
+  insertGate: null as null | Promise<void>,
   updated: [] as Array<[string, Record<string, unknown>, Array<[string, unknown]>]>,
 }));
 vi.mock("@/integrations/supabase/client", () => {
@@ -80,7 +82,7 @@ vi.mock("@/integrations/supabase/client", () => {
         insert: (rows: Array<Record<string, unknown>>) => {
           if (db.insertError) return Promise.resolve({ error: db.insertError });
           db.inserted.push(...rows);
-          return Promise.resolve({ error: null });
+          return (db.insertGate ?? Promise.resolve()).then(() => ({ error: null }));
         },
       }),
       rpc: (name: string, args: Record<string, unknown>) => {
@@ -135,6 +137,7 @@ describe("ImportTrades", () => {
     db.rpcError = null;
     db.updateError = null;
     db.signedOut = false;
+    db.insertGate = null;
   });
 
   it("asks where the trades are from before asking for a file", () => {
@@ -297,6 +300,34 @@ describe("ImportTrades", () => {
     // One retry first (no wait in tests).
     expect(await screen.findByText(/Couldn't load USD exchange rates/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+  });
+
+  it("a second click while saving saves nothing twice", async () => {
+    let release!: () => void;
+    db.insertGate = new Promise((r) => (release = r));
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    const save = await screen.findByRole("button", { name: "Save 7 trades" });
+    fireEvent.click(save);
+    fireEvent.click(save);
+    await waitFor(() => expect((save as HTMLButtonElement).disabled).toBe(true));
+    fireEvent.click(save);
+    release();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(db.inserted).toHaveLength(7);
+    expect(db.rpc).toHaveLength(1);
+  });
+
+  it("after a failed save you can save again", async () => {
+    db.insertError = { message: "insert failed" };
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    const save = await screen.findByRole("button", { name: "Save 7 trades" });
+    fireEvent.click(save);
+    await screen.findByText("insert failed");
+    db.insertError = null;
+    fireEvent.click(save);
+    await waitFor(() => expect(db.inserted).toHaveLength(7));
   });
 
   describe("a failed save says why, saves nothing more and stays open", () => {
