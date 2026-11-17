@@ -6,7 +6,7 @@ import type { ReviewItem } from "@/lib/splitwise-sync";
 
 const rpc = vi.hoisted(() => vi.fn());
 const tables = vi.hoisted(() => ({
-  splitwise_review: { data: [] as unknown, error: null as unknown },
+  splitwise_review: { data: [], error: null } as { data: unknown; error: unknown; count?: number },
   transactions: { data: [] as unknown, error: null as unknown },
   fx_rates: { data: [] as unknown, error: null as unknown },
 }));
@@ -20,7 +20,8 @@ vi.mock("@/lib/demo/mode", async (importOriginal) => ({
 vi.mock("@/integrations/supabase/client", () => {
   const from = (table: keyof typeof tables) => {
     const q: Record<string, unknown> = {};
-    for (const m of ["select", "eq", "order", "limit", "gte", "lte", "in"]) q[m] = () => q;
+    for (const m of ["select", "eq", "order", "limit", "gte", "lte", "in", "is", "range"])
+      q[m] = () => q;
     q["then"] = (resolve: (v: unknown) => void) => resolve(tables[table]);
     return q;
   };
@@ -349,6 +350,32 @@ describe("ToLink", () => {
     expect(rpc).toHaveBeenCalledTimes(1);
     refreshed();
     await waitFor(() => expect(screen.queryByRole("listitem", { name: "Groceries" })).toBeNull());
+  });
+
+  // polish-3 #2: no silent cut-offs
+  it("says how many wait when it shows only the newest", async () => {
+    tables.splitwise_review = { data: [item()], error: null, count: 1200 };
+    renderList();
+    const list = await screen.findByRole("region", { name: "To link" });
+    await screen.findByRole("listitem", { name: "Groceries" });
+    expect(list).toHaveTextContent("1,200 to link");
+    expect(list).toHaveTextContent("Showing the newest 1 of 1,200.");
+  });
+
+  it("says when suggestions don't reach older bank payments", async () => {
+    tables.splitwise_review = { data: [item()], error: null, count: 1 };
+    tables.transactions = {
+      data: Array.from({ length: 1000 }, (_, i) =>
+        bankRow({ entry_reference: `e${i}`, booking_date: "2026-11-05" }),
+      ),
+      error: null,
+    };
+    renderList();
+    expect(
+      await screen.findByText("Suggestions only cover bank payments from 5 Nov on.", {
+        exact: false,
+      }),
+    ).toBeTruthy();
   });
 
   it("says what to do when no payment is around", async () => {

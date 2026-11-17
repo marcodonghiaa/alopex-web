@@ -259,8 +259,8 @@ describe("syncedAgo", () => {
 
 describe("fetchReview", () => {
   it("reads the pending items, newest first", async () => {
-    query.result = { data: [item()], error: null };
-    expect(await fetchReview()).toEqual([item()]);
+    query.result = { data: [item()], error: null, count: 1 } as typeof query.result;
+    expect(await fetchReview()).toEqual({ items: [item()], total: 1 });
     expect(calls).toContainEqual(["from", ["splitwise_review"]]);
     expect(calls).toContainEqual(["eq", ["status", "pending"]]);
     expect(calls).toContainEqual(["order", ["booking_date", { ascending: false }]]);
@@ -268,6 +268,12 @@ describe("fetchReview", () => {
   it("throws the database message", async () => {
     query.result = { data: null, error: { message: "nope" } };
     await expect(fetchReview()).rejects.toThrow("nope");
+  });
+  // polish-3 #2: the list stops at 500; the total says how many really wait
+  it("counts every pending item, beyond the 500 it reads", async () => {
+    query.result = { data: [item()], error: null, count: 1200 } as typeof query.result;
+    expect((await fetchReview()).total).toBe(1200);
+    expect(calls).toContainEqual(["select", [expect.any(String), { count: "exact" }]]);
   });
 });
 

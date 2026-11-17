@@ -28,7 +28,7 @@ vi.mock("@/integrations/supabase/client", () => ({
     rpc: (...args: unknown[]) => rpc(...args),
     from: (table: string) => {
       const chain: { [method: string]: unknown } = {};
-      for (const m of ["select", "gte", "lte", "in", "limit", "eq", "order"])
+      for (const m of ["select", "gte", "lte", "in", "is", "range", "limit", "eq", "order"])
         chain[m] = () => chain;
       chain["insert"] = (row: unknown) => {
         insertRule(row);

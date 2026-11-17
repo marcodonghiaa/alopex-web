@@ -41,7 +41,7 @@ const DONE: Record<ReviewAction["action"], string> = {
 export function ToLink({ connected }: { connected: boolean }) {
   const queryClient = useQueryClient();
   const review = useQuery({ queryKey: REVIEW_KEY, queryFn: fetchReview });
-  const items = useMemo(() => review.data ?? [], [review.data]);
+  const items = useMemo(() => review.data?.items ?? [], [review.data]);
   const dates = items.map((i) => i.booking_date).sort();
   // Under "transactions" so the import's refresh keys refetch it after a link.
   const bank = useQuery({
@@ -74,7 +74,7 @@ export function ToLink({ connected }: { connected: boolean }) {
   // One action at a time: each one changes what the others would act on.
   const busy = demo || act.isPending;
 
-  const count = items.length;
+  const count = review.data?.total ?? 0;
   // Disconnected but kept: what's still waiting can be linked. A database without the sync
   // (an older backend) has no list at all, and nothing shows.
   if (!connected && count === 0) return null;
@@ -115,6 +115,18 @@ export function ToLink({ connected }: { connected: boolean }) {
           {bank.isError && (
             <p className="mb-2 px-1 text-xs text-muted-foreground">
               No bank suggestions: {bank.error.message}
+            </p>
+          )}
+          {bank.data?.completeFrom && (
+            <p className="mb-2 px-1 text-xs text-muted-foreground">
+              Suggestions only cover bank payments from {shortDate(bank.data.completeFrom)} on. Use
+              Find in bank for older ones.
+            </p>
+          )}
+          {count > items.length && (
+            <p className="mb-2 px-1 text-xs text-muted-foreground">
+              Showing the newest {formatCount(items.length)} of {formatCount(count)}. Settle these
+              and the rest follow.
             </p>
           )}
           <GroupedList>

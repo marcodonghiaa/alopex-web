@@ -74,4 +74,54 @@ describe("fetchBankWindow", () => {
     answers.transactions = [{ data: null, error: { message: "timeout" } }];
     await expect(fetchBankWindow(["2026-11-10"], [])).rejects.toThrow("timeout");
   });
+
+  // polish-3 #2: a long history must not leave random items without a suggestion
+  it("pages through the window, newest first, without deleted rows", async () => {
+    const page = (n: number, date: string) =>
+      Array.from({ length: n }, (_, i) =>
+        bankRow({ entry_reference: `${date}-${i}`, booking_date: date }),
+      );
+    answers.transactions = [
+      { data: page(1000, "2026-11-12"), error: null },
+      { data: page(3, "2026-11-01"), error: null },
+    ];
+    const w = await fetchBankWindow(["2026-11-10"], []);
+    expect(w.bank).toHaveLength(1003);
+    expect(w.capped).toBe(false);
+    expect(args("transactions", "range")).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ]);
+    expect(args("transactions", "order")[0]).toEqual(["booking_date", { ascending: false }]);
+    expect(args("transactions", "is")).toContainEqual(["deleted_at", null]);
+  });
+
+  it("stops after 10 000 bank rows and says from which date they are complete", async () => {
+    const full = {
+      data: Array.from({ length: 1000 }, () => bankRow({ booking_date: "2026-11-05" })),
+      error: null,
+    };
+    answers.transactions = Array.from({ length: 12 }, () => full);
+    const w = await fetchBankWindow(["2026-11-10"], []);
+    expect(args("transactions", "range")).toHaveLength(10);
+    expect(w.capped).toBe(true);
+    expect(w.completeFrom).toBe("2026-11-05");
+  });
+
+  it("pages the rates in date order too", async () => {
+    answers.transactions = [{ data: [bankRow({ currency: "CHF" })], error: null }];
+    const rates = Array.from({ length: 1000 }, () => ({
+      currency: "CHF",
+      date: "2026-11-01",
+      rate_to_eur: 1,
+    }));
+    answers.fx_rates = [
+      { data: rates, error: null },
+      { data: rates.slice(0, 5), error: null },
+    ];
+    const w = await fetchBankWindow(["2026-11-10"], []);
+    expect(w.fx).toHaveLength(1005);
+    expect(args("fx_rates", "order")[0]).toEqual(["date", { ascending: true }]);
+    expect(w.capped).toBe(false);
+  });
 });

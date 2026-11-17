@@ -183,18 +183,20 @@ export const canCount = (kind: ReviewKind) => kind === "paid_by_me" || kind === 
 export const directionOf = (kind: ReviewKind): BankTx["direction"] =>
   kind === "settle_in" ? "CRDT" : "DBIT";
 
-/** The pending items, newest first. */
-export async function fetchReview(): Promise<Array<ReviewItem>> {
-  const { data, error } = await supabase
+/** The newest pending items (at most 500), and how many are pending in all. */
+export async function fetchReview(): Promise<{ items: Array<ReviewItem>; total: number }> {
+  const { data, error, count } = await supabase
     .from("splitwise_review")
     .select(
       "id,kind,group_name,booking_date,description,cost,my_share,my_paid,currency,rejected_entry_references",
+      { count: "exact" },
     )
     .eq("status", "pending")
     .order("booking_date", { ascending: false })
     .limit(500);
   if (error) throw new Error(error.message);
-  return (data ?? []) as Array<ReviewItem>;
+  const items = (data ?? []) as Array<ReviewItem>;
+  return { items, total: count ?? items.length };
 }
 
 const cents = (amount: number) => Math.round(amount * 100);
