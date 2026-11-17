@@ -569,6 +569,11 @@ export function useRecordPaybackMutation(queryClient: QueryClient) {
       if (error) throw error;
       return data as unknown as PaybackResult;
     },
+    // The answered payment leaves the list now, not when the refetch lands: no second answer.
+    onSuccess: (_result, { payment }) =>
+      queryClient.setQueryData<Array<TxKey>>(["payback-candidates"], (list) =>
+        list?.filter((c) => txId(c) !== txId(payment)),
+      ),
     onError: (error) => saveFailed("Couldn't save", error),
     onSettled: () => refetchPayback(queryClient),
   });

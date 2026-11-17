@@ -953,6 +953,26 @@ describe("payback answers", () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["splits"] });
   });
 
+  // protects=an answered question can't be answered twice; fails_when=its row stays until the
+  // refetch lands, clickable again
+  it("an answered payment leaves the list at once, and a cold cache is fine", async () => {
+    const { queryClient, wrapper } = setup();
+    const other = { ...payment, entry_reference: "p2" };
+    queryClient.setQueryData(["payback-candidates"], [payment, other]);
+    rpc.mockResolvedValueOnce({ data: result, error: null });
+    const { result: hook } = renderHook(() => useRecordPaybackMutation(queryClient), { wrapper });
+    await act(() => hook.current.mutateAsync({ payment, contact: "Anna" }));
+    expect(queryClient.getQueryData(["payback-candidates"])).toEqual([other]);
+    // Nothing cached yet (the list never loaded): nothing to remove, no crash.
+    const cold = setup();
+    rpc.mockResolvedValueOnce({ data: result, error: null });
+    const { result: coldHook } = renderHook(() => useRecordPaybackMutation(cold.queryClient), {
+      wrapper: cold.wrapper,
+    });
+    await act(() => coldHook.current.mutateAsync({ payment, contact: "Anna" }));
+    expect(cold.queryClient.getQueryData(["payback-candidates"])).toBeUndefined();
+  });
+
   it("'not a payback' sends an empty contact", async () => {
     const { queryClient, wrapper } = setup();
     rpc.mockResolvedValueOnce({ data: { ...result, settled: [], linked: false }, error: null });
