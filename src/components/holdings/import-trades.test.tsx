@@ -533,4 +533,20 @@ describe("ImportTrades", () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
     expect(db.getUserCalls).toBe(1);
   });
+
+  it("one new trade is counted in the singular", async () => {
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const { trades } = parseTradesCsv(csv, {
+      kind: "stock",
+      knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+      today: "2026-11-17",
+    });
+    open("stock", trades.slice(1));
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    expect(await screen.findByRole("button", { name: "Save 1 trade" })).toBeTruthy();
+    expect(screen.getByText("new trade to save")).toBeTruthy();
+  });
 });
