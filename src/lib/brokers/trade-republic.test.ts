@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { newEvents, summarizeIncome } from "@/lib/investment-events";
+import { incomeByKey, newEvents, summarizeIncome } from "@/lib/investment-events";
 import { parseTradesCsv } from "@/lib/trades-csv";
 
 // The 23 columns of Trade Republic's transaction export, in its order.
@@ -366,6 +366,23 @@ describe("Trade Republic, income, fees, taxes and cash", () => {
     );
     expect(events?.map((e) => [e.kind, e.amount_eur, e.fee_eur])).toEqual([["fee", -1, 0]]);
     expect(summarizeIncome(events ?? []).fees).toBe(1);
+  });
+
+  it("saveback paid in, then spent on a buy: a reward for that holding and a buy at its price", () => {
+    const { trades, events } = parseTradesCsv(
+      file(
+        { category: "CASH", type: "BENEFITS_SAVEBACK", amount: "15" },
+        { type: "BUY", shares: "0.15", price: "100", amount: "-15", description: "Saveback" },
+      ),
+      stock,
+    );
+    expect(events?.map((e) => [e.kind, e.key, e.amount_eur])).toEqual([
+      ["reward", "XX0000000001", 15],
+    ]);
+    expect(trades).toEqual([
+      expect.objectContaining({ side: "buy", shares: 0.15, price_eur: 100, note: "Saveback" }),
+    ]);
+    expect([...incomeByKey(events ?? [])]).toEqual([["stock|XX0000000001", 15]]);
   });
 
   it("money moved in or out is a deposit or a withdrawal, by its sign", () => {

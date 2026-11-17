@@ -10,6 +10,7 @@ const db = vi.hoisted(() => ({
   ratesDown: false,
   rpcMissing: false,
   upsertError: null as string | null,
+  eventsDown: false,
   // How many upserted rows the database says it saved (the rest were already there).
   upsertSaved: null as number | null,
   updated: [] as Array<[string, Record<string, unknown>, Array<[string, unknown]>]>,
@@ -27,6 +28,7 @@ vi.mock("@/integrations/supabase/client", () => {
       { asset_symbol: "USDT", amount: 50, name: "Tether", source: "Coinbase" },
     ],
     // A dollar is 0.9 euro on every day the sample needs.
+    investment_events: [],
     fx_rates: [
       "2026-01-01",
       "2026-01-10",
@@ -38,7 +40,9 @@ vi.mock("@/integrations/supabase/client", () => {
   };
   // Every filter is ignored: each table answers with all its rows.
   const query = (rows: Array<Record<string, unknown>>) => {
-    const down = rows === tables["fx_rates"] && db.ratesDown;
+    const down =
+      (rows === tables["fx_rates"] && db.ratesDown) ||
+      (rows === tables["investment_events"] && db.eventsDown);
     const result = Promise.resolve(
       down ? { data: null, error: { message: "offline" } } : { data: rows, error: null },
     );
@@ -99,6 +103,7 @@ import { toast } from "sonner";
 
 import { ImportTrades } from "./import-trades";
 import type { Trade } from "@/lib/trades";
+import { parseTradesCsv } from "@/lib/trades-csv";
 
 function open(kind: "stock" | "crypto", saved: Array<Trade> = []) {
   render(
@@ -119,6 +124,7 @@ describe("ImportTrades", () => {
     db.rpcMissing = false;
     db.upsertError = null;
     db.upsertSaved = null;
+    db.eventsDown = false;
   });
 
   it("asks where the trades are from before asking for a file", () => {
@@ -303,6 +309,41 @@ describe("ImportTrades", () => {
     });
     expect((await screen.findByText("Rewards")).parentElement?.textContent).toBe("Rewards€1.50");
     expect(screen.getByText("Dividends").parentElement?.textContent).toBe("Dividends€1.20");
+  });
+
+  it("if saved dividends and fees can't load, it says so and won't save", async () => {
+    db.eventsDown = true;
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    expect(
+      await screen.findByText("Couldn't load your saved dividends and fees: offline"),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save 4 trades" })).toBeDisabled();
+  });
+
+  it("importing again after the income rows failed saves just them: the trades are skipped", async () => {
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const { trades } = parseTradesCsv(csv, {
+      kind: "stock",
+      knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+      today: "2026-11-17",
+    });
+    db.upserted.length = 0;
+    open("stock", trades);
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 1 row" }));
+    await waitFor(() => expect(toast.success).toHaveBeenLastCalledWith("1 other row imported"));
+    expect(db.inserted).toEqual([]);
+    expect(db.upserted.map(([table, rows]) => [table, rows.length])).toEqual([
+      ["investment_events", 1],
+    ]);
   });
 
   it("the toast counts only the rows the database saved, not ones it already had", async () => {
