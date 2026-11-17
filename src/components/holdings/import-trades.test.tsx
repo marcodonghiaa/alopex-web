@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const db = vi.hoisted(() => ({
@@ -8,12 +8,16 @@ const db = vi.hoisted(() => ({
   upserted: [] as Array<[string, Array<Record<string, unknown>>, unknown]>,
   rpc: [] as Array<[string, Record<string, unknown>]>,
   ratesDown: false,
+  holdingsDown: false,
+  /** Coin rows added for one test. */
+  extraCoins: [] as Array<Record<string, unknown>>,
   rpcMissing: false,
-  // set_holding_quantity fails outright.
-  rpcError: false,
+  /** Set, a write answers with this error (set_holding_quantity for rpcError). */
+  insertError: null as null | Record<string, unknown>,
+  rpcError: null as null | Record<string, unknown>,
+  updateError: null as null | Record<string, unknown>,
   upsertError: null as string | null,
   eventsDown: false,
-  holdingsDown: false,
   // The saved investment_events never arrive (still loading).
   eventsHang: false,
   signedOut: false,
@@ -24,6 +28,10 @@ const db = vi.hoisted(() => ({
   events: [] as Array<Record<string, unknown>>,
   // How many upserted rows the database says it saved (the rest were already there).
   upsertSaved: null as number | null,
+  /** Set, the exchange rates wait for it. */
+  ratesGate: null as null | Promise<void>,
+  /** How many times the exchange rates were read. */
+  ratesReads: 0,
   updated: [] as Array<[string, Record<string, unknown>, Array<[string, unknown]>]>,
   // While set, the trades insert waits for it: a slow save whose pending state really renders.
   insertGate: null as Promise<void> | null,
@@ -43,8 +51,10 @@ vi.mock("@/integrations/supabase/client", () => {
       "2026-01-01",
       "2026-01-10",
       "2026-01-20",
+      "2026-01-25",
       "2026-02-01",
       "2026-02-10",
+      "2026-02-20",
       "2026-03-01",
     ].map((date) => ({ date, rate_to_eur: 0.9 })),
   };
@@ -53,7 +63,8 @@ vi.mock("@/integrations/supabase/client", () => {
     const down =
       (rows === tables["fx_rates"] && db.ratesDown) ||
       (rows === tables["investment_events"] && db.eventsDown) ||
-      (rows === tables["portfolio_holdings"] && db.holdingsDown);
+      ((rows === tables["portfolio_holdings"] || rows === tables["crypto_holdings"]) &&
+        db.holdingsDown);
     const result = Promise.resolve(
       down ? { data: null, error: { message: "offline" } } : { data: rows, error: null },
     );
@@ -63,30 +74,39 @@ vi.mock("@/integrations/supabase/client", () => {
       lte: () => query(rows),
       order: () => query(rows),
       limit: () => query(rows),
-      range: () =>
-        rows === tables["investment_events"] && db.eventsHang
-          ? new Promise(() => {})
-          : Promise.resolve(
-              down
-                ? { data: null, error: { message: "offline" }, count: null }
-                : { data: rows, error: null, count: rows.length },
-            ),
+      range: () => {
+        if (rows === tables["investment_events"] && db.eventsHang) return new Promise(() => {});
+        if (rows === tables["fx_rates"]) db.ratesReads++;
+        return (
+          rows === tables["fx_rates"] && db.ratesGate ? db.ratesGate : Promise.resolve()
+        ).then(() =>
+          down
+            ? { data: null, error: { message: "offline" }, count: null }
+            : { data: rows, error: null, count: rows.length },
+        );
+      },
     });
   };
   return {
     supabase: {
       from: (table: string) => ({
-        select: () => query(tables[table] ?? []),
+        select: () =>
+          query(
+            table === "crypto_holdings" && db.extraCoins.length > 0
+              ? [...tables[table]!, ...db.extraCoins]
+              : (tables[table] ?? []),
+          ),
         update: (patch: Record<string, unknown>) => {
           const where: Array<[string, unknown]> = [];
           db.updated.push([table, patch, where]);
           const chain = {
             eq: (c: string, v: unknown) => (where.push([c, v]), chain),
-            then: (resolve: (v: unknown) => void) => resolve({ error: null }),
+            then: (resolve: (v: unknown) => void) => resolve({ error: db.updateError }),
           };
           return chain;
         },
         insert: (rows: Array<Record<string, unknown>>) => {
+          if (db.insertError) return Promise.resolve({ error: db.insertError });
           db.inserted.push(...rows);
           return (db.insertGate ?? Promise.resolve()).then(() => ({ error: null }));
         },
@@ -102,10 +122,10 @@ vi.mock("@/integrations/supabase/client", () => {
       rpc: (name: string, args: Record<string, unknown>) => {
         db.rpc.push([name, args]);
         return Promise.resolve(
-          db.rpcMissing
-            ? { data: null, error: { code: "PGRST202", message: "not found" } }
-            : db.rpcError
-              ? { data: null, error: { code: "XX000", message: "boom" } }
+          db.rpcError
+            ? { data: null, error: db.rpcError }
+            : db.rpcMissing
+              ? { data: null, error: { code: "PGRST202", message: "not found" } }
               : { data: 1, error: null },
         );
       },
@@ -118,12 +138,19 @@ vi.mock("@/integrations/supabase/client", () => {
     },
   };
 });
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode }) => (
+    <a href={to} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 import { toast } from "sonner";
 
 import { ImportTrades } from "./import-trades";
-import type { Trade } from "@/lib/trades";
 import { parseTradesCsv } from "@/lib/trades-csv";
+import type { Trade } from "@/lib/trades";
 
 /** A slow save: the insert waits until the returned function is called. */
 function slowInsert() {
@@ -142,8 +169,26 @@ async function pickTradeRepublic() {
   return screen.findByRole("button", { name: /^Save 4 trades/ });
 }
 
+function pick(name: RegExp, fixture: string) {
+  fireEvent.click(screen.getByRole("button", { name }));
+  const csv = readFileSync(`src/lib/brokers/fixtures/${fixture}`, "utf8");
+  fireEvent.change(screen.getByLabelText("CSV file"), {
+    target: { files: [new File([csv], "ops.csv", { type: "text/csv" })] },
+  });
+}
+
+/** The file status row's icon: lucide names each svg by its icon. */
+const statusIcon = () => document.querySelector("svg.lucide-check, svg.lucide-circle-alert");
+
+function pickText(name: RegExp, csv: string) {
+  fireEvent.click(screen.getByRole("button", { name }));
+  fireEvent.change(screen.getByLabelText("CSV file"), {
+    target: { files: [new File([csv], "ops.csv", { type: "text/csv" })] },
+  });
+}
+
 function open(kind: "stock" | "crypto", saved: Array<Trade> = []) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } });
   render(
     <QueryClientProvider client={client}>
       <ImportTrades kind={kind} saved={saved} />
@@ -168,7 +213,7 @@ describe("ImportTrades", () => {
     db.rpc.length = 0;
     db.updated.length = 0;
     db.rpcMissing = false;
-    db.rpcError = false;
+    db.rpcError = null;
     db.upsertError = null;
     db.upsertSaved = null;
     db.eventsDown = false;
@@ -178,6 +223,13 @@ describe("ImportTrades", () => {
     db.events.length = 0;
     db.insertGate = null;
     vi.mocked(toast.success).mockClear();
+    db.ratesDown = false;
+    db.extraCoins.length = 0;
+    db.insertError = null;
+    db.updateError = null;
+    db.signedOut = false;
+    db.ratesGate = null;
+    db.ratesReads = 0;
   });
 
   it("asks where the trades are from before asking for a file", () => {
@@ -226,6 +278,13 @@ describe("ImportTrades", () => {
     expect(screen.getByRole("button", { name: /My own spreadsheet/ })).toBeTruthy();
   });
 
+  it("the source list says where Ledger Live's file comes from: its desktop app", () => {
+    open("crypto");
+    expect(screen.getByRole("button", { name: /Ledger Live/ }).textContent).toContain(
+      "Desktop app export",
+    );
+  });
+
   it("a picked file shows its name and how many trades it holds, and hides the how-to", async () => {
     open("stock");
     fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
@@ -235,7 +294,8 @@ describe("ImportTrades", () => {
     expect(await screen.findByText("Transaction export.csv")).toBeTruthy();
     await waitFor(() => expect(screen.getByText("new trades to save")).toBeTruthy());
     expect(screen.getByText("By holding")).toBeTruthy();
-    expect(screen.getByText("Example World ETF")).toBeTruthy();
+    // Listed under By holding, and under Share counts to correct too.
+    expect(screen.getAllByText("Example World ETF")).toHaveLength(2);
     expect(screen.getByText("Notes")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Save 4 trades and 1 row" })).toBeTruthy();
     // The dividend in the file is shown and saved with the trades.
@@ -253,7 +313,8 @@ describe("ImportTrades", () => {
     // USDT sits only on Coinbase, which syncs itself: its Ledger moves are left out, and it says so.
     const save = await screen.findByRole("button", { name: "Save 7 trades" });
     expect(screen.getByText(/USDT has no Ledger or manual holding/)).toBeTruthy();
-    expect(screen.getByText("Share counts to correct")).toBeTruthy();
+    expect(screen.getByText("Holdings corrected")).toBeTruthy();
+    expect(screen.queryByText("Share counts corrected")).toBeNull();
     fireEvent.click(save);
     await waitFor(() => expect(db.inserted).toHaveLength(7));
     expect(db.inserted.some((t) => t["key"] === "USDT")).toBe(false);
@@ -265,6 +326,19 @@ describe("ImportTrades", () => {
     expect(db.rpc[0]![0]).toBe("set_holding_quantity");
     expect(db.rpc[0]![1]).toMatchObject({ p_kind: "crypto", p_key: "eth", p_source: "Manual" });
     expect(db.rpc[0]![1]["p_quantity"]).toBeCloseTo(0.4988);
+  });
+
+  it("a stock import corrects the share counts through set_holding_quantity", async () => {
+    open("stock");
+    pick(/Trade Republic/, "trade_republic.csv");
+    // "and 1 row": the file's dividend is saved too.
+    const save = await screen.findByRole("button", { name: /^Save 4 trades/ });
+    expect(screen.getByText("Share counts to correct")).toBeTruthy();
+    fireEvent.click(save);
+    await waitFor(() => expect(db.rpc.length).toBeGreaterThan(0));
+    expect(db.rpc[0]![0]).toBe("set_holding_quantity");
+    expect(db.rpc[0]![1]).toMatchObject({ p_kind: "stock", p_key: "XX0000000001", p_quantity: 4 });
+    expect(db.updated).toHaveLength(0);
   });
 
   it("on a backend without set_holding_quantity the count is still set, on the holding itself", async () => {
@@ -284,6 +358,19 @@ describe("ImportTrades", () => {
       ["asset_symbol", "eth"],
       ["source", "Manual"],
     ]);
+  });
+
+  it("a coin held on Ledger and added by hand too is corrected on its Ledger row", async () => {
+    db.extraCoins.push({ asset_symbol: "ETH", amount: 0.1, name: "Ethereum", source: "Ledger" });
+    open("crypto");
+    fireEvent.click(screen.getByRole("button", { name: /Ledger Live/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/ledger_live.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "ops.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
+    await waitFor(() => expect(db.rpc).toHaveLength(1));
+    expect(db.rpc[0]![1]).toMatchObject({ p_key: "ETH", p_source: "Ledger" });
   });
 
   it("a coin's Ledger count leaves out what you traded elsewhere", async () => {
@@ -327,13 +414,13 @@ describe("ImportTrades", () => {
     fireEvent.change(screen.getByLabelText("CSV file"), {
       target: { files: [new File([csv], "ops.csv", { type: "text/csv" })] },
     });
-    // One retry first, a second later.
-    expect(
-      await screen.findByText(/Couldn't load USD exchange rates/, {}, { timeout: 4000 }),
-    ).toBeTruthy();
+    // One retry first (no wait in tests).
+    expect((await screen.findByText(/Couldn't load USD to EUR rates/)).textContent).not.toMatch(
+      /Try again/,
+    );
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
-    // The file card stops reading: it can't be, until the rates load.
-    expect(screen.getByText("Can't be read")).toBeTruthy();
+    // The file card stops reading: it waits for the rates.
+    expect(screen.getByRole("status").textContent).toBe("Waiting for exchange rates");
     expect(screen.queryByText("Reading…")).toBeNull();
   });
 
@@ -453,7 +540,9 @@ describe("ImportTrades", () => {
     open("stock");
     fireEvent.click(await pickTradeRepublic());
     await waitFor(() =>
-      expect(toast.success).toHaveBeenLastCalledWith("4 trades and 1 income and cash row imported"),
+      expect(toast.success).toHaveBeenLastCalledWith(
+        "Imported 4 trades and 1 income and cash row, updated 2 share counts",
+      ),
     );
   });
 
@@ -540,10 +629,13 @@ describe("ImportTrades", () => {
     expect(screen.queryByLabelText("CSV file")).toBeNull();
   });
 
-  it("polish-4 UB14 focus moves to the file picker, then to the file's status", async () => {
+  it("polish-4 UB14 focus moves to the step's title, then to the file's status", async () => {
     open("stock");
     fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
-    expect(document.activeElement).toBe(screen.getByLabelText("CSV file"));
+    // The new step's title (grnc06 #14a), from which the steps and the picker follow.
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { name: "Import from Trade Republic" }),
+    );
     const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
     fireEvent.change(screen.getByLabelText("CSV file"), {
       target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
@@ -583,7 +675,7 @@ describe("ImportTrades", () => {
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
   });
 
-  it("polish-4 N1 a file that can't be imported shows an X, not a check", async () => {
+  it("polish-4 N1 a file that can't be imported shows an alert, not a check", async () => {
     open("stock");
     fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
     fireEvent.change(screen.getByLabelText("CSV file"), {
@@ -592,11 +684,12 @@ describe("ImportTrades", () => {
     expect(await screen.findByText("Can't be imported")).toBeInTheDocument();
     const card = screen.getByText("wrong.csv").closest("[tabindex]")!;
     expect(card.querySelector(".lucide-check")).toBeNull();
-    expect(card.querySelector(".lucide-x")).not.toBeNull();
+    // An alert icon (grnc06 #5), not an X beside the dialog's own close X.
+    expect(card.querySelector(".lucide-circle-alert")).not.toBeNull();
   });
 
   it("polish-4 N5 if the share counts fail after the trades saved, it says the trades are saved", async () => {
-    db.rpcError = true;
+    db.rpcError = { code: "XX000", message: "boom" };
     open("stock");
     fireEvent.click(await pickTradeRepublic());
     expect((await screen.findByRole("alert")).textContent).toBe(
@@ -606,7 +699,7 @@ describe("ImportTrades", () => {
   });
 
   it("polish-4 N5 with no trades saved, a share count failure shows the database's error", async () => {
-    db.rpcError = true;
+    db.rpcError = { code: "XX000", message: "boom" };
     const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
     const { trades, events } = parseTradesCsv(csv, {
       kind: "stock",
@@ -665,9 +758,10 @@ describe("ImportTrades", () => {
   it("polish-4 N10 before Save the share counts are still to correct", async () => {
     open("stock");
     await pickTradeRepublic();
-    expect(screen.getByText("Share counts to correct").parentElement?.textContent).toBe(
-      "Share counts to correct2",
-    );
+    // Each one listed under that heading: 2 of them.
+    const region = screen.getByRole("region", { name: "Share counts to correct" });
+    expect(within(region).getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.queryByText("Share counts corrected")).toBeNull();
   });
 
   it("polish-4 N11 a source's name never wraps; its hint gives way", () => {
@@ -681,9 +775,8 @@ describe("ImportTrades", () => {
     open("stock");
     await pickTradeRepublic();
     expect(screen.getByText("€1.20")).toHaveClass("font-figure");
-    expect(screen.getByText("Share counts to correct").nextElementSibling).toHaveClass(
-      "font-figure",
-    );
+    const region = screen.getByRole("region", { name: "Share counts to correct" });
+    expect(within(region).getByText("1 → 4")).toHaveClass("font-figure");
   });
 
   it("if saved dividends and fees can't load, it says so and won't save", async () => {
@@ -714,7 +807,9 @@ describe("ImportTrades", () => {
     });
     fireEvent.click(await screen.findByRole("button", { name: "Save 1 row" }));
     await waitFor(() =>
-      expect(toast.success).toHaveBeenLastCalledWith("1 income and cash row imported"),
+      expect(toast.success).toHaveBeenLastCalledWith(
+        "Imported 1 income and cash row, updated 2 share counts",
+      ),
     );
     expect(db.inserted).toEqual([]);
     expect(db.upserted.map(([table, rows]) => [table, rows.length])).toEqual([
@@ -732,7 +827,9 @@ describe("ImportTrades", () => {
     });
     fireEvent.click(await screen.findByRole("button", { name: "Save 4 trades and 1 row" }));
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
-    expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe("4 trades imported");
+    expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe(
+      "Imported 4 trades, updated 2 share counts",
+    );
   });
 
   it("a Trade Republic file saves its dividends too, skipping ones already saved by id", async () => {
@@ -751,7 +848,9 @@ describe("ImportTrades", () => {
       expect.objectContaining({ kind: "dividend", amount_eur: 1.2, user_id: "u1" }),
     ]);
     await waitFor(() =>
-      expect(toast.success).toHaveBeenLastCalledWith("4 trades and 1 income and cash row imported"),
+      expect(toast.success).toHaveBeenLastCalledWith(
+        "Imported 4 trades and 1 income and cash row, updated 2 share counts",
+      ),
     );
   });
 
@@ -779,7 +878,7 @@ describe("ImportTrades", () => {
     release();
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
     expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe(
-      "4 trades and 1 income and cash row imported",
+      "Imported 4 trades and 1 income and cash row, updated 2 share counts",
     );
   });
 
@@ -864,6 +963,73 @@ describe("ImportTrades", () => {
     expect(document.querySelector(".animate-spin")).toBeNull();
   });
 
+  it.each([
+    ["crypto", /Ledger Live/, "ledger_live.csv", "crypto-latest", "portfolio-latest"],
+    ["stock", /Trade Republic/, "trade_republic.csv", "portfolio-latest", "crypto-latest"],
+  ] as const)(
+    "a %s import refreshes that page's holdings",
+    async (kind, from, file, key, other) => {
+      const client = open(kind);
+      const invalidate = vi.spyOn(client, "invalidateQueries");
+      pick(from, file);
+      fireEvent.click(await screen.findByRole("button", { name: /^Save \d+ trades/ }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      const keys = invalidate.mock.calls.map(([f]) => f?.queryKey);
+      expect(keys).toContainEqual([key]);
+      expect(keys).not.toContainEqual([other]);
+    },
+  );
+
+  it("after a rates error, Try again loads them and offers the save", async () => {
+    db.ratesDown = true;
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    await screen.findByText(/Couldn't load USD to EUR rates/);
+    db.ratesDown = false;
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("button", { name: "Save 7 trades" })).toBeTruthy();
+    expect(screen.queryByText(/Couldn't load USD to EUR rates/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("counts are grouped in the reader's locale", async () => {
+    const language = vi.spyOn(navigator, "language", "get").mockReturnValue("en-GB");
+    onTestFinished(() => language.mockRestore());
+    const rows = Array.from({ length: 1234 }, (_, i) => {
+      const day = new Date(Date.UTC(2020, 0, 1 + i)).toISOString().slice(0, 10);
+      return `${day},buy,XX0000000001,1,${100 + i}`;
+    });
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    fireEvent.change(screen.getByLabelText("CSV text"), {
+      target: { value: ["date,side,isin,shares,price", ...rows].join("\n") },
+    });
+    await screen.findByText("new trades to save");
+    expect(screen.getByText("1,234")).toBeTruthy();
+  });
+
+  it("when your holdings can't be loaded it says so", async () => {
+    db.holdingsDown = true;
+    open("crypto");
+    expect(await screen.findByText("Couldn't load your holdings: offline")).toBeTruthy();
+  });
+
+  it.each([
+    ["the exchange rates", () => (db.ratesDown = true), /Couldn't load USD to EUR rates/],
+    ["your holdings", () => (db.holdingsDown = true), /Couldn't load your holdings/],
+  ])("when %s can't be loaded the file stops reading", async (what, fail, message) => {
+    fail();
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    await screen.findByText(message);
+    // Only the rates failed: the file is fine, it waits for them.
+    expect(screen.getByRole("status").textContent).toBe(
+      what === "the exchange rates" ? "Waiting for exchange rates" : "Can't be read",
+    );
+    expect(screen.queryByText("Reading…")).toBeNull();
+    expect(document.querySelector(".animate-spin")).toBeNull();
+  });
+
   it("an empty file says it's empty instead of reading forever", async () => {
     open("stock");
     fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
@@ -922,7 +1088,7 @@ describe("ImportTrades", () => {
     });
     fireEvent.click(await screen.findByRole("button", { name: "Save share counts" }));
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
-    expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe("2 share counts corrected");
+    expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe("Updated 2 share counts");
     expect(db.inserted).toEqual([]);
     expect(db.rpc).toHaveLength(2);
   });
@@ -1051,5 +1217,531 @@ describe("ImportTrades", () => {
       dataTransfer: { files: [new File(["x"], "mine.csv", { type: "text/csv" })] },
     });
     expect(screen.getByText("mine.csv")).toBeTruthy();
+  });
+
+  it("while the exchange rates load it says Reading… and offers no save yet", async () => {
+    let release!: () => void;
+    db.ratesGate = new Promise((r) => (release = r));
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    expect(await screen.findByText("Reading…")).toBeTruthy();
+    expect(document.querySelector(".animate-spin")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+    release();
+    expect(await screen.findByRole("button", { name: "Save 7 trades" })).toBeTruthy();
+    expect(screen.queryByText("Reading…")).toBeNull();
+  });
+
+  it("the dialog can't be closed while saving, and closes once saved", async () => {
+    let release!: () => void;
+    db.insertGate = new Promise((r) => (release = r));
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.getByText("ops.csv")).toBeTruthy();
+    release();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(db.inserted).toHaveLength(7);
+  });
+
+  it("while saving, the file can't be swapped or the source left", async () => {
+    let release!: () => void;
+    db.insertGate = new Promise((r) => (release = r));
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
+    const back = screen.getByRole("button", { name: /All sources/ });
+    await waitFor(() => expect((back as HTMLButtonElement).disabled).toBe(true));
+    fireEvent.click(back);
+    // Named Change file once a file is chosen (polish-4 UB13).
+    expect((screen.getByLabelText("Change file") as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByText("ops.csv")).toBeTruthy();
+    release();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(db.inserted).toHaveLength(7);
+  });
+
+  it("while a pasted spreadsheet saves, its text and the drop zone are locked", async () => {
+    let release!: () => void;
+    db.insertGate = new Promise((r) => (release = r));
+    open("crypto");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/ledger_live.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV text"), { target: { value: csv } });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
+    const area = screen.getByLabelText("CSV text") as HTMLTextAreaElement;
+    await waitFor(() => expect(area.disabled).toBe(true));
+    const dropped = new File([csv], "dropped.csv", { type: "text/csv" });
+    fireEvent.drop(screen.getByLabelText("CSV file").closest("label")!, {
+      dataTransfer: { files: [dropped] },
+    });
+    expect(screen.queryByText("dropped.csv")).toBeNull();
+    release();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(db.inserted).toHaveLength(7);
+  });
+
+  it("Esc closes the dialog when nothing is saving", async () => {
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    await screen.findByRole("button", { name: "Save 7 trades" });
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("a failed save's error is gone after closing and opening again", async () => {
+    db.insertError = { message: "insert failed" };
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
+    await screen.findByText("insert failed");
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    fireEvent.click(screen.getByText("Import trades from CSV"));
+    expect(screen.getByText("Where are these trades from?")).toBeTruthy();
+    expect(screen.queryByText("insert failed")).toBeNull();
+  });
+
+  it("a second click while saving saves nothing twice", async () => {
+    let release!: () => void;
+    db.insertGate = new Promise((r) => (release = r));
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    const save = await screen.findByRole("button", { name: "Save 7 trades" });
+    fireEvent.click(save);
+    fireEvent.click(save);
+    await waitFor(() => expect((save as HTMLButtonElement).disabled).toBe(true));
+    fireEvent.click(save);
+    release();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(db.inserted).toHaveLength(7);
+    expect(db.rpc).toHaveLength(1);
+  });
+
+  it("after a failed save you can save again", async () => {
+    db.insertError = { message: "insert failed" };
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    const save = await screen.findByRole("button", { name: "Save 7 trades" });
+    fireEvent.click(save);
+    await screen.findByText("insert failed");
+    db.insertError = null;
+    fireEvent.click(save);
+    await waitFor(() => expect(db.inserted).toHaveLength(7));
+  });
+
+  describe("a failed save says why, saves nothing more and stays open", () => {
+    async function saveFails(kind: "stock" | "crypto", message: RegExp) {
+      open(kind);
+      if (kind === "crypto") pick(/Ledger Live/, "ledger_live.csv");
+      else pick(/Trade Republic/, "trade_republic.csv");
+      fireEvent.click(await screen.findByRole("button", { name: /^Save \d+ trades/ }));
+      expect((await screen.findByRole("alert")).textContent).toMatch(message);
+      expect(screen.getByRole("dialog")).toBeTruthy();
+    }
+
+    it("the trades can't be written", async () => {
+      db.insertError = { message: "insert failed" };
+      await saveFails("crypto", /insert failed/);
+      expect(db.inserted).toHaveLength(0);
+      expect(db.rpc).toHaveLength(0);
+    });
+
+    it("you're signed out", async () => {
+      db.signedOut = true;
+      await saveFails("crypto", /You're signed out/);
+      expect(db.inserted).toHaveLength(0);
+      expect(db.rpc).toHaveLength(0);
+    });
+
+    it("the count is refused (42501), with no fallback write", async () => {
+      db.rpcError = { code: "42501", message: "permission denied" };
+      await saveFails("crypto", /permission denied/);
+      expect(db.rpc).toHaveLength(1);
+      expect(db.updated).toHaveLength(0);
+    });
+
+    it("the fallback count write fails", async () => {
+      db.rpcMissing = true;
+      db.updateError = { message: "update failed" };
+      await saveFails("crypto", /update failed/);
+      expect(db.updated).toHaveLength(1);
+    });
+
+    it("a stock count write fails", async () => {
+      db.rpcMissing = true;
+      db.updateError = { message: "update failed" };
+      await saveFails("stock", /update failed/);
+      expect(db.updated).toHaveLength(1);
+      expect(db.updated[0]![0]).toBe("portfolio_holdings");
+    });
+  });
+
+  describe("the file's icon matches its state", () => {
+    it("read: a check", async () => {
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Save 7 trades" });
+      expect(statusIcon()?.classList.contains("lucide-check")).toBe(true);
+    });
+
+    it("rates failed: an alert, not a check", async () => {
+      db.ratesDown = true;
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Try again" });
+      expect(statusIcon()?.classList.contains("lucide-circle-alert")).toBe(true);
+    });
+
+    it("bad lines: an alert, not a check", async () => {
+      open("stock");
+      pickText(
+        /My own spreadsheet/,
+        "date,side,isin,shares,price\n2026-01-02,buy,XX0000000001,abc,10",
+      );
+      await screen.findByText(/Fix these first/);
+      expect(statusIcon()?.classList.contains("lucide-circle-alert")).toBe(true);
+    });
+  });
+
+  it("Change is a 44px tap target, underlined, with a keyboard focus ring", async () => {
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    await screen.findByRole("button", { name: "Save 7 trades" });
+    const change = screen.getByLabelText("Change file").closest("label")!;
+    expect(change.textContent).toBe("Change");
+    for (const c of ["underline", "min-h-11", "has-[:focus-visible]:ring-2"])
+      expect(change.classList.contains(c), c).toBe(true);
+  });
+
+  it("the Ask for your broker link is always underlined", () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Another broker/ }));
+    expect(screen.getByRole("link", { name: "Ask for your broker" }).classList).toContain(
+      "underline",
+    );
+  });
+
+  it("the file's status line is announced: Reading…, then the result", async () => {
+    let release!: () => void;
+    db.ratesGate = new Promise((r) => (release = r));
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Reading…"));
+    release();
+    await screen.findByRole("button", { name: "Save 7 trades" });
+    expect(screen.getByRole("status").textContent).toBe("Read, check what it found below");
+  });
+
+  it("Try again shows it's trying until the rates arrive", async () => {
+    db.ratesDown = true;
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    await screen.findByRole("button", { name: "Try again" });
+    let release!: () => void;
+    db.ratesDown = false;
+    db.ratesGate = new Promise((r) => (release = r));
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    const trying = await screen.findByRole("button", { name: "Trying…" });
+    expect(trying.getAttribute("aria-disabled")).toBe("true");
+    expect(trying.querySelector(".animate-spin")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("Reading…");
+    release();
+    expect(await screen.findByRole("button", { name: "Save 7 trades" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Trying|Try again/ })).toBeNull();
+  });
+
+  it("Try again keeps keyboard focus while it tries, and ignores another press", async () => {
+    db.ratesDown = true;
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    const button = await screen.findByRole("button", { name: "Try again" });
+    let release!: () => void;
+    db.ratesDown = false;
+    db.ratesGate = new Promise((r) => (release = r));
+    const before = db.ratesReads;
+    button.focus();
+    fireEvent.click(button);
+    const trying = await screen.findByRole("button", { name: "Trying…" });
+    // aria-disabled, not disabled: a disabled button drops keyboard focus to the page body.
+    expect(trying.hasAttribute("disabled")).toBe(false);
+    expect(document.activeElement).toBe(trying);
+    await waitFor(() => expect(db.ratesReads).toBeGreaterThan(before));
+    const reads = db.ratesReads;
+    fireEvent.click(trying);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(db.ratesReads).toBe(reads);
+    expect(screen.getByRole("button", { name: "Trying…" })).toBe(trying);
+    expect(document.activeElement).toBe(trying);
+    release();
+    expect(await screen.findByRole("button", { name: "Save 7 trades" })).toBeTruthy();
+  });
+
+  it("a retry that fails again offers Try again once more", async () => {
+    db.ratesDown = true;
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    const again = await screen.findByRole("button", { name: "Try again" });
+    expect((again as HTMLButtonElement).disabled).toBe(false);
+    expect(again.hasAttribute("aria-disabled")).toBe(false);
+    expect(screen.getByRole("status").textContent).toBe("Waiting for exchange rates");
+  });
+
+  it.each([
+    ["Try again", () => (db.ratesDown = true), () => pick(/Ledger Live/, "ledger_live.csv")],
+    [
+      "Use a spreadsheet",
+      () => {},
+      () => fireEvent.click(screen.getByRole("button", { name: /Another broker/ })),
+    ],
+  ])("%s has a border on the dialog's background", async (name, setup, go) => {
+    setup();
+    open("crypto");
+    go();
+    const button = await screen.findByRole("button", { name });
+    expect(button.classList).toContain("border");
+    expect(button.classList).toContain("border-rule");
+  });
+
+  it("a file with errors offers no Save; a clean one does", async () => {
+    open("stock");
+    pickText(
+      /My own spreadsheet/,
+      "date,side,isin,shares,price\n2026-01-02,buy,XX0000000001,abc,10",
+    );
+    await screen.findByText(/Fix these first/);
+    expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Change file"), {
+      target: {
+        files: [
+          new File(["date,side,isin,shares,price\n2026-01-02,buy,XX0000000001,1,10"], "ok.csv"),
+        ],
+      },
+    });
+    expect(await screen.findByRole("button", { name: "Save 1 trade" })).toBeTruthy();
+  });
+
+  describe("corrected holdings", () => {
+    const corrected = () => screen.getByRole("region", { name: "Holdings corrected" });
+
+    it("lists each one: name, source, old → new, with its decimals", async () => {
+      db.extraCoins.push({ asset_symbol: "LTC", amount: 0.5, name: "Litecoin", source: "Manual" });
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Save 7 trades" });
+      const rows = within(corrected()).getAllByRole("listitem");
+      expect(rows.map((r) => r.textContent)).toEqual([
+        "EthereumManual0.4 → 0.4988",
+        "LitecoinManual0.5 → 0",
+      ]);
+    });
+
+    it("the toast counts the trades and the holdings updated", async () => {
+      db.extraCoins.push({ asset_symbol: "LTC", amount: 0.5, name: "Litecoin", source: "Manual" });
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(toast.success).toHaveBeenLastCalledWith("Imported 7 trades, updated 2 holdings");
+    });
+
+    it("one holding updated is singular", async () => {
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(toast.success).toHaveBeenLastCalledWith("Imported 7 trades, updated 1 holding");
+    });
+
+    it("nothing corrected: no list, and the toast only counts the trades", async () => {
+      open("stock");
+      pickText(
+        /My own spreadsheet/,
+        "date,side,isin,shares,price\n2026-01-02,buy,XX0000000001,1,10",
+      );
+      fireEvent.click(await screen.findByRole("button", { name: "Save 1 trade" }));
+      expect(screen.queryByRole("region", { name: /corrected/ })).toBeNull();
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(toast.success).toHaveBeenLastCalledWith("Imported 1 trade");
+    });
+
+    it("a stock's count shows old → new, with no source", async () => {
+      open("stock");
+      pick(/Trade Republic/, "trade_republic.csv");
+      await screen.findByRole("button", { name: /^Save 4 trades/ });
+      const rows = within(
+        screen.getByRole("region", { name: "Share counts to correct" }),
+      ).getAllByRole("listitem");
+      expect(rows[0]!.textContent).toBe("Example World ETF1 → 4");
+    });
+  });
+
+  it("a file that only corrects counts says Updated, as the sibling import says Imported", async () => {
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const ctx = {
+      kind: "stock" as const,
+      knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+      today: "2099-01-01",
+    };
+    // Every trade and income row already saved: only the share count is left to set.
+    const { trades, events } = parseTradesCsv(csv, ctx);
+    db.events.push(...events!.map((e) => ({ ...e })));
+    open("stock", trades);
+    pick(/Trade Republic/, "trade_republic.csv");
+    fireEvent.click(await screen.findByRole("button", { name: "Save share counts" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(toast.success).toHaveBeenLastCalledWith("Updated 2 share counts");
+  });
+
+  describe("a coin sold to zero with no holding", () => {
+    const byHolding = () => screen.getByText("By holding").nextElementSibling!.textContent;
+
+    it("is labelled by its ticker, fully sold", async () => {
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Save 7 trades" });
+      expect(byHolding()).toContain("LTC · fully sold");
+      expect(byHolding()).not.toContain("Ethereum · fully sold");
+    });
+
+    it("uses the coin's name when it's known", async () => {
+      db.extraCoins.push({ asset_symbol: "LTC", amount: 3, name: "Litecoin", source: "Coinbase" });
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Save 7 trades" });
+      expect(byHolding()).toContain("Litecoin · fully sold");
+    });
+  });
+
+  describe("changing step moves focus to the new step's title", () => {
+    const title = (name: string) => screen.getByRole("heading", { name });
+
+    it("after choosing a source", () => {
+      open("crypto");
+      fireEvent.click(screen.getByRole("button", { name: /Ledger Live/ }));
+      expect(document.activeElement).toBe(title("Import from Ledger Live"));
+    });
+
+    it("after All sources", () => {
+      open("crypto");
+      fireEvent.click(screen.getByRole("button", { name: /Ledger Live/ }));
+      fireEvent.click(screen.getByRole("button", { name: /All sources/ }));
+      expect(document.activeElement).toBe(title("Import trades"));
+    });
+
+    it("after Use a spreadsheet", () => {
+      open("stock");
+      fireEvent.click(screen.getByRole("button", { name: /Another broker/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Use a spreadsheet" }));
+      expect(document.activeElement).toBe(title("Import a spreadsheet"));
+    });
+
+    it("not when the dialog opens: the dialog places it then", () => {
+      open("crypto");
+      expect(document.activeElement).not.toBe(title("Import trades"));
+    });
+  });
+
+  it("a file chosen from the keyboard keeps focus on the file picker (now Change)", async () => {
+    open("crypto");
+    fireEvent.click(screen.getByRole("button", { name: /Ledger Live/ }));
+    screen.getByLabelText("CSV file").focus();
+    const csv = readFileSync("src/lib/brokers/fixtures/ledger_live.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "ops.csv", { type: "text/csv" })] },
+    });
+    await screen.findByText("ops.csv");
+    const picker = screen.getByLabelText("Change file");
+    expect(picker.closest("label")!.textContent).toBe("Change");
+    expect(document.activeElement).toBe(picker);
+  });
+
+  it("typing in the text box after a file leaves focus in the text box", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    screen.getByLabelText("CSV file").focus();
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File(["date,side,isin,shares,price"], "a.csv")] },
+    });
+    await screen.findByText("a.csv");
+    const area = screen.getByLabelText("CSV text");
+    area.focus();
+    fireEvent.change(area, { target: { value: "date,side" } });
+    expect(screen.queryByText("a.csv")).toBeNull();
+    expect(document.activeElement).toBe(area);
+  });
+
+  describe("a file for the other page links to it", () => {
+    it("a Ledger Live file on the Portfolio page links to the Crypto page", async () => {
+      open("stock");
+      pick(/My own spreadsheet/, "ledger_live.csv");
+      await screen.findByText(/import it on the Crypto page/);
+      expect(screen.getByRole("link", { name: "Open the Crypto page" }).getAttribute("href")).toBe(
+        "/crypto",
+      );
+    });
+
+    it("on its own page there's no such link", async () => {
+      open("crypto");
+      pick(/My own spreadsheet/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Save 7 trades" });
+      expect(screen.queryByRole("link", { name: /Open the/ })).toBeNull();
+    });
+  });
+
+  it("Save stays in view at the dialog's bottom: a sticky footer with the dialog's background", async () => {
+    open("crypto");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/ledger_live.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV text"), { target: { value: csv } });
+    const footer = (await screen.findByRole("button", { name: "Save 7 trades" })).parentElement!;
+    for (const c of ["sticky", "-bottom-6", "bg-background"])
+      expect(footer.classList.contains(c), c).toBe(true);
+  });
+
+  describe("the spreadsheet route's description follows the file", () => {
+    const description = () => screen.getByRole("dialog").querySelector("h2 + p")!.textContent;
+
+    it("a pasted Ledger Live file is described as Ledger's, in its currency", async () => {
+      open("crypto");
+      fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+      const csv = readFileSync("src/lib/brokers/fixtures/ledger_live.csv", "utf8");
+      fireEvent.change(screen.getByLabelText("CSV text"), { target: { value: csv } });
+      await screen.findByRole("button", { name: "Save 7 trades" });
+      expect(description()).toBe(
+        "This file comes from Ledger Live: read as it comes, its USD values turned into euro with each day's rate.",
+      );
+    });
+
+    it("your own columns keep the columns' description", async () => {
+      open("stock");
+      fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+      fireEvent.change(screen.getByLabelText("CSV text"), {
+        target: { value: "date,side,isin,shares,price\n2026-01-02,buy,XX0000000001,1,10" },
+      });
+      await screen.findByRole("button", { name: "Save 1 trade" });
+      expect(description()).toMatch(/price is per share in EUR/);
+    });
+
+    it.each([["stock", "ledger_live.csv", "Crypto"]] as const)(
+      "on the %s page, the other page's file (%s) keeps the columns' description",
+      async (kind, fixture, page) => {
+        open(kind);
+        pick(/My own spreadsheet/, fixture);
+        await screen.findByRole("link", { name: `Open the ${page} page` });
+        expect(description()).toMatch(/^A header row with date, side/);
+      },
+    );
+
+    it("a Trade Republic file belongs on the Crypto page too: described as its own, no link away", async () => {
+      open("crypto");
+      pick(/My own spreadsheet/, "trade_republic.csv");
+      await screen.findByText("Nothing in this file to import here.");
+      expect(description()).toBe("This file comes from Trade Republic: read as it comes.");
+      expect(screen.queryByRole("link", { name: /Open the/ })).toBeNull();
+    });
   });
 });

@@ -23,12 +23,18 @@ describe("rateLookup", () => {
 });
 
 // The few calls loadRates makes on the supabase client, answering with `stored`. Like the real
-// server, one request returns at most 1000 rows.
+// server, one request returns at most 1000 rows, and `eq` keeps only the matching rows (a row
+// without that column always matches).
 const CAP = 1000;
-const fakeDb = (stored: Array<{ date: string; rate_to_eur: number }>, error: unknown = null) => {
+type StoredRow = { date: string; rate_to_eur: number; currency?: string };
+const fakeDb = (all: Array<StoredRow>, error: unknown = null) => {
+  let stored = all;
   const q = {
     select: () => q,
-    eq: () => q,
+    eq: (column: string, value: unknown) => {
+      stored = stored.filter((r) => !(column in r) || r[column as keyof StoredRow] === value);
+      return q;
+    },
     gte: () => q,
     lte: () => q,
     order: () => q,
@@ -58,6 +64,21 @@ describe("loadRates", () => {
     expect(get).not.toHaveBeenCalled();
   });
 
+  it("stored rates that start exactly on the first day need nothing else", async () => {
+    const get = series({});
+    const found = await loadRates("USD", "2026-01-02", "2026-01-05", fakeDb(rows), get);
+    expect(found).toEqual(rows);
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("reads only the rates of the currency asked for", async () => {
+    const usd = rows.map((r) => ({ ...r, currency: "USD" }));
+    const gbp = [{ date: "2026-01-03", rate_to_eur: 1.2, currency: "GBP" }];
+    const get = series({});
+    const found = await loadRates("USD", "2026-01-02", "2026-01-05", fakeDb([...usd, ...gbp]), get);
+    expect(found).toEqual(usd);
+  });
+
   it("reads every stored day, past the server's 1000 rows a request", async () => {
     const many = Array.from({ length: 1500 }, (_, i) => ({
       date: new Date(Date.UTC(2020, 0, 1) + i * 86_400_000).toISOString().slice(0, 10),
@@ -77,6 +98,55 @@ describe("loadRates", () => {
     );
     expect(found[0]).toEqual({ date: "2025-12-29", rate_to_eur: 0.8 });
     expect(found.slice(1)).toEqual(rows);
+  });
+
+  it("fills a gap the sync left in the stored rates, keeping the stored days", async () => {
+    const holed = [
+      { date: "2026-01-02", rate_to_eur: 0.9 },
+      { date: "2026-01-16", rate_to_eur: 0.8 },
+    ];
+    const get = series({ "2026-01-02": 2, "2026-01-09": 1.25 });
+    const found = await loadRates("USD", "2026-01-05", "2026-01-20", fakeDb(holed), get);
+    expect(get).toHaveBeenCalledWith(
+      "https://api.frankfurter.dev/v1/2026-01-02..2026-01-16?base=EUR&symbols=USD",
+    );
+    expect(found).toEqual([holed[0], { date: "2026-01-09", rate_to_eur: 0.8 }, holed[1]]);
+    expect(rateLookup("USD", found)("USD", "2026-01-14")).toBe(0.8);
+  });
+
+  it("fills the days after the last stored rate when the sync stopped", async () => {
+    const get = series({ "2026-01-19": 1.25 });
+    const stale = [{ date: "2026-01-02", rate_to_eur: 0.9 }];
+    const found = await loadRates("USD", "2026-01-02", "2026-01-20", fakeDb(stale), get);
+    expect(get).toHaveBeenCalledWith(
+      "https://api.frankfurter.dev/v1/2026-01-02..2026-01-20?base=EUR&symbols=USD",
+    );
+    expect(found).toEqual([...stale, { date: "2026-01-19", rate_to_eur: 0.8 }]);
+  });
+
+  it("a gap that leaves one day without a recent rate fetches that day", async () => {
+    // 2026-01-02's rate covers up to 2026-01-12, so 2026-01-13 is bare.
+    const oneBare = [
+      { date: "2026-01-02", rate_to_eur: 0.9 },
+      { date: "2026-01-14", rate_to_eur: 0.8 },
+    ];
+    const get = series({ "2026-01-13": 1.25 });
+    const found = await loadRates("USD", "2026-01-02", "2026-01-20", fakeDb(oneBare), get);
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(rateLookup("USD", found)("USD", "2026-01-13")).toBe(0.8);
+  });
+
+  it("a gap every day of which still has a recent enough rate needs no fetch", async () => {
+    // 2026-01-13 is the last day 2026-01-02's rate still covers.
+    const spaced = [
+      { date: "2026-01-02", rate_to_eur: 0.9 },
+      { date: "2026-01-13", rate_to_eur: 0.8 },
+    ];
+    const get = series({});
+    await loadRates("USD", "2026-01-02", "2026-01-20", fakeDb(spaced), get);
+    expect(get).not.toHaveBeenCalled();
+    await loadRates("USD", "2026-01-02", "2026-01-12", fakeDb(spaced.slice(0, 1)), get);
+    expect(get).not.toHaveBeenCalled();
   });
 
   it("keeps only real days with a usable rate from the exchange-rate site", async () => {
@@ -102,7 +172,7 @@ describe("loadRates", () => {
   it("a broken answer from the exchange-rate site is our error, not a crash", async () => {
     const get = vi.fn(async () => ({ ok: true, json: async () => JSON.parse("{") as unknown }));
     await expect(loadRates("USD", "2026-01-01", "2026-01-05", fakeDb([]), get)).rejects.toThrow(
-      /Couldn't load USD exchange rates/,
+      "Couldn't load USD to EUR rates from api.frankfurter.dev to value this file.",
     );
   });
 
@@ -114,13 +184,41 @@ describe("loadRates", () => {
     );
   });
 
+  it("asks the exchange-rate site the security policy allows (FX_HISTORY)", async () => {
+    vi.resetModules();
+    vi.doMock("@/lib/csp", () => ({ FX_HISTORY: "https://fx.example" }));
+    try {
+      const fresh = await import("./rates");
+      const get = series({});
+      await fresh.loadRates("USD", "2026-01-01", "2026-01-05", fakeDb([]), get);
+      expect(get).toHaveBeenCalledWith(
+        "https://fx.example/v1/2025-12-22..2026-01-05?base=EUR&symbols=USD",
+      );
+      const down = vi.fn(async () => ({ ok: false, json: async () => ({}) }));
+      await expect(
+        fresh.loadRates("GBP", "2026-01-01", "2026-01-05", fakeDb([]), down),
+      ).rejects.toThrow("Couldn't load GBP to EUR rates from fx.example to value this file.");
+    } finally {
+      vi.doUnmock("@/lib/csp");
+      vi.resetModules();
+    }
+  });
+
+  it("an exchange-rate site that can't be reached (offline, blocked) is our error", async () => {
+    const offline = vi.fn(() => Promise.reject(new TypeError("Failed to fetch")));
+    await expect(loadRates("USD", "2026-01-01", "2026-01-05", fakeDb([]), offline)).rejects.toThrow(
+      "Couldn't load USD to EUR rates from api.frankfurter.dev to value this file.",
+    );
+  });
+
   it("says so when the rates can't be loaded", async () => {
     const down = vi.fn(async () => ({ ok: false, json: async () => ({}) }));
     await expect(loadRates("USD", "2025-01-01", "2026-01-05", fakeDb([]), down)).rejects.toThrow(
-      /Couldn't load USD exchange rates/,
+      "Couldn't load USD to EUR rates from api.frankfurter.dev to value this file.",
     );
+    // Our own stored rates failed: the exchange-rate site isn't to blame.
     await expect(
       loadRates("USD", "2026-01-03", "2026-01-05", fakeDb([], { message: "x" }), down),
-    ).rejects.toThrow(/Couldn't load USD exchange rates/);
+    ).rejects.toThrow("Couldn't load USD to EUR rates to value this file.");
   });
 });

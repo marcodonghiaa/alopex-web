@@ -264,6 +264,15 @@ describe("parseTradesCsv, Trade Republic export", () => {
     expect(errors[0]).toMatch(/future/);
   });
 
+  it("refuses a day that doesn't exist", () => {
+    const { errors } = parseTradesCsv(
+      file(line("2026-02-30", "TRADING", "BUY", "A", "AA", "1.0", "10")),
+      known,
+    );
+    // Worded as the Trade Republic parser words it (polish-4 UB16).
+    expect(errors).toEqual(["Line 2: the date isn't valid."]);
+  });
+
   it("says it can correct share counts; a plain CSV doesn't", () => {
     expect(parseTradesCsv(file(), known).setsShares).toBe(true);
     expect(parseTradesCsv("date,side,isin,shares,price\n", opts).setsShares).toBeUndefined();

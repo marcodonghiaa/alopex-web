@@ -188,26 +188,29 @@ describe("Dialog with a sheet over it", () => {
   });
 });
 
-// polish-4 UB2: a toast left from the last save sits over the reopened dialog.
-// fails_when=touching the toast counts as a click outside and closes the dialog
-describe("Dialog and a toast", () => {
+// polish-4 #15 / UB2: a toast shown over an open dialog (say, one left from the last save) sits
+// outside it. fails_when=touching the toast counts as a click outside, closes the dialog and drops
+// what was picked in it
+describe("Dialog and toasts", () => {
   const renderDialog = (onOpenChange = vi.fn()) => {
     render(
       <>
         <ol data-sonner-toaster="">
-          <li>3 trades imported</li>
+          <li>Import failed</li>
         </ol>
         <div>elsewhere</div>
         <Dialog open onOpenChange={onOpenChange}>
           <DialogContent aria-describedby={undefined}>
-            <DialogTitle>Import trades</DialogTitle>
+            <DialogTitle>Import</DialogTitle>
           </DialogContent>
         </Dialog>
       </>,
     );
     return onOpenChange;
   };
+  // The dialog starts listening for outside clicks a tick after it opens.
   const tick = () => act(() => new Promise((r) => setTimeout(r, 0)));
+  // jsdom's pointer events carry no pointerType, so Radix waits for the click that follows.
   const tap = (el: HTMLElement) => {
     fireEvent.pointerDown(el);
     fireEvent.click(el);
@@ -216,7 +219,7 @@ describe("Dialog and a toast", () => {
   it("stays open when a toast is touched", async () => {
     const onOpenChange = renderDialog();
     await tick();
-    tap(screen.getByText("3 trades imported"));
+    tap(screen.getByText("Import failed"));
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
