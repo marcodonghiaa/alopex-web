@@ -90,6 +90,13 @@ describe("Ledger Live operations export", () => {
     expect(parseTradesCsv(row(line), ctx).trades[0]?.external_id).toBe("abc:BTC:IN");
   });
 
+  it("a row with no hash has no id, so it can't clash with another", () => {
+    const line = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0.01,,  ,Bitcoin 1,a,USD,300,300";
+    const { trades, errors } = parseTradesCsv(row(line), ctx);
+    expect(errors).toEqual([]);
+    expect(trades[0]?.external_id).toBeNull();
+  });
+
   it("one transaction hash can carry a token and its gas, so the id is hash, coin and type", () => {
     const ids = parseTradesCsv(sample, ctx).trades.map((t) => t.external_id);
     expect(new Set(ids).size).toBe(ids.length);
