@@ -423,6 +423,17 @@ describe("Trade Republic, income, fees, taxes and cash", () => {
     expect(notes).toContain('1 row of a kind Alopex doesn\'t know yet was kept as "other".');
   });
 
+  it("a very long kind name is cut to 80 characters without splitting an emoji", () => {
+    const type = "X".repeat(74) + "😀É";
+    const { events } = parseTradesCsv(
+      file({ category: "CASH", type, symbol: "", amount: "1" }),
+      stock,
+    );
+    const raw = events?.[0]?.raw_type ?? "";
+    expect([...raw]).toHaveLength(80);
+    expect(raw.endsWith("😀")).toBe(true);
+  });
+
   it("a dividend from something you don't hold is left out with its trades", () => {
     const { events } = parseTradesCsv(
       file(
