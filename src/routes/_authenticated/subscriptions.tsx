@@ -381,7 +381,7 @@ function MonthlyAmount({ stream }: { stream: Stream }) {
       ) : (
         <span className="text-foreground">
           {formatMoney(Math.abs(monthly), "EUR")}
-          <span className="text-[0.8125rem] text-muted-foreground"> /mo</span>
+          <span className="text-[0.8125rem] text-muted-foreground">/mo</span>
         </span>
       )}
     </div>

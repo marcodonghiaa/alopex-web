@@ -202,7 +202,7 @@ function SpendingPage() {
         <>
           {/* Headline: the month's spend, then how it splits by category */}
           <section aria-label={`Spent in ${monthLabel}`} className="mb-8">
-            <p className="text-[0.9375rem] font-medium text-muted-foreground">Spent</p>
+            <p className="text-[0.9375rem] text-muted-foreground">Spent</p>
             {/* The change chip as on Net Worth: less spent reads green */}
             <div className="mt-1">
               <HeadlineFigure
@@ -269,7 +269,7 @@ function RegretCard({ groups, month }: { groups: Array<RegretGroup>; month: Date
   return (
     <section aria-label="Not worth it" className="mt-6">
       <GroupedList>
-        <h2 className="flex items-center gap-2 px-4 py-3 text-sm font-semibold text-foreground sm:px-5">
+        <h2 className="flex items-center gap-2 px-4 py-3 text-lg font-semibold text-foreground sm:px-5">
           <ThumbsDown aria-hidden className="size-4 shrink-0 text-muted-foreground" />
           <span className="flex-1">Not worth it</span>
           <span className="font-figure">{formatEur(total)}</span>

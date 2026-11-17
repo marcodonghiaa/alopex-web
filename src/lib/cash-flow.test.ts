@@ -90,18 +90,18 @@ describe("savingsRate / formatRate", () => {
   // Polish 1 #8: the rate follows the number format chosen in Settings, like every other percent.
   it("formats the rate in the chosen locale", () => {
     setLocaleOverride("de-DE");
-    expect(formatRate(0.254)).toBe("25\u00a0%");
-    expect(formatRate(-0.2)).toBe("−20\u00a0%");
+    expect(formatRate(0.254)).toBe("25,4\u00a0%");
+    expect(formatRate(-0.2)).toBe("−20,0\u00a0%");
   });
-  // Re-audit: −0.5% rounds to −0 in Math.round, which hid the minus and showed "1%".
-  it("keeps the minus on a half-percent overspend", () => {
+  // Re-audit: −0.05% rounds to −0 in Math.round, which hid the minus.
+  it("keeps the minus on a tiny overspend", () => {
     setLocaleOverride("en-GB");
-    expect(formatRate(-0.005)).toBe("−1%");
+    expect(formatRate(-0.0005)).toBe("−0.1%");
   });
 
   it("shows no minus for a rate that rounds to zero", () => {
     setLocaleOverride("en-GB");
-    expect(formatRate(-0.004)).toBe("0%");
+    expect(formatRate(-0.0004)).toBe("0.0%");
   });
   it("is the share of income kept", () => {
     expect(savingsRate(2000, 1500)).toBe(0.25);
@@ -114,10 +114,11 @@ describe("savingsRate / formatRate", () => {
     expect(savingsRate(-5, 0)).toBeNull();
   });
   it("formats with a real minus and a dash for none", () => {
-    expect(formatRate(0.254)).toBe("25%");
-    expect(formatRate(-0.2)).toBe("−20%");
+    // One decimal, like every percent in a list (iOS view: fonts).
+    expect(formatRate(0.254)).toBe("25.4%");
+    expect(formatRate(-0.2)).toBe("−20.0%");
     expect(formatRate(null)).toBe("—");
-    expect(formatRate(0)).toBe("0%");
+    expect(formatRate(0)).toBe("0.0%");
   });
 });
 
@@ -501,7 +502,7 @@ describe("formatRate below −999%", () => {
   afterEach(() => setLocaleOverride(""));
   it("shows a floor instead of a huge number", () => {
     expect(formatRate(savingsRate(0.01, 500))).toBe("< −999%");
-    expect(formatRate(-9.99)).toBe("−999%");
+    expect(formatRate(-9.99)).toBe("−999.0%");
     setLocaleOverride("de-DE");
     expect(formatRate(-50)).toMatch(/^< −999\s%$/);
   });

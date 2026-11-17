@@ -149,10 +149,21 @@ describe("Spending page breakdown", () => {
     renderPage();
     const links = await screen.findAllByRole("link");
     expect(links.map((l) => l.textContent)).toEqual([
-      "Housing80%€800.00",
-      "Uncategorized20%€200.00",
+      "Housing80.0%€800.00",
+      "Uncategorized20.0%€200.00",
     ]);
     expect(screen.queryByText("Total")).toBeNull();
+  });
+
+  // iOS view (fonts): the label over the figure is set like Net Worth's "Year to date".
+  it("labels the figure in Net Worth's range-line style", async () => {
+    spendByMonth = { "2026-11-01": october };
+    renderPage();
+    expect(await screen.findByText("Spent")).toHaveClass(
+      "text-[0.9375rem]",
+      "text-muted-foreground",
+    );
+    expect(screen.getByText("Spent")).not.toHaveClass("font-medium");
   });
 
   // Whiteboard: the comparison is the headline chip (like Net Worth), not a sentence.

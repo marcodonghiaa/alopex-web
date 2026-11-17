@@ -100,7 +100,7 @@ describe("Cash flow page", () => {
     renderPage();
     await waitFor(() => expect(row("Income")).toHaveTextContent("€3,000.00"));
     expect(row("Spending")).toHaveTextContent("€2,250.00");
-    expect(row("Savings rate")).toHaveTextContent("25%");
+    expect(row("Savings rate")).toHaveTextContent("25.0%");
     expect(screen.getByRole("region", { name: /^Saved in/ })).toHaveTextContent(/^Saved/);
   });
 
@@ -119,7 +119,7 @@ describe("Cash flow page", () => {
     renderPage();
     await waitFor(() => expect(row("Income")).toHaveTextContent("€3,000.00"));
     fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
-    await waitFor(() => expect(row("Savings rate")).toHaveTextContent("−50%"));
+    await waitFor(() => expect(row("Savings rate")).toHaveTextContent("−50.0%"));
     // Polish 4 #20: a negative rate isn't described as "income kept".
     expect(row("Savings rate")).toHaveTextContent("Taken from savings");
     expect(row("Savings rate")).not.toHaveTextContent("Share of income kept");
@@ -263,14 +263,14 @@ describe("Cash flow page", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("boom");
   });
 
-  // Polish 3 #3: a rate that shows as 0% is coloured neither as a gain nor a loss.
-  it("keeps a 0% rate neutral", async () => {
+  // Polish 3 #3: a rate that shows as 0.0% is coloured neither as a gain nor a loss.
+  it("keeps a 0.0% rate neutral", async () => {
     tables["v_income_vs_expenses_monthly"] = [
-      { month: monthISO(0), income_eur: 1000, expenses_eur: 996 },
+      { month: monthISO(0), income_eur: 1000, expenses_eur: 999.6 },
     ];
     renderPage();
-    await waitFor(() => expect(row("Savings rate")).toHaveTextContent("0%"));
-    expect(within(row("Savings rate")).getByText("0%")).toHaveClass("text-muted-foreground");
+    await waitFor(() => expect(row("Savings rate")).toHaveTextContent("0.0%"));
+    expect(within(row("Savings rate")).getByText("0.0%")).toHaveClass("text-muted-foreground");
   });
 
   // Polish 3 #4: a failed background refresh keeps the figures that already loaded.
@@ -340,7 +340,7 @@ describe("Cash flow page", () => {
     renderPage();
     const trend = await screen.findByRole("img", { name: /^Saved per month/ });
     expect(trend).toHaveAccessibleName(/€500\.00.*€750\.00/);
-    expect(trend).toHaveAccessibleName(/25% of income/);
+    expect(trend).toHaveAccessibleName(/25.0% of income/);
   });
 
   // Polish 4 #6: the Sankey's name lists payers and categories; its SVG text stays out of the tree.

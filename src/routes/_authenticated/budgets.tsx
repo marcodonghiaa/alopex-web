@@ -360,7 +360,7 @@ function BudgetsPage() {
       ) : (
         <>
           <section aria-label={`Left to spend in ${monthLabel}`} className="mb-8">
-            <p className="text-[0.9375rem] font-medium text-muted-foreground">
+            <p className="text-[0.9375rem] text-muted-foreground">
               {totalAvailable - totalSpent < 0 ? "Over budget" : "Left to spend"}
             </p>
             <div className="mt-1">

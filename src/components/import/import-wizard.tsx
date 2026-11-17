@@ -189,7 +189,7 @@ export function ImportWizard() {
 
       {csv && mapping && (
         <div className="rounded-2xl border bg-card p-5 card-ring">
-          <h2 className="mb-3 text-sm font-semibold">Which column is which?</h2>
+          <h2 className="mb-3 text-lg font-semibold text-foreground">Which column is which?</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             {roles.map(({ role, label, required }) => (
               <label key={role} className="text-sm">
@@ -222,7 +222,7 @@ export function ImportWizard() {
 
       {categories.length > 0 && (
         <div className="rounded-2xl border bg-card p-5 card-ring">
-          <h2 className="mb-1 text-sm font-semibold">Where each category goes</h2>
+          <h2 className="mb-1 text-lg font-semibold text-foreground">Where each category goes</h2>
           <p className="mb-3 text-sm text-muted-foreground">
             Your file's categories are matched to the app's. Change any that look wrong. Income and
             Transfer rows are not spending, so they are skipped.
@@ -254,7 +254,7 @@ export function ImportWizard() {
 
       {plan && (
         <div className="rounded-2xl border bg-card p-5 card-ring">
-          <h2 className="mb-1 text-sm font-semibold">Check before importing</h2>
+          <h2 className="mb-1 text-lg font-semibold text-foreground">Check before importing</h2>
           <p className="mb-3 text-sm text-muted-foreground">
             {plural(plan.rows.length, "row")} ready, {plan.skipped.length} skipped. Importing again
             overwrites months that already exist.

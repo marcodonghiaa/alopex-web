@@ -759,7 +759,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
           <div className="space-y-5">
             {groupByDay(filtered).map((group) => (
               <section key={group.day ?? "none"}>
-                <SectionTitle>{formatDayHeading(group.day)}</SectionTitle>
+                <SectionTitle variant="label">{formatDayHeading(group.day)}</SectionTitle>
                 <ul className="divide-y divide-hairline overflow-hidden rounded-lg bg-card">
                   {group.rows.map((tx) => (
                     <TransactionCardView key={txId(tx)} {...viewProps(tx)} />

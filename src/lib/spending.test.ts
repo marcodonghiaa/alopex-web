@@ -67,12 +67,13 @@ describe("spendChange", () => {
 });
 
 describe("sharePercent", () => {
-  it("rounds to a whole percent", () => {
-    expect(sharePercent(58.04, 100)).toBe("58%");
+  // One decimal, like Net Worth's Breakdown (iOS view: fonts).
+  it("has one decimal", () => {
+    expect(sharePercent(58.04, 100)).toBe("58.0%");
   });
 
-  it("shows slivers as <1%, not 0%", () => {
-    expect(sharePercent(0.4, 100)).toBe("<1%");
+  it("shows slivers as <0.1%, not 0.0%", () => {
+    expect(sharePercent(0.04, 100)).toBe("<0.1%");
   });
 
   it("is empty when there is no total", () => {

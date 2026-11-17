@@ -176,9 +176,7 @@ export function SplitwisePanel({
       <header className="space-y-5">
         <Steps current={1} />
         <div>
-          <h2 className="text-[1.75rem] leading-tight font-semibold tracking-tight">
-            Import from Splitwise
-          </h2>
+          <h2 className="text-[1.75rem] leading-tight font-semibold">Import from Splitwise</h2>
           <p className="mt-1 text-[0.9375rem] text-muted-foreground">
             Bring in your share of group expenses.
           </p>

@@ -132,6 +132,13 @@ describe("Subscriptions page", () => {
     expect(screen.getByLabelText("Estimated monthly cost")).toHaveTextContent("€10.00");
   });
 
+  // iOS view (fonts): one way to write a monthly amount, "€10.00/mo" (as in the found dialog).
+  it("writes a monthly amount with no space before /mo", async () => {
+    renderPage();
+    const queue = await screen.findByRole("region", { name: "To review" });
+    expect(within(queue).getByText(/\/mo$/).parentElement).toHaveTextContent(/€[\d.,]+\/mo$/);
+  });
+
   it("hides the queue when nothing needs review and shows the empty state without streams", async () => {
     db.rows = [];
     renderPage();

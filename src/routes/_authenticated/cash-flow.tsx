@@ -26,12 +26,7 @@ import {
   type MonthlyFlowRow,
   type Period,
 } from "@/lib/cash-flow";
-import {
-  formatEur,
-  monthFromParam,
-  monthParam,
-  parseTransactionsSearch,
-} from "@/lib/transactions";
+import { formatEur, monthFromParam, monthParam, parseTransactionsSearch } from "@/lib/transactions";
 import { TONE_TEXT, toneOf } from "@/lib/tone";
 import { FlowSankey } from "@/components/cash-flow/flow-sankey";
 import { TrendBars } from "@/components/cash-flow/trend-bars";
@@ -72,8 +67,8 @@ const PERIODS: Array<{ value: Period; label: string }> = [
   { value: "year", label: "Year" },
 ];
 
-/** Below half a percent the rate shows as 0% (0.5% already rounds to 1%). */
-const ZERO_RATE = 0.005 - 1e-9;
+/** Below 0.05% the rate shows as 0.0% (0.05% already rounds to 0.1%). */
+const ZERO_RATE = 0.0005 - 1e-9;
 
 /** Bars in the trend: a year of months, two years of quarters, five years. */
 const TREND_COUNT: Record<Period, number> = { month: 12, quarter: 8, year: 5 };
@@ -203,7 +198,7 @@ function CashFlowPage() {
       </div>
 
       <section aria-label={`Saved in ${label}`} className="mb-8">
-        <p className="text-[0.9375rem] font-medium text-muted-foreground">
+        <p className="text-[0.9375rem] text-muted-foreground">
           {summary.net < 0 ? "Spent more than came in" : "Saved"}
           {/* The period still running isn't a full month, quarter or year yet. */}
           {!canGoNext && " so far"}
