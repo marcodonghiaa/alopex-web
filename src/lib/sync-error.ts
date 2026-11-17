@@ -42,7 +42,7 @@ export function syncErrorMessage(
   }
   if (APP_REFUSED.has(code)) return refusedMessage([bank]);
   if (code === "SAVE_FAILED")
-    return `${bank} synced, but the transactions couldn't be saved. ${RETRY} If it keeps happening, check the sync-bank function's logs in Supabase.`;
+    return `${bank} synced, but the transactions couldn't be saved. Alopex tries again at the next sync, within 6 hours. If it keeps happening, check the sync-bank function's logs in Supabase.`;
   if (
     code === "ASPSP_ERROR" ||
     code === "ASPSP_TIMEOUT" ||

@@ -65,6 +65,8 @@ describe("syncErrorMessage", () => {
     expect(syncErrorMessage("SAVE_FAILED", "N26")).toMatch(
       /If it keeps happening, check the sync-bank function's logs in Supabase\.$/,
     );
+    // It gives a next step, so it can't also say there is nothing to do.
+    expect(syncErrorMessage("SAVE_FAILED", "N26")).not.toMatch(/Nothing to do/);
   });
 
   it("names an unknown code instead of hiding it", () => {
