@@ -208,3 +208,20 @@ describe("Dialog close button", () => {
     expect(screen.getByRole("button", { name: "Close" })).toBeEnabled();
   });
 });
+
+// polish-4 #29: the sheet's X was a 16x16 target; match the dialog's 44 px one
+describe("Sheet close button", () => {
+  it("is a 44 px target like the dialog's", () => {
+    render(
+      <Sheet open>
+        <SheetContent aria-describedby={undefined}>
+          <SheetTitle>Find</SheetTitle>
+        </SheetContent>
+      </Sheet>,
+    );
+    const close = screen.getByRole("button", { name: "Close" }).className.split(" ");
+    expect(close).toContain("size-11");
+    expect(close).toContain("right-1");
+    expect(close).toContain("top-1");
+  });
+});
