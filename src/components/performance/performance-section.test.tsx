@@ -134,6 +134,24 @@ describe("ReturnCell", () => {
     expect(screen.getByRole("button", { name: "+20.00%" })).toHaveClass("min-h-11");
   });
 
+  it("flags a return built on a buy with no price; a priced buy gets no flag", () => {
+    const free = { ...trade, price_eur: 0 };
+    const view = renderWith(
+      <ReturnCell
+        perf={perf([{ row: row("K"), measured: ok(200, 1000) }], {
+          tradesByKey: new Map([["K", [trade, free]]]),
+        })}
+        holdingKey="K"
+        name="Holding"
+        quantity={10}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "+20.00% price missing" })).toBeInTheDocument();
+    view.unmount();
+    cell(ok(200, 1000));
+    expect(screen.queryByText("price missing")).not.toBeInTheDocument();
+  });
+
   it("asks for purchases when there are none", () => {
     cell({ state: "no_trades" });
     expect(screen.getByText("Add purchases")).toBeInTheDocument();

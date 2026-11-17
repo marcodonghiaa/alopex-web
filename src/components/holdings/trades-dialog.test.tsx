@@ -82,6 +82,34 @@ describe("TradesDialog", () => {
     expect(detail("2026-03-02")).not.toMatch(/tax/);
   });
 
+  it("polish-4 F3 says when a buy has no price and how to fix it; not when every buy has one", async () => {
+    const buy = { kind: "stock", key: "K", side: "buy", shares: 1, fee_eur: 0 };
+    const show = (price: number) =>
+      render(
+        <QueryClientProvider client={new QueryClient()}>
+          <TradesDialog
+            kind="stock"
+            holdingKey="K"
+            name="Example ETF"
+            quantity={2}
+            label="Trades"
+            trades={[
+              { ...buy, id: "t1", trade_date: "2026-03-01", price_eur: 10 },
+              { ...buy, id: "t2", trade_date: "2026-03-02", price_eur: price },
+            ]}
+          />
+        </QueryClientProvider>,
+      );
+    const view = show(0);
+    fireEvent.click(screen.getByRole("button", { name: "Trades" }));
+    expect(await screen.findByText(/A buy has no price/)).toBeInTheDocument();
+    view.unmount();
+    show(12);
+    fireEvent.click(screen.getByRole("button", { name: "Trades" }));
+    await screen.findByText("Example ETF");
+    expect(screen.queryByText(/A buy has no price/)).not.toBeInTheDocument();
+  });
+
   it("polish-5 #5 fills the edit form in the chosen format", async () => {
     setLocaleOverride("it-IT");
     render(

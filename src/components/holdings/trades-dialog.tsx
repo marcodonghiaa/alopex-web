@@ -1,7 +1,7 @@
 import { ambiguousNumberHint, formatQuantity, inputNumber } from "@/lib/locale";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -50,6 +50,10 @@ function validate(form: Form) {
     },
   };
 }
+
+/** A buy saved at €0.00: shares moved in from another broker, whose price the file didn't give. */
+export const hasMissingPrice = (trades: Array<Pick<SavedTrade, "side" | "price_eur">>) =>
+  trades.some((t) => t.side === "buy" && t.price_eur === 0);
 
 /** Every buy and sell of one holding: add, correct or remove them. */
 export function TradesDialog({
@@ -149,6 +153,15 @@ export function TradesDialog({
             Prices are per share, in EUR.
           </DialogDescription>
         </DialogHeader>
+        {hasMissingPrice(trades) && (
+          <p className="flex items-start gap-2 text-sm">
+            <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+            <span>
+              A buy has no price, so the return is too high. Edit that trade and enter what you paid
+              per share.
+            </span>
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-3 text-left">
           <div>
