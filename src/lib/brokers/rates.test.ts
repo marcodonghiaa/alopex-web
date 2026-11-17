@@ -79,6 +79,32 @@ describe("loadRates", () => {
     expect(found.slice(1)).toEqual(rows);
   });
 
+  it("keeps only real days with a usable rate from the exchange-rate site", async () => {
+    const get = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        rates: {
+          __proto__x: { USD: 1 },
+          "9999-zz": { USD: 1 },
+          "2025-12-27": null,
+          "2025-12-28": { USD: 5e-324 },
+          "2025-12-29": { USD: "1.1" },
+          "2025-12-30": { USD: 1.25 },
+        },
+      }),
+    }));
+    const found = await loadRates("USD", "2026-01-01", "2026-01-05", fakeDb(rows), get);
+    expect(found[0]).toEqual({ date: "2025-12-30", rate_to_eur: 0.8 });
+    expect(found).toHaveLength(1 + rows.length);
+  });
+
+  it("a broken answer from the exchange-rate site is our error, not a crash", async () => {
+    const get = vi.fn(async () => ({ ok: true, json: async () => JSON.parse("{") as unknown }));
+    await expect(loadRates("USD", "2026-01-01", "2026-01-05", fakeDb([]), get)).rejects.toThrow(
+      /Couldn't load USD exchange rates/,
+    );
+  });
+
   it("says so when the rates can't be loaded", async () => {
     const down = vi.fn(async () => ({ ok: false, json: async () => ({}) }));
     await expect(loadRates("USD", "2025-01-01", "2026-01-05", fakeDb([]), down)).rejects.toThrow(

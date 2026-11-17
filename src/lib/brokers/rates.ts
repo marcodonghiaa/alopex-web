@@ -59,10 +59,23 @@ export async function loadRates(
     `https://api.frankfurter.dev/v1/${start}..${until}?base=EUR&symbols=${currency}`,
   ).catch(() => null);
   if (!res?.ok) throw fail();
-  const body = (await res.json()) as { rates?: Record<string, Record<string, number>> };
-  const older = Object.entries(body.rates ?? {})
-    .filter(([date, r]) => r[currency]! > 0 && (stored.length === 0 || date < stored[0]!.date))
-    .map(([date, r]) => ({ date, rate_to_eur: 1 / r[currency]! }))
+  // Only real days with a finite rate above zero: a bad answer must never become a price.
+  let body: { rates?: Record<string, Record<string, unknown> | null> };
+  try {
+    body = (await res.json()) as typeof body;
+  } catch {
+    throw fail();
+  }
+  const older = Object.entries(body?.rates ?? {})
+    .flatMap(([date, r]) => {
+      const units = r?.[currency];
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || typeof units !== "number") return [];
+      const rate = 1 / units;
+      return units > 0 && Number.isFinite(units) && Number.isFinite(rate)
+        ? [{ date, rate_to_eur: rate }]
+        : [];
+    })
+    .filter(({ date }) => stored.length === 0 || date < stored[0]!.date)
     .sort((a, b) => a.date.localeCompare(b.date));
   return [...older, ...stored];
 }
