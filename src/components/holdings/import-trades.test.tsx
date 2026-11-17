@@ -478,4 +478,16 @@ describe("ImportTrades", () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
     expect(db.inserted).toHaveLength(4);
   });
+
+  it("a failed save's error is gone when you open the dialog again", async () => {
+    db.upsertError = "boom";
+    open("stock");
+    fireEvent.click(await pickTradeRepublic());
+    expect((await screen.findByRole("alert")).textContent).toMatch(/boom/);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    fireEvent.click(screen.getByText("Import trades from CSV"));
+    expect(screen.getByText("Where are these trades from?")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
 });
