@@ -787,6 +787,18 @@ function demoAddHolding(store: Store, now: Date, body: Record<string, unknown>) 
       value_usd: usd,
     });
   }
+  // The demo's net worth is generated once, so add the new holding's value to it by hand.
+  const added = db[kind === "stock" ? "portfolio_snapshots" : "crypto_snapshots"]!.at(-1)!;
+  const latest = (db["v_net_worth_daily"] ?? []).reduce<Row | undefined>(
+    (a, r) => (!a || String(r["snapshot_date"]) > String(a["snapshot_date"]) ? r : a),
+    undefined,
+  );
+  if (latest) {
+    const field = kind === "stock" ? "portfolio_total_eur" : "crypto_total_eur";
+    const value = Number(added["value_eur"]);
+    latest[field] = Number(latest[field]) + value;
+    latest["total_eur"] = Number(latest["total_eur"]) + value;
+  }
   store.refresh();
   return { data: { added: true, priced: true }, error: null };
 }
