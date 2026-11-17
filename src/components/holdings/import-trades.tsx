@@ -644,7 +644,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                   {incomeList.map((r) => (
                     <div key={r.label} className={row}>
                       <span className="flex-1">{r.label}</span>
-                      <span className="tabular-nums">{formatIncome(r.value)}</span>
+                      <span className="font-figure">{formatIncome(r.value)}</span>
                     </div>
                   ))}
                   {freshEvents.length > 0 && (
@@ -652,7 +652,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                       <span className="flex-1">
                         Rows saved in all (deposits and withdrawals too)
                       </span>
-                      <span className="tabular-nums">{freshEvents.length}</span>
+                      <span className="font-figure">{freshEvents.length}</span>
                     </div>
                   )}
                 </GroupedList>
@@ -669,7 +669,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                 {(skippedTrades > 0 || skippedEvents > 0) && (
                   <div className={row}>
                     <span className="flex-1">Already saved, skipped</span>
-                    <span className="tabular-nums">
+                    <span className="font-figure">
                       {[
                         skippedTrades > 0 && plural(skippedTrades, "trade"),
                         skippedEvents > 0 && plural(skippedEvents, "row"),
@@ -682,7 +682,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                 {updates.length > 0 && (
                   <div className={row}>
                     <span className="flex-1">Share counts to correct</span>
-                    <span className="tabular-nums">{updates.length}</span>
+                    <span className="font-figure">{updates.length}</span>
                   </div>
                 )}
               </GroupedList>

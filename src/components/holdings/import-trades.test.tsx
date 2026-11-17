@@ -657,6 +657,15 @@ describe("ImportTrades", () => {
     expect(screen.getByText("Any CSV with our columns")).toHaveClass("min-w-0", "truncate");
   });
 
+  it("polish-4 N12 the preview sets its figures as the page does", async () => {
+    open("stock");
+    await pickTradeRepublic();
+    expect(screen.getByText("€1.20")).toHaveClass("font-figure");
+    expect(screen.getByText("Share counts to correct").nextElementSibling).toHaveClass(
+      "font-figure",
+    );
+  });
+
   it("if saved dividends and fees can't load, it says so and won't save", async () => {
     db.eventsDown = true;
     open("stock");
