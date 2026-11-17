@@ -31,6 +31,9 @@ const rowId = (id: string) => `to-link-${id}`;
 const focusLater = (id: string) =>
   requestAnimationFrame(() => document.getElementById(id)?.focus());
 
+// The page's answer is who owes you: a long queue would push the groups far down.
+const FIRST = 5;
+
 const DONE: Record<ReviewAction["action"], string> = {
   link: "Linked to the bank payment",
   reject: "Won't suggest that payment again",
@@ -69,6 +72,8 @@ export function ToLink({ connected }: { connected: boolean }) {
   // Stable between renders: Find in bank clears the picked payment when its row changes.
   const findRow = useMemo(() => (finding ? reviewRow(finding, 0) : null), [finding]);
   const demo = isDemoMode();
+  const [showAll, setShowAll] = useState(false);
+  const shown = showAll ? items : items.slice(0, FIRST);
 
   const act = useMutation({
     mutationFn: runReviewAction,
@@ -138,7 +143,7 @@ export function ToLink({ connected }: { connected: boolean }) {
           )}
           <GroupedList>
             <ul className="divide-y divide-hairline">
-              {items.map((item) => (
+              {shown.map((item) => (
                 <ReviewRow
                   key={item.id}
                   item={item}
@@ -150,6 +155,19 @@ export function ToLink({ connected }: { connected: boolean }) {
               ))}
             </ul>
           </GroupedList>
+          {shown.length < items.length && (
+            <Button
+              variant="quiet"
+              className="mt-2 w-full"
+              onClick={() => {
+                setShowAll(true);
+                // The button goes away: focus the first row it revealed, not <body>.
+                focusLater(rowId(items[FIRST]!.id));
+              }}
+            >
+              Show all {formatCount(items.length)}
+            </Button>
+          )}
         </>
       )}
       <FindInBank

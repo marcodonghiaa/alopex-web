@@ -463,3 +463,32 @@ describe("Find in bank focus", () => {
     );
   });
 });
+
+// polish-4 #5: a long list must not push the groups (the page's answer) far down
+describe("To link length", () => {
+  const many = (n: number) =>
+    Array.from({ length: n }, (_, i) => item({ id: `r${i}`, description: `Expense ${i}` }));
+
+  it("shows the newest 5 and a Show all that reveals the rest and keeps focus in the list", async () => {
+    tables.splitwise_review = { data: many(7), error: null };
+    renderList();
+    await screen.findByRole("listitem", { name: "Expense 0" });
+    expect(screen.getAllByRole("listitem")).toHaveLength(5);
+    expect(screen.queryByRole("listitem", { name: "Expense 5" })).toBeNull();
+    expect(screen.getByRole("region", { name: "To link" })).toHaveTextContent("7 to link");
+    await userEvent.click(screen.getByRole("button", { name: "Show all 7" }));
+    expect(screen.getAllByRole("listitem")).toHaveLength(7);
+    expect(screen.queryByRole("button", { name: /Show all/ })).toBeNull();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("listitem", { name: "Expense 5" })),
+    );
+  });
+
+  it("shows every row and no Show all when 5 or fewer wait", async () => {
+    tables.splitwise_review = { data: many(5), error: null };
+    renderList();
+    await screen.findByRole("listitem", { name: "Expense 4" });
+    expect(screen.getAllByRole("listitem")).toHaveLength(5);
+    expect(screen.queryByRole("button", { name: /Show all/ })).toBeNull();
+  });
+});
