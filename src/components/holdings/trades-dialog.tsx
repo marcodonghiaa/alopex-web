@@ -1,5 +1,5 @@
 import { ambiguousNumberHint, formatQuantity, inputNumber } from "@/lib/locale";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Pencil, Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
@@ -80,6 +80,7 @@ export function TradesDialog({
   const [form, setForm] = useState<Form>(blank);
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const priceRef = useRef<HTMLInputElement>(null);
 
   const done = (message: string, clearForm = true) => {
     toast.success(message);
@@ -187,9 +188,11 @@ export function TradesDialog({
               <button
                 type="button"
                 className="text-primary underline-offset-2 hover:underline"
-                onClick={() =>
-                  startEdit(trades.find((t) => t.side === "buy" && t.price_eur === 0)!)
-                }
+                onClick={() => {
+                  startEdit(trades.find((t) => t.side === "buy" && t.price_eur === 0)!);
+                  // The note asks for the price: go straight to it.
+                  priceRef.current?.focus();
+                }}
               >
                 Edit that trade
               </button>{" "}
@@ -236,6 +239,7 @@ export function TradesDialog({
               Price per share (EUR)
             </label>
             <Input
+              ref={priceRef}
               id="trade-price"
               inputMode="decimal"
               value={form.price}

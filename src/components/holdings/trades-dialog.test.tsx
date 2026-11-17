@@ -250,6 +250,28 @@ describe("TradesDialog", () => {
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
   });
 
+  it("polish-5 B5 Edit that trade puts focus on the price, which it asks you to enter", async () => {
+    const buy = { kind: "stock", key: "K", side: "buy", shares: 1, fee_eur: 0 };
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TradesDialog
+          kind="stock"
+          holdingKey="K"
+          name="Example ETF"
+          quantity={2}
+          label="Trades"
+          trades={[
+            { ...buy, id: "t1", trade_date: "2026-03-01", price_eur: 10 },
+            { ...buy, id: "t2", trade_date: "2026-03-02", price_eur: 0 },
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Trades" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit that trade" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Price/)));
+  });
+
   it("polish-4 F4 shows an imported trade's note on its line; nothing when there is none", async () => {
     const buy = { kind: "stock", key: "K", side: "buy", shares: 1, fee_eur: 0, price_eur: 10 };
     render(
