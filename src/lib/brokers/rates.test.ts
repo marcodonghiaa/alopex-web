@@ -144,6 +144,13 @@ describe("loadRates", () => {
     }
   });
 
+  it("an exchange-rate site that can't be reached (offline, blocked) is our error", async () => {
+    const offline = vi.fn(() => Promise.reject(new TypeError("Failed to fetch")));
+    await expect(loadRates("USD", "2026-01-01", "2026-01-05", fakeDb([]), offline)).rejects.toThrow(
+      /Couldn't load USD exchange rates/,
+    );
+  });
+
   it("says so when the rates can't be loaded", async () => {
     const down = vi.fn(async () => ({ ok: false, json: async () => ({}) }));
     await expect(loadRates("USD", "2025-01-01", "2026-01-05", fakeDb([]), down)).rejects.toThrow(
