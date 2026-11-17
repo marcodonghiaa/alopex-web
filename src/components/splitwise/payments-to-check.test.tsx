@@ -117,6 +117,18 @@ describe("PaymentsToCheck", () => {
     expect(screen.queryByRole("button", { name: "Someone else" })).toBeNull();
   });
 
+  // protects=answers never silently dropped; fails_when=another row looks clickable while one saves
+  // (the page answers one payment at a time and ignores clicks meanwhile)
+  it("while any payment saves, every row waits", () => {
+    const other = suggestion({
+      payment: { ...payment, entry_reference: "p2", payer: "ANNA ROSSI" },
+      debtor: anna,
+    });
+    view([suggestion(), other], [cri, anna], "acc|p1");
+    for (const name of ["Yes, it's Anna", "Not a payback"])
+      for (const b of screen.getAllByRole("button", { name })) expect(b).toBeDisabled();
+  });
+
   it("while a payment saves, its buttons wait", () => {
     view([suggestion()], [cri, anna], "acc|p1");
     for (const name of ["Yes, it's Crifiore", "Someone else", "Not a payback"])

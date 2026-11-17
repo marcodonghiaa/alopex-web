@@ -32,7 +32,7 @@ export function PaymentsToCheck({
 }: {
   suggestions: Array<PaybackSuggestion>;
   debtors: Array<Debtor>;
-  /** The payment being saved, if any: its buttons wait. */
+  /** The payment being saved, if any: while it saves, every row waits. */
   busy: string | null;
   onConfirm: (payment: PaybackCandidate, debtor: Debtor) => void;
   onDismiss: (payment: PaybackCandidate, suggestion: PaybackSuggestion) => void;
@@ -53,7 +53,8 @@ export function PaymentsToCheck({
             const id = txId(p);
             const amount = money(p.amount, p.currency);
             const from = p.payer ?? "an unnamed payer";
-            const saving = busy === id;
+            // One answer at a time (the server takes them one by one too): every row waits.
+            const saving = busy !== null;
             const others = debtors.filter((d) => d.name !== s.debtor.name);
             return (
               <li key={id} className="px-4 py-3 sm:px-5">
