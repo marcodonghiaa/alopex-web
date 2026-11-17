@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { dateLocale } from "@/lib/locale";
 import { money } from "@/lib/splits";
 import { txId } from "@/lib/transactions";
@@ -41,13 +41,35 @@ export function PaymentsToCheck({
   // Who you picked under "Someone else", by name: if they leave the list while the form is open,
   // the select shows no one rather than whoever is now first.
   const [pick, setPick] = useState("");
+  // Where focus goes next: back to a row's "Someone else" when its form closes, or to the next
+  // row once an answered one leaves the list.
+  const [focusAfter, setFocusAfter] = useState<{ to: "other" | "next"; id: string } | null>(null);
+  const list = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    if (!focusAfter || !list.current) return;
+    const rows = [...list.current.querySelectorAll<HTMLElement>("li[data-row]")];
+    if (focusAfter.to === "other") {
+      rows
+        .find((r) => r.dataset["row"] === focusAfter.id)
+        ?.querySelector<HTMLElement>("[data-someone-else]")
+        ?.focus();
+      setFocusAfter(null);
+    } else if (!rows.some((r) => r.dataset["row"] === focusAfter.id)) {
+      rows[0]?.querySelector<HTMLElement>("button")?.focus();
+      setFocusAfter(null);
+    }
+  }, [focusAfter, suggestions, choosing]);
   if (suggestions.length === 0) return null;
+  const closeForm = (id: string) => {
+    setChoosing(null);
+    setFocusAfter({ to: "other", id });
+  };
 
   return (
     <section aria-label="Payments to check" className="mt-8">
       <SectionTitle>Did someone pay you back?</SectionTitle>
       <GroupedList>
-        <ul className="divide-y divide-hairline">
+        <ul ref={list} className="divide-y divide-hairline">
           {suggestions.map((s) => {
             const p = s.payment;
             const id = txId(p);
@@ -57,7 +79,7 @@ export function PaymentsToCheck({
             const saving = busy !== null;
             const others = debtors.filter((d) => d.name !== s.debtor.name);
             return (
-              <li key={id} className="px-4 py-3 sm:px-5">
+              <li key={id} data-row={id} className="px-4 py-3 sm:px-5">
                 <div className="flex items-start gap-3">
                   <Initial name={s.debtor.name} />
                   <div className="min-w-0 flex-1">
@@ -75,13 +97,14 @@ export function PaymentsToCheck({
                   <form
                     className="mt-3 flex flex-wrap items-center gap-2 sm:pl-[3.25rem]"
                     onKeyDown={(e) => {
-                      if (e.key === "Escape") setChoosing(null);
+                      if (e.key === "Escape") closeForm(id);
                     }}
                     onSubmit={(e) => {
                       e.preventDefault();
                       const d = others.find((x) => x.name === pick);
                       if (d) {
                         setChoosing(null);
+                        setFocusAfter({ to: "next", id });
                         onConfirm(p, d);
                       }
                     }}
@@ -111,18 +134,25 @@ export function PaymentsToCheck({
                     <Button type="submit" disabled={saving || others.length === 0}>
                       Confirm
                     </Button>
-                    <Button variant="ghost" onClick={() => setChoosing(null)}>
+                    <Button variant="ghost" onClick={() => closeForm(id)}>
                       Cancel
                     </Button>
                   </form>
                 ) : (
                   <div className="mt-3 flex flex-wrap gap-2 sm:pl-[3.25rem]">
-                    <Button disabled={saving} onClick={() => onConfirm(p, s.debtor)}>
+                    <Button
+                      disabled={saving}
+                      onClick={() => {
+                        setFocusAfter({ to: "next", id });
+                        onConfirm(p, s.debtor);
+                      }}
+                    >
                       Yes, it's {s.debtor.name}
                     </Button>
                     {others.length > 0 && (
                       <Button
                         variant="secondary"
+                        data-someone-else
                         disabled={saving}
                         onClick={() => {
                           setPick(others[0]?.name ?? "");
@@ -132,7 +162,14 @@ export function PaymentsToCheck({
                         Someone else
                       </Button>
                     )}
-                    <Button variant="ghost" disabled={saving} onClick={() => onDismiss(p, s)}>
+                    <Button
+                      variant="ghost"
+                      disabled={saving}
+                      onClick={() => {
+                        setFocusAfter({ to: "next", id });
+                        onDismiss(p, s);
+                      }}
+                    >
                       {s.reason === "linked" ? `Not ${s.debtor.name}` : "Not a payback"}
                     </Button>
                   </div>

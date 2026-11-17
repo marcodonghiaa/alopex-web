@@ -30,9 +30,9 @@ function view(
 ) {
   const onConfirm = vi.fn();
   const onDismiss = vi.fn();
-  const ui = (d: Array<Debtor>) => (
+  const ui = (d: Array<Debtor>, sg = s) => (
     <PaymentsToCheck
-      suggestions={s}
+      suggestions={sg}
       debtors={d}
       busy={busy}
       onConfirm={onConfirm}
@@ -40,7 +40,12 @@ function view(
     />
   );
   const { rerender } = render(ui(debtors));
-  return { onConfirm, onDismiss, setDebtors: (d: Array<Debtor>) => rerender(ui(d)) };
+  return {
+    onConfirm,
+    onDismiss,
+    setDebtors: (d: Array<Debtor>) => rerender(ui(d)),
+    setSuggestions: (sg: Array<PaybackSuggestion>) => rerender(ui(debtors, sg)),
+  };
 }
 
 describe("PaymentsToCheck", () => {
@@ -119,6 +124,27 @@ describe("PaymentsToCheck", () => {
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("button", { name: "Confirm" })).toBeNull();
     expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  // protects=keyboard and screen-reader users keep their place; fails_when=focus drops to the
+  // page after closing the form or answering a payment
+  it("focus stays in the list: back on Someone else after Cancel or Esc, next row after an answer", async () => {
+    const other = suggestion({
+      payment: { ...payment, entry_reference: "p2", payer: "ANNA ROSSI" },
+      debtor: anna,
+    });
+    const { setSuggestions } = view([suggestion(), other]);
+    const [someoneElse] = screen.getAllByRole("button", { name: "Someone else" });
+    await userEvent.click(someoneElse!);
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(document.activeElement).toBe(screen.getAllByRole("button", { name: "Someone else" })[0]);
+    await userEvent.click(screen.getAllByRole("button", { name: "Someone else" })[0]!);
+    await userEvent.keyboard("{Escape}");
+    expect(document.activeElement).toBe(screen.getAllByRole("button", { name: "Someone else" })[0]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Yes, it's Crifiore" }));
+    setSuggestions([other]); // answered: its row leaves
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Yes, it's Anna" }));
   });
 
   it("no Someone else when nobody else owes you", () => {
