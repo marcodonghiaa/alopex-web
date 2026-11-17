@@ -273,6 +273,7 @@ export function TradesDialog({
                   at {formatEur(t.price_eur)}
                   <span className="block text-xs text-muted-foreground">
                     {formatDay(t.trade_date)}
+                    {t.note && ` · ${t.note}`}
                     {t.fee_eur > 0 && ` · fee ${formatEur(t.fee_eur)}`}
                     {(t.tax_eur ?? 0) > 0 && ` · tax ${formatEur(t.tax_eur!)}`}
                   </span>

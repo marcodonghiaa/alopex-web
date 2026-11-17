@@ -242,4 +242,27 @@ describe("TradesDialog", () => {
     expect(document.querySelector("li[aria-current]")).toBeNull();
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
   });
+
+  it("polish-4 F4 shows an imported trade's note on its line; nothing when there is none", async () => {
+    const buy = { kind: "stock", key: "K", side: "buy", shares: 1, fee_eur: 0, price_eur: 10 };
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TradesDialog
+          kind="stock"
+          holdingKey="K"
+          name="Example ETF"
+          quantity={2}
+          label="Trades"
+          trades={[
+            { ...buy, id: "t1", trade_date: "2026-03-01", note: "Moved in or out" },
+            { ...buy, id: "t2", trade_date: "2026-03-02", note: null },
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Trades" }));
+    const line = await screen.findByText(/Moved in or out/);
+    expect(line.textContent).toMatch(/2026 · Moved in or out$/);
+    expect(screen.getAllByText(/Moved in or out/)).toHaveLength(1);
+  });
 });

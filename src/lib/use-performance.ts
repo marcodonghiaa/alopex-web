@@ -49,7 +49,7 @@ export async function fetchTrades(client: SupabaseClient<Database>): Promise<Tra
     const { data, error, count } = await client
       .from("holding_trades")
       .select(
-        "id,kind,key,side,trade_date,shares,price_eur,fee_eur,tax_eur,traded_at,source,external_id",
+        "id,kind,key,side,trade_date,shares,price_eur,fee_eur,tax_eur,traded_at,source,external_id,note",
         {
           count: "exact",
         },

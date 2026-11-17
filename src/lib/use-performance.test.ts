@@ -113,6 +113,7 @@ describe("fetchTrades and fetchEvents columns", () => {
       "traded_at",
       "source",
       "external_id",
+      "note",
     ]);
     expect(await columnsOf(fetchEvents)).toEqual([
       "kind",
