@@ -220,14 +220,6 @@ function CryptoPage() {
         <p className="mt-4 max-w-2xl text-sm text-muted-foreground">Coinbase syncs daily.</p>
       </section>
 
-      {!query.isPending && (
-        <InvestmentIncome
-          events={perf.events}
-          trades={[...perf.tradesByKey.values()].flat()}
-          page="crypto"
-        />
-      )}
-
       {query.isPending ? (
         <>
           <Skeleton className="mb-6 h-80" />
@@ -387,6 +379,15 @@ function CryptoPage() {
       )}
 
       {!query.isPending && <TradesImport perf={perf} />}
+
+      {/* Under the holdings and the import that fills it: the holdings are the everyday task. */}
+      {!query.isPending && (
+        <InvestmentIncome
+          events={perf.events}
+          trades={[...perf.tradesByKey.values()].flat()}
+          page="crypto"
+        />
+      )}
 
       {/* Coinbase coins come back on their own when the sync sees them again. */}
       <SoldHoldings

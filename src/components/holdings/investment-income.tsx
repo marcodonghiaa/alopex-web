@@ -74,7 +74,7 @@ export function InvestmentIncome({
   const rows = incomeRows(all);
   if (rows.length === 0) return null;
   return (
-    <section aria-label="Income and costs" className="mb-6">
+    <section aria-label="Income and costs" className="my-6">
       <SectionTitle>Income and costs</SectionTitle>
       <GroupedList>
         {/* One table: the columns line up row to row, and a screen reader names each amount's column. */}

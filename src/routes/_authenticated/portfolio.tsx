@@ -220,14 +220,6 @@ function PortfolioPage() {
         </div>
       )}
 
-      {!query.isPending && (
-        <InvestmentIncome
-          events={perf.events}
-          trades={[...perf.tradesByKey.values()].flat()}
-          page="stock"
-        />
-      )}
-
       {query.isPending ? (
         <>
           <Skeleton className="mb-6 h-80" />
@@ -426,6 +418,15 @@ function PortfolioPage() {
       )}
 
       {!query.isPending && <TradesImport perf={perf} />}
+
+      {/* Under the holdings and the import that fills it: the holdings are the everyday task. */}
+      {!query.isPending && (
+        <InvestmentIncome
+          events={perf.events}
+          trades={[...perf.tradesByKey.values()].flat()}
+          page="stock"
+        />
+      )}
 
       <SoldHoldings
         items={(query.data ?? []).flatMap((row) =>
