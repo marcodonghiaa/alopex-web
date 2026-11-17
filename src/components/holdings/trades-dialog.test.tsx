@@ -10,12 +10,14 @@ vi.mock("@/integrations/supabase/client", () => ({
         updates.push(patch);
         return { eq: () => Promise.resolve({ error: null }) };
       },
+      delete: () => ({ eq: () => Promise.resolve({ error: null }) }),
     }),
   },
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { setLocaleOverride } from "@/lib/locale";
+import { toast } from "sonner";
 import { TradesDialog } from "./trades-dialog";
 
 afterEach(() => setLocaleOverride(""));
@@ -327,5 +329,36 @@ describe("TradesDialog", () => {
     expect(screen.getByRole("button", { name: "Remove: bought 2 on 1 Mar 2026" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Edit: sold 1 on 1 Mar 2026" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Remove: sold 1 on 1 Mar 2026" })).toBeTruthy();
+  });
+
+  it("polish-4 N3 removing another trade keeps what you're typing; removing the one you edit clears it", async () => {
+    const buy = { kind: "stock", key: "K", side: "buy", shares: 1, fee_eur: 0, price_eur: 10 };
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TradesDialog
+          kind="stock"
+          holdingKey="K"
+          name="Example ETF"
+          quantity={2}
+          label="Trades"
+          trades={[
+            { ...buy, id: "t1", trade_date: "2026-03-01" },
+            { ...buy, id: "t2", trade_date: "2026-03-02" },
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Trades" }));
+    fireEvent.change(await screen.findByLabelText(/Shares/), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Remove: bought 1 on 1 Mar 2026" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Trade removed"));
+    expect(screen.getByLabelText(/Shares/)).toHaveValue("5");
+    // Editing the second, then removing it, leaves edit mode.
+    fireEvent.click(screen.getByRole("button", { name: "Edit: bought 1 on 2 Mar 2026" }));
+    vi.mocked(toast.success).mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Remove: bought 1 on 2 Mar 2026" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Trade removed"));
+    expect(screen.getByRole("button", { name: "Add trade" })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Shares/)).toHaveValue("");
   });
 });

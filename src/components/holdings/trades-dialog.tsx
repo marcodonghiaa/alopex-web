@@ -81,12 +81,14 @@ export function TradesDialog({
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const done = (message: string) => {
+  const done = (message: string, clearForm = true) => {
     toast.success(message);
     void queryClient.invalidateQueries({ queryKey: ["holding-trades"] });
     void queryClient.invalidateQueries({ queryKey: ["holding-performance"] });
-    setForm(blank());
-    setEditing(null);
+    if (clearForm) {
+      setForm(blank());
+      setEditing(null);
+    }
     setError(null);
   };
   const failed = (err: Error) => setError(err.message);
@@ -118,7 +120,8 @@ export function TradesDialog({
       const { error: e } = await supabase.from("holding_trades").delete().eq("id", id);
       if (e) throw e;
     },
-    onSuccess: () => done("Trade removed"),
+    // Only the trade you were editing leaves the form: a half-typed new trade stays.
+    onSuccess: (_, id) => done("Trade removed", id === editing),
     onError: failed,
   });
 
