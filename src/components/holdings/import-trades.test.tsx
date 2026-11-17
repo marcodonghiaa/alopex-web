@@ -12,6 +12,8 @@ const db = vi.hoisted(() => ({
   upsertError: null as string | null,
   eventsDown: false,
   holdingsDown: false,
+  // The saved investment_events never arrive (still loading).
+  eventsHang: false,
   getUserCalls: 0,
   // The saved investment_events rows (the file's own, once imported).
   events: [] as Array<Record<string, unknown>>,
@@ -60,11 +62,13 @@ vi.mock("@/integrations/supabase/client", () => {
       order: () => query(rows),
       limit: () => query(rows),
       range: () =>
-        Promise.resolve(
-          down
-            ? { data: null, error: { message: "offline" }, count: null }
-            : { data: rows, error: null, count: rows.length },
-        ),
+        rows === tables["investment_events"] && db.eventsHang
+          ? new Promise(() => {})
+          : Promise.resolve(
+              down
+                ? { data: null, error: { message: "offline" }, count: null }
+                : { data: rows, error: null, count: rows.length },
+            ),
     });
   };
   return {
@@ -154,6 +158,7 @@ describe("ImportTrades", () => {
     db.upsertSaved = null;
     db.eventsDown = false;
     db.holdingsDown = false;
+    db.eventsHang = false;
     db.getUserCalls = 0;
     db.events.length = 0;
     db.insertGate = null;
@@ -571,5 +576,12 @@ describe("ImportTrades", () => {
     expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe("2 share counts corrected");
     expect(db.inserted).toEqual([]);
     expect(db.rpc).toHaveLength(2);
+  });
+
+  it("Save waits for your saved dividends and fees, so a re-import can't save them twice", async () => {
+    db.eventsHang = true;
+    open("stock");
+    expect(await pickTradeRepublic()).toBeDisabled();
+    expect(screen.queryByText("Also saved: income, fees and cash")).toBeNull();
   });
 });
