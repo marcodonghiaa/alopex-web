@@ -16,6 +16,7 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: { rpc, functions: { invoke } },
 }));
 
+import { setLocaleOverride } from "@/lib/locale";
 import { SyncSetup } from "./sync-setup";
 
 const httpError = (status: number, body: unknown) => ({
@@ -221,6 +222,28 @@ describe("Connect dialog", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
     await screen.findByText("Splitwise · Sam");
     expect(screen.getByRole("dialog", { name: "Connect Splitwise" })).toBeTruthy();
+  });
+
+  // polish-3 #7
+  it("groups the preview's counts in the chosen locale", async () => {
+    setLocaleOverride("de-DE");
+    try {
+      functions({
+        "splitwise-connect": [ok({ displayName: "Sam" })],
+        "sync-splitwise": [ok({ new: 1234, adopted: 0, review: 2500, deleted: 0 })],
+      });
+      const dialog = await open();
+      await userEvent.type(within(dialog).getByLabelText("API key"), "abcdefghijkl");
+      await userEvent.click(within(dialog).getByRole("checkbox"));
+      await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+      await within(dialog).findByText("New expenses");
+      const row = (label: string) =>
+        within(dialog).getByText(label).nextElementSibling?.textContent;
+      expect(row("New expenses")).toBe("1.234");
+      expect(row("To link")).toBe("2.500");
+    } finally {
+      setLocaleOverride("");
+    }
   });
 
   // polish-3 #8: one sync at a time, whichever button started it

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BankTx } from "@/lib/import/splitwise-match";
+import { setLocaleOverride } from "@/lib/locale";
 
 const rpc = vi.hoisted(() => vi.fn());
 const invoke = vi.hoisted(() => vi.fn());
@@ -33,6 +34,7 @@ import {
   syncNow,
   syncRefreshKeys,
   syncSummary,
+  formatCount,
   SyncError,
   type ReviewItem,
 } from "./splitwise-sync";
@@ -207,6 +209,18 @@ describe("syncSummary", () => {
   });
   it("says so when nothing changed", () => {
     expect(syncSummary({ new: 0, adopted: 0, review: 0, deleted: 0 })).toBe("Nothing new");
+  });
+  // polish-3 #7: counts group thousands as every other figure in the app does
+  it("groups thousands in the chosen locale", () => {
+    setLocaleOverride("it-IT");
+    try {
+      expect(syncSummary({ new: 1234, adopted: 2000, review: 1500, deleted: 1001 })).toBe(
+        "1.234 new expenses, 2.000 expenses already imported, 1.500 to link, 1.001 removed",
+      );
+      expect(formatCount(1234)).toBe("1.234");
+    } finally {
+      setLocaleOverride("");
+    }
   });
 });
 

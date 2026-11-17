@@ -3,6 +3,7 @@ import { functionErrorBody } from "@/lib/function-error";
 import type { ClassifiedRow } from "@/lib/import/splitwise-classify";
 import { matchBank, type BankTx, type RateToEur } from "@/lib/import/splitwise-match";
 import { refreshKeys } from "@/lib/import/last-import";
+import { numberFormat } from "@/lib/locale";
 
 // The dashboard side of the Splitwise API sync: the connection's status, the two Edge Functions
 // (splitwise-connect, sync-splitwise) and the To link list (splitwise_review). The server does
@@ -107,15 +108,19 @@ export const previewSync = () =>
 export const syncNow = () =>
   call<SyncCounts>("sync-splitwise", {}, "Couldn't sync with Splitwise. Try again later.");
 
-const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+/** A count as every figure in the app is written: "1.234" in Italian or German. */
+export const formatCount = (n: number) => numberFormat().format(n);
+
+const count = (n: number, one: string, many = `${one}s`) =>
+  `${formatCount(n)} ${n === 1 ? one : many}`;
 
 /** "2 new expenses, 1 to link", or "Nothing new" when the sync changed nothing. */
 export function syncSummary(c: SyncCounts): string {
   const parts = [
     c.new > 0 && count(c.new, "new expense"),
     c.adopted > 0 && `${count(c.adopted, "expense")} already imported`,
-    c.review > 0 && `${c.review} to link`,
-    c.deleted > 0 && `${c.deleted} removed`,
+    c.review > 0 && `${formatCount(c.review)} to link`,
+    c.deleted > 0 && `${formatCount(c.deleted)} removed`,
   ].filter(Boolean);
   return parts.length ? parts.join(", ") : "Nothing new";
 }

@@ -10,6 +10,7 @@ import { isDemoMode } from "@/lib/demo/mode";
 import {
   CONNECTION_KEY,
   connectSplitwise,
+  formatCount,
   previewSync,
   type SyncCounts,
 } from "@/lib/splitwise-sync";
@@ -174,7 +175,9 @@ export function ConnectDialog({
                   {COUNTS.map(([k, label]) => (
                     <div key={k} className="flex min-h-11 items-center justify-between px-4">
                       <dt className="text-sm">{label}</dt>
-                      <dd className="font-figure text-[0.9375rem]">{preview.data[k]}</dd>
+                      <dd className="font-figure text-[0.9375rem]">
+                        {formatCount(preview.data[k])}
+                      </dd>
                     </div>
                   ))}
                 </dl>

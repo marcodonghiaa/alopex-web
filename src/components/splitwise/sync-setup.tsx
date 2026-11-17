@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { useSplitwiseConnection, useSyncNow, useSyncRunning } from "@/lib/use-splitwise-sync";
 import {
   disconnectSplitwise,
+  formatCount,
   syncedAgo,
   syncRefreshKeys,
   type SplitwiseConnection,
@@ -193,9 +194,9 @@ function DisconnectDialog({
     onSuccess: ({ deleted }, andData) => {
       toast.success(
         onlyDelete
-          ? `Synced Splitwise data deleted: ${deleted === 1 ? "1 expense" : `${deleted} expenses`}`
+          ? `Synced Splitwise data deleted: ${deleted === 1 ? "1 expense" : `${formatCount(deleted)} expenses`}`
           : andData
-            ? `Splitwise disconnected, ${deleted === 1 ? "1 synced expense" : `${deleted} synced expenses`} removed`
+            ? `Splitwise disconnected, ${deleted === 1 ? "1 synced expense" : `${formatCount(deleted)} synced expenses`} removed`
             : "Splitwise disconnected. What was synced stays.",
       );
       for (const queryKey of syncRefreshKeys()) void queryClient.invalidateQueries({ queryKey });

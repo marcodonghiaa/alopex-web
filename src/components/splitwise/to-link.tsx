@@ -15,6 +15,7 @@ import {
   canCount,
   directionOf,
   fetchReview,
+  formatCount,
   KIND_LABEL,
   REVIEW_KEY,
   reviewRow,
@@ -124,7 +125,7 @@ export function ToLink({ connected }: { connected: boolean }) {
         action={
           count > 0 ? (
             <span className="pb-px font-figure text-xs text-ember">
-              {count}
+              {formatCount(count)}
               <span className="sr-only"> to link</span>
             </span>
           ) : null
