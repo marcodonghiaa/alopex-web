@@ -14,8 +14,8 @@ const payment: PaybackCandidate = {
   payer: "MARIO VERDI",
   linked_contact: null,
 };
-const mario: Debtor = { name: "Marverdi", open: 320, splitwiseOnly: false };
-const anna: Debtor = { name: "Anna", open: 60, splitwiseOnly: false };
+const mario: Debtor = { name: "Marverdi", open: 320, onSplitwise: 0, splitwiseOnly: false };
+const anna: Debtor = { name: "Anna", open: 60, onSplitwise: 0, splitwiseOnly: false };
 const suggestion = (over: Partial<PaybackSuggestion> = {}): PaybackSuggestion => ({
   payment,
   debtor: mario,
@@ -106,7 +106,7 @@ describe("PaymentsToCheck", () => {
   // protects=recording the person you picked; fails_when=the list changes under the open form and
   // Confirm silently records whoever is now first
   it("Someone else never records a person you didn't pick", async () => {
-    const bob: Debtor = { name: "Bob", open: 30, splitwiseOnly: false };
+    const bob: Debtor = { name: "Bob", open: 30, onSplitwise: 0, splitwiseOnly: false };
     const { onConfirm, setDebtors } = view([suggestion()], [mario, anna, bob]);
     await userEvent.click(screen.getByRole("button", { name: "Someone else" }));
     await userEvent.selectOptions(screen.getByLabelText(/Who paid you/), "Bob");
@@ -209,6 +209,7 @@ describe("PaymentsToCheck", () => {
     const long: Debtor = {
       name: "Maria Alessandra Bianchi-Ferraris di Montebello",
       open: 320,
+      onSplitwise: 0,
       splitwiseOnly: false,
     };
     view([suggestion({ debtor: long })], [long, anna]);

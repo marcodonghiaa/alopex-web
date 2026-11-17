@@ -18,6 +18,8 @@ export interface PaybackCandidate extends TxKey {
 export interface Debtor {
   name: string;
   open: number;
+  /** The part of `open` that is a Splitwise balance (settled in Splitwise, not here). */
+  onSplitwise: number;
   /** Only a Splitwise balance: Alopex has no bills of theirs to settle. */
   splitwiseOnly: boolean;
 }
@@ -49,14 +51,23 @@ export function debtorsFrom(
 ): Array<Debtor> {
   const byName = new Map<string, Debtor & { fromSplits: boolean }>();
   const add = (name: string, value: number, fromSplits: boolean) => {
+    const sw = fromSplits ? 0 : value;
     const key = name.trim().toLowerCase();
     // The server records names up to 100 characters (record_payback): longer ones can't be asked.
     if (!key || [...name.trim()].length > 100) return;
     const hit = byName.get(key);
     if (hit) {
       hit.open += value;
+      hit.onSplitwise += sw;
       hit.fromSplits ||= fromSplits;
-    } else byName.set(key, { name: name.trim(), open: value, splitwiseOnly: false, fromSplits });
+    } else
+      byName.set(key, {
+        name: name.trim(),
+        open: value,
+        onSplitwise: sw,
+        splitwiseOnly: false,
+        fromSplits,
+      });
   };
   // Bills with no name ("Not assigned") have nobody to pay them back.
   for (const p of people) if (p.open > 0 && p.name !== NO_NAME) add(p.name, p.open, true);
@@ -69,6 +80,7 @@ export function debtorsFrom(
     .map(({ fromSplits, ...d }) => ({
       ...d,
       open: Math.round(d.open * 100) / 100,
+      onSplitwise: Math.round(d.onSplitwise * 100) / 100,
       splitwiseOnly: !fromSplits,
     }))
     .filter((d) => d.open >= 0.01)
@@ -239,3 +251,11 @@ export const dismissMessage = (name: string, linked: boolean): string =>
   linked
     ? `Got it: not ${name}. This payer is no longer linked to them.`
     : "Got it: not a payback.";
+
+/** What they owe you, in the parts the page shows: "€256.00 in bills + €30.50 on Splitwise". */
+export function owesLine(d: Debtor, money: (eur: number) => string): string {
+  const bills = Math.round((d.open - d.onSplitwise) * 100) / 100;
+  if (d.onSplitwise < 0.01) return `owes you ${money(d.open)}`;
+  if (bills < 0.01) return `owes you ${money(d.onSplitwise)} on Splitwise`;
+  return `owes you ${money(bills)} in bills + ${money(d.onSplitwise)} on Splitwise`;
+}

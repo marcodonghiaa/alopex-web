@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { dateLocale } from "@/lib/locale";
 import { money } from "@/lib/splits";
 import { txId } from "@/lib/transactions";
-import type { Debtor, PaybackCandidate, PaybackSuggestion } from "@/lib/payback";
+import {
+  owesLine,
+  type Debtor,
+  type PaybackCandidate,
+  type PaybackSuggestion,
+} from "@/lib/payback";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/field";
 import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
@@ -103,7 +108,7 @@ export function PaymentsToCheck({
                       {day(p.booking_date)}
                     </p>
                     <p className="text-[0.8125rem] text-muted-foreground">
-                      {why(s)} · owes you {money(s.debtor.open, "EUR")}
+                      {why(s)} · {owesLine(s.debtor, (v) => money(v, "EUR"))}
                     </p>
                   </div>
                 </div>

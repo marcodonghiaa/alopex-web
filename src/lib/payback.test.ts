@@ -3,6 +3,7 @@ import {
   debtorsFrom,
   namesLookAlike,
   dismissMessage,
+  owesLine,
   paybackMessage,
   suggestPaybacks,
   type Debtor,
@@ -32,7 +33,12 @@ const pay = (over: Partial<PaybackCandidate> = {}): PaybackCandidate => ({
   linked_contact: null,
   ...over,
 });
-const debtor = (name: string, open: number): Debtor => ({ name, open, splitwiseOnly: false });
+const debtor = (name: string, open: number): Debtor => ({
+  name,
+  open,
+  onSplitwise: 0,
+  splitwiseOnly: false,
+});
 
 describe("namesLookAlike", () => {
   it.each([
@@ -101,7 +107,7 @@ describe("debtorsFrom", () => {
       ],
       rate,
     );
-    expect(out).toEqual([{ name: "Anna", open: 120, splitwiseOnly: false }]);
+    expect(out).toEqual([{ name: "Anna", open: 120, onSplitwise: 60, splitwiseOnly: false }]);
   });
 
   it("marks Splitwise-only debtors and drops groups without a rate", () => {
@@ -113,25 +119,25 @@ describe("debtorsFrom", () => {
       ],
       rate,
     );
-    expect(out).toEqual([{ name: "Marverdi", open: 320, splitwiseOnly: true }]);
+    expect(out).toEqual([{ name: "Marverdi", open: 320, onSplitwise: 320, splitwiseOnly: true }]);
   });
 
   it("leaves out names over 100 characters: the server can't record them", () => {
     const long = "A".repeat(101);
     expect(debtorsFrom([person(long, 50), person("😀".repeat(100), 5)], [], rate)).toEqual([
-      { name: "😀".repeat(100), open: 5, splitwiseOnly: false },
+      { name: "😀".repeat(100), open: 5, onSplitwise: 0, splitwiseOnly: false },
     ]);
   });
 
   it("leaves out bills with no name: nobody can pay those back", () => {
     expect(debtorsFrom([person(NO_NAME, 50), person("Anna", 10)], [], rate)).toEqual([
-      { name: "Anna", open: 10, splitwiseOnly: false },
+      { name: "Anna", open: 10, onSplitwise: 0, splitwiseOnly: false },
     ]);
   });
 
   it("rounds to the cent and drops what is under a cent", () => {
     expect(debtorsFrom([person("A", 10.004), person("B", 0.004)], [], rate)).toEqual([
-      { name: "A", open: 10, splitwiseOnly: false },
+      { name: "A", open: 10, onSplitwise: 0, splitwiseOnly: false },
     ]);
   });
 });
@@ -236,5 +242,21 @@ describe("dismissMessage", () => {
       "Got it: not Anna. This payer is no longer linked to them.",
     );
     expect(dismissMessage("Anna", false)).toBe("Got it: not a payback.");
+  });
+});
+
+describe("owesLine", () => {
+  const money = (n: number) => `€${n.toFixed(2)}`;
+  // protects=the figure matches the page; fails_when=it shows one total no row on the page shows
+  it("names each part so it matches the page: bills, Splitwise, or both", () => {
+    const d = (open: number, onSplitwise: number): Debtor => ({
+      name: "Giulia",
+      open,
+      onSplitwise,
+      splitwiseOnly: onSplitwise >= open,
+    });
+    expect(owesLine(d(256, 0), money)).toBe("owes you €256.00");
+    expect(owesLine(d(30.5, 30.5), money)).toBe("owes you €30.50 on Splitwise");
+    expect(owesLine(d(286.5, 30.5), money)).toBe("owes you €256.00 in bills + €30.50 on Splitwise");
   });
 });
