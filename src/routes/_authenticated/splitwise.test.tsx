@@ -1,12 +1,19 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-// The demo client mirrors the real tables: split bills plus Splitwise groups on both sides.
-vi.mock("@/integrations/supabase/client", async () => {
+// The demo client mirrors the real tables: split bills plus Splitwise groups on both sides. A
+// fresh one per test, so answers given in one test never leak into the next.
+const db = vi.hoisted(() => ({ client: null as unknown }));
+vi.mock("@/integrations/supabase/client", () => ({
+  get supabase() {
+    return db.client;
+  },
+}));
+beforeEach(async () => {
   const { createFakeClient } = await import("@/lib/demo/fake-client");
-  return { supabase: createFakeClient(new Date("2026-11-08T12:00:00Z")) };
+  db.client = createFakeClient(new Date("2026-11-08T12:00:00Z"));
 });
 
 import { toast } from "sonner";
@@ -68,7 +75,7 @@ describe("Who owes you", () => {
         expect.objectContaining({ duration: 10_000, action: expect.anything() }),
       ),
     );
-    // Its Undo brings the question back (and leaves the demo data as it was for the next test).
+    // Its Undo brings the question back.
     const opts = success.mock.calls.at(-1)?.[1] as unknown as { action: { onClick: () => void } };
     opts.action.onClick();
     expect(await screen.findByRole("region", { name: "Payments to check" })).toBeTruthy();
