@@ -358,7 +358,12 @@ function AccountsPage() {
               role="status"
               className="mb-4 flex flex-wrap items-center justify-between gap-3 break-words rounded-lg bg-warning/10 px-4 py-3 text-sm text-foreground"
             >
-              <span className="min-w-0">{issue!.text}</span>
+              {/* A long code like WRONG_CONTINUATION_KEY breaks after an underscore, not mid-word. */}
+              <span className="min-w-0">
+                {issue!.text
+                  .split(/(?<=_)/)
+                  .flatMap((part, i) => (i ? [<wbr key={i} />, part] : [part]))}
+              </span>
               {issue!.reconnect && issue!.bank && (
                 <Button
                   variant="ghost"

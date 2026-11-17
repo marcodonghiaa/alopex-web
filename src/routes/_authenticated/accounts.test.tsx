@@ -241,6 +241,15 @@ describe("sync errors", () => {
     expect(order[0]).toMatch(/Renew access/);
   });
 
+  // protects=a long unknown code breaks at its underscores on a phone; fails_when=it splits mid-word
+  it("lets a long error code break after its underscores", async () => {
+    rows.v_bank_accounts_latest = [account({ sync_error: "WRONG_CONTINUATION_KEY" })];
+    renderPage();
+    const banner = (await screen.findByText(/WRONG_/)).closest("[role=status]")!;
+    expect(banner.textContent).toMatch(/\(WRONG_CONTINUATION_KEY\)/);
+    expect(banner.querySelectorAll("wbr")).toHaveLength(2);
+  });
+
   it("shows nothing when the last sync went through", async () => {
     rows.v_bank_accounts_latest = [account({ sync_error: null })];
     renderPage();
