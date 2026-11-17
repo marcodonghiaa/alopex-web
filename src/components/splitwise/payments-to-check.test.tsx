@@ -30,16 +30,17 @@ function view(
 ) {
   const onConfirm = vi.fn();
   const onDismiss = vi.fn();
-  render(
+  const ui = (d: Array<Debtor>) => (
     <PaymentsToCheck
       suggestions={s}
-      debtors={debtors}
+      debtors={d}
       busy={busy}
       onConfirm={onConfirm}
       onDismiss={onDismiss}
-    />,
+    />
   );
-  return { onConfirm, onDismiss };
+  const { rerender } = render(ui(debtors));
+  return { onConfirm, onDismiss, setDebtors: (d: Array<Debtor>) => rerender(ui(d)) };
 }
 
 describe("PaymentsToCheck", () => {
@@ -92,6 +93,23 @@ describe("PaymentsToCheck", () => {
     await userEvent.click(screen.getByRole("button", { name: "Confirm" }));
     expect(onConfirm).toHaveBeenCalledWith(payment, anna);
     expect(screen.queryByRole("button", { name: "Confirm" })).toBeNull();
+  });
+
+  // protects=recording the person you picked; fails_when=the list changes under the open form and
+  // Confirm silently records whoever is now first
+  it("Someone else never records a person you didn't pick", async () => {
+    const bob: Debtor = { name: "Bob", open: 30, splitwiseOnly: false };
+    const { onConfirm, setDebtors } = view([suggestion()], [cri, anna, bob]);
+    await userEvent.click(screen.getByRole("button", { name: "Someone else" }));
+    await userEvent.selectOptions(screen.getByLabelText(/Who paid you/), "Bob");
+    setDebtors([cri, anna]); // Bob settled up elsewhere while the form was open
+    await userEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    expect(onConfirm).not.toHaveBeenCalled();
+    // The form says so instead of showing Anna as if picked.
+    expect((screen.getByLabelText(/Who paid you/) as HTMLSelectElement).value).toBe("");
+    await userEvent.selectOptions(screen.getByLabelText(/Who paid you/), "Anna");
+    await userEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    expect(onConfirm).toHaveBeenCalledWith(payment, anna);
   });
 
   it("no Someone else when nobody else owes you", () => {

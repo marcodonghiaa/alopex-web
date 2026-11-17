@@ -38,6 +38,9 @@ export function PaymentsToCheck({
   onDismiss: (payment: PaybackCandidate, suggestion: PaybackSuggestion) => void;
 }) {
   const [choosing, setChoosing] = useState<string | null>(null);
+  // Who you picked under "Someone else", by name: if they leave the list while the form is open,
+  // the select shows no one rather than whoever is now first.
+  const [pick, setPick] = useState("");
   if (suggestions.length === 0) return null;
 
   return (
@@ -72,8 +75,7 @@ export function PaymentsToCheck({
                     className="mt-3 flex flex-wrap items-center gap-2 sm:pl-[3.25rem]"
                     onSubmit={(e) => {
                       e.preventDefault();
-                      const name = new FormData(e.currentTarget).get("who");
-                      const d = debtors.find((x) => x.name === name);
+                      const d = others.find((x) => x.name === pick);
                       if (d) {
                         setChoosing(null);
                         onConfirm(p, d);
@@ -87,9 +89,15 @@ export function PaymentsToCheck({
                       id={`who-${id}`}
                       name="who"
                       className="w-full sm:w-56"
-                      defaultValue={others[0]?.name}
+                      value={others.some((d) => d.name === pick) ? pick : ""}
+                      onChange={(e) => setPick(e.target.value)}
                       autoFocus
                     >
+                      {!others.some((d) => d.name === pick) && (
+                        <option value="" disabled>
+                          Choose who paid you
+                        </option>
+                      )}
                       {others.map((d) => (
                         <option key={d.name} value={d.name}>
                           {d.name} · owes {money(d.open, "EUR")}
@@ -109,7 +117,14 @@ export function PaymentsToCheck({
                       Yes, it's {s.debtor.name}
                     </Button>
                     {others.length > 0 && (
-                      <Button variant="secondary" disabled={saving} onClick={() => setChoosing(id)}>
+                      <Button
+                        variant="secondary"
+                        disabled={saving}
+                        onClick={() => {
+                          setPick(others[0]?.name ?? "");
+                          setChoosing(id);
+                        }}
+                      >
                         Someone else
                       </Button>
                     )}
