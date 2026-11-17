@@ -197,21 +197,18 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
         if (error) throw error;
       }
       // If this fails the trades are safe: importing again skips them and retries the counts.
-      for (const { key, shares } of updates) {
-        // Coins go through set_holding_quantity, which also writes today's value for net worth.
-        if (kind === "crypto") {
-          await saveQuantity(
-            { kind: "crypto", symbol: wallet!.get(key)!.symbol, source: wallet!.get(key)!.source },
-            shares,
-          );
-          continue;
-        }
-        const { error } = await supabase
-          .from("portfolio_holdings")
-          .update({ shares })
-          .eq("isin", key);
-        if (error) throw error;
-      }
+      // set_holding_quantity also writes today's value, so net worth moves at once.
+      for (const { key, shares } of updates)
+        await saveQuantity(
+          kind === "stock"
+            ? { kind: "stock", isin: key }
+            : {
+                kind: "crypto",
+                symbol: wallet!.get(key)!.symbol,
+                source: wallet!.get(key)!.source,
+              },
+          shares,
+        );
       // A re-import is skipped by the database too: the same broker id is saved once.
       if (freshEvents.length > 0) {
         const { data } = await supabase.auth.getUser();

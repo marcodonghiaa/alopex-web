@@ -315,7 +315,18 @@ describe("ImportTrades", () => {
       "4 trades saved, but the income, fee and cash rows weren't (boom). Import the file again to save them.",
     );
     expect(db.inserted).toHaveLength(4);
-    expect(db.updated.map(([table]) => table)).toContain("portfolio_holdings");
+    // Through set_holding_quantity, which also writes today's value for net worth.
+    expect(db.rpc).toEqual([
+      [
+        "set_holding_quantity",
+        { p_kind: "stock", p_key: "XX0000000001", p_quantity: 4, p_source: null },
+      ],
+      [
+        "set_holding_quantity",
+        { p_kind: "stock", p_key: "XX0000000002", p_quantity: 0, p_source: null },
+      ],
+    ]);
+    expect(db.updated).toEqual([]);
   });
 
   it("the preview names income and costs as the Income and costs section does", async () => {
