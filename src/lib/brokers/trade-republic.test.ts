@@ -23,6 +23,10 @@ type Row = Partial<{
   fx_rate: string;
   description: string;
   id: string;
+  counterparty_name: string;
+  counterparty_iban: string;
+  payment_reference: string;
+  mcc_code: string;
 }>;
 let n = 0;
 const row = (r: Row) => {
@@ -47,10 +51,10 @@ const row = (r: Row) => {
     r.fx_rate ?? "",
     r.description ?? "",
     r.id ?? `00000000-0000-7000-8000-${String(++n).padStart(12, "0")}`,
-    "",
-    "",
-    "",
-    "",
+    r.counterparty_name ?? "",
+    r.counterparty_iban ?? "",
+    r.payment_reference ?? "",
+    r.mcc_code ?? "",
   ];
   return cells.map((c) => `"${c}"`).join(",");
 };
@@ -396,6 +400,41 @@ describe("Trade Republic, income, fees, taxes and cash", () => {
       stock,
     );
     expect(events?.map((e) => e.kind)).toEqual(["deposit", "withdrawal", "withdrawal"]);
+  });
+
+  it("who money went to or came from is never saved, on a transfer or a trade", () => {
+    // All invented: no real person, account or reference.
+    const who = {
+      counterparty_name: "Testa Fakeperson",
+      counterparty_iban: "XX00TEST0000000000000001",
+      payment_reference: "FAKE-REF-4711",
+      mcc_code: "9999",
+    };
+    const cash = { category: "CASH", symbol: "", name: "", ...who };
+    const { trades, events, errors } = parseTradesCsv(
+      file(
+        {
+          ...cash,
+          type: "CUSTOMER_INBOUND",
+          amount: "500",
+          description: "Incoming transfer from Testa Fakeperson",
+        },
+        {
+          ...cash,
+          type: "TRANSFER_INSTANT_OUTBOUND",
+          amount: "-200",
+          description: "Outgoing transfer for Testa Fakeperson",
+        },
+        { ...who, type: "BUY", shares: "1", price: "10", amount: "-10" },
+      ),
+      stock,
+    );
+    expect(errors).toEqual([]);
+    expect(trades).toHaveLength(1);
+    expect(events).toHaveLength(2);
+    const stored = JSON.stringify([trades, events]);
+    for (const secret of ["Testa", "Fakeperson", "XX00TEST", "FAKE-REF-4711", "9999"])
+      expect(stored).not.toContain(secret);
   });
 
   it("card payments are skipped and counted; a card fee is still a fee", () => {
