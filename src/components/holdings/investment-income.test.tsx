@@ -85,6 +85,25 @@ describe("InvestmentIncome", () => {
     expect(screen.queryByText("Fees")).toBeNull();
   });
 
+  it("a cost of nothing this year shows €0.00 there, not -€0.00", () => {
+    render(
+      <InvestmentIncome
+        page="stock"
+        today="2026-11-17"
+        events={[
+          ev({
+            kind: "fee",
+            asset_kind: null,
+            key: null,
+            event_date: "2025-06-01",
+            amount_eur: -1,
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByText("Fees").parentElement?.textContent).toBe("Fees€0.00-€1.00");
+  });
+
   it("coins' events go to Crypto, shares' and cash to Portfolio", () => {
     const coin = ev({ asset_kind: "crypto", key: "BTC" });
     const cash = ev({ kind: "interest", asset_kind: null, key: null });

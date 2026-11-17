@@ -31,12 +31,16 @@ const INCOME_ROWS: Array<{ label: string; field: keyof IncomeSummary; cost?: boo
   { label: "Fees", field: "fees", cost: true },
 ];
 
-/** The rows with something to show, each with its amount; a cost reads as money out. */
+/** A row's amount as shown: a cost as money out, and under half a cent (rounding dust) as 0, not "−€0.00". */
+function incomeValue(summary: IncomeSummary, r: (typeof INCOME_ROWS)[number]) {
+  const v = r.cost ? -summary[r.field] : summary[r.field];
+  return Math.abs(v) < 0.005 ? 0 : v;
+}
+
+/** The rows with something to show, each with its amount. */
 export function incomeRows(summary: IncomeSummary) {
-  return (
-    INCOME_ROWS.map((r) => ({ ...r, value: r.cost ? -summary[r.field] : summary[r.field] }))
-      // Under half a cent is rounding dust: it would show as "−€0.00".
-      .filter((r) => Math.abs(r.value) >= 0.005)
+  return INCOME_ROWS.map((r) => ({ ...r, value: incomeValue(summary, r) })).filter(
+    (r) => r.value !== 0,
   );
 }
 
@@ -66,7 +70,6 @@ export function InvestmentIncome({
   const year = incomeAndCosts(mine, trades, `${today.slice(0, 4)}-01-01`);
   const rows = incomeRows(all);
   if (rows.length === 0) return null;
-  const shown = (n: number, cost?: boolean) => formatEur(cost ? -n : n);
   return (
     <section aria-label="Income and costs" className="mb-6">
       <SectionTitle>Income and costs</SectionTitle>
@@ -82,7 +85,7 @@ export function InvestmentIncome({
             className="grid min-h-11 grid-cols-[1fr_auto_auto] items-center gap-x-6 px-4 text-[0.9375rem]"
           >
             <span className="text-foreground">{r.label}</span>
-            <span className="text-right font-figure">{shown(year[r.field], r.cost)}</span>
+            <span className="text-right font-figure">{formatEur(incomeValue(year, r))}</span>
             <span className="text-right font-figure">{formatEur(r.value)}</span>
           </div>
         ))}
