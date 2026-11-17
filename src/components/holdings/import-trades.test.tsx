@@ -334,6 +334,18 @@ describe("ImportTrades", () => {
     },
   );
 
+  it("after a rates error, Try again loads them and offers the save", async () => {
+    db.ratesDown = true;
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    await screen.findByText(/Couldn't load USD exchange rates/);
+    db.ratesDown = false;
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("button", { name: "Save 7 trades" })).toBeTruthy();
+    expect(screen.queryByText(/Couldn't load USD exchange rates/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
   it("when your holdings can't be loaded it says so", async () => {
     db.holdingsDown = true;
     open("crypto");

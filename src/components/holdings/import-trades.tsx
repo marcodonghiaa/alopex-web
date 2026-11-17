@@ -427,9 +427,14 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
           </>
         )}
         {rates.isError && (
-          <p role="alert" className="text-sm text-negative">
-            {rates.error.message}
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p role="alert" className="text-sm text-negative">
+              {rates.error.message}
+            </p>
+            <Button variant="quiet" onClick={() => void rates.refetch()}>
+              Try again
+            </Button>
+          </div>
         )}
         {keys.isError && (
           <p role="alert" className="text-sm text-negative">
