@@ -1,3 +1,4 @@
+import { cutChars } from "@/lib/transactions";
 import type { ClassifiedRow } from "./splitwise-classify";
 import {
   diffStored,
@@ -161,7 +162,7 @@ export function planWrite(input: PlanInput): WritePlan {
     input.stored,
   );
   const { problems, byRow } = checkMatches(rows, input.confirmed);
-  if (group === "" || group.length > MAX_GROUP) {
+  if (group === "" || Array.from(group).length > MAX_GROUP) {
     problems.push(`The group name must be between 1 and ${MAX_GROUP} characters.`);
   }
 
@@ -196,7 +197,7 @@ export function planWrite(input: PlanInput): WritePlan {
     shares.push({
       fingerprint,
       booking_date: r.date,
-      description: r.description.slice(0, MAX_DESCRIPTION),
+      description: cutChars(r.description, MAX_DESCRIPTION),
       category: input.categoryFor(r),
       amount: euros(r.shareCents),
       currency: r.currency,

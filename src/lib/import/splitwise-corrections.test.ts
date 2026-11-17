@@ -169,6 +169,19 @@ describe("planCorrections", () => {
     categoryFor: () => "Food",
   };
 
+  // polish-1 #17: same character cut as the import
+  it("cuts an added row's description by characters, emoji on the boundary whole", () => {
+    const long = rowsOf(
+      row({ row: 1, description: `${"y".repeat(299)}😀tail`, netCents: [-400, 800, -400] }),
+    );
+    const plan = planCorrections({
+      ...input,
+      older: [{ row: long[0] as (typeof long)[number], fingerprint: "f" }],
+      ticked: new Set(["f"]),
+    });
+    expect(plan.add[0]?.description).toBe(`${"y".repeat(299)}😀`);
+  });
+
   // protects=nothing old changes without a tick; fails_when=the default selection sends a row
   it("sends nothing when nothing is ticked", () => {
     expect(planCorrections(input)).toEqual({ add: [], edit: [], remove: [], problems: [] });

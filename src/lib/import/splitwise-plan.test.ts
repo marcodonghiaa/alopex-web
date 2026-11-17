@@ -198,6 +198,21 @@ describe("planWrite", () => {
     expect(plan.problems).toEqual([]);
   });
 
+  // polish-1 #17: the database counts characters (char_length); a cut by UTF-16 units splits an
+  // emoji on the boundary (a lone surrogate jsonb refuses) and never matches the sync's cut
+  it("cuts by characters, keeping an emoji on the boundary whole", () => {
+    const long = rowsOf(row({ row: 1, description: `${"y".repeat(299)}😀tail` }));
+    const plan = planWrite({ ...base(long), fingerprints: ["short-id"] });
+    expect(plan.shares[0]?.description).toBe(`${"y".repeat(299)}😀`);
+  });
+
+  it("takes a 100-character group name that ends in an emoji", () => {
+    expect(planWrite({ ...base(), group: `${"g".repeat(99)}😀` }).problems).toEqual([]);
+    expect(planWrite({ ...base(), group: `${"g".repeat(100)}😀` }).problems).toEqual([
+      expect.stringMatching(/group/i),
+    ]);
+  });
+
   it("writes nothing for a file with nothing of mine in it", () => {
     const plan = planWrite(base(rowsOf(NOT_MINE)));
     expect(plan.shares).toEqual([]);

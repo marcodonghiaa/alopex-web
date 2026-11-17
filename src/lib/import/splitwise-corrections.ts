@@ -1,3 +1,4 @@
+import { cutChars } from "@/lib/transactions";
 import type { ClassifiedRow } from "./splitwise-classify";
 import type { RateToEur } from "./splitwise-match";
 import type { RpcClient } from "./splitwise-commit";
@@ -165,7 +166,7 @@ export function planCorrections(input: CorrectionInput): CorrectionPlan {
       return {
         fingerprint,
         booking_date: row.date,
-        description: row.description.slice(0, MAX_DESCRIPTION),
+        description: cutChars(row.description, MAX_DESCRIPTION),
         category: input.categoryFor(row),
         amount: euros(row.shareCents ?? 0),
         currency: row.currency,
@@ -183,7 +184,7 @@ export function planCorrections(input: CorrectionInput): CorrectionPlan {
         old_fingerprint: stored.fingerprint,
         fingerprint,
         booking_date: row.date,
-        description: renamed ? row.description.slice(0, MAX_DESCRIPTION) : stored.description,
+        description: renamed ? cutChars(row.description, MAX_DESCRIPTION) : stored.description,
         amount: euros(row.shareCents ?? 0),
         currency: row.currency,
         cost: euros(Math.abs(row.costCents)),
