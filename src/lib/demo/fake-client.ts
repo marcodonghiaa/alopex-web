@@ -551,6 +551,7 @@ class Query implements PromiseLike<Result> {
   private conflict: Array<string> = [];
   private head = false;
   private wantCount = false;
+  private ignoreDuplicates = false;
   private one: "one" | "maybe" | null = null;
 
   constructor(
@@ -568,10 +569,11 @@ class Query implements PromiseLike<Result> {
     this.payload = [rows].flat();
     return this;
   }
-  upsert(rows: Row | Array<Row>, opts?: { onConflict?: string }) {
+  upsert(rows: Row | Array<Row>, opts?: { onConflict?: string; ignoreDuplicates?: boolean }) {
     this.mode = "upsert";
     this.payload = [rows].flat();
     this.conflict = opts?.onConflict?.split(",") ?? [];
+    this.ignoreDuplicates = !!opts?.ignoreDuplicates;
     return this;
   }
   update(patch: Row) {
@@ -658,7 +660,11 @@ class Query implements PromiseLike<Result> {
     const matches = rows.filter((r) => this.filters.every((f) => f(r)));
     let affected = matches;
     if (this.mode === "insert") affected = this.payload.map((p) => this.insertRow(rows, p));
-    if (this.mode === "upsert") affected = this.payload.map((p) => this.upsertRow(rows, p));
+    if (this.mode === "upsert")
+      affected = this.payload.flatMap((p): Array<Row> => {
+        const row = this.upsertRow(rows, p);
+        return row ? [row] : [];
+      });
     if (this.mode === "update") matches.forEach((r) => Object.assign(r, this.patch));
     if (this.mode === "delete")
       this.store.db[this.table] = rows.filter((r) => !matches.includes(r));
@@ -676,12 +682,14 @@ class Query implements PromiseLike<Result> {
     return row;
   }
 
-  private upsertRow(rows: Array<Row>, p: Row): Row {
+  // Like Postgres: a null in the key never matches (nulls are distinct), and ignoreDuplicates
+  // leaves the saved row alone and doesn't return it.
+  private upsertRow(rows: Array<Row>, p: Row): Row | null {
     const hit = rows.find(
-      (r) => this.conflict.length > 0 && this.conflict.every((c) => r[c] === p[c]),
+      (r) => this.conflict.length > 0 && this.conflict.every((c) => p[c] != null && r[c] === p[c]),
     );
     if (!hit) return this.insertRow(rows, p);
-    return Object.assign(hit, p);
+    return this.ignoreDuplicates ? null : Object.assign(hit, p);
   }
 
   private shape(rows: Array<Row>, count: number | null): Result {

@@ -168,6 +168,41 @@ describe("fake client: writes live in memory only", () => {
     expect(n2).toBe(n);
   });
 
+  it("upserts like Postgres: ignoreDuplicates keeps the saved row, a null key never matches", async () => {
+    const c = fresh();
+    const event = (external_id: string | null, amount_eur: number) => ({
+      user_id: DEMO_USER_ID,
+      kind: "dividend",
+      event_date: "2026-03-01",
+      amount_eur,
+      raw_type: "CASH|DIVIDEND",
+      source: "test",
+      external_id,
+    });
+    const opts = { onConflict: "user_id,source,external_id", ignoreDuplicates: true };
+    const up = (rows: Array<ReturnType<typeof event>>, o: object = opts) =>
+      c
+        .from("investment_events")
+        .upsert(rows as never, o)
+        .select("external_id");
+    expect((await up([event("a", 1), event(null, 2)])).data).toHaveLength(2);
+    // The same id again is skipped and not returned; a second null id is a new row.
+    const again = await up([event("a", 9), event(null, 3)]);
+    expect(again.data!.map((r) => r.external_id)).toEqual([null]);
+    // Without ignoreDuplicates the saved row takes the new values.
+    await up([event("a", 5)], { onConflict: "user_id,source,external_id" });
+    const { data } = await c
+      .from("investment_events")
+      .select("external_id,amount_eur")
+      .eq("source", "test")
+      .order("amount_eur");
+    expect(data!.map((r) => [r.external_id, r.amount_eur])).toEqual([
+      [null, 2],
+      [null, 3],
+      ["a", 5],
+    ]);
+  });
+
   // Regression: once a table was emptied, new rows got no id, so deleting one
   // (`.eq("id", undefined)`) matched and removed every new row.
   it("gives new rows ids even after the table was emptied", async () => {
