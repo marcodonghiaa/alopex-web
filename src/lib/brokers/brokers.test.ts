@@ -105,11 +105,13 @@ describe("Trade Republic sample", () => {
     const result = parseTradesCsv(fixture("ledger_live"), ctx, BROKERS[0]);
     expect(result.trades).toEqual([]);
     expect(result.unknownFormat).toBeUndefined();
-    expect(result.errors).toEqual(["This is a Ledger Live export: import it on the Crypto page."]);
+    expect(result.errors).toEqual([
+      "This file comes from Ledger Live: import it on the Crypto page.",
+    ]);
     const crypto = { ...ctx, kind: "crypto" as const };
     const ledger = BROKERS.find((b) => b.id === "ledger_live")!;
     expect(parseTradesCsv(fixture("trade_republic"), crypto, ledger).errors).toEqual([
-      "This is a Trade Republic export: import it on the Portfolio page.",
+      "This file comes from Trade Republic: import it on the Portfolio page.",
     ]);
   });
 
@@ -120,7 +122,7 @@ describe("Trade Republic sample", () => {
       const plain = "date,side,isin,shares,price\n2026-01-02,buy,XX0000000001,1,100";
       const result = parseTradesCsv(plain, ctx, BROKERS[0]);
       expect(result.unknownFormat).toBeUndefined();
-      expect(result.errors).toEqual(["This is a Other Bank export: pick Other Bank instead."]);
+      expect(result.errors).toEqual(["This file comes from Other Bank: pick Other Bank instead."]);
     } finally {
       BROKERS.pop();
     }

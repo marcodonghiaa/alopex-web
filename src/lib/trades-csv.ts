@@ -41,7 +41,7 @@ export function parseTradesCsv(text: string, ctx: ParseContext, from?: BrokerPar
         other.kind === kind
           ? `pick ${other.name} instead`
           : `import it on the ${other.kind === "crypto" ? "Crypto" : "Portfolio"} page`;
-      return { trades: [], errors: [`This is a ${other.name} export: ${where}.`], notes: [] };
+      return { trades: [], errors: [`This file comes from ${other.name}: ${where}.`], notes: [] };
     }
     return {
       trades: [],
