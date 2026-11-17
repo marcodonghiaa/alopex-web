@@ -44,6 +44,8 @@ export function ConnectDialog({
   const [consent, setConsent] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [name, setName] = useState<string | null>(null);
+  // A new dry run for every connect, even with the same account.
+  const [connectedAt, setConnectedAt] = useState(0);
   const demo = isDemoMode();
 
   useEffect(() => {
@@ -59,12 +61,13 @@ export function ConnectDialog({
     onSuccess: ({ displayName }) => {
       setApiKey(""); // the key is on the server now; nothing keeps it in the page
       setName(displayName);
+      setConnectedAt(Date.now());
       void queryClient.invalidateQueries({ queryKey: CONNECTION_KEY });
     },
     onError: (err) => setProblem(err.message),
   });
   const preview = useQuery({
-    queryKey: ["splitwise-preview", name],
+    queryKey: ["splitwise-preview", connectedAt],
     queryFn: previewSync,
     enabled: name !== null,
     retry: false,

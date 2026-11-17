@@ -179,6 +179,25 @@ describe("Connect dialog", () => {
     );
   });
 
+  // protects=the dialog doesn't turn into Reconnect once the connect lands; fails_when=its title
+  // follows the refetched status
+  it("keeps its title after connecting", async () => {
+    functions({
+      "splitwise-connect": [ok({ displayName: "Sam" })],
+      "sync-splitwise": [ok({ new: 0, adopted: 0, review: 0, deleted: 0 })],
+    });
+    rpc.mockResolvedValueOnce(notConnected());
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: "Connect Splitwise" }));
+    const dialog = screen.getByRole("dialog", { name: "Connect Splitwise" });
+    await userEvent.type(within(dialog).getByLabelText("API key"), "abcdefghijkl");
+    await userEvent.click(within(dialog).getByRole("checkbox"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    await screen.findByText("Splitwise · Sam");
+    expect(screen.getByRole("dialog", { name: "Connect Splitwise" })).toBeTruthy();
+  });
+
   it("shows a preview failure and still lets the sync start", async () => {
     functions({
       "splitwise-connect": [ok({ displayName: "Sam" })],

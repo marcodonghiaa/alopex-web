@@ -24,7 +24,8 @@ const ROW =
  */
 export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
   const connection = useSplitwiseConnection();
-  const [connecting, setConnecting] = useState(false);
+  // Fixed when the dialog opens: connecting flips the status to connected under it.
+  const [connecting, setConnecting] = useState<"connect" | "reconnect" | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const c = connection.data;
   const connected = c?.connected === true;
@@ -35,12 +36,12 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
         {connected ? (
           <StatusRow
             c={c}
-            onReconnect={() => setConnecting(true)}
+            onReconnect={() => setConnecting("reconnect")}
             onDisconnect={() => setDisconnecting(true)}
           />
         ) : (
           !connection.isPending && (
-            <button type="button" onClick={() => setConnecting(true)} className={ROW}>
+            <button type="button" onClick={() => setConnecting("connect")} className={ROW}>
               <Link2 aria-hidden className="size-4" />
               Connect Splitwise
             </button>
@@ -51,7 +52,11 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
           Import a file instead
         </button>
       </GroupedList>
-      <ConnectDialog open={connecting} onOpenChange={setConnecting} reconnect={connected} />
+      <ConnectDialog
+        open={connecting !== null}
+        onOpenChange={(open) => open || setConnecting(null)}
+        reconnect={connecting === "reconnect"}
+      />
       <DisconnectDialog open={disconnecting} onOpenChange={setDisconnecting} />
     </>
   );
