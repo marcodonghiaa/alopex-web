@@ -15,6 +15,14 @@ export interface SyncErrorAccount {
 }
 
 const CONSENT_ENDED = new Set(["EXPIRED_SESSION", "REVOKED_SESSION", "CLOSED_SESSION"]);
+// Enable Banking refused the app itself (its key), so every bank fails the same way.
+const APP_REFUSED = new Set([
+  "UNAUTHORIZED_IP",
+  "UNAUTHORIZED_ACCESS",
+  "AUTHORIZATION_NOT_PROVIDED",
+  "HTTP_401",
+  "HTTP_403",
+]);
 const RETRY = "Nothing to do: Alopex tries again at the next sync, within 6 hours.";
 
 // `account` names the account when the bank stopped sharing one of several.
@@ -34,15 +42,7 @@ export function syncErrorMessage(
   ) {
     return `${bank} no longer shares ${account}. Connect ${bank} again and include it when the bank asks which accounts to share.`;
   }
-  if (
-    code === "UNAUTHORIZED_IP" ||
-    code === "UNAUTHORIZED_ACCESS" ||
-    code === "AUTHORIZATION_NOT_PROVIDED" ||
-    code === "HTTP_401" ||
-    code === "HTTP_403"
-  ) {
-    return `Enable Banking refused to sync ${bank}: check that your Enable Banking app is active and that its key in your setup is the right one.`;
-  }
+  if (APP_REFUSED.has(code)) return refusedMessage([bank]);
   if (code === "SAVE_FAILED")
     return `${bank} synced, but the transactions couldn't be saved. ${RETRY} If it keeps happening, check the sync-bank function's logs in Supabase.`;
   if (
@@ -62,15 +62,28 @@ export function syncErrorMessage(
 // A consent that has run out is skipped: the cron no longer syncs it, so its last error never
 // clears, and the Renew banner already says what to do.
 export function syncAlerts(accounts: Array<SyncErrorAccount>, now = Date.now()): string[] {
+  const live = accounts.filter(
+    (a) => a.sync_error && !(a.consent_valid_until && Date.parse(a.consent_valid_until) <= now),
+  );
+  const refused = [...new Set(live.filter((a) => APP_REFUSED.has(a.sync_error!)).map(bankOf))];
   const messages = new Set<string>(); // each message names its bank
-  for (const a of accounts) {
-    if (!a.sync_error) continue;
-    if (a.consent_valid_until && Date.parse(a.consent_valid_until) <= now) continue;
+  for (const a of live) {
+    // One banner for the app key, where the first refused bank would be.
+    if (APP_REFUSED.has(a.sync_error!)) {
+      messages.add(refusedMessage(refused));
+      continue;
+    }
     const account = a.currency ? accountLabel(a.currency, a.iban) : undefined;
-    const text = syncErrorMessage(a.sync_error, bankOf(a), account);
+    const text = syncErrorMessage(a.sync_error!, bankOf(a), account);
     if (text) messages.add(text);
   }
   return [...messages];
+}
+
+function refusedMessage(banks: string[]): string {
+  const names =
+    banks.length > 1 ? `${banks.slice(0, -1).join(", ")} and ${banks[banks.length - 1]}` : banks[0];
+  return `Enable Banking refused to sync ${names}: check in the Enable Banking control panel that your app is active, and that your Edge Function secrets ENABLE_BANKING_APP_ID and ENABLE_BANKING_PRIVATE_KEY belong to it.`;
 }
 
 // "your EUR account •••• 0002": a bank can hold several accounts in one currency.

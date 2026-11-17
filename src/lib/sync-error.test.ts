@@ -156,3 +156,20 @@ describe("database types", () => {
     expect([row, update, insert, view]).toEqual([cols, cols, cols, cols]);
   });
 });
+
+describe("syncAlerts: Enable Banking refusing the app", () => {
+  // The app key is shared by every bank: one banner naming them all, not one per bank.
+  it("shows one banner for all banks and says where the key lives", () => {
+    expect(
+      syncAlerts([
+        acc("Fineco", "HTTP_401"),
+        acc("Revolut", "ASPSP_TIMEOUT"),
+        acc("N26", "UNAUTHORIZED_IP"),
+        acc("Bunq", "AUTHORIZATION_NOT_PROVIDED"),
+      ]),
+    ).toEqual([
+      "Enable Banking refused to sync Fineco, N26 and Bunq: check in the Enable Banking control panel that your app is active, and that your Edge Function secrets ENABLE_BANKING_APP_ID and ENABLE_BANKING_PRIVATE_KEY belong to it.",
+      "Revolut didn't answer the last sync. Nothing to do: Alopex tries again at the next sync, within 6 hours.",
+    ]);
+  });
+});
