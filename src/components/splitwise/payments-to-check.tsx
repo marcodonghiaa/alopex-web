@@ -45,20 +45,34 @@ export function PaymentsToCheck({
   // row once an answered one leaves the list.
   const [focusAfter, setFocusAfter] = useState<{ to: "other" | "next"; id: string } | null>(null);
   const list = useRef<HTMLUListElement>(null);
+  // Whether the answer we're waiting on has started saving: once it has and ends with its row
+  // still here, the save failed and focus stays where it is.
+  const started = useRef(false);
   useEffect(() => {
-    if (!focusAfter || !list.current) return;
-    const rows = [...list.current.querySelectorAll<HTMLElement>("li[data-row]")];
+    if (!focusAfter) return;
+    const rows = [...(list.current?.querySelectorAll<HTMLElement>("li[data-row]") ?? [])];
+    const done = () => {
+      started.current = false;
+      setFocusAfter(null);
+    };
     if (focusAfter.to === "other") {
       rows
         .find((r) => r.dataset["row"] === focusAfter.id)
         ?.querySelector<HTMLElement>("[data-someone-else]")
         ?.focus();
-      setFocusAfter(null);
-    } else if (!rows.some((r) => r.dataset["row"] === focusAfter.id)) {
-      rows[0]?.querySelector<HTMLElement>("button")?.focus();
-      setFocusAfter(null);
+      return done();
     }
-  }, [focusAfter, suggestions, choosing]);
+    if (busy !== null) {
+      started.current = true;
+      return; // buttons wait while it saves: focus once it ends
+    }
+    if (rows.length === 0) return done(); // the last one: nothing left to focus
+    if (!rows.some((r) => r.dataset["row"] === focusAfter.id)) {
+      rows[0]?.querySelector<HTMLElement>("button")?.focus();
+      return done();
+    }
+    if (started.current) done(); // saved and still here: it failed
+  }, [focusAfter, suggestions, choosing, busy]);
   if (suggestions.length === 0) return null;
   const closeForm = (id: string) => {
     setChoosing(null);

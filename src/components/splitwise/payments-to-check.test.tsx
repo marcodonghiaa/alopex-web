@@ -30,22 +30,24 @@ function view(
 ) {
   const onConfirm = vi.fn();
   const onDismiss = vi.fn();
-  const ui = (d: Array<Debtor>, sg = s, b = busy) => (
+  // The props as they are now: each setter changes one and keeps the others.
+  const now = { d: debtors, sg: s, b: busy };
+  const ui = () => (
     <PaymentsToCheck
-      suggestions={sg}
-      debtors={d}
-      busy={b}
+      suggestions={now.sg}
+      debtors={now.d}
+      busy={now.b}
       onConfirm={onConfirm}
       onDismiss={onDismiss}
     />
   );
-  const { rerender } = render(ui(debtors));
+  const { rerender } = render(ui());
   return {
     onConfirm,
     onDismiss,
-    setDebtors: (d: Array<Debtor>) => rerender(ui(d)),
-    setSuggestions: (sg: Array<PaybackSuggestion>) => rerender(ui(debtors, sg)),
-    setBusy: (b: string | null) => rerender(ui(debtors, s, b)),
+    setDebtors: (d: Array<Debtor>) => rerender(((now.d = d), ui())),
+    setSuggestions: (sg: Array<PaybackSuggestion>) => rerender(((now.sg = sg), ui())),
+    setBusy: (b: string | null) => rerender(((now.b = b), ui())),
   };
 }
 
@@ -156,6 +158,50 @@ describe("PaymentsToCheck", () => {
     expect(confirm).toBeDisabled();
     await userEvent.click(confirm);
     expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  // protects=focus never jumps later; fails_when=a failed save or the last answer leaves a pending
+  // "move focus" that fires on some later list change
+  it("a failed save or the last answer never moves focus later", async () => {
+    const other = suggestion({
+      payment: { ...payment, entry_reference: "p2", payer: "ANNA ROSSI" },
+      debtor: anna,
+    });
+    const third = suggestion({
+      payment: { ...payment, entry_reference: "p3", payer: "ANNA ROSSI" },
+      debtor: anna,
+    });
+    const outside = document.createElement("input");
+    document.body.append(outside);
+    const { setSuggestions, setBusy } = view([suggestion(), other]);
+    // A Yes that fails: it saves, then the row stays.
+    await userEvent.click(screen.getByRole("button", { name: "Yes, it's Marverdi" }));
+    setBusy("acc|p1");
+    setBusy(null);
+    outside.focus();
+    setSuggestions([other, third]); // later, the list changes for another reason
+    expect(document.activeElement).toBe(outside);
+    // The last row answered: nothing left to focus, and nothing pending for later.
+    setSuggestions([other]);
+    await userEvent.click(screen.getByRole("button", { name: "Yes, it's Anna" }));
+    setSuggestions([]);
+    outside.focus();
+    setSuggestions([third]);
+    expect(document.activeElement).toBe(outside);
+    outside.remove();
+  });
+
+  it("an answered row leaving while the save still shows lands focus once it ends", async () => {
+    const other = suggestion({
+      payment: { ...payment, entry_reference: "p2", payer: "ANNA ROSSI" },
+      debtor: anna,
+    });
+    const { setSuggestions, setBusy } = view([suggestion(), other]);
+    await userEvent.click(screen.getByRole("button", { name: "Yes, it's Marverdi" }));
+    setBusy("acc|p1");
+    setSuggestions([other]); // removed from the list while the buttons still wait
+    setBusy(null);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Yes, it's Anna" }));
   });
 
   it("no Someone else when nobody else owes you", () => {
