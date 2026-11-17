@@ -23,12 +23,18 @@ describe("rateLookup", () => {
 });
 
 // The few calls loadRates makes on the supabase client, answering with `stored`. Like the real
-// server, one request returns at most 1000 rows.
+// server, one request returns at most 1000 rows, and `eq` keeps only the matching rows (a row
+// without that column always matches).
 const CAP = 1000;
-const fakeDb = (stored: Array<{ date: string; rate_to_eur: number }>, error: unknown = null) => {
+type StoredRow = { date: string; rate_to_eur: number; currency?: string };
+const fakeDb = (all: Array<StoredRow>, error: unknown = null) => {
+  let stored = all;
   const q = {
     select: () => q,
-    eq: () => q,
+    eq: (column: string, value: unknown) => {
+      stored = stored.filter((r) => !(column in r) || r[column as keyof StoredRow] === value);
+      return q;
+    },
     gte: () => q,
     lte: () => q,
     order: () => q,
@@ -56,6 +62,14 @@ describe("loadRates", () => {
     const found = await loadRates("USD", "2026-01-03", "2026-01-05", fakeDb(rows), get);
     expect(found).toEqual(rows);
     expect(get).not.toHaveBeenCalled();
+  });
+
+  it("reads only the rates of the currency asked for", async () => {
+    const usd = rows.map((r) => ({ ...r, currency: "USD" }));
+    const gbp = [{ date: "2026-01-03", rate_to_eur: 1.2, currency: "GBP" }];
+    const get = series({});
+    const found = await loadRates("USD", "2026-01-02", "2026-01-05", fakeDb([...usd, ...gbp]), get);
+    expect(found).toEqual(usd);
   });
 
   it("reads every stored day, past the server's 1000 rows a request", async () => {
