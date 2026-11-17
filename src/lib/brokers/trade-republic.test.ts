@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { setLocaleOverride } from "@/lib/locale";
 import { incomeByKey, newEvents, summarizeIncome } from "@/lib/investment-events";
 import { parseTradesCsv } from "@/lib/trades-csv";
 
@@ -514,5 +516,30 @@ describe("Trade Republic, income, fees, taxes and cash", () => {
       stock,
     );
     expect(errors).toEqual(["Line 2: the date is in the future."]);
+  });
+});
+
+describe("Trade Republic, the viewer's format", () => {
+  afterEach(() => setLocaleOverride(""));
+
+  it("a file reads the same whatever format the viewer picked", () => {
+    const sample = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const sampleOpts = { ...stock, knownKeys: new Set(["XX0000000001", "XX0000000002"]) };
+    // A dot then three digits: German or Italian would read it as a thousands mark.
+    const grouped = file(
+      { shares: "0.125", price: "1.250", amount: "-0.16" },
+      { category: "CASH", type: "DIVIDEND", amount: "1.250" },
+    );
+    setLocaleOverride("en-GB");
+    const base = [parseTradesCsv(sample, sampleOpts), parseTradesCsv(grouped, stock)];
+    expect(base[0]!.trades[0]).toMatchObject({ shares: 2, price_eur: 100 });
+    expect(base[1]!.trades[0]).toMatchObject({ shares: 0.125, price_eur: 1.25 });
+    expect(base[1]!.events![0]).toMatchObject({ amount_eur: 1.25 });
+    for (const locale of ["de-DE", "it-IT", "en-US", "fr-FR"]) {
+      setLocaleOverride(locale);
+      expect([parseTradesCsv(sample, sampleOpts), parseTradesCsv(grouped, stock)], locale).toEqual(
+        base,
+      );
+    }
   });
 });
