@@ -48,3 +48,7 @@ export function asOf(snapshotDate: string | null, today: string): string | null 
     ...(snapshotDate.slice(0, 4) === today.slice(0, 4) ? {} : { year: "numeric" }),
   })}`;
 }
+
+/** An ISO day moved by whole days, on the calendar (UTC), so time zones and DST don't shift it. */
+export const addDays = (iso: string, days: number): string =>
+  new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);

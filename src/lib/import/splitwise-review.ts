@@ -1,3 +1,4 @@
+import { addDays } from "@/lib/date";
 import type { BankMatch, BankTx, RateToEur } from "./splitwise-match";
 
 // Small pure helpers for the Splitwise review screen: they turn database rows into what the
@@ -43,7 +44,8 @@ export function toBankTx(r: BankRowFromDb): BankTx | null {
 }
 
 /** Rate for a currency on a date: the latest one on or before it. Euros are 1. */
-export function makeRate(rows: Array<FxRow>): RateToEur {
+/** `maxGapDays`: never use a rate older than this many days before the date asked for. */
+export function makeRate(rows: Array<FxRow>, maxGapDays = Infinity): RateToEur {
   const byCurrency = new Map<string, Array<FxRow>>();
   for (const r of [...rows].sort((a, b) => a.date.localeCompare(b.date))) {
     byCurrency.set(r.currency, [...(byCurrency.get(r.currency) ?? []), r]);
@@ -51,8 +53,9 @@ export function makeRate(rows: Array<FxRow>): RateToEur {
   return (currency, date) => {
     if (currency === "EUR") return 1;
     const list = byCurrency.get(currency) ?? [];
-    const before = list.filter((r) => r.date <= date);
-    return before[before.length - 1]?.rate_to_eur ?? null;
+    const found = list.filter((r) => r.date <= date).at(-1);
+    if (!found || (maxGapDays < Infinity && found.date < addDays(date, -maxGapDays))) return null;
+    return found.rate_to_eur;
   };
 }
 

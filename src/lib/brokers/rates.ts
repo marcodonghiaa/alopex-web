@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRows } from "@/lib/export/fetch-all";
+import { addDays } from "@/lib/date";
+import { makeRate } from "@/lib/import/splitwise-review";
 
 export interface RateRow {
   date: string;
@@ -10,21 +12,12 @@ export interface RateRow {
 // not one older than this: then the price would be a guess.
 const MAX_GAP_DAYS = 10;
 
-const addDays = (iso: string, n: number) =>
-  new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
-
-/** Euro per one `currency` on a day, from rows sorted by date; null when there's no recent rate. */
-export function rateLookup(currency: string, rows: Array<RateRow>) {
-  return (wanted: string, date: string): number | null => {
-    if (wanted !== currency) return null;
-    let found: RateRow | null = null;
-    for (const r of rows) {
-      if (r.date > date) break;
-      found = r;
-    }
-    return found && found.date >= addDays(date, -MAX_GAP_DAYS) ? found.rate_to_eur : null;
-  };
-}
+/** Euro per one `currency` on a day (or the last day before it); null when there's no recent rate. */
+export const rateLookup = (currency: string, rows: Array<RateRow>) =>
+  makeRate(
+    rows.map((r) => ({ ...r, currency })),
+    MAX_GAP_DAYS,
+  );
 
 type Db = Pick<typeof supabase, "from">;
 type Get = (url: string) => Promise<{ ok: boolean; json: () => Promise<unknown> }>;
