@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { functionErrorBody } from "@/lib/function-error";
 import type { ClassifiedRow } from "@/lib/import/splitwise-classify";
 import { matchBank, type BankTx, type RateToEur } from "@/lib/import/splitwise-match";
+import { refreshKeys } from "@/lib/import/last-import";
 
 // The dashboard side of the Splitwise API sync: the connection's status, the two Edge Functions
 // (splitwise-connect, sync-splitwise) and the To link list (splitwise_review). The server does
@@ -9,6 +10,13 @@ import { matchBank, type BankTx, type RateToEur } from "@/lib/import/splitwise-m
 
 export const CONNECTION_KEY = ["splitwise-connection"];
 export const REVIEW_KEY = ["splitwise-review"];
+
+/** What to refetch after a sync, a disconnect or a review action: shares, spending, bank rows. */
+export const syncRefreshKeys = (): Array<Array<string>> => [
+  ...refreshKeys("splitwise"),
+  CONNECTION_KEY,
+  REVIEW_KEY,
+];
 
 export type ConnectionStatus = "ok" | "needs_reconnect" | "error";
 

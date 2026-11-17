@@ -31,6 +31,7 @@ import {
   suggestMatches,
   syncedAgo,
   syncNow,
+  syncRefreshKeys,
   syncSummary,
   SyncError,
   type ReviewItem,
@@ -305,5 +306,20 @@ describe("runReviewAction", () => {
       error: { message: "This Splitwise expense is already settled." },
     });
     await expect(runReviewAction({ action: "count", id: "r1" })).rejects.toThrow("already settled");
+  });
+});
+
+describe("syncRefreshKeys", () => {
+  // protects=a link or a sync shows at once in spending and the bank list; fails_when=a key is dropped
+  it("refreshes the import's keys plus the connection and the To link list", () => {
+    const keys = syncRefreshKeys().map((k) => k[0]);
+    for (const k of [
+      "transactions",
+      "spend-by-category",
+      "splitwise-balances",
+      "splitwise-connection",
+      "splitwise-review",
+    ])
+      expect(keys).toContain(k);
   });
 });
