@@ -404,8 +404,11 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                 onClick={() => setFrom(o.id)}
                 className={cn(row, "w-full text-left hover:bg-muted")}
               >
-                <span className="flex-1 font-medium">{o.label}</span>
-                <span className="text-xs text-muted-foreground">{o.hint}</span>
+                {/* The name is the choice: it keeps its line, the hint gives way. */}
+                <span className="shrink-0 font-medium">{o.label}</span>
+                <span className="min-w-0 flex-1 truncate text-right text-xs text-muted-foreground">
+                  {o.hint}
+                </span>
                 <ChevronRight aria-hidden className="size-4 text-muted-foreground" />
               </button>
             ))}

@@ -650,6 +650,13 @@ describe("ImportTrades", () => {
     );
   });
 
+  it("polish-4 N11 a source's name never wraps; its hint gives way", () => {
+    open("stock");
+    const name = screen.getByText("My own spreadsheet");
+    expect(name).toHaveClass("shrink-0");
+    expect(screen.getByText("Any CSV with our columns")).toHaveClass("min-w-0", "truncate");
+  });
+
   it("if saved dividends and fees can't load, it says so and won't save", async () => {
     db.eventsDown = true;
     open("stock");
