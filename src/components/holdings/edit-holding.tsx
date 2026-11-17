@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/field";
 
 export type { HoldingTarget } from "@/lib/holding-quantity";
 
-// Deletes the holding for good, with its price history and trades (database function
+// Deletes the holding for good, with its price history, trades and income rows (database function
 // delete_holding): for one added by mistake. Its value also leaves past net worth.
 async function deleteHolding(target: HoldingTarget): Promise<void> {
   const { error } = await supabase.rpc("delete_holding", {
@@ -147,8 +147,9 @@ export function EditHolding({
         {confirmDelete ? (
           <div className="space-y-2 rounded-lg bg-negative/10 p-3">
             <p className="text-xs text-foreground">
-              Deletes {name}, its price history and trades. It also leaves your past net worth. Sold
-              it? Use Mark as sold instead.
+              Deletes {name}, its price history, trades, and its dividends, interest, fees and taxes
+              in Income and costs. It also leaves your past net worth. Sold it? Use Mark as sold
+              instead.
             </p>
             <div className="flex gap-2">
               <Button variant="quiet" onClick={() => setConfirmDelete(false)} className="flex-1">

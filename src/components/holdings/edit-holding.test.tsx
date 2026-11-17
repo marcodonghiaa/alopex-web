@@ -71,6 +71,16 @@ describe("EditHolding delete", () => {
     );
   });
 
+  it("polish-5 A-P3-2 the confirmation says its income and costs go too", () => {
+    setup({ kind: "stock", isin: "IE00TEST" });
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(
+      screen.getByText(
+        /^Deletes Test ETF, its price history, trades, and its dividends, interest, fees and taxes in Income and costs\./,
+      ),
+    ).toBeInTheDocument();
+  });
+
   // Regression: Mark as sold left the old value in net worth until the next price sync.
   it("Mark as sold goes through set_holding_quantity, which also updates today's value", async () => {
     rpc.mockResolvedValue({ data: 1, error: null });
