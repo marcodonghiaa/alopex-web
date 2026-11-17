@@ -97,10 +97,32 @@ describe("InvestmentIncome", () => {
     );
     expect(
       screen.getByText(
-        "Taxes and fees not tied to a coin count here but not in any coin's return.",
+        "Fees and taxes charged on their own, not on a trade, count here but not in the coin's return.",
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/stamp duty/)).toBeNull();
+  });
+
+  it("polish-5 A-P3-4 the Crypto note speaks of a coin's own fee and tax rows, the only ones it shows", () => {
+    render(
+      <InvestmentIncome
+        page="crypto"
+        today="2026-11-17"
+        events={[
+          ev({ kind: "fee", asset_kind: "crypto", key: "BTC", amount_eur: -3 }),
+          // Not a coin's: shown on Portfolio, never here.
+          ev({ kind: "tax", asset_kind: null, key: null, amount_eur: -9 }),
+        ]}
+      />,
+    );
+    expect(screen.getByText("Fees").parentElement?.textContent).toBe("Fees−€3.00−€3.00");
+    expect(screen.queryByText("Taxes")).toBeNull();
+    expect(
+      screen.getByText(
+        "Fees and taxes charged on their own, not on a trade, count here but not in the coin's return.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/not tied to a coin/)).toBeNull();
   });
 
   it("this year is your own calendar's, not UTC's", () => {

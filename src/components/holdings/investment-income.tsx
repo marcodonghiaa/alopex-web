@@ -114,7 +114,8 @@ export function InvestmentIncome({
       </GroupedList>
       <p className="mt-2 px-4 text-xs text-muted-foreground">
         {page === "crypto"
-          ? "Taxes and fees not tied to a coin count here but not in any coin's return."
+          ? // Only a coin's own rows reach this page (eventsForPage): its fee and tax rows.
+            "Fees and taxes charged on their own, not on a trade, count here but not in the coin's return."
           : "Dividends and interest are after tax. Taxes and fees not tied to a holding, like stamp duty, count here but not in any holding's return."}
       </p>
     </section>
