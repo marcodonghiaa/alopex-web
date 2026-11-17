@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarizeIncome } from "@/lib/investment-events";
+import { newEvents, summarizeIncome } from "@/lib/investment-events";
 import { parseTradesCsv } from "@/lib/trades-csv";
 
 // The 23 columns of Trade Republic's transaction export, in its order.
@@ -300,6 +300,23 @@ describe("Trade Republic, income, fees, taxes and cash", () => {
     );
     expect(trades[0]).toMatchObject({ side: "sell", tax_eur: 0 });
     expect(events?.[0]).toMatchObject({ kind: "tax_refund", amount_eur: 1.5, key: "XX0000000001" });
+  });
+
+  it("a fee given back on a trade (a rebate) is money in, not dropped", () => {
+    const { trades, events } = parseTradesCsv(
+      file({ type: "BUY", shares: "1", price: "10", amount: "-10", fee: "0.5" }),
+      stock,
+    );
+    expect(trades[0]).toMatchObject({ side: "buy", fee_eur: 0 });
+    expect(events?.map((e) => [e.kind, e.amount_eur, e.fee_eur, e.key])).toEqual([
+      ["fee", 0.5, 0, "XX0000000001"],
+    ]);
+    expect(summarizeIncome(events ?? []).fees).toBe(-0.5);
+    const both = parseTradesCsv(
+      file({ type: "SELL", shares: "-1", price: "10", amount: "10", fee: "0.5", tax: "1.5" }),
+      stock,
+    ).events!;
+    expect(newEvents(both, []).map((e) => e.kind)).toEqual(["tax_refund", "fee"]);
   });
 
   it("interest, saveback, fees, taxes and refunds each get their kind", () => {

@@ -164,6 +164,17 @@ export const tradeRepublic: BrokerParser = {
         if (TRADES.has(type) && taxSigned > 0) {
           events.push({ ...event("tax_refund"), amount_eur: taxSigned, tax_eur: 0, fee_eur: 0 });
         }
+        // And a fee given back (a rebate) is money in too. Its own id, so a trade with both a tax
+        // refund and a rebate keeps both: an event's id is saved once.
+        if (TRADES.has(type) && feeSigned > 0) {
+          events.push({
+            ...event("fee"),
+            amount_eur: feeSigned,
+            tax_eur: 0,
+            fee_eur: 0,
+            external_id: id && `${id}:fee`,
+          });
+        }
         return;
       }
 
