@@ -69,7 +69,8 @@ describe("loadRates", () => {
   });
 
   it("fetches the older days a fresh install hasn't stored, as euro per dollar", async () => {
-    const get = series({ "2025-12-29": 1.25 });
+    // Frankfurter also answers for 2026-01-02, a day already stored: the stored one is kept.
+    const get = series({ "2025-12-29": 1.25, "2026-01-02": 2 });
     const found = await loadRates("USD", "2026-01-01", "2026-01-05", fakeDb(rows), get);
     expect(get).toHaveBeenCalledWith(
       "https://api.frankfurter.dev/v1/2025-12-22..2026-01-02?base=EUR&symbols=USD",

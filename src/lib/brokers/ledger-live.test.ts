@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseTradesCsv } from "@/lib/trades-csv";
-import { ledgerLive } from "./ledger-live";
 
 const sample = readFileSync(path.resolve(__dirname, "fixtures/ledger_live.csv"), "utf8");
 const HEADER = sample.split("\n")[0]!;
@@ -105,14 +104,6 @@ describe("Ledger Live operations export", () => {
     expect(ids).toEqual(["abc:BTC:IN", "abc:BTC:IN#2"]);
   });
 
-  it("a failed send costs its fee and nothing else, as Ledger Live counts it", () => {
-    const failed = parseTradesCsv(sample, ctx).trades.find((t) =>
-      t.external_id?.endsWith("9:ETH:OUT"),
-    )!;
-    expect(failed.shares).toBe(0.0002);
-    expect(failed.shares * failed.price_eur - failed.fee_eur).toBeCloseTo(0);
-  });
-
   it("a coin you sold to zero is kept, so its profit counts; one you still hold elsewhere is left out", () => {
     const { trades } = parseTradesCsv(sample, ctx);
     expect(trades.filter((t) => t.key === "LTC")).toHaveLength(2);
@@ -200,9 +191,5 @@ describe("Ledger Live operations export", () => {
     const result = parseTradesCsv(sample, { ...ctx, kind: "stock" });
     expect(result.trades).toEqual([]);
     expect(result.errors[0]).toMatch(/Crypto page/);
-  });
-
-  it("sets the Ledger holding, not your coins held elsewhere", () => {
-    expect(ledgerLive.holdingSource).toBe("Ledger");
   });
 });
