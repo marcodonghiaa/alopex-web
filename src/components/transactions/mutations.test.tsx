@@ -89,6 +89,8 @@ import {
   useReviewGroupMutation,
   useShareMutation,
   useSettleSplitMutation,
+  useRecordPaybackMutation,
+  useUndoPaybackMutation,
   useSplitMutation,
   saveErrorText,
   useTransactionFieldMutation,
@@ -917,5 +919,80 @@ describe("settling a To review group", () => {
         result.current.mutateAsync({ group: group([rr("a1", "r1", "DBIT")]), choice: "count" }),
       ),
     ).rejects.toThrow("denied");
+  });
+});
+
+describe("payback answers", () => {
+  const payment = {
+    account_uid: "a1",
+    entry_reference: "p1",
+    booking_date: "2026-11-15",
+    amount: 60,
+    currency: "EUR",
+    amount_eur: 60,
+    payer: "ANNA ROSSI",
+    linked_contact: null,
+  };
+  const result = { settled: ["b1"], settled_eur: 60, left_eur: 0, linked: true };
+
+  it("a yes records the contact and remembers the payer, then refreshes the list and bills", async () => {
+    const { queryClient, wrapper } = setup();
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    rpc.mockResolvedValueOnce({ data: result, error: null });
+    const { result: hook } = renderHook(() => useRecordPaybackMutation(queryClient), { wrapper });
+    await expect(
+      act(() => hook.current.mutateAsync({ payment, contact: "Anna" })),
+    ).resolves.toEqual(result);
+    expect(rpc).toHaveBeenLastCalledWith("record_payback", {
+      p_account: "a1",
+      p_ref: "p1",
+      p_contact: "Anna",
+      p_remember: true,
+    });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["payback-candidates"] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["splits"] });
+  });
+
+  it("'not a payback' sends an empty contact", async () => {
+    const { queryClient, wrapper } = setup();
+    rpc.mockResolvedValueOnce({ data: { ...result, settled: [], linked: false }, error: null });
+    const { result: hook } = renderHook(() => useRecordPaybackMutation(queryClient), { wrapper });
+    await act(() => hook.current.mutateAsync({ payment, contact: "" }));
+    expect(rpc).toHaveBeenLastCalledWith(
+      "record_payback",
+      expect.objectContaining({ p_contact: "" }),
+    );
+  });
+
+  it("a refused answer says it couldn't save and still refreshes the list", async () => {
+    const { toast } = await import("sonner");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { queryClient, wrapper } = setup();
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const err = Object.assign(new Error("Payment already checked"), { code: "P0001" });
+    rpc.mockResolvedValueOnce({ data: null, error: err });
+    const { result: hook } = renderHook(() => useRecordPaybackMutation(queryClient), { wrapper });
+    await act(() => hook.current.mutateAsync({ payment, contact: "Anna" }).catch(() => {}));
+    expect(toast.error).toHaveBeenLastCalledWith("Couldn't save", expect.anything());
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["payback-candidates"] });
+    log.mockRestore();
+  });
+
+  it("undo sends whether to forget the payer, and says so when it fails", async () => {
+    const { toast } = await import("sonner");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { queryClient, wrapper } = setup();
+    const { result: hook } = renderHook(() => useUndoPaybackMutation(queryClient), { wrapper });
+    rpc.mockResolvedValueOnce({ data: { reopened: 1 }, error: null });
+    await act(() => hook.current.mutateAsync({ payment, forget: true }));
+    expect(rpc).toHaveBeenLastCalledWith("undo_payback", {
+      p_account: "a1",
+      p_ref: "p1",
+      p_forget: true,
+    });
+    rpc.mockResolvedValueOnce({ data: null, error: new Error("Payment not found") });
+    await act(() => hook.current.mutateAsync({ payment, forget: false }).catch(() => {}));
+    expect(toast.error).toHaveBeenLastCalledWith("Couldn't undo", expect.anything());
+    log.mockRestore();
   });
 });
