@@ -134,6 +134,48 @@ describe("debts", () => {
   });
 });
 
+describe("sync errors", () => {
+  afterEach(() => {
+    rows.v_bank_accounts_latest = [];
+  });
+  const account = (over: Record<string, unknown>) => ({
+    uid: "a1",
+    label: "Demo Bank Current",
+    iban: null,
+    currency: "EUR",
+    snapshot_date: "2026-10-19",
+    amount: 1000,
+    amount_eur: 1000,
+    consent_valid_until: null,
+    bank_name: "Demo Bank",
+    account_type: null,
+    manual: false,
+    ...over,
+  });
+  const renderPage = () =>
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+
+  // protects=a bank that stopped updating says why; fails_when=the last sync error is not shown
+  it("says why a bank stopped updating", async () => {
+    rows.v_bank_accounts_latest = [
+      account({ sync_error: "ASPSP_TIMEOUT", sync_error_at: "2026-11-15T06:17:00Z" }),
+    ];
+    renderPage();
+    expect(await screen.findByText(/Demo Bank didn't answer the last sync/)).toBeInTheDocument();
+  });
+
+  it("shows nothing when the last sync went through", async () => {
+    rows.v_bank_accounts_latest = [account({ sync_error: null })];
+    renderPage();
+    await screen.findByRole("button", { name: "Add a debt" });
+    expect(screen.queryByText(/last sync/)).not.toBeInTheDocument();
+  });
+});
+
 describe("connect a bank", () => {
   beforeEach(() => {
     vi.spyOn(navigator, "languages", "get").mockReturnValue(["pl-PL"]);

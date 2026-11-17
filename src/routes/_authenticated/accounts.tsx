@@ -23,6 +23,7 @@ import {
 } from "@/lib/bank-link";
 import { functionErrorMessage } from "@/lib/function-error";
 import { consentAlerts, type ConsentAlert } from "@/lib/consent-expiry";
+import { syncAlerts } from "@/lib/sync-error";
 import { asOf, formatISODate } from "@/lib/date";
 import { AccountBadge, accountName, bankOf } from "@/components/bank-badge";
 import { formatEur, formatMoney } from "@/lib/transactions";
@@ -66,6 +67,9 @@ interface BankAccountRow {
   // Absent before the account types migration; null = unknown, counted as checking.
   account_type?: string | null;
   manual?: boolean | null;
+  // Absent before the bank-sync-health migration; null when the last sync went through.
+  sync_error?: string | null;
+  sync_error_at?: string | null;
 }
 
 interface BankGroup {
@@ -155,6 +159,7 @@ function AccountsPage() {
 
   const bankAccounts = useMemo(() => bankQuery.data ?? [], [bankQuery.data]);
   const expiring = useMemo(() => consentAlerts(bankAccounts, new Date()), [bankAccounts]);
+  const syncIssues = useMemo(() => syncAlerts(bankAccounts), [bankAccounts]);
 
   // Credit cards and loans get their own group; everything else is cash, as before.
   const cashAccounts = useMemo(
@@ -325,6 +330,17 @@ function AccountsPage() {
             >
               Renew access
             </Button>
+          </div>
+        ))}
+
+        {/* Why a bank stopped updating; an ended consent already has its Renew banner above. */}
+        {syncIssues.map((issue) => (
+          <div
+            key={issue.message}
+            role="status"
+            className="mb-4 rounded-lg bg-warning/10 px-4 py-3 text-sm text-foreground"
+          >
+            {issue.message}
           </div>
         ))}
 
