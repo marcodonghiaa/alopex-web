@@ -417,6 +417,13 @@ describe("ImportTrades", () => {
     expect(await screen.findByRole("button", { name: "Save 1 trade" })).toBeTruthy();
   });
 
+  it("polish-4 F7b the preview's fees and taxes count those on the trades, as the page does", async () => {
+    open("stock");
+    await pickTradeRepublic();
+    // The sale's €1 fee: the page's Fees row adds it too.
+    expect(screen.getByText("Fees").parentElement?.textContent).toBe("Fees−€1.00");
+  });
+
   it("if saved dividends and fees can't load, it says so and won't save", async () => {
     db.eventsDown = true;
     open("stock");

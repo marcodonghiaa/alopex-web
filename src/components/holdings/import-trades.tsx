@@ -29,9 +29,9 @@ import {
   shareUpdates,
   summarizeImport,
 } from "@/lib/trades-csv";
-import { newEvents, summarizeIncome } from "@/lib/investment-events";
+import { newEvents } from "@/lib/investment-events";
 import { fetchEvents } from "@/lib/use-performance";
-import { formatIncome, incomeRows } from "@/components/holdings/investment-income";
+import { formatIncome, incomeAndCosts, incomeRows } from "@/components/holdings/investment-income";
 
 /** A coin holding as stored: its count and its symbol written as saved (the key is in capitals). */
 interface Held {
@@ -173,7 +173,9 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     () => (parsed?.events && savedEvents.data ? newEvents(parsed.events, savedEvents.data) : []),
     [parsed, savedEvents.data],
   );
-  const income = useMemo(() => summarizeIncome(freshEvents), [freshEvents]);
+  // With the new trades' fees and taxes, the same sum as the Income and costs section.
+  const income = useMemo(() => incomeAndCosts(freshEvents, fresh), [freshEvents, fresh]);
+  const incomeList = incomeRows(income);
   const summary = useMemo(() => summarizeImport(fresh), [fresh]);
   // Count only the wallet's own trades for its holding.
   const updates = useMemo(() => {
@@ -559,22 +561,27 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               )}
             </div>
 
-            {freshEvents.length > 0 && (
+            {/* Shown once the saved rows are known: until then the file's could all be saved already. */}
+            {savedEvents.data && (freshEvents.length > 0 || incomeList.length > 0) && (
               <div>
                 <p className="px-1 pb-1.5 text-xs font-medium text-muted-foreground">
                   Also saved: income, fees and cash
                 </p>
                 <GroupedList className="border border-hairline">
-                  {incomeRows(income).map((r) => (
+                  {incomeList.map((r) => (
                     <div key={r.label} className={row}>
                       <span className="flex-1">{r.label}</span>
                       <span className="tabular-nums">{formatIncome(r.value)}</span>
                     </div>
                   ))}
-                  <div className={row}>
-                    <span className="flex-1">Rows saved in all (deposits and withdrawals too)</span>
-                    <span className="tabular-nums">{freshEvents.length}</span>
-                  </div>
+                  {freshEvents.length > 0 && (
+                    <div className={row}>
+                      <span className="flex-1">
+                        Rows saved in all (deposits and withdrawals too)
+                      </span>
+                      <span className="tabular-nums">{freshEvents.length}</span>
+                    </div>
+                  )}
                 </GroupedList>
                 {(income.dividends !== 0 || income.interest !== 0) && (
                   <p className="px-1 pt-1.5 text-xs text-muted-foreground">
