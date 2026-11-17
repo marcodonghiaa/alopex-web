@@ -439,6 +439,59 @@ describe("ImportTrades", () => {
     expect(screen.queryByText("Left out")).toBeNull();
   });
 
+  describe("polish-4 UB10 a file with nothing new says what it found", () => {
+    const fixture = () => readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const pick = (csv: string) => {
+      fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+      fireEvent.change(screen.getByLabelText("CSV file"), {
+        target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+      });
+    };
+
+    it("a file with only its header says there's nothing to import, with no check and no Save", async () => {
+      open("stock");
+      pick(fixture().split("\n")[0]!);
+      expect(await screen.findByText("Nothing in this file to import here.")).toBeInTheDocument();
+      expect(screen.getByText("Nothing new to import")).toBeInTheDocument();
+      expect(document.querySelector(".lucide-check")).toBeNull();
+      expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+      expect(screen.queryByText(/new trades? to save/)).toBeNull();
+    });
+
+    it("a file saved before says everything is already saved, trades and rows counted", async () => {
+      const { trades, events } = parseTradesCsv(fixture(), {
+        kind: "stock",
+        knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+        today: "2026-11-17",
+      });
+      db.events.push(...events!.map((e) => ({ ...e })));
+      db.stocks[0]!["shares"] = 4;
+      db.stocks[1]!["shares"] = 0;
+      open("stock", trades);
+      pick(fixture());
+      expect(
+        await screen.findByText("Everything in this file is already saved."),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Already saved, skipped").parentElement?.textContent).toBe(
+        "Already saved, skipped4 trades, 1 row",
+      );
+      expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+    });
+
+    it("a file of income only counts its rows, not 0 trades", async () => {
+      const [header] = fixture().split("\n");
+      const saveback =
+        '"2026-03-02T09:00:00Z","2026-03-02","DEFAULT","CASH","BENEFITS_SAVEBACK","","","","","","1.50","","","EUR","00000000-0000-4000-8000-000000000007"';
+      open("stock");
+      pick(`${header}\n${saveback}`);
+      expect(await screen.findByText("new income and cash row to save")).toBeInTheDocument();
+      expect(screen.queryByText(/new trades? to save/)).toBeNull();
+      expect(screen.getByText("Read, check what it found below")).toBeInTheDocument();
+      expect(document.querySelector(".lucide-check")).not.toBeNull();
+      expect(screen.getByRole("button", { name: "Save 1 row" })).toBeEnabled();
+    });
+  });
+
   it("if saved dividends and fees can't load, it says so and won't save", async () => {
     db.eventsDown = true;
     open("stock");

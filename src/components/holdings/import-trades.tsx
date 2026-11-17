@@ -300,6 +300,17 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     />
   );
   const ok = parsed != null && parsed.errors.length === 0;
+  // Rows of the file saved before; known once your saved rows have loaded.
+  const skippedTrades = parsed ? parsed.trades.length - fresh.length : 0;
+  const skippedEvents =
+    parsed?.events && savedEvents.data ? parsed.events.length - freshEvents.length : 0;
+  // A read file with nothing to save: no check mark, no Save, and a line saying why.
+  const nothing =
+    ok &&
+    (parsed.events == null || savedEvents.data != null) &&
+    fresh.length === 0 &&
+    freshEvents.length === 0 &&
+    updates.length === 0;
   // Holdings or rates failed: the file can't be read until they load, so stop showing Reading….
   const unreadable = !parsed && (keys.isError || rates.isError);
   const title =
@@ -400,11 +411,15 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                     "inline-flex size-9 shrink-0 items-center justify-center rounded-full",
                     (parsed && !ok) || unreadable
                       ? "bg-negative/15 text-negative"
-                      : "bg-positive/15 text-positive",
+                      : nothing
+                        ? "bg-foreground/[0.07] text-muted-foreground"
+                        : "bg-positive/15 text-positive",
                   )}
                 >
                   {unreadable ? (
                     <X className="size-4" strokeWidth={2.5} />
+                  ) : nothing ? (
+                    <Info className="size-4" strokeWidth={2.5} />
                   ) : parsed ? (
                     <Check className="size-4" strokeWidth={2.5} />
                   ) : (
@@ -418,9 +433,11 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                       ? "Can't be read"
                       : !parsed
                         ? "Reading…"
-                        : ok
-                          ? "Read, check what it found below"
-                          : "Can't be imported"}
+                        : nothing
+                          ? "Nothing new to import"
+                          : ok
+                            ? "Read, check what it found below"
+                            : "Can't be imported"}
                   </span>
                 </span>
                 <label className="cursor-pointer text-xs text-primary underline-offset-2 hover:underline has-[:disabled]:pointer-events-none has-[:disabled]:opacity-50">
@@ -543,14 +560,26 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
         {ok && (
           <div className="flex flex-col gap-4">
             <div className="px-1">
-              <p className="flex items-baseline gap-2">
-                <span className="text-3xl leading-none font-semibold tabular-nums">
-                  {fresh.length}
-                </span>
-                <span className="text-[0.9375rem] font-medium">
-                  new trade{fresh.length === 1 ? "" : "s"} to save
-                </span>
-              </p>
+              {nothing ? (
+                <p className="text-[0.9375rem] font-medium">
+                  {skippedTrades > 0 || skippedEvents > 0
+                    ? "Everything in this file is already saved."
+                    : "Nothing in this file to import here."}
+                </p>
+              ) : (
+                (fresh.length > 0 || freshEvents.length > 0) && (
+                  <p className="flex items-baseline gap-2">
+                    <span className="text-3xl leading-none font-semibold tabular-nums">
+                      {fresh.length > 0 ? fresh.length : freshEvents.length}
+                    </span>
+                    <span className="text-[0.9375rem] font-medium">
+                      {fresh.length > 0
+                        ? `new trade${fresh.length === 1 ? "" : "s"} to save`
+                        : `new income and cash row${freshEvents.length === 1 ? "" : "s"} to save`}
+                    </span>
+                  </p>
+                )
+              )}
               {summary && (
                 <p className="mt-0.5 text-sm text-muted-foreground">
                   {plural(summary.buys, "buy")} · {plural(summary.sells, "sell")} ·{" "}
@@ -591,12 +620,19 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               </div>
             )}
 
-            {(parsed.trades.length > fresh.length || updates.length > 0) && (
+            {(skippedTrades > 0 || skippedEvents > 0 || updates.length > 0) && (
               <GroupedList className="border border-hairline">
-                {parsed.trades.length > fresh.length && (
+                {(skippedTrades > 0 || skippedEvents > 0) && (
                   <div className={row}>
                     <span className="flex-1">Already saved, skipped</span>
-                    <span className="tabular-nums">{parsed.trades.length - fresh.length}</span>
+                    <span className="tabular-nums">
+                      {[
+                        skippedTrades > 0 && plural(skippedTrades, "trade"),
+                        skippedEvents > 0 && plural(skippedEvents, "row"),
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </span>
                   </div>
                 )}
                 {updates.length > 0 && (
@@ -651,7 +687,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             {save.error.message}
           </p>
         )}
-        {parsed && (
+        {parsed && !nothing && (
           <Button
             disabled={
               parsed.errors.length > 0 ||
