@@ -292,6 +292,19 @@ describe("ImportTrades", () => {
     expect(db.updated.map(([table]) => table)).toContain("portfolio_holdings");
   });
 
+  it("the preview names income and costs as the Income and costs section does", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const saveback =
+      '"2026-03-02T09:00:00Z","2026-03-02","DEFAULT","CASH","BENEFITS_SAVEBACK","","","","","","1.50","","","EUR","00000000-0000-4000-8000-000000000007"';
+    const csv = `${readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8").trim()}\n${saveback}`;
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    expect((await screen.findByText("Rewards")).parentElement?.textContent).toBe("Rewards€1.50");
+    expect(screen.getByText("Dividends").parentElement?.textContent).toBe("Dividends€1.20");
+  });
+
   it("the toast counts only the rows the database saved, not ones it already had", async () => {
     db.upsertSaved = 0;
     open("stock");
