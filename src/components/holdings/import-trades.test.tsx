@@ -770,4 +770,62 @@ describe("ImportTrades", () => {
       expect(byHolding()).toContain("Litecoin · fully sold");
     });
   });
+
+  describe("changing step moves focus to the new step's title", () => {
+    const title = (name: string) => screen.getByRole("heading", { name });
+
+    it("after choosing a source", () => {
+      open("crypto");
+      fireEvent.click(screen.getByRole("button", { name: /Ledger Live/ }));
+      expect(document.activeElement).toBe(title("Import from Ledger Live"));
+    });
+
+    it("after All sources", () => {
+      open("crypto");
+      fireEvent.click(screen.getByRole("button", { name: /Ledger Live/ }));
+      fireEvent.click(screen.getByRole("button", { name: /All sources/ }));
+      expect(document.activeElement).toBe(title("Import trades"));
+    });
+
+    it("after Use a spreadsheet", () => {
+      open("stock");
+      fireEvent.click(screen.getByRole("button", { name: /Another broker/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Use a spreadsheet" }));
+      expect(document.activeElement).toBe(title("Import a spreadsheet"));
+    });
+
+    it("not when the dialog opens: the dialog places it then", () => {
+      open("crypto");
+      expect(document.activeElement).not.toBe(title("Import trades"));
+    });
+  });
+
+  it("a file chosen from the keyboard keeps focus on the file picker (now Change)", async () => {
+    open("crypto");
+    fireEvent.click(screen.getByRole("button", { name: /Ledger Live/ }));
+    screen.getByLabelText("CSV file").focus();
+    const csv = readFileSync("src/lib/brokers/fixtures/ledger_live.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "ops.csv", { type: "text/csv" })] },
+    });
+    await screen.findByText("ops.csv");
+    const picker = screen.getByLabelText("CSV file");
+    expect(picker.closest("label")!.textContent).toBe("Change");
+    expect(document.activeElement).toBe(picker);
+  });
+
+  it("typing in the text box after a file leaves focus in the text box", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    screen.getByLabelText("CSV file").focus();
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File(["date,side,isin,shares,price"], "a.csv")] },
+    });
+    await screen.findByText("a.csv");
+    const area = screen.getByLabelText("CSV text");
+    area.focus();
+    fireEvent.change(area, { target: { value: "date,side" } });
+    expect(screen.queryByText("a.csv")).toBeNull();
+    expect(document.activeElement).toBe(area);
+  });
 });

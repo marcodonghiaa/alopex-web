@@ -1,5 +1,5 @@
 import { dateLocale, numberFormat } from "@/lib/locale";
-import { useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -109,6 +109,26 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   const [dragging, setDragging] = useState(false);
   // Where the file comes from: a broker's id, "spreadsheet" for your own columns, or "other".
   const [from, setFrom] = useState<string | null>(null);
+  // A step you change takes focus to its title, not the dialog: the old control is gone.
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const stepChanged = useRef(false);
+  function go(next: string | null) {
+    stepChanged.current = true;
+    setFrom(next);
+  }
+  useEffect(() => {
+    if (!stepChanged.current) return;
+    stepChanged.current = false;
+    titleRef.current?.focus();
+  }, [from]);
+  // The drop zone becomes the file's row with Change: a picker that had focus keeps it there.
+  const fileRef = useRef<HTMLInputElement>(null);
+  const refocusFile = useRef(false);
+  useEffect(() => {
+    if (!refocusFile.current) return;
+    refocusFile.current = false;
+    fileRef.current?.focus();
+  }, [fileName]);
   const brokers = BROKERS.filter((b) => b.kind === kind);
   const broker = brokers.find((b) => b.id === from);
   const keyColumn = kind === "stock" ? "isin" : "symbol";
@@ -256,7 +276,9 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       className="sr-only"
       // A file can't be swapped while the last one saves.
       disabled={save.isPending}
+      ref={fileRef}
       onChange={(e) => {
+        refocusFile.current = !fileName && document.activeElement === e.target;
         onFile(e.target.files?.[0]);
         // The same file can be chosen again after Change.
         e.target.value = "";
@@ -297,7 +319,10 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
         {from !== null && (
           <button
             type="button"
-            onClick={reset}
+            onClick={() => {
+              reset();
+              go(null);
+            }}
             disabled={save.isPending}
             className="-my-2 inline-flex min-h-11 items-center gap-1 self-start text-xs text-muted-foreground hover:text-foreground"
           >
@@ -305,7 +330,9 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
           </button>
         )}
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle ref={titleRef} tabIndex={-1} className="outline-none">
+            {title}
+          </DialogTitle>
           <DialogDescription>
             {from === null
               ? "Where are these trades from?"
@@ -323,7 +350,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               <button
                 key={o.id}
                 type="button"
-                onClick={() => setFrom(o.id)}
+                onClick={() => go(o.id)}
                 className={cn(row, "w-full text-left hover:bg-muted")}
               >
                 <span className="flex-1 font-medium">{o.label}</span>
@@ -351,7 +378,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             <Button
               variant="quiet"
               className="border border-rule"
-              onClick={() => setFrom("spreadsheet")}
+              onClick={() => go("spreadsheet")}
             >
               Use a spreadsheet
             </Button>
