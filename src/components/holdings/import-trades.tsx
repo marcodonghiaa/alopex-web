@@ -612,6 +612,12 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                     {updates.map(({ key, shares }) => {
                       const held = wallet?.get(key);
                       const old = held ? held.shares : keys.data?.shares.get(key);
+                      // Trades you typed in count on the coin too: a hand-added holding set to the
+                      // file's amount no longer matches them.
+                      const byHand =
+                        held?.source === "Manual"
+                          ? saved.filter((t) => !t.source && t.key.toUpperCase() === key).length
+                          : 0;
                       return (
                         <li key={key} className={cn(row, "border-hairline not-first:border-t")}>
                           <span className="min-w-0 flex-1">
@@ -621,6 +627,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                             {held && (
                               <span className="block text-xs text-muted-foreground">
                                 {held.source}
+                                {byHand > 0 &&
+                                  ` · Has ${plural(byHand, "trade")} you added by hand: its return will show as not matching until you remove ${byHand === 1 ? "it" : "them"}`}
                               </span>
                             )}
                           </span>

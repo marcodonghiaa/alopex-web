@@ -744,6 +744,62 @@ describe("ImportTrades", () => {
       ]);
     });
 
+    it("a holding with trades you added by hand says its return won't match", async () => {
+      const byHand: Trade = {
+        kind: "crypto",
+        key: "ETH",
+        side: "buy",
+        trade_date: "2025-12-01",
+        shares: 0.4,
+        price_eur: 2000,
+        fee_eur: 0,
+        source: null,
+      };
+      open("crypto", [byHand]);
+      pick(/Ledger Live/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Save 7 trades" });
+      const rows = within(corrected()).getAllByRole("listitem");
+      expect(rows.map((r) => r.textContent)).toEqual([
+        "EthereumManual · Has 1 trade you added by hand: its return will show as not matching until you remove it0.4 → 0.4988",
+      ]);
+    });
+
+    it("two trades added by hand are counted, and both are to remove", async () => {
+      const byHand = (trade_date: string): Trade => ({
+        kind: "crypto",
+        key: "eth",
+        side: "buy",
+        trade_date,
+        shares: 0.2,
+        price_eur: 2000,
+        fee_eur: 0,
+      });
+      open("crypto", [byHand("2025-11-01"), byHand("2025-12-01")]);
+      pick(/Ledger Live/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Save 7 trades" });
+      expect(within(corrected()).getByText(/Has 2 trades you added by hand/).textContent).toBe(
+        "Manual · Has 2 trades you added by hand: its return will show as not matching until you remove them",
+      );
+    });
+
+    it("trades from this file's own source don't count as added by hand", async () => {
+      const fromLedger: Trade = {
+        kind: "crypto",
+        key: "ETH",
+        side: "buy",
+        trade_date: "2025-12-01",
+        shares: 0.4,
+        price_eur: 2000,
+        fee_eur: 0,
+        source: "ledger_live",
+        external_id: "older",
+      };
+      open("crypto", [fromLedger]);
+      pick(/Ledger Live/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Save 7 trades" });
+      expect(within(corrected()).queryByText(/added by hand/)).toBeNull();
+    });
+
     it("the toast counts the trades and the holdings updated", async () => {
       db.extraCoins.push({ asset_symbol: "LTC", amount: 0.5, name: "Litecoin", source: "Manual" });
       open("crypto");
