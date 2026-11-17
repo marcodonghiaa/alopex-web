@@ -216,26 +216,32 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
         const { data } = await supabase.auth.getUser();
         if (!data.user) throw new Error("You're signed out. Sign in and try again.");
         const userId = data.user.id;
-        const { error } = await supabase.from("investment_events").upsert(
-          freshEvents.map((e) => ({ ...e, user_id: userId })),
-          { onConflict: "user_id,source,external_id", ignoreDuplicates: true },
-        );
+        // Only rows the database saved come back: one already there (another tab) isn't counted.
+        const { data: savedRows, error } = await supabase
+          .from("investment_events")
+          .upsert(
+            freshEvents.map((e) => ({ ...e, user_id: userId })),
+            { onConflict: "user_id,source,external_id", ignoreDuplicates: true },
+          )
+          .select("id");
         // The trades and counts are saved by now: say so, or a retry looks like it starts over.
         if (error && fresh.length > 0)
           throw new Error(
             `${plural(fresh.length, "trade")} saved, but the income, fee and cash rows weren't (${error.message}). Import the file again to save them.`,
           );
         if (error) throw error;
+        return savedRows?.length ?? 0;
       }
+      return 0;
     },
-    onSuccess: () => {
+    onSuccess: (savedEvents) => {
       toast.success(
-        [
+        ([
           fresh.length > 0 && plural(fresh.length, "trade"),
-          freshEvents.length > 0 && plural(freshEvents.length, "other row"),
+          savedEvents > 0 && plural(savedEvents, "other row"),
         ]
           .filter(Boolean)
-          .join(" and ") + " imported",
+          .join(" and ") || "Nothing new") + " imported",
       );
       reset();
       setOpen(false);

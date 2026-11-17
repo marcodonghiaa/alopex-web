@@ -10,6 +10,8 @@ const db = vi.hoisted(() => ({
   ratesDown: false,
   rpcMissing: false,
   upsertError: null as string | null,
+  // How many upserted rows the database says it saved (the rest were already there).
+  upsertSaved: null as number | null,
   updated: [] as Array<[string, Record<string, unknown>, Array<[string, unknown]>]>,
 }));
 vi.mock("@/integrations/supabase/client", () => {
@@ -73,7 +75,11 @@ vi.mock("@/integrations/supabase/client", () => {
         },
         upsert: (rows: Array<Record<string, unknown>>, options: unknown) => {
           db.upserted.push([table, rows, options]);
-          return Promise.resolve({ error: db.upsertError ? { message: db.upsertError } : null });
+          const error = db.upsertError ? { message: db.upsertError } : null;
+          const saved = rows.slice(0, db.upsertSaved ?? rows.length);
+          return Object.assign(Promise.resolve({ error }), {
+            select: () => Promise.resolve({ data: error ? null : saved, error }),
+          });
         },
       }),
       rpc: (name: string, args: Record<string, unknown>) => {
@@ -89,6 +95,7 @@ vi.mock("@/integrations/supabase/client", () => {
   };
 });
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from "sonner";
 
 import { ImportTrades } from "./import-trades";
 import type { Trade } from "@/lib/trades";
@@ -111,6 +118,7 @@ describe("ImportTrades", () => {
     db.updated.length = 0;
     db.rpcMissing = false;
     db.upsertError = null;
+    db.upsertSaved = null;
   });
 
   it("asks where the trades are from before asking for a file", () => {
@@ -284,6 +292,19 @@ describe("ImportTrades", () => {
     expect(db.updated.map(([table]) => table)).toContain("portfolio_holdings");
   });
 
+  it("the toast counts only the rows the database saved, not ones it already had", async () => {
+    db.upsertSaved = 0;
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 4 trades" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe("4 trades imported");
+  });
+
   it("a Trade Republic file saves its dividends too, skipping ones already saved by id", async () => {
     db.upserted.length = 0;
     open("stock");
@@ -300,5 +321,8 @@ describe("ImportTrades", () => {
     expect(rows).toEqual([
       expect.objectContaining({ kind: "dividend", amount_eur: 1.2, user_id: "u1" }),
     ]);
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenLastCalledWith("4 trades and 1 other row imported"),
+    );
   });
 });
