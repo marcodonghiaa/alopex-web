@@ -11,6 +11,13 @@ wallets on the Crypto page. Anything else can be imported as a plain CSV with th
 | Trade Republic | DE, IT, FR, ES and more | CSV  | 2026-11-10                      |
 | Ledger Live    | Any country             | CSV  | 2026-11-17                      |
 
+## Ledger Live and your crypto holdings
+
+A Ledger Live export lists every operation of those wallets, so it sets how many coins you hold
+there. It writes to the crypto holding whose source is `Ledger`, or else to the one whose source is
+`Manual` (typed in by hand). A coin you still hold only under another source (an exchange sync, say) is
+left out, with a note: add it as a coin, then import again. Those other holdings are never changed.
+
 ## Your broker isn't here, or stopped working?
 
 Open [Add my broker](https://github.com/marcodonghiaa/alopex/issues/new?template=new-broker.yml) with a
