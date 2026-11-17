@@ -529,10 +529,12 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                   <span role="status" className="block text-xs text-muted-foreground">
                     {!parsed && keys.isError
                       ? "Can't be read"
-                      : !parsed && !stuck
-                        ? "Reading…"
+                      : stuck
+                        ? "Couldn't load exchange rates"
                         : !parsed
-                          ? "Waiting for exchange rates"
+                          ? need
+                            ? "Loading exchange rates…"
+                            : "Reading…"
                           : nothing
                             ? "Nothing new to import"
                             : ok

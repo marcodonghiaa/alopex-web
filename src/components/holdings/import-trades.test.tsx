@@ -494,8 +494,8 @@ describe("ImportTrades", () => {
       /Try again/,
     );
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
-    // The file card stops reading: it waits for the rates.
-    expect(screen.getByRole("status").textContent).toBe("Waiting for exchange rates");
+    // The file card stops reading: it says the rates failed.
+    expect(screen.getByRole("status").textContent).toBe("Couldn't load exchange rates");
     expect(screen.queryByText("Reading…")).toBeNull();
   });
 
@@ -856,6 +856,31 @@ describe("ImportTrades", () => {
     },
   );
 
+  describe("polish-5 B3 the file card says what the exchange rates are doing", () => {
+    it("while they load: Loading exchange rates…, a spinner, no error icon", async () => {
+      let release!: () => void;
+      db.ratesGate = new Promise((r) => (release = r));
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      await waitFor(() =>
+        expect(screen.getByRole("status").textContent).toBe("Loading exchange rates…"),
+      );
+      expect(document.querySelector(".animate-spin")).toBeTruthy();
+      expect(statusIcon()).toBeNull();
+      release();
+      await screen.findByRole("button", { name: "Save 7 trades" });
+    });
+
+    it("once they fail: the error icon, Couldn't load exchange rates, and Try again", async () => {
+      db.ratesDown = true;
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Try again" });
+      expect(screen.getByRole("status").textContent).toBe("Couldn't load exchange rates");
+      expect(statusIcon()?.classList.contains("lucide-circle-alert")).toBe(true);
+    });
+  });
+
   it("polish-4 N11 a source's name never wraps; its hint gives way", () => {
     open("stock");
     const name = screen.getByText("My own spreadsheet");
@@ -1114,9 +1139,9 @@ describe("ImportTrades", () => {
     open("crypto");
     pick(/Ledger Live/, "ledger_live.csv");
     await screen.findByText(message);
-    // Only the rates failed: the file is fine, it waits for them.
+    // Only the rates failed: the file is fine, the card says the rates failed.
     expect(screen.getByRole("status").textContent).toBe(
-      what === "the exchange rates" ? "Waiting for exchange rates" : "Can't be read",
+      what === "the exchange rates" ? "Couldn't load exchange rates" : "Can't be read",
     );
     expect(screen.queryByText("Reading…")).toBeNull();
     expect(document.querySelector(".animate-spin")).toBeNull();
@@ -1311,17 +1336,19 @@ describe("ImportTrades", () => {
     expect(screen.getByText("mine.csv")).toBeTruthy();
   });
 
-  it("while the exchange rates load it says Reading… and offers no save yet", async () => {
+  it("while the exchange rates load it says so and offers no save yet", async () => {
     let release!: () => void;
     db.ratesGate = new Promise((r) => (release = r));
     open("crypto");
     pick(/Ledger Live/, "ledger_live.csv");
-    expect(await screen.findByText("Reading…")).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toBe("Loading exchange rates…"),
+    );
     expect(document.querySelector(".animate-spin")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
     release();
     expect(await screen.findByRole("button", { name: "Save 7 trades" })).toBeTruthy();
-    expect(screen.queryByText("Reading…")).toBeNull();
+    expect(screen.queryByText("Loading exchange rates…")).toBeNull();
   });
 
   it("the dialog can't be closed while saving, and closes once saved", async () => {
@@ -1539,7 +1566,7 @@ describe("ImportTrades", () => {
     const trying = await screen.findByRole("button", { name: "Trying…" });
     expect(trying.getAttribute("aria-disabled")).toBe("true");
     expect(trying.querySelector(".animate-spin")).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toBe("Reading…");
+    expect(screen.getByRole("status").textContent).toBe("Loading exchange rates…");
     release();
     expect(await screen.findByRole("button", { name: "Save 7 trades" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Trying|Try again/ })).toBeNull();
@@ -1579,7 +1606,7 @@ describe("ImportTrades", () => {
     const again = await screen.findByRole("button", { name: "Try again" });
     expect((again as HTMLButtonElement).disabled).toBe(false);
     expect(again.hasAttribute("aria-disabled")).toBe(false);
-    expect(screen.getByRole("status").textContent).toBe("Waiting for exchange rates");
+    expect(screen.getByRole("status").textContent).toBe("Couldn't load exchange rates");
   });
 
   it.each([
