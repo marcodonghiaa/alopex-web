@@ -321,10 +321,11 @@ describe("ToLink", () => {
     const a = await screen.findByRole("listitem", { name: "Groceries" });
     const b = screen.getByRole("listitem", { name: "Trip" });
     await userEvent.click(within(a).getByRole("button", { name: "Ignore" }));
-    await waitFor(() => expect(within(a).getByRole("button", { name: "Ignore" })).toBeDisabled());
-    expect(within(b).getByRole("button", { name: "Ignore" })).toBeDisabled();
+    const off = (el: HTMLElement) => expect(el).toHaveAttribute("aria-disabled", "true");
+    await waitFor(() => off(within(a).getByRole("button", { name: "Ignore" })));
+    off(within(b).getByRole("button", { name: "Ignore" }));
     await userEvent.click(within(b).getByRole("button", { name: "Ignore" }));
-    expect(within(a).getByRole("button", { name: "Ignore" })).toBeDisabled();
+    off(within(a).getByRole("button", { name: "Ignore" }));
     expect(rpc).toHaveBeenCalledTimes(1);
     finish({ data: {}, error: null });
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Ignored"));
@@ -343,7 +344,10 @@ describe("ToLink", () => {
     );
     await userEvent.click(within(row).getByRole("button", { name: "Link" }));
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Linked to the bank payment"));
-    expect(within(row).getByRole("button", { name: "Ignore" })).toBeDisabled();
+    expect(within(row).getByRole("button", { name: "Ignore" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
     await userEvent.click(within(row).getByRole("button", { name: "Ignore" }));
     expect(rpc).toHaveBeenCalledTimes(1);
     refreshed();
@@ -543,5 +547,40 @@ describe("Find in bank for a settle-up", () => {
     await userEvent.click(within(row).getByRole("button", { name: "Find in bank" }));
     const sheet = await screen.findByRole("dialog", { name: "Which payment was Groceries?" });
     expect(sheet).toHaveTextContent("Payments around 10 Nov, any amount.");
+  });
+});
+
+// polish-4 #11: pending rows keep the clicked button focused; a row that goes hands focus on
+describe("To link focus around an action", () => {
+  it("keeps focus on the clicked button while it runs and after it fails", async () => {
+    tables.splitwise_review = { data: [item()], error: null };
+    let finish: (v: unknown) => void = () => {};
+    rpc.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));
+    renderList();
+    const row = await screen.findByRole("listitem", { name: "Groceries" });
+    const ignore = within(row).getByRole("button", { name: "Ignore" });
+    await userEvent.click(ignore);
+    await waitFor(() => expect(ignore).toHaveAttribute("aria-disabled", "true"));
+    expect(ignore).not.toBeDisabled();
+    expect(document.activeElement).toBe(ignore);
+    finish({ data: null, error: { message: "nope" } });
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("nope"));
+    await waitFor(() => expect(ignore).not.toHaveAttribute("aria-disabled"));
+    expect(document.activeElement).toBe(ignore);
+  });
+
+  it("moves focus to the row that takes the place of one that went", async () => {
+    tables.splitwise_review = {
+      data: [item(), item({ id: "r2", description: "Trip" })],
+      error: null,
+    };
+    renderList();
+    const row = await screen.findByRole("listitem", { name: "Groceries" });
+    tables.splitwise_review = { data: [item({ id: "r2", description: "Trip" })], error: null };
+    await userEvent.click(within(row).getByRole("button", { name: "Ignore" }));
+    await waitFor(() => expect(screen.queryByRole("listitem", { name: "Groceries" })).toBeNull());
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("listitem", { name: "Trip" })),
+    );
   });
 });

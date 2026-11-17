@@ -301,7 +301,10 @@ describe("Connect dialog", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Start sync" }));
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(screen.getByRole("button", { name: /Sync now|Syncing/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Sync now|Syncing/ })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
     finish(ok({ new: 1, adopted: 0, review: 0, deleted: 0 }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Sync now" })).toBeEnabled());
   });
@@ -634,7 +637,10 @@ describe("Pending states and refreshes", () => {
     await userEvent.type(within(dialog).getByLabelText("API key"), "abcdefghijkl");
     await userEvent.click(within(dialog).getByRole("checkbox"));
     await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
-    expect(within(dialog).getByRole("button", { name: "Checking the key…" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Checking the key…" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
     call.finish(ok({ displayName: "Sam" }));
     await within(dialog).findByText("Connected as Sam");
     expect(refreshed(spy)).toContain('["splitwise-connection"]');
@@ -647,7 +653,10 @@ describe("Pending states and refreshes", () => {
     renderSetup();
     const spy = vi.spyOn(client, "invalidateQueries");
     await userEvent.click(await screen.findByRole("button", { name: "Sync now" }));
-    expect(screen.getByRole("button", { name: "Syncing…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Syncing…" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
     call.finish(ok({ new: 0, adopted: 0, review: 0, deleted: 0 }));
     await waitFor(() => expect(refreshed(spy)).toEqual(expect.arrayContaining(everything)));
   });
@@ -661,7 +670,10 @@ describe("Pending states and refreshes", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
     const dialog = screen.getByRole("dialog", { name: "Disconnect Splitwise?" });
     await userEvent.click(within(dialog).getByRole("button", { name: "Disconnect" }));
-    expect(within(dialog).getByRole("button", { name: "Disconnecting…" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Disconnecting…" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
     call.finish(ok({ disconnected: true, deleted: 0 }));
     await waitFor(() => expect(refreshed(spy)).toEqual(expect.arrayContaining(everything)));
   });
@@ -677,7 +689,10 @@ describe("Pending states and refreshes", () => {
     );
     const dialog = screen.getByRole("dialog", { name: "Delete synced Splitwise data?" });
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
-    expect(within(dialog).getByRole("button", { name: "Deleting…" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Deleting…" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
     call.finish(ok({ disconnected: true, deleted: 0 }));
     await waitFor(() => expect(refreshed(spy)).toEqual(expect.arrayContaining(everything)));
   });
@@ -884,5 +899,62 @@ describe("Sync preview copy", () => {
     expect(within(dialog).getByRole("button", { name: "Not now" })).toBeTruthy();
     expect(within(dialog).queryByRole("button", { name: "Later" })).toBeNull();
     expect(within(dialog).getByText("Syncs automatically within 6 hours.")).toBeTruthy();
+  });
+});
+
+// polish-4 #11: a pending button is aria-disabled, not disabled, so it keeps keyboard focus
+describe("Pending buttons keep focus", () => {
+  const pending = (b: HTMLElement) => {
+    expect(b).not.toBeDisabled();
+    expect(b).toHaveAttribute("aria-disabled", "true");
+  };
+  const hold = () => new Promise(() => {});
+
+  it("Sync now", async () => {
+    invoke.mockReturnValueOnce(hold());
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: "Sync now" }));
+    const b = screen.getByRole("button", { name: "Syncing…" });
+    pending(b);
+    expect(document.activeElement).toBe(b);
+    await userEvent.click(b);
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("Connect while the key is checked", async () => {
+    invoke.mockReturnValueOnce(hold());
+    rpc.mockResolvedValue(notConnected());
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: "Connect Splitwise" }));
+    const dialog = screen.getByRole("dialog", { name: "Connect Splitwise" });
+    await userEvent.type(within(dialog).getByLabelText("API key"), "abcdefghijkl");
+    await userEvent.click(within(dialog).getByRole("checkbox"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    const b = within(dialog).getByRole("button", { name: "Checking the key…" });
+    pending(b);
+    await userEvent.click(b);
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("Disconnect while it runs", async () => {
+    invoke.mockReturnValueOnce(hold());
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
+    const dialog = screen.getByRole("dialog", { name: "Disconnect Splitwise?" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Disconnect" }));
+    const b = within(dialog).getByRole("button", { name: "Disconnecting…" });
+    pending(b);
+    await userEvent.click(b);
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("is a plain, enabled button again once nothing runs", async () => {
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    const b = await screen.findByRole("button", { name: "Sync now" });
+    expect(b).not.toHaveAttribute("aria-disabled");
+    expect(b).toBeEnabled();
   });
 });

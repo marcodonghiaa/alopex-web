@@ -16,6 +16,7 @@ import {
   syncRefreshKeys,
   type SplitwiseConnection,
 } from "@/lib/splitwise-sync";
+import { PENDING } from "./pending";
 import { ConnectDialog } from "./connect-dialog";
 
 /** Focuses the setup's main control (Sync now, Reconnect, Connect or Retry) if focus was lost. */
@@ -175,9 +176,11 @@ function StatusRow({
         ) : (
           <Button
             variant="secondary"
+            className={PENDING}
             data-splitwise-primary
-            onClick={() => sync.mutate()}
-            disabled={demo || syncing}
+            onClick={() => syncing || sync.mutate()}
+            disabled={demo}
+            aria-disabled={syncing || undefined}
           >
             {syncing ? "Syncing…" : "Sync now"}
           </Button>
@@ -296,8 +299,9 @@ function DisconnectDialog({
           </Button>
           <Button
             variant="destructive"
-            onClick={() => disconnect.mutate(onlyDelete || deleteData)}
-            disabled={disconnect.isPending}
+            className={PENDING}
+            onClick={() => disconnect.isPending || disconnect.mutate(onlyDelete || deleteData)}
+            aria-disabled={disconnect.isPending || undefined}
           >
             {onlyDelete
               ? disconnect.isPending

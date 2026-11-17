@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { GroupedList } from "@/components/ui/grouped-list";
 import { isDemoMode } from "@/lib/demo/mode";
+import { cn } from "@/lib/utils";
+import { PENDING } from "./pending";
 import {
   CONNECTION_KEY,
   connectSplitwise,
@@ -83,6 +85,7 @@ export function ConnectDialog({
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (connect.isPending) return;
     if (apiKey.trim() === "") return setProblem("Paste your Splitwise API key first.");
     if (!consent) return setProblem("Tick the box to let Alopex read your Splitwise expenses.");
     setProblem(null);
@@ -157,7 +160,12 @@ export function ConnectDialog({
                 {problem}
               </p>
             )}
-            <Button type="submit" className="mt-5 w-full" disabled={demo || connect.isPending}>
+            <Button
+              type="submit"
+              className={cn("mt-5 w-full", PENDING)}
+              disabled={demo}
+              aria-disabled={connect.isPending || undefined}
+            >
               {connect.isPending ? "Checking the key…" : "Connect"}
             </Button>
           </form>
@@ -207,7 +215,11 @@ export function ConnectDialog({
               <Button variant="quiet" onClick={() => onOpenChange(false)}>
                 Not now
               </Button>
-              <Button onClick={() => start.mutate()} disabled={syncing}>
+              <Button
+                className={PENDING}
+                onClick={() => syncing || start.mutate()}
+                aria-disabled={syncing || undefined}
+              >
                 {syncing ? "Syncing…" : "Start sync"}
               </Button>
             </div>

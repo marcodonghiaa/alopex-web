@@ -7,6 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isDemoMode } from "@/lib/demo/mode";
+import { PENDING } from "./pending";
 import { moneyAmount, money, shortDate } from "@/lib/import/splitwise-format";
 import { fetchBankWindow } from "@/lib/import/splitwise-bank";
 import { makeRate } from "@/lib/import/splitwise-review";
@@ -30,6 +31,8 @@ import {
 const rowId = (id: string) => `to-link-${id}`;
 const focusLater = (id: string) =>
   requestAnimationFrame(() => document.getElementById(id)?.focus());
+const rowIds = () =>
+  [...document.querySelectorAll<HTMLElement>("li[id^='to-link-']")].map((li) => li.id);
 
 // The page's answer is who owes you: a long queue would push the groups far down.
 const FIRST = 5;
@@ -83,14 +86,28 @@ export function ToLink({ connected }: { connected: boolean }) {
 
   const act = useMutation({
     mutationFn: runReviewAction,
+    // Where the row sits, so focus can go to the one that takes its place once it's gone.
+    onMutate: (a) => rowIds().indexOf(rowId(a.id)),
     onSuccess: (_d, a) => toast.success(DONE[a.action]),
     onError: (err) => toast.error(err.message),
     // Awaited: the action stays pending (rows off) until the list shows its result.
-    onSettled: () =>
-      Promise.all(syncRefreshKeys().map((queryKey) => queryClient.invalidateQueries({ queryKey }))),
+    onSettled: async (_d, _e, a, at) => {
+      await Promise.all(
+        syncRefreshKeys().map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      );
+      requestAnimationFrame(() => {
+        if (document.activeElement && document.activeElement !== document.body) return;
+        const ids = rowIds();
+        const next = ids.includes(rowId(a.id))
+          ? rowId(a.id)
+          : ids[Math.min(at ?? 0, ids.length - 1)];
+        if (next) document.getElementById(next)?.focus();
+      });
+    },
   });
-  // One action at a time: each one changes what the others would act on.
-  const busy = demo || act.isPending;
+  // One action at a time: each one changes what the others would act on. Busy, not disabled, so
+  // the clicked button keeps keyboard focus.
+  const busy = act.isPending;
 
   const count = review.data?.total ?? 0;
   // Disconnected but kept: what's still waiting can be linked. A database without the sync
@@ -155,6 +172,7 @@ export function ToLink({ connected }: { connected: boolean }) {
                   item={item}
                   suggestion={suggestions.get(item.id) ?? null}
                   busy={busy}
+                  demo={demo}
                   onAct={(a) => act.mutate(a)}
                   onFind={() => setFinding(item)}
                 />
@@ -216,17 +234,21 @@ function ReviewRow({
   item,
   suggestion,
   busy,
+  demo,
   onAct,
   onFind,
 }: {
   item: ReviewItem;
   suggestion: Suggestion | null;
   busy: boolean;
+  /** Linking is off in the demo: real disabled, for good. */
+  demo: boolean;
   onAct: (a: ReviewAction) => void;
   onFind: () => void;
 }) {
   const tx = suggestion?.tx;
   const out = directionOf(item.kind) === "DBIT";
+  const off = { disabled: demo, "aria-disabled": busy || undefined, className: PENDING };
   return (
     <li
       id={rowId(item.id)}
@@ -274,36 +296,41 @@ function ReviewRow({
       <div className="mt-2 flex flex-wrap gap-2">
         {tx ? (
           <>
-            <Button disabled={busy} onClick={() => onAct({ action: "link", id: item.id, tx })}>
+            <Button {...off} onClick={() => busy || onAct({ action: "link", id: item.id, tx })}>
               Link
             </Button>
             <Button
               variant="secondary"
-              disabled={busy}
+              {...off}
               onClick={() =>
-                onAct({ action: "reject", id: item.id, entryReference: tx.entryReference })
+                busy || onAct({ action: "reject", id: item.id, entryReference: tx.entryReference })
               }
             >
               Not this one
             </Button>
           </>
         ) : null}
-        <Button id={`${rowId(item.id)}-find`} variant="secondary" disabled={busy} onClick={onFind}>
+        <Button
+          id={`${rowId(item.id)}-find`}
+          variant="secondary"
+          {...off}
+          onClick={() => busy || onFind()}
+        >
           Find in bank
         </Button>
         {canCount(item.kind) && (
           <Button
             variant="secondary"
-            disabled={busy}
-            onClick={() => onAct({ action: "count", id: item.id })}
+            {...off}
+            onClick={() => busy || onAct({ action: "count", id: item.id })}
           >
             Count my share
           </Button>
         )}
         <Button
           variant="ghost"
-          disabled={busy}
-          onClick={() => onAct({ action: "dismiss", id: item.id })}
+          {...off}
+          onClick={() => busy || onAct({ action: "dismiss", id: item.id })}
         >
           Ignore
         </Button>
