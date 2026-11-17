@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { FindInBank } from "@/components/import/find-in-bank";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
@@ -9,8 +8,8 @@ import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isDemoMode } from "@/lib/demo/mode";
 import { moneyAmount, money, shortDate } from "@/lib/import/splitwise-format";
-import type { BankTx } from "@/lib/import/splitwise-match";
-import { makeRate, toBankTx, type FxRow } from "@/lib/import/splitwise-review";
+import { fetchBankWindow } from "@/lib/import/splitwise-bank";
+import { makeRate } from "@/lib/import/splitwise-review";
 import {
   canCount,
   directionOf,
@@ -26,50 +25,6 @@ import {
   type ReviewItem,
   type Suggestion,
 } from "@/lib/splitwise-sync";
-
-// Bank rows from 30 days before the oldest item (the matcher's early window) to a week after the
-// newest. The database returns at most 1000 rows per call; past that, suggestions are left out.
-const DAYS_BEFORE = 30;
-const DAYS_AFTER = 7;
-const PAGE_LIMIT = 1000;
-
-const addDays = (iso: string, days: number) =>
-  new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
-
-interface Bank {
-  bank: Array<BankTx>;
-  fx: Array<FxRow>;
-}
-
-async function fetchBank(items: Array<ReviewItem>): Promise<Bank> {
-  const dates = items.map((i) => i.booking_date).sort();
-  const from = addDays(dates[0]!, -DAYS_BEFORE);
-  const to = addDays(dates[dates.length - 1]!, DAYS_AFTER);
-  const bank = await supabase
-    .from("transactions")
-    .select(
-      "account_uid, entry_reference, booking_date, amount, currency, credit_debit_indicator, personal_amount, flow_type, deleted_at, creditor_name",
-    )
-    .gte("booking_date", from)
-    .lte("booking_date", to)
-    .limit(PAGE_LIMIT);
-  if (bank.error) throw new Error(bank.error.message);
-  const currencies = [
-    ...new Set([...items.map((i) => i.currency), ...(bank.data ?? []).map((t) => t.currency)]),
-  ].filter((c) => c !== "EUR");
-  const fx =
-    currencies.length === 0
-      ? { data: [] as Array<FxRow>, error: null }
-      : await supabase
-          .from("fx_rates")
-          .select("currency, date, rate_to_eur")
-          .in("currency", currencies)
-          .gte("date", addDays(from, -14))
-          .lte("date", to)
-          .limit(PAGE_LIMIT);
-  if (fx.error) throw new Error(fx.error.message);
-  return { bank: (bank.data ?? []).flatMap((r) => toBankTx(r) ?? []), fx: fx.data ?? [] };
-}
 
 const DONE: Record<ReviewAction["action"], string> = {
   link: "Linked to the bank payment",
@@ -91,7 +46,11 @@ export function ToLink({ connected }: { connected: boolean }) {
   // Under "transactions" so the import's refresh keys refetch it after a link.
   const bank = useQuery({
     queryKey: ["transactions", "splitwise-to-link", dates[0], dates[dates.length - 1]],
-    queryFn: () => fetchBank(items),
+    queryFn: () =>
+      fetchBankWindow(
+        items.map((i) => i.booking_date),
+        items.map((i) => i.currency),
+      ),
     enabled: items.length > 0,
   });
   const rate = useMemo(() => makeRate(bank.data?.fx ?? []), [bank.data]);
