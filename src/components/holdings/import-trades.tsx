@@ -32,7 +32,7 @@ import {
 import { newEvents, summarizeIncome } from "@/lib/investment-events";
 import { formatEur } from "@/lib/transactions";
 import { fetchEvents } from "@/lib/use-performance";
-import { INCOME_ROWS } from "@/components/holdings/investment-income";
+import { incomeRows } from "@/components/holdings/investment-income";
 
 /** A coin holding as stored: its count and its symbol written as saved (the key is in capitals). */
 interface Held {
@@ -554,16 +554,12 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                   Also saved: income, fees and cash
                 </p>
                 <GroupedList className="border border-hairline">
-                  {INCOME_ROWS.map(
-                    (r) => [r.label, r.cost ? -income[r.field] : income[r.field]] as const,
-                  )
-                    .filter(([, v]) => Math.abs(v) >= 0.005)
-                    .map(([label, v]) => (
-                      <div key={label} className={row}>
-                        <span className="flex-1">{label}</span>
-                        <span className="tabular-nums">{formatEur(v)}</span>
-                      </div>
-                    ))}
+                  {incomeRows(income).map((r) => (
+                    <div key={r.label} className={row}>
+                      <span className="flex-1">{r.label}</span>
+                      <span className="tabular-nums">{formatEur(r.value)}</span>
+                    </div>
+                  ))}
                   <div className={row}>
                     <span className="flex-1">Rows, with deposits and withdrawals</span>
                     <span className="tabular-nums">{freshEvents.length}</span>

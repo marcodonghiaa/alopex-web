@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { InvestmentEvent } from "@/lib/investment-events";
-import { InvestmentIncome, eventsForPage, incomeAndCosts } from "./investment-income";
+import { InvestmentIncome, eventsForPage, incomeAndCosts, incomeRows } from "./investment-income";
 
 // Your own clock: just past midnight on 1 January where you are, still 31 December in UTC.
 vi.mock("@/lib/trades", async (load) => ({
@@ -114,5 +114,16 @@ describe("incomeAndCosts", () => {
       />,
     );
     expect(screen.getByText("Fees")).toBeInTheDocument();
+  });
+});
+
+describe("incomeRows", () => {
+  it("lists the rows with something to show, a cost as money out, rounding dust left out", () => {
+    expect(
+      incomeRows({ dividends: 1.2, interest: 0, rewards: 0.004, taxes: 2, fees: -0.003 }),
+    ).toEqual([
+      { label: "Dividends", field: "dividends", value: 1.2 },
+      { label: "Taxes", field: "taxes", cost: true, value: -2 },
+    ]);
   });
 });

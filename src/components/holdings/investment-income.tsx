@@ -23,13 +23,22 @@ export function incomeAndCosts(
 }
 
 /** The rows of income and costs, here and in the import preview. A cost is shown as money out. */
-export const INCOME_ROWS: Array<{ label: string; field: keyof IncomeSummary; cost?: boolean }> = [
+const INCOME_ROWS: Array<{ label: string; field: keyof IncomeSummary; cost?: boolean }> = [
   { label: "Dividends", field: "dividends" },
   { label: "Interest", field: "interest" },
   { label: "Rewards", field: "rewards" },
   { label: "Taxes", field: "taxes", cost: true },
   { label: "Fees", field: "fees", cost: true },
 ];
+
+/** The rows with something to show, each with its amount; a cost reads as money out. */
+export function incomeRows(summary: IncomeSummary) {
+  return (
+    INCOME_ROWS.map((r) => ({ ...r, value: r.cost ? -summary[r.field] : summary[r.field] }))
+      // Under half a cent is rounding dust: it would show as "−€0.00".
+      .filter((r) => Math.abs(r.value) >= 0.005)
+  );
+}
 
 /** Events for this page: coins' on Crypto, everything else (shares and cash) on Portfolio. */
 export function eventsForPage(events: Array<EventRow>, page: "stock" | "crypto") {
@@ -55,8 +64,7 @@ export function InvestmentIncome({
   const mine = eventsForPage(events, page);
   const all = incomeAndCosts(mine, trades);
   const year = incomeAndCosts(mine, trades, `${today.slice(0, 4)}-01-01`);
-  // Under half a cent is rounding dust: it would show as "−€0.00".
-  const rows = INCOME_ROWS.filter((r) => Math.abs(all[r.field]) >= 0.005);
+  const rows = incomeRows(all);
   if (rows.length === 0) return null;
   const shown = (n: number, cost?: boolean) => formatEur(cost ? -n : n);
   return (
@@ -75,7 +83,7 @@ export function InvestmentIncome({
           >
             <span className="text-foreground">{r.label}</span>
             <span className="text-right font-figure">{shown(year[r.field], r.cost)}</span>
-            <span className="text-right font-figure">{shown(all[r.field], r.cost)}</span>
+            <span className="text-right font-figure">{formatEur(r.value)}</span>
           </div>
         ))}
       </GroupedList>
