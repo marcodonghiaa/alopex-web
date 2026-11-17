@@ -217,7 +217,7 @@ export function ConnectDialog({
               </Button>
               <Button
                 className={PENDING}
-                onClick={() => syncing || start.mutate()}
+                onClick={() => start()}
                 aria-disabled={syncing || undefined}
               >
                 {syncing ? "Syncing…" : "Start sync"}

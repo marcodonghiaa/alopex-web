@@ -178,7 +178,7 @@ function StatusRow({
             variant="secondary"
             className={PENDING}
             data-splitwise-primary
-            onClick={() => syncing || sync.mutate()}
+            onClick={() => sync()}
             disabled={demo}
             aria-disabled={syncing || undefined}
           >
@@ -234,9 +234,12 @@ function DisconnectDialog({
   useEffect(() => {
     if (open) setDeleteData(false); // keeping is the default every time
   }, [open]);
+  // Set in the click itself: isPending only shows on the next render, after a second click.
+  const running = useRef(false);
   const disconnect = useMutation({
     // The choice travels with the call: the dialog may reset it before the answer comes.
     mutationFn: (andData: boolean) => disconnectSplitwise(andData),
+    onSettled: () => (running.current = false),
     onSuccess: ({ deleted }, andData) => {
       toast.success(
         onlyDelete
@@ -300,7 +303,11 @@ function DisconnectDialog({
           <Button
             variant="destructive"
             className={PENDING}
-            onClick={() => disconnect.isPending || disconnect.mutate(onlyDelete || deleteData)}
+            onClick={() => {
+              if (running.current) return;
+              running.current = true;
+              disconnect.mutate(onlyDelete || deleteData);
+            }}
             aria-disabled={disconnect.isPending || undefined}
           >
             {onlyDelete

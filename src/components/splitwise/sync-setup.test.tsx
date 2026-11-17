@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -956,5 +956,78 @@ describe("Pending buttons keep focus", () => {
     const b = await screen.findByRole("button", { name: "Sync now" });
     expect(b).not.toHaveAttribute("aria-disabled");
     expect(b).toBeEnabled();
+  });
+});
+
+// polish-4 #12: two clicks in the same tick (key repeat, switch devices) send one request
+describe("Double trigger", () => {
+  const twice = (b: HTMLElement) =>
+    act(() => {
+      fireEvent.click(b);
+      fireEvent.click(b);
+    });
+
+  it("Sync now", async () => {
+    invoke.mockResolvedValue(ok({ new: 0, adopted: 0, review: 0, deleted: 0 }));
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    twice(await screen.findByRole("button", { name: "Sync now" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("Start sync", async () => {
+    functions({
+      "splitwise-connect": [ok({ displayName: "Sam" })],
+      "sync-splitwise": [
+        ok({ new: 1, adopted: 0, review: 0, deleted: 0 }),
+        ok({ new: 1, adopted: 0, review: 0, deleted: 0 }),
+        ok({ new: 1, adopted: 0, review: 0, deleted: 0 }),
+      ],
+    });
+    rpc.mockResolvedValue(notConnected());
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: "Connect Splitwise" }));
+    const dialog = screen.getByRole("dialog", { name: "Connect Splitwise" });
+    await userEvent.type(within(dialog).getByLabelText("API key"), "abcdefghijkl");
+    await userEvent.click(within(dialog).getByRole("checkbox"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    await within(dialog).findByText("New expenses");
+    twice(within(dialog).getByRole("button", { name: "Start sync" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    // connect, preview, one sync
+    expect(invoke).toHaveBeenCalledTimes(3);
+  });
+
+  it("Disconnect", async () => {
+    functions({ "splitwise-connect": [ok({ disconnected: true, deleted: 0 })] });
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
+    const dialog = screen.getByRole("dialog", { name: "Disconnect Splitwise?" });
+    twice(within(dialog).getByRole("button", { name: "Disconnect" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(toast.success).toHaveBeenCalledTimes(1);
+  });
+
+  it("still lets a second Disconnect through after the first one failed", async () => {
+    functions({
+      "splitwise-connect": [
+        httpError(502, { error: "Couldn't reach the server." }),
+        ok({ disconnected: true, deleted: 0 }),
+      ],
+    });
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
+    const dialog = screen.getByRole("dialog", { name: "Disconnect Splitwise?" });
+    const confirm = within(dialog).getByRole("button", { name: "Disconnect" });
+    await userEvent.click(confirm);
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    await waitFor(() => expect(confirm).not.toHaveAttribute("aria-disabled"));
+    await userEvent.click(confirm);
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(invoke).toHaveBeenCalledTimes(2);
   });
 });

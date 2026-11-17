@@ -19,10 +19,14 @@ const SYNC_NOW_KEY = ["splitwise-sync-now"];
 /** A sync is running, started from any button (the connect dialog's or the status row's). */
 export const useSyncRunning = () => useIsMutating({ mutationKey: SYNC_NOW_KEY }) > 0;
 
-/** Shows the toast for a finished sync and refreshes everything it can have changed. */
+/**
+ * Starts a sync, unless one runs: checked on the cache now, not on the next render, so a double
+ * click or key repeat sends one. Shows the toast for a finished sync and refreshes everything it
+ * can have changed.
+ */
 export function useSyncNow(onSettled?: () => void) {
   const queryClient = useQueryClient();
-  return useMutation({
+  const sync = useMutation({
     mutationKey: SYNC_NOW_KEY,
     mutationFn: syncNow,
     onSuccess: (counts) => toast.success(`Splitwise synced: ${syncSummary(counts)}`),
@@ -36,4 +40,7 @@ export function useSyncNow(onSettled?: () => void) {
       onSettled?.();
     },
   });
+  return () => {
+    if (queryClient.isMutating({ mutationKey: SYNC_NOW_KEY }) === 0) sync.mutate();
+  };
 }
