@@ -412,4 +412,28 @@ describe("ImportTrades", () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
     expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe("4 trades and 1 other row imported");
   });
+
+  it("Esc and All sources do nothing during a save, so an old save can't close a new session", async () => {
+    const release = slowInsert();
+    open("stock");
+    fireEvent.click(await pickTradeRepublic());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Save 4 trades" })).toBeDisabled(),
+    );
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    fireEvent.click(screen.getByRole("button", { name: /All sources/ }));
+    expect(screen.getByText("export.csv")).toBeTruthy();
+    release();
+    // The save that finished closes the dialog it belongs to.
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("when nothing is saving, Esc closes the dialog and All sources goes back", async () => {
+    open("stock");
+    await pickTradeRepublic();
+    fireEvent.click(screen.getByRole("button", { name: /All sources/ }));
+    expect(screen.getByText("Where are these trades from?")).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
 });

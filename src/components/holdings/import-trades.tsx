@@ -299,6 +299,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     <Dialog
       open={open}
       onOpenChange={(next) => {
+        // A save in flight finishes in this session: closing now would let it close the next one.
+        if (!next && save.isPending) return;
         setOpen(next);
         if (!next) reset();
       }}
@@ -311,7 +313,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
           <button
             type="button"
             onClick={reset}
-            className="-my-2 inline-flex min-h-11 items-center gap-1 self-start text-xs text-muted-foreground hover:text-foreground"
+            disabled={save.isPending}
+            className="-my-2 inline-flex min-h-11 items-center gap-1 self-start text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
           >
             <ChevronLeft className="size-3.5" /> All sources
           </button>
