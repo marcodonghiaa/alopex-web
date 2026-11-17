@@ -118,14 +118,14 @@ function pick(name: RegExp, fixture: string) {
 }
 
 function open(kind: "stock" | "crypto", saved: Array<Trade> = []) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } });
   render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } })}
-    >
+    <QueryClientProvider client={client}>
       <ImportTrades kind={kind} saved={saved} />
     </QueryClientProvider>,
   );
   fireEvent.click(screen.getByText("Import trades from CSV"));
+  return client;
 }
 
 describe("ImportTrades", () => {
@@ -306,6 +306,23 @@ describe("ImportTrades", () => {
     expect(await screen.findByText(/Couldn't load USD exchange rates/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
   });
+
+  it.each([
+    ["crypto", /Ledger Live/, "ledger_live.csv", "crypto-latest", "portfolio-latest"],
+    ["stock", /Trade Republic/, "trade_republic.csv", "portfolio-latest", "crypto-latest"],
+  ] as const)(
+    "a %s import refreshes that page's holdings",
+    async (kind, from, file, key, other) => {
+      const client = open(kind);
+      const invalidate = vi.spyOn(client, "invalidateQueries");
+      pick(from, file);
+      fireEvent.click(await screen.findByRole("button", { name: /^Save \d+ trades$/ }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      const keys = invalidate.mock.calls.map(([f]) => f?.queryKey);
+      expect(keys).toContainEqual([key]);
+      expect(keys).not.toContainEqual([other]);
+    },
+  );
 
   it("when your holdings can't be loaded it says so", async () => {
     db.holdingsDown = true;

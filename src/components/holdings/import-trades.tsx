@@ -210,7 +210,9 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       void queryClient.invalidateQueries({ queryKey: ["holding-trades"] });
       void queryClient.invalidateQueries({ queryKey: ["holding-keys", kind] });
       void queryClient.invalidateQueries({ queryKey: ["holding-performance"] });
-      void queryClient.invalidateQueries({ queryKey: ["portfolio-latest"] });
+      void queryClient.invalidateQueries({
+        queryKey: [kind === "stock" ? "portfolio-latest" : "crypto-latest"],
+      });
       void queryClient.invalidateQueries({ queryKey: ["net-worth-daily"] });
     },
   });
