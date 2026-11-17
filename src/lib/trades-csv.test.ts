@@ -253,7 +253,7 @@ describe("parseTradesCsv, Trade Republic export", () => {
       known,
     );
     expect(trades).toEqual([]);
-    expect(errors[0]).toMatch(/Line 2: this BUY row has no price/);
+    expect(errors[0]).toMatch(/Line 2: this buy row has no price/);
   });
 
   it("refuses a date in the future, like the plain CSV import", () => {

@@ -191,7 +191,7 @@ describe("Trade Republic, trades", () => {
 
   it("a number it can't read stops the import", () => {
     const { errors } = parseTradesCsv(file({ shares: "abc", price: "10" }), stock);
-    expect(errors).toEqual(["Line 2: couldn't read this BUY row."]);
+    expect(errors).toEqual(["Line 2: couldn't read this buy row."]);
   });
 
   it("a date it can't read stops the import", () => {
@@ -488,6 +488,14 @@ describe("Trade Republic, income, fees, taxes and cash", () => {
     expect(notes).toEqual([
       "1 row is for shares and cash: import this file on the Portfolio page too.",
     ]);
+  });
+
+  it("polish-4 UB16 an error names the row's kind in plain words, not the file's code", () => {
+    const { errors } = parseTradesCsv(
+      file({ type: "PRIVATE_MARKET_BUY", shares: "1", price: "", amount: "-10" }),
+      stock,
+    );
+    expect(errors).toEqual(["Line 2: this private market buy row has no price."]);
   });
 
   it("a very long kind name is cut to 80 characters without splitting an emoji", () => {

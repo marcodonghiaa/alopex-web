@@ -710,10 +710,10 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             {save.error.message}
           </p>
         )}
-        {parsed && !nothing && (
+        {/* A file with errors saves nothing: no Save next to "Can't be imported". */}
+        {ok && !nothing && (
           <Button
             disabled={
-              parsed.errors.length > 0 ||
               (fresh.length === 0 && updates.length === 0 && freshEvents.length === 0) ||
               (parsed.events != null && !savedEvents.data) ||
               save.isPending

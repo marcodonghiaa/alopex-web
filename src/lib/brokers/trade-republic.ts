@@ -12,6 +12,9 @@ const COLUMNS = ["transaction_id", "category", "type", "symbol", "shares", "pric
 //   A bond paid back at maturity: a sale at what you got for it.
 //   A split: more shares at no cost. Shares that come in from or go out to another broker: their
 //   price isn't in the file, so they're counted at no cost and you're told.
+/** A row's kind as words: PRIVATE_MARKET_BUY is "private market buy". */
+const plain = (type: string) => type.toLowerCase().replace(/_/g, " ");
+
 const TRADES = new Set(["BUY", "SELL", "PRIVATE_MARKET_BUY", "PRIVATE_MARKET_SELL"]);
 const FREE = new Set(["FREE_RECEIPT", "GIFT", "STOCKPERK", "STOCK_PERK"]);
 const PAID_BACK = new Set(["FINAL_MATURITY", "REDEMPTION", "TILG", "LIQUIDATION"]);
@@ -105,7 +108,7 @@ export const tradeRepublic: BrokerParser = {
       const fee = Math.max(0, -feeSigned);
       const tax = Math.max(0, -taxSigned);
       if (![shares, amount, feeSigned, taxSigned].every(Number.isFinite)) {
-        return void errors.push(`${line_}: couldn't read this ${type} row.`);
+        return void errors.push(`${line_}: couldn't read this ${plain(type)} row.`);
       }
 
       const movesShares =
@@ -128,7 +131,7 @@ export const tradeRepublic: BrokerParser = {
         if (TRADES.has(type)) {
           // A blank price read as 0 and saved a buy at no cost, inflating the return.
           if (get("price").trim() === "")
-            return void errors.push(`${line_}: this ${type} row has no price.`);
+            return void errors.push(`${line_}: this ${plain(type)} row has no price.`);
           price = num(get("price"));
           if (get("currency") !== "EUR")
             return void errors.push(`${line_}: the price isn't in EUR.`);
@@ -142,7 +145,8 @@ export const tradeRepublic: BrokerParser = {
           note = FREE.has(type) ? "Received free" : type === "SPLIT" ? "Split" : "Moved in or out";
           if (!FREE.has(type) && type !== "SPLIT" && shares > 0) movedIn++;
         }
-        if (!(price >= 0)) return void errors.push(`${line_}: couldn't read this ${type} row.`);
+        if (!(price >= 0))
+          return void errors.push(`${line_}: couldn't read this ${plain(type)} row.`);
         trades.push({
           kind,
           key,

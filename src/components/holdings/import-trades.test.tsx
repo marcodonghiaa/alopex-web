@@ -548,6 +548,16 @@ describe("ImportTrades", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
+  it("polish-4 UB16 a file that can't be imported offers no Save", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    fireEvent.change(screen.getByLabelText("CSV text"), {
+      target: { value: "date,side,isin,shares,price,fee\n2999-01-15,buy,XX0000000001,1,10,0" },
+    });
+    expect(await screen.findByText("Nothing saved. Fix these first:")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+  });
+
   it("if saved dividends and fees can't load, it says so and won't save", async () => {
     db.eventsDown = true;
     open("stock");
