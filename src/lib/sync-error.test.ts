@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Database } from "@/integrations/supabase/types";
 import { syncAlerts, syncErrorMessage } from "./sync-error";
 
+const texts = (...args: Parameters<typeof syncAlerts>) => syncAlerts(...args).map((a) => a.text);
+
 const acc = (
   bank_name: string,
   sync_error: string | null,
@@ -74,11 +76,11 @@ describe("syncErrorMessage", () => {
 
 describe("syncAlerts", () => {
   it("lists nothing when every sync went through, or on an older database", () => {
-    expect(syncAlerts([acc("Fineco", null), { label: "Cash" }])).toEqual([]);
+    expect(texts([acc("Fineco", null), { label: "Cash" }])).toEqual([]);
   });
 
   it("shows one alert per bank and message", () => {
-    const alerts = syncAlerts([
+    const alerts = texts([
       acc("Fineco", "ASPSP_TIMEOUT", "2026-11-15T06:17:00Z"),
       acc("Fineco", "ASPSP_TIMEOUT", "2026-11-15T06:17:00Z"),
       acc("N26", "ASPSP_RATE_LIMIT_EXCEEDED"),
@@ -92,13 +94,13 @@ describe("syncAlerts", () => {
   // The error's time is not the last good update (it moves when the code changes, and a failed
   // save still updated the balance); the account row already shows the real one.
   it("never adds a date, so no time zone can show the wrong day", () => {
-    expect(syncAlerts([acc("Fineco", "ASPSP_TIMEOUT", "2026-11-15T00:17:00Z")])).toEqual([
+    expect(texts([acc("Fineco", "ASPSP_TIMEOUT", "2026-11-15T00:17:00Z")])).toEqual([
       "Fineco didn't answer the last sync. Nothing to do: Alopex tries again at the next sync, within 6 hours.",
     ]);
   });
 
   it("skips ended consents", () => {
-    expect(syncAlerts([acc("Fineco", "REVOKED_SESSION")])).toEqual([]);
+    expect(texts([acc("Fineco", "REVOKED_SESSION")])).toEqual([]);
   });
 
   // The cron stops syncing an ended consent, so its last error never clears: the Renew banner
@@ -113,7 +115,7 @@ describe("syncAlerts", () => {
       ...acc("N26", "ASPSP_TIMEOUT"),
       consent_valid_until: "2026-11-18T00:00:00+00:00",
     };
-    expect(syncAlerts([ended, valid], now)).toEqual([syncErrorMessage("ASPSP_TIMEOUT", "N26")]);
+    expect(texts([ended, valid], now)).toEqual([syncErrorMessage("ASPSP_TIMEOUT", "N26")]);
   });
 
   it("names which account a bank stopped sharing, by currency and IBAN end", () => {
@@ -125,7 +127,7 @@ describe("syncAlerts", () => {
     const savings = { ...acc("N26", "HTTP_404"), currency: "EUR", iban: "DE89370400440532010002" };
     const usd = { ...acc("N26", "HTTP_404"), currency: "USD", iban: null };
     const then = "Connect N26 again and include it when the bank asks which accounts to share.";
-    expect(syncAlerts([main, savings, usd])).toEqual([
+    expect(texts([main, savings, usd])).toEqual([
       `N26 no longer shares your EUR account •••• 0001. ${then}`,
       `N26 no longer shares your EUR account •••• 0002. ${then}`,
       `N26 no longer shares your USD account. ${then}`,
@@ -133,7 +135,7 @@ describe("syncAlerts", () => {
   });
 
   it("keeps two different problems of the same bank", () => {
-    expect(syncAlerts([acc("N26", "ASPSP_TIMEOUT"), acc("N26", "SAVE_FAILED")])).toHaveLength(2);
+    expect(texts([acc("N26", "ASPSP_TIMEOUT"), acc("N26", "SAVE_FAILED")])).toHaveLength(2);
   });
 
   it("names a 4xx it does not know instead of calling it a bank outage", () => {
@@ -161,7 +163,7 @@ describe("syncAlerts: Enable Banking refusing the app", () => {
   // The app key is shared by every bank: one banner naming them all, not one per bank.
   it("shows one banner for all banks and says where the key lives", () => {
     expect(
-      syncAlerts([
+      texts([
         acc("Fineco", "HTTP_401"),
         acc("Revolut", "ASPSP_TIMEOUT"),
         acc("N26", "UNAUTHORIZED_IP"),
@@ -170,6 +172,21 @@ describe("syncAlerts: Enable Banking refusing the app", () => {
     ).toEqual([
       "Enable Banking refused to sync Fineco, N26 and Bunq: check in the Enable Banking control panel that your app is active, and that your Edge Function secrets ENABLE_BANKING_APP_ID and ENABLE_BANKING_PRIVATE_KEY belong to it.",
       "Revolut didn't answer the last sync. Nothing to do: Alopex tries again at the next sync, within 6 hours.",
+    ]);
+  });
+});
+
+describe("syncAlerts: what the user can do", () => {
+  it("offers to connect again only when the bank stopped sharing an account", () => {
+    const alerts = syncAlerts([
+      { ...acc("N26", "ASPSP_ACCOUNT_NOT_ACCESSIBLE"), currency: "EUR" },
+      acc("Fineco", "ASPSP_TIMEOUT"),
+      acc("Bunq", "HTTP_401"),
+    ]);
+    expect(alerts.map((a) => [a.bank, a.reconnect])).toEqual([
+      ["N26", true],
+      ["Fineco", false],
+      [null, false],
     ]);
   });
 });

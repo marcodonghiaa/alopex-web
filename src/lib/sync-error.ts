@@ -23,6 +23,8 @@ const APP_REFUSED = new Set([
   "HTTP_401",
   "HTTP_403",
 ]);
+// The bank stopped sharing this account with the consent: linking the bank again fixes it.
+const NOT_SHARED = new Set(["ASPSP_ACCOUNT_NOT_ACCESSIBLE", "ACCOUNT_DOES_NOT_EXIST", "HTTP_404"]);
 const RETRY = "Nothing to do: Alopex tries again at the next sync, within 6 hours.";
 
 // `account` names the account when the bank stopped sharing one of several.
@@ -35,11 +37,7 @@ export function syncErrorMessage(
   if (code === "ASPSP_RATE_LIMIT_EXCEEDED") {
     return `${bank} limits automatic updates and refused the last one. ${RETRY}`;
   }
-  if (
-    code === "ASPSP_ACCOUNT_NOT_ACCESSIBLE" ||
-    code === "ACCOUNT_DOES_NOT_EXIST" ||
-    code === "HTTP_404"
-  ) {
+  if (NOT_SHARED.has(code)) {
     return `${bank} no longer shares ${account}. Connect ${bank} again and include it when the bank asks which accounts to share.`;
   }
   if (APP_REFUSED.has(code)) return refusedMessage([bank]);
@@ -61,23 +59,31 @@ export function syncErrorMessage(
 // already shows its last real update.
 // A consent that has run out is skipped: the cron no longer syncs it, so its last error never
 // clears, and the Renew banner already says what to do.
-export function syncAlerts(accounts: Array<SyncErrorAccount>, now = Date.now()): string[] {
+export interface SyncAlert {
+  bank: string | null; // null: the app itself was refused, for every bank
+  text: string;
+  reconnect: boolean; // the bank stopped sharing an account: linking it again fixes it
+}
+
+export function syncAlerts(accounts: Array<SyncErrorAccount>, now = Date.now()): SyncAlert[] {
   const live = accounts.filter(
     (a) => a.sync_error && !(a.consent_valid_until && Date.parse(a.consent_valid_until) <= now),
   );
   const refused = [...new Set(live.filter((a) => APP_REFUSED.has(a.sync_error!)).map(bankOf))];
-  const messages = new Set<string>(); // each message names its bank
+  const alerts = new Map<string, SyncAlert>(); // by text; each text names its bank
   for (const a of live) {
     // One banner for the app key, where the first refused bank would be.
     if (APP_REFUSED.has(a.sync_error!)) {
-      messages.add(refusedMessage(refused));
+      const text = refusedMessage(refused);
+      alerts.set(text, { bank: null, text, reconnect: false });
       continue;
     }
+    const bank = bankOf(a);
     const account = a.currency ? accountLabel(a.currency, a.iban) : undefined;
-    const text = syncErrorMessage(a.sync_error!, bankOf(a), account);
-    if (text) messages.add(text);
+    const text = syncErrorMessage(a.sync_error!, bank, account);
+    if (text) alerts.set(text, { bank, text, reconnect: NOT_SHARED.has(a.sync_error!) });
   }
-  return [...messages];
+  return [...alerts.values()];
 }
 
 function refusedMessage(banks: string[]): string {

@@ -160,6 +160,20 @@ function AccountsPage() {
   const bankAccounts = useMemo(() => bankQuery.data ?? [], [bankQuery.data]);
   const expiring = useMemo(() => consentAlerts(bankAccounts, new Date()), [bankAccounts]);
   const syncIssues = useMemo(() => syncAlerts(bankAccounts), [bankAccounts]);
+  // Renew and "Connect again" both link the bank again: open Connect a bank with it prefilled.
+  const connectAgain = (bank: string) => {
+    // Prefill without the country select's handler, which would clear the bank.
+    const t = renewTarget(bank, bankAccounts);
+    if (t) {
+      setBankCountry(t.country);
+      setBankName(t.bankName);
+    } else {
+      setBankName(""); // never keep another bank from an earlier Renew
+    }
+    flushSync(() => setShowConnectForm(true));
+    connectStepsRef.current?.scrollIntoView({ block: "center" });
+    connectStepsRef.current?.focus({ preventScroll: true });
+  };
 
   // Credit cards and loans get their own group; everything else is cash, as before.
   const cashAccounts = useMemo(
@@ -318,19 +332,7 @@ function AccountsPage() {
             <span>{consentMessage(alert)}</span>
             <Button
               variant="ghost"
-              onClick={() => {
-                // Prefill without the country select's handler, which would clear the bank.
-                const t = renewTarget(alert.bank, bankAccounts);
-                if (t) {
-                  setBankCountry(t.country);
-                  setBankName(t.bankName);
-                } else {
-                  setBankName(""); // never keep another bank from an earlier Renew
-                }
-                flushSync(() => setShowConnectForm(true));
-                connectStepsRef.current?.scrollIntoView({ block: "center" });
-                connectStepsRef.current?.focus({ preventScroll: true });
-              }}
+              onClick={() => connectAgain(alert.bank)}
               className="px-3 text-primary hover:bg-primary/10 hover:text-primary"
             >
               Renew access
@@ -339,13 +341,22 @@ function AccountsPage() {
         ))}
 
         {/* Why a bank stopped updating; an ended consent already has its Renew banner above. */}
-        {syncIssues.map((message) => (
+        {syncIssues.map((issue) => (
           <div
-            key={message}
+            key={issue.text}
             role="status"
-            className="mb-4 break-words rounded-lg bg-warning/10 px-4 py-3 text-sm text-foreground"
+            className="mb-4 flex flex-wrap items-center justify-between gap-3 break-words rounded-lg bg-warning/10 px-4 py-3 text-sm text-foreground"
           >
-            {message}
+            <span className="min-w-0">{issue.text}</span>
+            {issue.reconnect && issue.bank && (
+              <Button
+                variant="ghost"
+                onClick={() => connectAgain(issue.bank!)}
+                className="px-3 text-primary hover:bg-primary/10 hover:text-primary"
+              >
+                Connect again
+              </Button>
+            )}
           </div>
         ))}
 

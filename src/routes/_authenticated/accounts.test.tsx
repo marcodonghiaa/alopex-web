@@ -191,6 +191,30 @@ describe("sync errors", () => {
     expect(screen.queryByText(/didn't answer the last sync/)).not.toBeInTheDocument();
   });
 
+  // protects=a bank that stopped sharing an account can be reconnected in one tap, like Renew;
+  // fails_when=the banner asks to connect again with no button
+  it("connects the bank again from a 'no longer shares' banner", async () => {
+    rows.v_bank_accounts_latest = [
+      account({
+        sync_error: "ASPSP_ACCOUNT_NOT_ACCESSIBLE",
+        bank_name: "Gone Bank",
+        bank_country: "LT",
+      }),
+    ];
+    invoke.mockResolvedValue({
+      data: { banks: [{ name: "Other Bank", logo: null }] },
+      error: null,
+    });
+    renderPage();
+    Element.prototype.scrollIntoView = vi.fn();
+    fireEvent.click(await screen.findByRole("button", { name: "Connect again" }));
+    expect(
+      await screen.findByText(
+        "Gone Bank isn't listed for this country anymore. Pick your bank again.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("shows nothing when the last sync went through", async () => {
     rows.v_bank_accounts_latest = [account({ sync_error: null })];
     renderPage();
