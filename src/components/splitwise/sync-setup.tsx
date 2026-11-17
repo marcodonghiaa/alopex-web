@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link2, RefreshCw, TriangleAlert, Upload } from "lucide-react";
+import { Link2, RefreshCw, Trash2, TriangleAlert, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { GroupedList } from "@/components/ui/grouped-list";
 import { isDemoMode } from "@/lib/demo/mode";
+import { cn } from "@/lib/utils";
 import { useSplitwiseConnection, useSyncNow } from "@/lib/use-splitwise-sync";
 import {
   disconnectSplitwise,
@@ -28,6 +29,7 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
   // Fixed when the dialog opens: connecting flips the status to connected under it.
   const [connecting, setConnecting] = useState<"connect" | "reconnect" | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const c = connection.data;
   const connected = c?.connected === true;
 
@@ -47,6 +49,17 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
               Connect Splitwise
             </button>
           )
+        )}
+        {!connected && c?.syncedData && (
+          <button
+            type="button"
+            onClick={() => setDeleting(true)}
+            className={cn(ROW, "text-negative disabled:opacity-50")}
+            disabled={isDemoMode()}
+          >
+            <Trash2 aria-hidden className="size-4" />
+            Delete synced Splitwise data
+          </button>
         )}
         <div>
           <button
@@ -74,6 +87,7 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
         reconnect={connecting === "reconnect"}
       />
       <DisconnectDialog open={disconnecting} onOpenChange={setDisconnecting} />
+      <DeleteSyncedDialog open={deleting} onOpenChange={setDeleting} />
     </>
   );
 }
@@ -226,6 +240,54 @@ export function DisconnectDialog({
             disabled={disconnect.isPending}
           >
             {disconnect.isPending ? "Disconnecting…" : "Disconnect"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** After "Disconnect, keep data": deletes what the sync brought in, once confirmed. */
+function DeleteSyncedDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const queryClient = useQueryClient();
+  const remove = useMutation({
+    mutationFn: () => disconnectSplitwise(true),
+    onSuccess: ({ deleted }) => {
+      toast.success(
+        `Synced Splitwise data deleted: ${deleted === 1 ? "1 expense" : `${deleted} expenses`}`,
+      );
+      for (const queryKey of syncRefreshKeys()) void queryClient.invalidateQueries({ queryKey });
+      onOpenChange(false);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  return (
+    <Dialog open={open} onOpenChange={(next) => remove.isPending || onOpenChange(next)}>
+      <DialogContent className="gap-0 rounded-xl p-5 sm:p-6">
+        <DialogTitle className="text-xl font-semibold tracking-tight">
+          Delete synced Splitwise data?
+        </DialogTitle>
+        <DialogDescription className="mt-1 text-sm text-muted-foreground">
+          Removes synced expenses, the To link list and Splitwise balances, and frees the bank
+          payments they changed.
+        </DialogDescription>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="secondary" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            className="bg-negative/10"
+            onClick={() => remove.mutate()}
+            disabled={remove.isPending}
+          >
+            {remove.isPending ? "Deleting…" : "Delete"}
           </Button>
         </div>
       </DialogContent>

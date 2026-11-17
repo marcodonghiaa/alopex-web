@@ -254,6 +254,7 @@ describe("fake client: auth, functions and rpc", () => {
         display_name: "Alex",
         last_synced_at: new Date(NOW.getTime() - 2 * 3_600_000).toISOString(),
         last_error: null,
+        synced_data: true,
       },
     ]);
     const review = await c

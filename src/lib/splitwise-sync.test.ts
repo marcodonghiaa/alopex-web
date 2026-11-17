@@ -99,8 +99,27 @@ describe("fetchConnection", () => {
       displayName: "Sam",
       lastSyncedAt: "2026-11-17T10:00:00Z",
       lastError: null,
+      syncedData: false,
     });
     expect(rpc).toHaveBeenCalledWith("get_splitwise_connection");
+  });
+
+  // polish-2 #6
+  it("reads whether synced data is left", async () => {
+    rpc.mockResolvedValue({
+      data: [
+        {
+          connected: false,
+          status: null,
+          display_name: null,
+          last_synced_at: null,
+          last_error: null,
+          synced_data: true,
+        },
+      ],
+      error: null,
+    });
+    expect((await fetchConnection()).syncedData).toBe(true);
   });
 
   it("reads no connection as not connected", async () => {

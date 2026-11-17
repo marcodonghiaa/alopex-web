@@ -800,6 +800,7 @@ function demoSplitwiseConnection(now: Date) {
     display_name: "Alex",
     last_synced_at: new Date(now.getTime() - 2 * 3_600_000).toISOString(),
     last_error: null,
+    synced_data: true,
   };
 }
 

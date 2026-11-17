@@ -26,6 +26,8 @@ export interface SplitwiseConnection {
   displayName: string | null;
   lastSyncedAt: string | null;
   lastError: string | null;
+  /** Something the sync brought in is still here (after "Disconnect, keep data", say). */
+  syncedData: boolean;
 }
 
 /** The signed-in user's own connection (never the key), from get_splitwise_connection. */
@@ -39,6 +41,7 @@ export async function fetchConnection(): Promise<SplitwiseConnection> {
     displayName: row?.display_name ?? null,
     lastSyncedAt: row?.last_synced_at ?? null,
     lastError: row?.last_error ?? null,
+    syncedData: row?.synced_data === true,
   };
 }
 

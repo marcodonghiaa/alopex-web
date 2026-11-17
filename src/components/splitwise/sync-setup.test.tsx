@@ -35,9 +35,16 @@ const connection = (over: Record<string, unknown> = {}) =>
       ...over,
     },
   ]);
-const notConnected = () =>
+const notConnected = (synced_data = false) =>
   ok([
-    { connected: false, status: null, display_name: null, last_synced_at: null, last_error: null },
+    {
+      connected: false,
+      status: null,
+      display_name: null,
+      last_synced_at: null,
+      last_error: null,
+      synced_data,
+    },
   ]);
 
 /** Answers each Edge Function call in turn: splitwise-connect, then sync-splitwise. */
@@ -421,5 +428,71 @@ describe("Disconnect", () => {
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith("Couldn't disconnect Splitwise, please try again"),
     );
+  });
+});
+
+// polish-2 #6: after "Disconnect, keep data" the user can still have what was synced deleted
+describe("Delete synced data after a disconnect", () => {
+  const DELETE = "Delete synced Splitwise data";
+  const openDelete = async () => {
+    rpc.mockResolvedValue(notConnected(true));
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: DELETE }));
+    return screen.getByRole("dialog", { name: "Delete synced Splitwise data?" });
+  };
+
+  it("is offered only when disconnected with synced data left", async () => {
+    rpc.mockResolvedValue(notConnected(false));
+    renderSetup();
+    await screen.findByRole("button", { name: "Connect Splitwise" });
+    expect(screen.queryByRole("button", { name: DELETE })).toBeNull();
+  });
+
+  it("is not offered while connected (Disconnect has it)", async () => {
+    rpc.mockResolvedValue(connection({ synced_data: true }));
+    renderSetup();
+    await screen.findByText("Splitwise · Sam");
+    expect(screen.queryByRole("button", { name: DELETE })).toBeNull();
+  });
+
+  // protects=nothing is deleted without confirming; fails_when=the row deletes on click
+  it("asks first, then deletes through splitwise-connect", async () => {
+    functions({ "splitwise-connect": [ok({ disconnected: true, deleted: 4 })] });
+    const dialog = await openDelete();
+    expect(invoke).not.toHaveBeenCalled();
+    expect(dialog).toHaveTextContent("frees the bank payments they changed");
+    rpc.mockResolvedValue(notConnected(false));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(invoke).toHaveBeenCalledWith("splitwise-connect", {
+      body: { disconnect: true, deleteData: true },
+    });
+    expect(toast.success).toHaveBeenCalledWith("Synced Splitwise data deleted: 4 expenses");
+    await waitFor(() => expect(screen.queryByRole("button", { name: DELETE })).toBeNull());
+  });
+
+  it("cancels without calling anything, and shows a failure", async () => {
+    const dialog = await openDelete();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(invoke).not.toHaveBeenCalled();
+    functions({
+      "splitwise-connect": [
+        httpError(500, { error: "Couldn't disconnect Splitwise, please try again" }),
+      ],
+    });
+    await userEvent.click(screen.getByRole("button", { name: DELETE }));
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }),
+    );
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith("Couldn't disconnect Splitwise, please try again"),
+    );
+  });
+
+  it("stays off in the demo", async () => {
+    demo.on = true;
+    rpc.mockResolvedValue(notConnected(true));
+    renderSetup();
+    expect(await screen.findByRole("button", { name: DELETE })).toBeDisabled();
   });
 });

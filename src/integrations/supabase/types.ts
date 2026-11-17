@@ -1337,6 +1337,7 @@ export type Database = {
           display_name: string | null;
           last_synced_at: string | null;
           last_error: string | null;
+          synced_data: boolean;
         }>;
       };
       link_splitwise_review: {
