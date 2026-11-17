@@ -438,14 +438,27 @@ describe("ImportTrades", () => {
     );
   });
 
-  it("Esc during a slow save still toasts what was saved", async () => {
+  it("the toast counts what the save saved, even if the trades list changes meanwhile", async () => {
+    // During the save the trades list refreshes (another tab saved them): the dialog's new
+    // trades drop to none, but this save still inserted 4.
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const { trades } = parseTradesCsv(csv, {
+      kind: "stock",
+      knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+      today: "2026-11-17",
+    });
     const release = slowInsert();
-    open("stock");
-    fireEvent.click(await pickTradeRepublic());
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Save 4 trades" })).toBeDisabled(),
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = (saved: Array<Trade>) => (
+      <QueryClientProvider client={client}>
+        <ImportTrades kind="stock" saved={saved} />
+      </QueryClientProvider>
     );
-    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    const { rerender } = render(view([]));
+    fireEvent.click(screen.getByText("Import trades from CSV"));
+    fireEvent.click(await pickTradeRepublic());
+    await waitFor(() => expect(db.inserted).toHaveLength(4));
+    rerender(view(trades));
     release();
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
     expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe("4 trades and 1 other row imported");
