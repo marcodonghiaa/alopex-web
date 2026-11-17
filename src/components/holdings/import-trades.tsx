@@ -20,6 +20,7 @@ import { GroupedList } from "@/components/ui/grouped-list";
 import { localToday } from "@/lib/trades";
 import type { Trade } from "@/lib/trades";
 import { BROKERS, NEW_BROKER_URL } from "@/lib/brokers";
+import { saveQuantity } from "@/lib/holding-quantity";
 import { loadRates, rateLookup } from "@/lib/brokers/rates";
 import {
   detectBroker,
@@ -176,15 +177,17 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       // If this fails the trades are safe: importing again skips them and retries the counts.
       for (const { key, shares } of updates) {
         // Coins go through set_holding_quantity, which also writes today's value for net worth.
-        const { error } =
-          kind === "stock"
-            ? await supabase.from("portfolio_holdings").update({ shares }).eq("isin", key)
-            : await supabase.rpc("set_holding_quantity", {
-                p_kind: "crypto",
-                p_key: key,
-                p_quantity: shares,
-                p_source: wallet!.get(key)!.source,
-              });
+        if (kind === "crypto") {
+          await saveQuantity(
+            { kind: "crypto", symbol: key, source: wallet!.get(key)!.source },
+            shares,
+          );
+          continue;
+        }
+        const { error } = await supabase
+          .from("portfolio_holdings")
+          .update({ shares })
+          .eq("isin", key);
         if (error) throw error;
       }
     },

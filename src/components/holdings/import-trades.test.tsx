@@ -7,6 +7,8 @@ const db = vi.hoisted(() => ({
   inserted: [] as Array<Record<string, unknown>>,
   rpc: [] as Array<[string, Record<string, unknown>]>,
   ratesDown: false,
+  rpcMissing: false,
+  updated: [] as Array<[string, Record<string, unknown>, Array<[string, unknown]>]>,
 }));
 vi.mock("@/integrations/supabase/client", () => {
   const tables: Record<string, Array<Record<string, unknown>>> = {
@@ -47,6 +49,15 @@ vi.mock("@/integrations/supabase/client", () => {
     supabase: {
       from: (table: string) => ({
         select: () => query(tables[table] ?? []),
+        update: (patch: Record<string, unknown>) => {
+          const where: Array<[string, unknown]> = [];
+          db.updated.push([table, patch, where]);
+          const chain = {
+            eq: (c: string, v: unknown) => (where.push([c, v]), chain),
+            then: (resolve: (v: unknown) => void) => resolve({ error: null }),
+          };
+          return chain;
+        },
         insert: (rows: Array<Record<string, unknown>>) => {
           db.inserted.push(...rows);
           return Promise.resolve({ error: null });
@@ -54,7 +65,11 @@ vi.mock("@/integrations/supabase/client", () => {
       }),
       rpc: (name: string, args: Record<string, unknown>) => {
         db.rpc.push([name, args]);
-        return Promise.resolve({ data: 1, error: null });
+        return Promise.resolve(
+          db.rpcMissing
+            ? { data: null, error: { code: "PGRST202", message: "not found" } }
+            : { data: 1, error: null },
+        );
       },
       auth: { getUser: () => Promise.resolve({ data: { user: { id: "u1" } } }) },
     },
@@ -79,6 +94,8 @@ describe("ImportTrades", () => {
   beforeEach(() => {
     db.inserted.length = 0;
     db.rpc.length = 0;
+    db.updated.length = 0;
+    db.rpcMissing = false;
   });
 
   it("asks where the trades are from before asking for a file", () => {
@@ -163,6 +180,25 @@ describe("ImportTrades", () => {
     expect(db.rpc[0]![0]).toBe("set_holding_quantity");
     expect(db.rpc[0]![1]).toMatchObject({ p_kind: "crypto", p_key: "ETH", p_source: "Manual" });
     expect(db.rpc[0]![1]["p_quantity"]).toBeCloseTo(0.4988);
+  });
+
+  it("on a backend without set_holding_quantity the count is still set, on the holding itself", async () => {
+    db.rpcMissing = true;
+    open("crypto");
+    fireEvent.click(screen.getByRole("button", { name: /Ledger Live/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/ledger_live.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "ops.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
+    await waitFor(() => expect(db.updated).toHaveLength(1));
+    const [table, patch, where] = db.updated[0]!;
+    expect(table).toBe("crypto_holdings");
+    expect(patch["amount"]).toBeCloseTo(0.4988);
+    expect(where).toEqual([
+      ["asset_symbol", "ETH"],
+      ["source", "Manual"],
+    ]);
   });
 
   it("a Ledger Live file pasted as a spreadsheet is read the same way", async () => {
