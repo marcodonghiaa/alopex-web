@@ -212,6 +212,13 @@ describe("ImportTrades", () => {
     expect(screen.getByRole("button", { name: /My own spreadsheet/ })).toBeTruthy();
   });
 
+  it("the source list says where Ledger Live's file comes from: its desktop app", () => {
+    open("crypto");
+    expect(screen.getByRole("button", { name: /Ledger Live/ }).textContent).toContain(
+      "Desktop app export",
+    );
+  });
+
   it("a picked file shows its name and how many trades it holds, and hides the how-to", async () => {
     open("stock");
     fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
