@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { SegmentedControl } from "@/components/segmented-control";
 import { ValueChart } from "@/components/value-chart";
 import { trendSummary } from "@/lib/chart-summary";
@@ -77,12 +76,11 @@ export function RangeChange({ delta, change, first, scrubbed, range }: RangeChan
 
 // Days on the Return line: one price request each, so a sample of the range, not every day.
 const RETURN_DAYS = 24;
-type ChartMode = "value" | "return";
 
 /**
- * The holdings' value over the chosen range, or (Return, when your trades are imported) the gain
- * since the range's first day without the money you added or took out, as a broker's Performance
- * view. The Return line ends on the chip's figure: same trades, same prices.
+ * Performance over the chosen range: the gain since its first day without the money you added
+ * or took out, as a broker's Performance view; it ends on the chip's figure (same trades, same
+ * prices). Without usable trades there is no return to draw, so the value is shown instead.
  */
 export function ValueHistoryChart({
   history,
@@ -94,9 +92,7 @@ export function ValueHistoryChart({
   perf?: ChipPerformance;
 }) {
   const { chartData, key, range, setRange, setScrubIndex } = history;
-  const [mode, setMode] = useState<ChartMode>("value");
-  const canReturn = perf != null && !perf.isPending && !perf.unavailable && tradesUsable(perf);
-  const onReturn = canReturn && mode === "return";
+  const onReturn = perf != null && !perf.isPending && !perf.unavailable && tradesUsable(perf);
   const picked = sampleIndices(chartData.length, RETURN_DAYS);
   // The last day is today: today's prices, as the chip.
   const prices = useDayPrices(
@@ -163,24 +159,13 @@ export function ValueHistoryChart({
           </div>
         )}
       </div>
-      <div className="mt-4 flex flex-col items-start gap-2">
+      <div className="mt-4 flex">
         <SegmentedControl
           label="Chart range"
           options={CHART_RANGES.map((r) => ({ value: r, label: r }))}
           value={range}
           onChange={setRange}
         />
-        {canReturn && (
-          <SegmentedControl
-            label="Chart shows"
-            options={[
-              { value: "value", label: "Value" },
-              { value: "return", label: "Return" },
-            ]}
-            value={mode}
-            onChange={setMode}
-          />
-        )}
       </div>
     </section>
   );
