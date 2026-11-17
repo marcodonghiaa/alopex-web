@@ -195,17 +195,6 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
           .insert(fresh.map((t) => ({ ...t, user_id: userId })));
         if (error) throw error;
       }
-      // A re-import is skipped by the database too: the same broker id is saved once.
-      if (freshEvents.length > 0) {
-        const { data } = await supabase.auth.getUser();
-        if (!data.user) throw new Error("You're signed out. Sign in and try again.");
-        const userId = data.user.id;
-        const { error } = await supabase.from("investment_events").upsert(
-          freshEvents.map((e) => ({ ...e, user_id: userId })),
-          { onConflict: "user_id,source,external_id", ignoreDuplicates: true },
-        );
-        if (error) throw error;
-      }
       // If this fails the trades are safe: importing again skips them and retries the counts.
       for (const { key, shares } of updates) {
         // Coins go through set_holding_quantity, which also writes today's value for net worth.
@@ -220,6 +209,22 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
           .from("portfolio_holdings")
           .update({ shares })
           .eq("isin", key);
+        if (error) throw error;
+      }
+      // A re-import is skipped by the database too: the same broker id is saved once.
+      if (freshEvents.length > 0) {
+        const { data } = await supabase.auth.getUser();
+        if (!data.user) throw new Error("You're signed out. Sign in and try again.");
+        const userId = data.user.id;
+        const { error } = await supabase.from("investment_events").upsert(
+          freshEvents.map((e) => ({ ...e, user_id: userId })),
+          { onConflict: "user_id,source,external_id", ignoreDuplicates: true },
+        );
+        // The trades and counts are saved by now: say so, or a retry looks like it starts over.
+        if (error && fresh.length > 0)
+          throw new Error(
+            `${plural(fresh.length, "trade")} saved, but the income, fee and cash rows weren't (${error.message}). Import the file again to save them.`,
+          );
         if (error) throw error;
       }
     },

@@ -9,6 +9,7 @@ const db = vi.hoisted(() => ({
   rpc: [] as Array<[string, Record<string, unknown>]>,
   ratesDown: false,
   rpcMissing: false,
+  upsertError: null as string | null,
   updated: [] as Array<[string, Record<string, unknown>, Array<[string, unknown]>]>,
 }));
 vi.mock("@/integrations/supabase/client", () => {
@@ -72,7 +73,7 @@ vi.mock("@/integrations/supabase/client", () => {
         },
         upsert: (rows: Array<Record<string, unknown>>, options: unknown) => {
           db.upserted.push([table, rows, options]);
-          return Promise.resolve({ error: null });
+          return Promise.resolve({ error: db.upsertError ? { message: db.upsertError } : null });
         },
       }),
       rpc: (name: string, args: Record<string, unknown>) => {
@@ -109,6 +110,7 @@ describe("ImportTrades", () => {
     db.rpc.length = 0;
     db.updated.length = 0;
     db.rpcMissing = false;
+    db.upsertError = null;
   });
 
   it("asks where the trades are from before asking for a file", () => {
@@ -264,6 +266,22 @@ describe("ImportTrades", () => {
     ).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
     db.ratesDown = false;
+  });
+
+  it("if the income rows fail after the trades saved, it says so and still updates share counts", async () => {
+    db.upsertError = "boom";
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 4 trades" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "4 trades saved, but the income, fee and cash rows weren't (boom). Import the file again to save them.",
+    );
+    expect(db.inserted).toHaveLength(4);
+    expect(db.updated.map(([table]) => table)).toContain("portfolio_holdings");
   });
 
   it("a Trade Republic file saves its dividends too, skipping ones already saved by id", async () => {
