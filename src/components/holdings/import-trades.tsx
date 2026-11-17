@@ -576,6 +576,11 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                     <span className="tabular-nums">{freshEvents.length}</span>
                   </div>
                 </GroupedList>
+                {(income.dividends !== 0 || income.interest !== 0) && (
+                  <p className="px-1 pt-1.5 text-xs text-muted-foreground">
+                    Dividends and interest are after tax.
+                  </p>
+                )}
               </div>
             )}
 

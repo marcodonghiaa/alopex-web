@@ -371,6 +371,25 @@ describe("ImportTrades", () => {
     expect(screen.getByText("Dividends").parentElement?.textContent).toBe("Dividends€1.20");
   });
 
+  it("polish-4 UB4 the preview says dividends are after tax; not when the file has none", async () => {
+    open("stock");
+    await pickTradeRepublic();
+    expect(screen.getByText("Dividends and interest are after tax.")).toBeInTheDocument();
+    cleanup();
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const [header] = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8").split(
+      "\n",
+    );
+    const saveback =
+      '"2026-03-02T09:00:00Z","2026-03-02","DEFAULT","CASH","BENEFITS_SAVEBACK","","","","","","1.50","","","EUR","00000000-0000-4000-8000-000000000007"';
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([`${header}\n${saveback}`], "export.csv", { type: "text/csv" })] },
+    });
+    expect(await screen.findByText("Rewards")).toBeInTheDocument();
+    expect(screen.queryByText("Dividends and interest are after tax.")).toBeNull();
+  });
+
   it("if saved dividends and fees can't load, it says so and won't save", async () => {
     db.eventsDown = true;
     open("stock");

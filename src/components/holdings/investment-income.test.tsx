@@ -77,9 +77,14 @@ describe("InvestmentIncome", () => {
     );
     expect(
       screen.getByText(
-        "Taxes and fees not tied to a holding, like stamp duty, count here but not in any holding's return.",
+        "Dividends and interest are after tax. Taxes and fees not tied to a holding, like stamp duty, count here but not in any holding's return.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("polish-4 UB4 says dividends and interest are after tax", () => {
+    render(<InvestmentIncome page="stock" today="2026-11-17" events={[ev({ amount_eur: 8 })]} />);
+    expect(screen.getByText(/^Dividends and interest are after tax\./)).toBeInTheDocument();
   });
 
   it("this year is your own calendar's, not UTC's", () => {
