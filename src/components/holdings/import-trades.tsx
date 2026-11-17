@@ -1,7 +1,7 @@
 import { dateLocale } from "@/lib/locale";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronLeft, ChevronRight, FileUp, Info, Lock, Loader2 } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, FileUp, Info, Lock, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -279,6 +279,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     />
   );
   const ok = parsed != null && parsed.errors.length === 0;
+  // Holdings or rates failed: the file can't be read until they load, so stop showing Reading….
+  const unreadable = !parsed && (keys.isError || rates.isError);
   const title =
     from === null
       ? "Import trades"
@@ -375,10 +377,14 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                   aria-hidden
                   className={cn(
                     "inline-flex size-9 shrink-0 items-center justify-center rounded-full",
-                    parsed && !ok ? "bg-negative/15 text-negative" : "bg-positive/15 text-positive",
+                    (parsed && !ok) || unreadable
+                      ? "bg-negative/15 text-negative"
+                      : "bg-positive/15 text-positive",
                   )}
                 >
-                  {parsed ? (
+                  {unreadable ? (
+                    <X className="size-4" strokeWidth={2.5} />
+                  ) : parsed ? (
                     <Check className="size-4" strokeWidth={2.5} />
                   ) : (
                     <Loader2 className="size-4 animate-spin" />
@@ -387,11 +393,13 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{fileName}</span>
                   <span className="block text-xs text-muted-foreground">
-                    {!parsed
-                      ? "Reading…"
-                      : ok
-                        ? "Read, check what it found below"
-                        : "Can't be imported"}
+                    {unreadable
+                      ? "Can't be read"
+                      : !parsed
+                        ? "Reading…"
+                        : ok
+                          ? "Read, check what it found below"
+                          : "Can't be imported"}
                   </span>
                 </span>
                 <label className="cursor-pointer text-xs text-primary underline-offset-2 hover:underline">

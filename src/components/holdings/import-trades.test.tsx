@@ -11,6 +11,7 @@ const db = vi.hoisted(() => ({
   rpcMissing: false,
   upsertError: null as string | null,
   eventsDown: false,
+  holdingsDown: false,
   // How many upserted rows the database says it saved (the rest were already there).
   upsertSaved: null as number | null,
   updated: [] as Array<[string, Record<string, unknown>, Array<[string, unknown]>]>,
@@ -44,7 +45,8 @@ vi.mock("@/integrations/supabase/client", () => {
   const query = (rows: Array<Record<string, unknown>>) => {
     const down =
       (rows === tables["fx_rates"] && db.ratesDown) ||
-      (rows === tables["investment_events"] && db.eventsDown);
+      (rows === tables["investment_events"] && db.eventsDown) ||
+      (rows === tables["portfolio_holdings"] && db.holdingsDown);
     const result = Promise.resolve(
       down ? { data: null, error: { message: "offline" } } : { data: rows, error: null },
     );
@@ -143,6 +145,7 @@ describe("ImportTrades", () => {
     db.upsertError = null;
     db.upsertSaved = null;
     db.eventsDown = false;
+    db.holdingsDown = false;
     db.insertGate = null;
     vi.mocked(toast.success).mockClear();
   });
@@ -299,6 +302,9 @@ describe("ImportTrades", () => {
       await screen.findByText(/Couldn't load USD exchange rates/, {}, { timeout: 4000 }),
     ).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+    // The file card stops reading: it can't be, until the rates load.
+    expect(screen.getByText("Can't be read")).toBeTruthy();
+    expect(screen.queryByText("Reading…")).toBeNull();
     db.ratesDown = false;
   });
 
@@ -489,5 +495,28 @@ describe("ImportTrades", () => {
     fireEvent.click(screen.getByText("Import trades from CSV"));
     expect(screen.getByText("Where are these trades from?")).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("when your holdings can't be loaded the file card says it can't be read, not Reading…", async () => {
+    db.holdingsDown = true;
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    expect(await screen.findByText("Couldn't load your holdings: offline")).toBeTruthy();
+    expect(screen.getByText("Can't be read")).toBeTruthy();
+    expect(screen.queryByText("Reading…")).toBeNull();
+    expect(document.querySelector(".animate-spin")).toBeNull();
+  });
+
+  it("while the file is being read it says Reading…", () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File(["x"], "export.csv", { type: "text/csv" })] },
+    });
+    expect(screen.getByText("Reading…")).toBeTruthy();
   });
 });
