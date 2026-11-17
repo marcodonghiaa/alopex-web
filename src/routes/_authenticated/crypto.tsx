@@ -20,6 +20,7 @@ import { InvestingSwitch } from "@/components/investing-switch";
 import { EmptyState } from "@/components/empty-state";
 import { useValueHistory } from "@/lib/use-value-history";
 import { usePerformance } from "@/lib/use-performance";
+import { InvestmentIncome } from "@/components/holdings/investment-income";
 import {
   PerformanceNotice,
   ReturnCell,
@@ -202,6 +203,8 @@ function CryptoPage() {
         )}
         <p className="mt-4 max-w-2xl text-sm text-muted-foreground">Coinbase syncs daily.</p>
       </section>
+
+      {!query.isPending && <InvestmentIncome events={perf.events} page="crypto" />}
 
       {query.isPending ? (
         <>

@@ -1,6 +1,6 @@
 import { BROKERS } from "@/lib/brokers";
 import type { BrokerParser, CsvResult, ParseContext } from "@/lib/brokers";
-import { parseDate, splitLine } from "@/lib/brokers/csv";
+import { csvLines, parseDate, splitLine } from "@/lib/brokers/csv";
 import { netShares, parseAmount } from "@/lib/trades";
 import type { Trade } from "@/lib/trades";
 
@@ -17,7 +17,7 @@ export type { CsvResult } from "@/lib/brokers";
  */
 export function parseTradesCsv(text: string, ctx: ParseContext, from?: BrokerParser): CsvResult {
   const { kind, knownKeys, today } = ctx;
-  const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
+  const lines = csvLines(text);
   if (lines.length === 0) return { trades: [], errors: ["The file is empty."], notes: [] };
 
   const headerLine = lines[0]!.replace(/^\uFEFF/, "");

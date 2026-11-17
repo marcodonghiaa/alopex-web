@@ -76,8 +76,11 @@ describe("Trade Republic sample", () => {
       "Example World ETF",
     );
     expect(notes).toContain(
-      "2 rows that aren't trades were skipped (dividends, interest, card payments, transfers).",
+      "1 card payment was skipped: they're your bank account's. Connect Trade Republic as a bank to see them.",
     );
+    expect(parseTradesCsv(fixture("trade_republic"), ctx).events?.map((e) => e.kind)).toEqual([
+      "dividend",
+    ]);
   });
 
   it("a file missing one of its columns isn't read as Trade Republic", () => {

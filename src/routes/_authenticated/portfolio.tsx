@@ -30,6 +30,7 @@ import { DetailRow, HoldingRow } from "@/components/holdings/holding-row";
 import { InvestingSwitch } from "@/components/investing-switch";
 import { useValueHistory } from "@/lib/use-value-history";
 import { usePerformance } from "@/lib/use-performance";
+import { InvestmentIncome } from "@/components/holdings/investment-income";
 import {
   PerformanceNotice,
   ReturnCell,
@@ -207,6 +208,8 @@ function PortfolioPage() {
           />
         </div>
       )}
+
+      {!query.isPending && <InvestmentIncome events={perf.events} page="stock" />}
 
       {query.isPending ? (
         <>

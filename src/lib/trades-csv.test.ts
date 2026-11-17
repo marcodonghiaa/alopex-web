@@ -155,6 +155,9 @@ describe("parseTradesCsv, Trade Republic export", () => {
         shares: 2.5,
         price_eur: 10,
         fee_eur: 0,
+        tax_eur: 0,
+        traded_at: "2026-01-02T10:00:00Z",
+        note: null,
         source: "trade_republic",
         external_id: "id",
       },
@@ -166,6 +169,9 @@ describe("parseTradesCsv, Trade Republic export", () => {
         shares: 1,
         price_eur: 12,
         fee_eur: 1,
+        tax_eur: 0,
+        traded_at: "2026-02-02T10:00:00Z",
+        note: null,
         source: "trade_republic",
         external_id: "id",
       },
@@ -180,8 +186,8 @@ describe("parseTradesCsv, Trade Republic export", () => {
     expect(trades[0]).toMatchObject({ side: "buy", shares: 2, price_eur: 0, fee_eur: 0 });
   });
 
-  it("skips dividends, migrations, saveback credits and card payments", () => {
-    const { trades, errors } = parseTradesCsv(
+  it("dividends and saveback aren't trades; migrations and card payments are skipped", () => {
+    const { trades, events, errors } = parseTradesCsv(
       file(
         line("2026-01-02", "CASH", "DIVIDEND", "A", "AA", "7.0", ""),
         line("2026-01-02", "DELIVERY", "MIGRATION", "A", "AA", "-7.0", "90"),
@@ -193,15 +199,16 @@ describe("parseTradesCsv, Trade Republic export", () => {
     );
     expect(errors).toEqual([]);
     expect(trades).toEqual([]);
+    expect(events?.map((e) => e.kind)).toEqual(["dividend", "reward"]);
   });
 
-  it("says how many rows weren't trades, so nothing goes missing silently", () => {
+  it("says how many rows were skipped, so nothing goes missing silently", () => {
     const one = parseTradesCsv(
-      file(line("2026-01-02", "CASH", "DIVIDEND", "A", "AA", "7.0", "")),
+      file(line("2026-01-02", "CASH", "CARD_TRANSACTION", "Shop", "", "", "")),
       known,
     );
     expect(one.notes).toEqual([
-      "1 row that isn't a trade was skipped (dividends, interest, card payments, transfers).",
+      "1 card payment was skipped: they're your bank account's. Connect Trade Republic as a bank to see them.",
     ]);
     const none = parseTradesCsv(
       file(line("2026-01-02", "TRADING", "BUY", "A", "AA", "1.0", "10")),
@@ -262,9 +269,15 @@ describe("parseTradesCsv, Trade Republic export", () => {
     expect(parseTradesCsv("date,side,isin,shares,price\n", opts).setsShares).toBeUndefined();
   });
 
-  it("belongs on the Portfolio page", () => {
-    const { errors } = parseTradesCsv(file(), { ...known, kind: "crypto" });
-    expect(errors[0]).toMatch(/Portfolio page/);
+  it("on the Crypto page it takes only the crypto rows, and points to Portfolio for the rest", () => {
+    const { trades, notes } = parseTradesCsv(
+      file(line("2026-01-02", "TRADING", "BUY", "A", "AA", "1.0", "10")),
+      { ...known, kind: "crypto" },
+    );
+    expect(trades).toEqual([]);
+    expect(notes).toContain(
+      "1 row is for shares and cash: import this file on the Portfolio page too.",
+    );
   });
 });
 

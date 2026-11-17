@@ -22,6 +22,9 @@ import type { Trade } from "@/lib/trades";
 import { BROKERS, NEW_BROKER_URL } from "@/lib/brokers";
 import { loadRates, rateLookup } from "@/lib/brokers/rates";
 import { newTrades, parseTradesCsv, shareUpdates, summarizeImport } from "@/lib/trades-csv";
+import { newEvents, summarizeIncome } from "@/lib/investment-events";
+import { formatEur } from "@/lib/transactions";
+import { fetchEvents } from "@/lib/use-performance";
 
 interface Holdings {
   shares: Map<string, number>;
@@ -78,7 +81,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   const [dragging, setDragging] = useState(false);
   // Where the file comes from: a broker's id, "spreadsheet" for your own columns, or "other".
   const [from, setFrom] = useState<string | null>(null);
-  const brokers = BROKERS.filter((b) => b.kind === kind);
+  const brokers = BROKERS.filter((b) => b.kind === kind || b.kind === "both");
   const broker = brokers.find((b) => b.id === from);
   const keyColumn = kind === "stock" ? "isin" : "symbol";
 
@@ -116,6 +119,17 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     );
   }, [firstPass, ctx, need, rates.data, text, broker]);
   const fresh = useMemo(() => (parsed ? newTrades(parsed.trades, saved) : []), [parsed, saved]);
+  // Dividends, interest, fees, taxes and transfers in the file that aren't saved yet.
+  const savedEvents = useQuery({
+    queryKey: ["investment-events"],
+    queryFn: () => fetchEvents(supabase),
+    enabled: open,
+  });
+  const freshEvents = useMemo(
+    () => (parsed?.events && savedEvents.data ? newEvents(parsed.events, savedEvents.data) : []),
+    [parsed, savedEvents.data],
+  );
+  const income = useMemo(() => summarizeIncome(freshEvents), [freshEvents]);
   const summary = useMemo(() => summarizeImport(fresh), [fresh]);
   // A wallet's file is the record of that wallet only: count its own trades, set its own holding.
   const fileBroker = BROKERS.find((b) => b.id === parsed?.trades[0]?.source);
@@ -143,6 +157,17 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
           .insert(fresh.map((t) => ({ ...t, user_id: userId })));
         if (error) throw error;
       }
+      // A re-import is skipped by the database too: the same broker id is saved once.
+      if (freshEvents.length > 0) {
+        const { data } = await supabase.auth.getUser();
+        if (!data.user) throw new Error("You're signed out. Sign in and try again.");
+        const userId = data.user.id;
+        const { error } = await supabase.from("investment_events").upsert(
+          freshEvents.map((e) => ({ ...e, user_id: userId })),
+          { onConflict: "user_id,source,external_id", ignoreDuplicates: true },
+        );
+        if (error) throw error;
+      }
       // If this fails the trades are safe: importing again skips them and retries the counts.
       for (const { key, shares } of updates) {
         // Coins go through set_holding_quantity, which also writes today's value for net worth.
@@ -159,12 +184,20 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       }
     },
     onSuccess: () => {
-      toast.success(`${fresh.length} trade${fresh.length === 1 ? "" : "s"} imported`);
+      toast.success(
+        [
+          fresh.length > 0 && plural(fresh.length, "trade"),
+          freshEvents.length > 0 && plural(freshEvents.length, "other row"),
+        ]
+          .filter(Boolean)
+          .join(" and ") + " imported",
+      );
       reset();
       setOpen(false);
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["holding-trades"] });
+      void queryClient.invalidateQueries({ queryKey: ["investment-events"] });
       void queryClient.invalidateQueries({ queryKey: ["holding-keys", kind] });
       void queryClient.invalidateQueries({ queryKey: ["holding-performance"] });
       void queryClient.invalidateQueries({ queryKey: ["portfolio-latest"] });
@@ -391,6 +424,11 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             {rates.error.message}
           </p>
         )}
+        {savedEvents.isError && (
+          <p role="alert" className="text-sm text-negative">
+            Couldn't load your saved dividends and fees: {savedEvents.error.message}
+          </p>
+        )}
         {keys.isError && (
           <p role="alert" className="text-sm text-negative">
             Couldn't load your holdings: {keys.error.message}
@@ -441,6 +479,36 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                 </p>
               )}
             </div>
+
+            {freshEvents.length > 0 && (
+              <div>
+                <p className="px-1 pb-1.5 text-xs font-medium text-muted-foreground">
+                  Also saved: income, fees and cash
+                </p>
+                <GroupedList className="border border-hairline">
+                  {(
+                    [
+                      ["Dividends", income.dividends],
+                      ["Interest", income.interest],
+                      ["Rewards and saveback", income.rewards],
+                      ["Taxes", -income.taxes],
+                      ["Fees", -income.fees],
+                    ] as const
+                  )
+                    .filter(([, v]) => Math.abs(v) >= 0.005)
+                    .map(([label, v]) => (
+                      <div key={label} className={row}>
+                        <span className="flex-1">{label}</span>
+                        <span className="tabular-nums">{formatEur(v)}</span>
+                      </div>
+                    ))}
+                  <div className={row}>
+                    <span className="flex-1">Rows, with deposits and withdrawals</span>
+                    <span className="tabular-nums">{freshEvents.length}</span>
+                  </div>
+                </GroupedList>
+              </div>
+            )}
 
             {(parsed.trades.length > fresh.length || updates.length > 0) && (
               <GroupedList className="border border-hairline">
@@ -507,7 +575,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             disabled={
               !parsed ||
               parsed.errors.length > 0 ||
-              (fresh.length === 0 && updates.length === 0) ||
+              (fresh.length === 0 && updates.length === 0 && freshEvents.length === 0) ||
+              (parsed.events != null && !savedEvents.data) ||
               save.isPending
             }
             onClick={() => save.mutate()}
@@ -515,7 +584,9 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             {save.isPending && <Loader2 className="size-4 animate-spin" />}
             {fresh.length > 0
               ? `Save ${fresh.length} trade${fresh.length === 1 ? "" : "s"}`
-              : "Save trades"}
+              : freshEvents.length > 0
+                ? `Save ${plural(freshEvents.length, "row")}`
+                : "Save trades"}
           </Button>
         )}
       </DialogContent>

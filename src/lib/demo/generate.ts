@@ -271,11 +271,65 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
     side: "buy",
     trade_date: iso(firstDay),
     fee_eur: 1,
+    tax_eur: 0,
+    traded_at: null,
+    note: null,
+    currency: null,
+    price_native: null,
+    group_id: null,
     source: null,
     external_id: null,
     created_at: stamp(iso(firstDay)),
     user_id,
   }));
+
+  // A quarterly distribution from the equity fund and monthly interest on cash, so the income
+  // part of returns has something to show.
+  const investment_events: DemoDb["investment_events"] = days
+    .filter((n) => new Date(`${iso(n)}T12:00:00Z`).getUTCDate() === 15)
+    .flatMap((n, i) => {
+      const date = iso(n);
+      const month = new Date(`${date}T12:00:00Z`).getUTCMonth();
+      const base = {
+        event_date: date,
+        occurred_at: null,
+        fee_eur: 0,
+        shares: null,
+        orig_amount: null,
+        orig_currency: null,
+        fx_rate: null,
+        note: null,
+        source: null,
+        external_id: null,
+        created_at: stamp(date),
+        user_id,
+      };
+      const interest = {
+        ...base,
+        id: `demo-event-i${i}`,
+        kind: "interest",
+        asset_kind: null,
+        key: null,
+        amount_eur: 4.2,
+        tax_eur: 1.1,
+        raw_type: "CASH|INTEREST_PAYMENT",
+      };
+      if (month % 3 !== 2) return [interest];
+      return [
+        interest,
+        {
+          ...base,
+          id: `demo-event-d${i}`,
+          kind: "dividend",
+          asset_kind: "stock",
+          key: "IE00DEMO0001",
+          amount_eur: 18.4,
+          tax_eur: 4.9,
+          shares: 42,
+          raw_type: "CASH|DISTRIBUTION",
+        },
+      ];
+    });
 
   const crypto_holdings: DemoDb["crypto_holdings"] = COINS.map((c) => ({
     amount: c.amount,
@@ -500,6 +554,7 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
     net_worth_snapshots,
     pending_bank_consents: [],
     holding_trades,
+    investment_events,
     portfolio_holdings,
     portfolio_snapshots,
     price_history: [],

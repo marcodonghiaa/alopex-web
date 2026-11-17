@@ -43,6 +43,23 @@ describe("measure", () => {
     expect(m.change).toBeCloseTo(399 / 801);
   });
 
+  it("tax on a trade counts like a fee, on a buy and on a sale", () => {
+    const m = ok(
+      measure(row(), [
+        { ...buy("2025-01-10", 12, 80, 1), tax_eur: 2 },
+        { ...sell("2025-06-01", 2, 150), tax_eur: 3 },
+      ]),
+    );
+    // 960 + 1 + 2 in, 300 - 3 back, 10 left at 120: 1200 + 297 - 963.
+    expect(m.gain).toBeCloseTo(534);
+  });
+
+  it("what the holding paid you (dividends after tax) adds to its gain", () => {
+    const m = ok(measure(row(), [buy("2025-01-10", 10, 80, 1)], 25));
+    expect(m.gain).toBeCloseTo(424);
+    expect(m.change).toBeCloseTo(424 / 801);
+  });
+
   it("counts profit already taken, against the most ever invested", () => {
     // Bought 12 at 80 (960 in), sold 2 at 150 (300), 10 left at 120 (1200): +540 on 960.
     const m = ok(measure(row(), [buy("2025-01-10", 12, 80), sell("2025-06-01", 2, 150)]));

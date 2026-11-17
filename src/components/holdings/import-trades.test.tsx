@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const db = vi.hoisted(() => ({
   inserted: [] as Array<Record<string, unknown>>,
+  upserted: [] as Array<[string, Array<Record<string, unknown>>, unknown]>,
   rpc: [] as Array<[string, Record<string, unknown>]>,
   ratesDown: false,
 }));
@@ -41,6 +42,7 @@ vi.mock("@/integrations/supabase/client", () => {
       lte: () => query(rows),
       order: () => query(rows),
       limit: () => query(rows),
+      range: () => Promise.resolve({ data: rows, error: null, count: rows.length }),
     });
   };
   return {
@@ -49,6 +51,10 @@ vi.mock("@/integrations/supabase/client", () => {
         select: () => query(tables[table] ?? []),
         insert: (rows: Array<Record<string, unknown>>) => {
           db.inserted.push(...rows);
+          return Promise.resolve({ error: null });
+        },
+        upsert: (rows: Array<Record<string, unknown>>, options: unknown) => {
+          db.upserted.push([table, rows, options]);
           return Promise.resolve({ error: null });
         },
       }),
@@ -115,9 +121,9 @@ describe("ImportTrades", () => {
     expect(screen.getByText("Where are these trades from?")).toBeTruthy();
   });
 
-  it("the crypto page lists no stock brokers, and lists Ledger Live", () => {
+  it("the crypto page lists crypto sources and Trade Republic (it sells coins too)", () => {
     open("crypto");
-    expect(screen.queryByRole("button", { name: /Trade Republic/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Trade Republic/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Ledger Live/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /My own spreadsheet/ })).toBeTruthy();
   });
@@ -134,6 +140,9 @@ describe("ImportTrades", () => {
     expect(screen.getByText("Example World ETF")).toBeTruthy();
     expect(screen.getByText("Left out")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Save 4 trades" })).toBeTruthy();
+    // The dividend in the file is shown and saved with the trades.
+    expect(screen.getByText("Also saved: income, fees and cash")).toBeTruthy();
+    expect(screen.getByText("Dividends")).toBeTruthy();
     expect(screen.queryByText("How to get the file")).toBeNull();
   });
 
@@ -171,5 +180,23 @@ describe("ImportTrades", () => {
     ).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
     db.ratesDown = false;
+  });
+
+  it("a Trade Republic file saves its dividends too, skipping ones already saved by id", async () => {
+    db.upserted.length = 0;
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 4 trades" }));
+    await waitFor(() => expect(db.upserted).toHaveLength(1));
+    const [table, rows, options] = db.upserted[0]!;
+    expect(table).toBe("investment_events");
+    expect(options).toEqual({ onConflict: "user_id,source,external_id", ignoreDuplicates: true });
+    expect(rows).toEqual([
+      expect.objectContaining({ kind: "dividend", amount_eur: 1.2, user_id: "u1" }),
+    ]);
   });
 });

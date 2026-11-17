@@ -9,6 +9,8 @@ import { fetchAllRows } from "@/lib/export/fetch-all";
 import type { ExportRow } from "@/lib/export/tables";
 import { measure, summarizeTrades } from "@/lib/trades";
 import type { Measured, Trade } from "@/lib/trades";
+import { incomeByKey } from "@/lib/investment-events";
+import type { InvestmentEvent } from "@/lib/investment-events";
 
 export type PerformanceResult = { rows: Array<PerformanceRow> } | { unavailable: true };
 export type SavedTrade = Trade & { id: string };
@@ -46,9 +48,12 @@ export async function fetchTrades(client: SupabaseClient<Database>): Promise<Tra
   const rows = await fetchAllRows("holding_trades", async (from, to) => {
     const { data, error, count } = await client
       .from("holding_trades")
-      .select("id,kind,key,side,trade_date,shares,price_eur,fee_eur,source,external_id", {
-        count: "exact",
-      })
+      .select(
+        "id,kind,key,side,trade_date,shares,price_eur,fee_eur,tax_eur,traded_at,note,source,external_id",
+        {
+          count: "exact",
+        },
+      )
       .order("id")
       .range(from, to);
     if (error && isMissingTable(error)) {
@@ -58,6 +63,32 @@ export async function fetchTrades(client: SupabaseClient<Database>): Promise<Tra
     return { data: data as Array<ExportRow> | null, error, count };
   });
   return missing ? { unavailable: true } : { trades: rows as unknown as Array<SavedTrade> };
+}
+
+export type SavedEvent = InvestmentEvent & { id: string };
+
+/**
+ * Every dividend, fee, tax and transfer, paged. A database without the table yet (dashboard
+ * deployed before the migration) has none: returns count only trades then.
+ */
+export async function fetchEvents(client: SupabaseClient<Database>): Promise<Array<SavedEvent>> {
+  let missing = false;
+  const rows = await fetchAllRows("investment_events", async (from, to) => {
+    const { data, error, count } = await client
+      .from("investment_events")
+      .select(
+        "id,kind,asset_kind,key,event_date,occurred_at,amount_eur,tax_eur,fee_eur,shares,orig_amount,orig_currency,fx_rate,raw_type,source,external_id",
+        { count: "exact" },
+      )
+      .order("id")
+      .range(from, to);
+    if (error && isMissingTable(error)) {
+      missing = true;
+      return { data: [], error: null, count: 0 };
+    }
+    return { data: data as Array<ExportRow> | null, error, count };
+  });
+  return missing ? [] : (rows as unknown as Array<SavedEvent>);
 }
 
 // Every holding's latest price: total return has no range, so any early date will do.
@@ -71,6 +102,11 @@ export function usePerformance(lastIso: string | undefined, kind: "stock" | "cry
     enabled: lastIso != null,
   });
   const saved = useQuery({ queryKey: ["holding-trades"], queryFn: () => fetchTrades(supabase) });
+  const events = useQuery({
+    queryKey: ["investment-events"],
+    queryFn: () => fetchEvents(supabase),
+  });
+  const income = useMemo(() => incomeByKey(events.data ?? []), [events.data]);
 
   const tradesByKey = useMemo(() => {
     const out = new Map<string, Array<SavedTrade>>();
@@ -101,9 +137,9 @@ export function usePerformance(lastIso: string | undefined, kind: "stock" | "cry
       }));
     return [...rows, ...sold].map((row) => ({
       row,
-      measured: measure(row, tradesByKey.get(row.key) ?? []),
+      measured: measure(row, tradesByKey.get(row.key) ?? [], income.get(`${kind}|${row.key}`) ?? 0),
     }));
-  }, [prices.data, tradesByKey, kind]);
+  }, [prices.data, tradesByKey, kind, income]);
 
   const summary = useMemo(() => summarizeTrades(measured, 1), [measured]);
   const measuredByKey = useMemo(
@@ -116,10 +152,11 @@ export function usePerformance(lastIso: string | undefined, kind: "stock" | "cry
     summary,
     measuredByKey,
     tradesByKey,
-    isPending: lastIso == null || prices.isPending || saved.isPending,
+    events: events.data ?? [],
+    isPending: lastIso == null || prices.isPending || saved.isPending || events.isPending,
     unavailable:
       (prices.data != null && "unavailable" in prices.data) ||
       (saved.data != null && "unavailable" in saved.data),
-    error: prices.error ?? saved.error ?? null,
+    error: prices.error ?? saved.error ?? events.error ?? null,
   };
 }

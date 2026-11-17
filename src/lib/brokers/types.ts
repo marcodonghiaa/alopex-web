@@ -1,7 +1,10 @@
+import type { InvestmentEvent } from "@/lib/investment-events";
 import type { Trade } from "@/lib/trades";
 
 export interface CsvResult {
   trades: Array<Trade>;
+  /** What isn't a buy or a sell: dividends, interest, fees, taxes, deposits, transfers. */
+  events?: Array<InvestmentEvent>;
   errors: Array<string>;
   /** Left out on purpose, but you should know. */
   notes: Array<string>;
@@ -32,8 +35,8 @@ export interface BrokerParser {
   id: string;
   name: string;
   country: string;
-  /** Which page imports it: stock trades on Portfolio, coins on Crypto. */
-  kind: "stock" | "crypto";
+  /** Which page imports it: stock trades on Portfolio, coins on Crypto, or both from one file. */
+  kind: "stock" | "crypto" | "both";
   /** Where to find the file in the broker's app, one short step each, shown before you upload. */
   howToExport: Array<string>;
   /**
