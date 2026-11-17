@@ -487,6 +487,40 @@ describe("fake client: delete_holding", () => {
     expect(await latestTotal(c)).toBeCloseTo(before - lastValue, 1);
   });
 
+  // protects=add then delete leaves every net-worth day as it was, even just after local
+  // midnight, when the UTC date is still yesterday (Berlin is UTC+2 on 20 Oct)
+  it("adding then deleting a coin just after local midnight leaves net worth unchanged", async () => {
+    const tz = process.env["TZ"];
+    process.env["TZ"] = "Europe/Berlin";
+    try {
+      const c = createFakeClient(new Date(2026, 9, 20, 0, 30)); // made in Berlin time
+      const days = async () =>
+        (await c.from("v_net_worth_daily").select("snapshot_date,total_eur")).data!.map(
+          (r) => `${r.snapshot_date} ${r.total_eur!.toFixed(2)}`,
+        );
+      const before = await days();
+      await c.functions.invoke("add-holding", {
+        body: {
+          action: "add",
+          kind: "crypto",
+          id: "solana",
+          symbol: "SOL",
+          name: "Solana",
+          quantity: 3,
+        },
+      });
+      await (c.rpc as unknown as Rpc)("delete_holding", {
+        p_kind: "crypto",
+        p_key: "SOL",
+        p_source: "Manual",
+      });
+      expect(await days()).toEqual(before);
+    } finally {
+      if (tz === undefined) delete process.env["TZ"];
+      else process.env["TZ"] = tz;
+    }
+  });
+
   it("removes one crypto source and returns 0 when there is nothing to delete", async () => {
     const c = fresh();
     const { data: coins } = await c.from("crypto_holdings").select("asset_symbol,source");

@@ -728,7 +728,8 @@ function demoAddHolding(store: Store, now: Date, body: Record<string, unknown>) 
   const sec = list.find((s) => s.id === body["id"]);
   const quantity = Number(body["quantity"]);
   if (!sec || !(quantity > 0)) return functionError(400, "Invalid request");
-  const today = now.toISOString().slice(0, 10);
+  // The local day, as the generated net worth uses: the UTC one is yesterday after local midnight.
+  const today = formatISODate(now);
   const user_id = DEMO_USER_ID;
   const db = store.db;
   if (kind === "stock") {
