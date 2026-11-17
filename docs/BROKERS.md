@@ -8,7 +8,7 @@ wallets on the Crypto page. Anything else can be imported as a plain CSV with th
 
 | Broker         | Accounts in             | File | Last checked with a real export |
 | -------------- | ----------------------- | ---- | ------------------------------- |
-| Trade Republic | DE, IT, FR, ES and more | CSV  | 2026-11-10                      |
+| Trade Republic | DE, IT, FR, ES and more | CSV  | 2026-11-17                      |
 | Ledger Live    | Any country             | CSV  | 2026-11-17                      |
 
 ## Your broker isn't here, or stopped working?
