@@ -103,10 +103,24 @@ describe("fetchBankWindow", () => {
     };
     answers.transactions = Array.from({ length: 12 }, () => full);
     const w = await fetchBankWindow(["2026-11-10"], []);
-    expect(args("transactions", "range")).toHaveLength(10);
+    expect(args("transactions", "range")).toHaveLength(11); // 10 pages, then one row to see if more
     expect(w.capped).toBe(true);
     // Other rows on 5 Nov may be the ones cut: complete only from the day after.
     expect(w.completeFrom).toBe("2026-11-06");
+  });
+
+  // polish-3 round 2: exactly 10 000 rows is everything, not a cut
+  it("reads exactly 10 000 rows as complete", async () => {
+    const full = {
+      data: Array.from({ length: 1000 }, () => bankRow({ booking_date: "2026-11-05" })),
+      error: null,
+    };
+    answers.transactions = [...Array.from({ length: 10 }, () => full), { data: [], error: null }];
+    const w = await fetchBankWindow(["2026-11-10"], []);
+    expect(w.bank).toHaveLength(10_000);
+    expect(w.capped).toBe(false);
+    expect(w.completeFrom).toBeNull();
+    expect(args("transactions", "range").at(-1)).toEqual([10_000, 10_000]);
   });
 
   it("pages the rates in date order too", async () => {

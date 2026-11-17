@@ -25,7 +25,7 @@ export interface BankWindow {
   completeFrom: string | null;
 }
 
-/** Every row of a query, page by page in a stable order, or the first MAX_PAGES pages. */
+/** Every row of a query, page by page in a stable order, or the first MAX_PAGES pages (capped). */
 async function allPages<T>(
   page: (
     from: number,
@@ -39,7 +39,10 @@ async function allPages<T>(
     rows.push(...(data ?? []));
     if ((data ?? []).length < PAGE) return { rows, capped: false };
   }
-  return { rows, capped: true };
+  // Exactly MAX_PAGES full pages may be all there is: one more row says whether anything was cut.
+  const more = await page(MAX_PAGES * PAGE, MAX_PAGES * PAGE);
+  if (more.error) throw new Error(more.error.message);
+  return { rows, capped: (more.data ?? []).length > 0 };
 }
 
 /** `currencies`: the Splitwise side's; the bank's own are added. */
