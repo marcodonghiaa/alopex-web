@@ -597,14 +597,9 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             {save.error.message}
           </p>
         )}
-        {parsed && (
+        {ok && (
           <Button
-            disabled={
-              !parsed ||
-              parsed.errors.length > 0 ||
-              (fresh.length === 0 && updates.length === 0) ||
-              save.isPending
-            }
+            disabled={(fresh.length === 0 && updates.length === 0) || save.isPending}
             onClick={() => {
               if (saving.current) return;
               saving.current = true;

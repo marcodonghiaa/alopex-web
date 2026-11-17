@@ -659,4 +659,22 @@ describe("ImportTrades", () => {
     expect(button.classList).toContain("border");
     expect(button.classList).toContain("border-rule");
   });
+
+  it("a file with errors offers no Save; a clean one does", async () => {
+    open("stock");
+    pickText(
+      /My own spreadsheet/,
+      "date,side,isin,shares,price\n2026-01-02,buy,XX0000000001,abc,10",
+    );
+    await screen.findByText(/Fix these first/);
+    expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: {
+        files: [
+          new File(["date,side,isin,shares,price\n2026-01-02,buy,XX0000000001,1,10"], "ok.csv"),
+        ],
+      },
+    });
+    expect(await screen.findByRole("button", { name: "Save 1 trade" })).toBeTruthy();
+  });
 });
