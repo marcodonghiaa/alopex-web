@@ -1,4 +1,5 @@
 import { bankOf } from "@/components/bank-badge";
+import { maskIban } from "@/lib/iban";
 
 // Why a bank stopped updating, from accounts.sync_error (what the last sync-bank run hit: Enable
 // Banking's error name, or HTTP_<status> / TIMEOUT / NETWORK / SAVE_FAILED). Cleared by the next
@@ -94,5 +95,5 @@ function refusedMessage(banks: string[]): string {
 
 // "your EUR account •••• 0002": a bank can hold several accounts in one currency.
 function accountLabel(currency: string, iban?: string | null): string {
-  return `your ${currency} account${iban ? ` •••• ${iban.slice(-4)}` : ""}`;
+  return `your ${currency} account${iban ? ` ${maskIban(iban)}` : ""}`;
 }
