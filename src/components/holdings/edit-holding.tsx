@@ -65,6 +65,8 @@ export function EditHolding({
     onSuccess: () => {
       toast.success(`${name} deleted`);
       refresh();
+      // Delete also removes its dividends and other events.
+      void queryClient.invalidateQueries({ queryKey: ["investment-events"] });
       setOpen(false);
     },
     onError: (err) => setError(err instanceof Error ? err.message : "Couldn't delete"),

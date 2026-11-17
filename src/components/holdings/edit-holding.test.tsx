@@ -61,6 +61,16 @@ describe("EditHolding delete", () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["holding-trades"] });
   });
 
+  it("deleting a holding refreshes Income and costs, which lose its dividends", async () => {
+    rpc.mockResolvedValue({ data: 1, error: null });
+    const { invalidate } = setup({ kind: "stock", isin: "IE00TEST" });
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete for good" }));
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ["investment-events"] }),
+    );
+  });
+
   // Regression: Mark as sold left the old value in net worth until the next price sync.
   it("Mark as sold goes through set_holding_quantity, which also updates today's value", async () => {
     rpc.mockResolvedValue({ data: 1, error: null });
