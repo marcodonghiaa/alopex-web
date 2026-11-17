@@ -14,7 +14,7 @@ export interface ConsentAccount {
 
 export interface ConsentAlert {
   bank: string;
-  daysLeft: number; // 0 or less: already expired
+  daysLeft: number; // 0: ends today; below 0: already expired
 }
 
 // One alert per bank (all of a bank's accounts share one consent), soonest first.
