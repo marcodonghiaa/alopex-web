@@ -411,6 +411,24 @@ describe("Disconnect", () => {
     expect(toast.success).toHaveBeenCalledWith("Splitwise disconnected, 7 synced expenses removed");
   });
 
+  // polish-3 #6: Cancel can't pretend to stop a disconnect already sent
+  it("turns Cancel off while the disconnect runs, and reports the choice sent", async () => {
+    let finish: (v: unknown) => void = () => {};
+    invoke.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));
+    const dialog = await openDisconnect();
+    fireEvent.click(within(dialog).getByRole("radio", { name: /Delete synced data/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Disconnect" }));
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDisabled();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("dialog", { name: "Disconnect Splitwise?" })).toBeTruthy();
+    finish(ok({ disconnected: true, deleted: 2 }));
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith(
+        "Splitwise disconnected, 2 synced expenses removed",
+      ),
+    );
+  });
+
   it("cancels without calling anything, and shows a failure", async () => {
     const dialog = await openDisconnect();
     await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
@@ -486,6 +504,19 @@ describe("Delete synced data after a disconnect", () => {
     );
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith("Couldn't disconnect Splitwise, please try again"),
+    );
+  });
+
+  // polish-3 #6
+  it("turns Cancel off while the delete runs", async () => {
+    let finish: (v: unknown) => void = () => {};
+    invoke.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));
+    const dialog = await openDelete();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDisabled();
+    finish(ok({ disconnected: true, deleted: 1 }));
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("Synced Splitwise data deleted: 1 expense"),
     );
   });
 

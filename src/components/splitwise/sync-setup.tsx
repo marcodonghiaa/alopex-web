@@ -178,10 +178,11 @@ export function DisconnectDialog({
     if (open) setDeleteData(false); // keeping is the default every time
   }, [open]);
   const disconnect = useMutation({
-    mutationFn: () => disconnectSplitwise(deleteData),
-    onSuccess: ({ deleted }) => {
+    // The choice travels with the call: the dialog may reset it before the answer comes.
+    mutationFn: (andData: boolean) => disconnectSplitwise(andData),
+    onSuccess: ({ deleted }, andData) => {
       toast.success(
-        deleteData
+        andData
           ? `Splitwise disconnected, ${deleted === 1 ? "1 synced expense" : `${deleted} synced expenses`} removed`
           : "Splitwise disconnected. What was synced stays.",
       );
@@ -230,13 +231,17 @@ export function DisconnectDialog({
           ))}
         </fieldset>
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button variant="secondary" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="secondary"
+            onClick={() => onOpenChange(false)}
+            disabled={disconnect.isPending}
+          >
             Cancel
           </Button>
           <Button
             variant="destructive"
             className="bg-negative/10"
-            onClick={() => disconnect.mutate()}
+            onClick={() => disconnect.mutate(deleteData)}
             disabled={disconnect.isPending}
           >
             {disconnect.isPending ? "Disconnecting…" : "Disconnect"}
@@ -278,7 +283,11 @@ function DeleteSyncedDialog({
           payments they changed.
         </DialogDescription>
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button variant="secondary" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="secondary"
+            onClick={() => onOpenChange(false)}
+            disabled={remove.isPending}
+          >
             Cancel
           </Button>
           <Button
