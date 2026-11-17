@@ -78,14 +78,16 @@ describe("syncAlerts", () => {
       acc("Fineco", "ASPSP_TIMEOUT", "2026-11-15T06:17:00Z"),
       acc("N26", "ASPSP_RATE_LIMIT_EXCEEDED"),
     ]);
-    expect(alerts.map((a) => a.bank)).toEqual(["Fineco", "N26"]);
+    expect(alerts).toEqual([
+      "Fineco didn't answer the last sync. Alopex tries again at the next sync, every 6 hours.",
+      "N26 limits automatic updates (often 4 a day) and refused the last one. Alopex tries again at the next sync, every 6 hours.",
+    ]);
   });
 
   // The error's time is not the last good update (it moves when the code changes, and a failed
   // save still updated the balance); the account row already shows the real one.
   it("never adds a date, so no time zone can show the wrong day", () => {
-    const [alert] = syncAlerts([acc("Fineco", "ASPSP_TIMEOUT", "2026-11-15T00:17:00Z")]);
-    expect(alert?.message).toBe("Fineco didn't answer the last sync. Alopex tries again at the next sync, every 6 hours.");
+    expect(syncAlerts([acc("Fineco", "ASPSP_TIMEOUT", "2026-11-15T00:17:00Z")])).toEqual(["Fineco didn't answer the last sync. Alopex tries again at the next sync, every 6 hours."]);
   });
 
   it("skips ended consents", () => {
@@ -98,6 +100,6 @@ describe("syncAlerts", () => {
     const now = Date.parse("2026-11-17T12:00:00Z");
     const ended = { ...acc("Fineco", "ASPSP_TIMEOUT"), consent_valid_until: "2026-11-17T00:00:00+00:00" };
     const valid = { ...acc("N26", "ASPSP_TIMEOUT"), consent_valid_until: "2026-11-18T00:00:00+00:00" };
-    expect(syncAlerts([ended, valid], now).map((a) => a.bank)).toEqual(["N26"]);
+    expect(syncAlerts([ended, valid], now)).toEqual([syncErrorMessage("ASPSP_TIMEOUT", "N26")]);
   });
 });

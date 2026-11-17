@@ -339,13 +339,13 @@ function AccountsPage() {
         ))}
 
         {/* Why a bank stopped updating; an ended consent already has its Renew banner above. */}
-        {syncIssues.map((issue) => (
+        {syncIssues.map((message) => (
           <div
-            key={issue.message}
+            key={message}
             role="status"
             className="mb-4 break-words rounded-lg bg-warning/10 px-4 py-3 text-sm text-foreground"
           >
-            {issue.message}
+            {message}
           </div>
         ))}
 

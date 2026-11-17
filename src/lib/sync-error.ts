@@ -12,11 +12,6 @@ export interface SyncErrorAccount {
   consent_valid_until?: string | null;
 }
 
-export interface SyncAlert {
-  bank: string;
-  message: string;
-}
-
 const CONSENT_ENDED = new Set(["EXPIRED_SESSION", "REVOKED_SESSION", "CLOSED_SESSION"]);
 const RETRY = "Alopex tries again at the next sync, every 6 hours.";
 
@@ -59,17 +54,13 @@ export function syncErrorMessage(code: string, bank: string): string | null {
 // already shows its last real update.
 // A consent that has run out is skipped: the cron no longer syncs it, so its last error never
 // clears, and the Renew banner already says what to do.
-export function syncAlerts(accounts: Array<SyncErrorAccount>, now = Date.now()): Array<SyncAlert> {
-  const seen = new Map<string, SyncAlert>();
+export function syncAlerts(accounts: Array<SyncErrorAccount>, now = Date.now()): string[] {
+  const messages = new Set<string>(); // each message names its bank
   for (const a of accounts) {
     if (!a.sync_error) continue;
     if (a.consent_valid_until && Date.parse(a.consent_valid_until) <= now) continue;
-    const bank = bankOf(a);
-    const text = syncErrorMessage(a.sync_error, bank);
-    if (!text) continue;
-    const key = `${bank}\n${text}`;
-    if (seen.has(key)) continue;
-    seen.set(key, { bank, message: text });
+    const text = syncErrorMessage(a.sync_error, bankOf(a));
+    if (text) messages.add(text);
   }
-  return [...seen.values()];
+  return [...messages];
 }
