@@ -390,6 +390,15 @@ describe("ImportTrades", () => {
     expect(screen.queryByText("Dividends and interest are after tax.")).toBeNull();
   });
 
+  it("polish-4 UB6 the row count says it counts every row saved", async () => {
+    open("stock");
+    await pickTradeRepublic();
+    expect(
+      screen.getByText("Rows saved in all (deposits and withdrawals too)").parentElement
+        ?.textContent,
+    ).toBe("Rows saved in all (deposits and withdrawals too)1");
+  });
+
   it("if saved dividends and fees can't load, it says so and won't save", async () => {
     db.eventsDown = true;
     open("stock");

@@ -572,7 +572,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                     </div>
                   ))}
                   <div className={row}>
-                    <span className="flex-1">Rows, with deposits and withdrawals</span>
+                    <span className="flex-1">Rows saved in all (deposits and withdrawals too)</span>
                     <span className="tabular-nums">{freshEvents.length}</span>
                   </div>
                 </GroupedList>
