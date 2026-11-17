@@ -289,7 +289,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     <input
       type="file"
       accept=".csv,.tsv,.txt,text/csv"
-      aria-label="CSV file"
+      aria-label={fileName ? "Choose another file" : "CSV file"}
       className="sr-only"
       disabled={save.isPending}
       onChange={(e) => {
@@ -440,7 +440,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                             : "Can't be imported"}
                   </span>
                 </span>
-                <label className="cursor-pointer text-xs text-primary underline-offset-2 hover:underline has-[:disabled]:pointer-events-none has-[:disabled]:opacity-50">
+                <label className="-my-2 inline-flex min-h-11 cursor-pointer items-center rounded-sm px-1 text-xs text-primary underline-offset-2 hover:underline has-[:disabled]:pointer-events-none has-[:disabled]:opacity-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
                   Change
                   {fileInput}
                 </label>

@@ -502,6 +502,19 @@ describe("ImportTrades", () => {
     expect(screen.getByText(/^1 buy · /).textContent).toBe("1 buy · 15 Jan 2026");
   });
 
+  it("polish-4 UB13 Change is named, 44px tall and shows keyboard focus; before a file, the picker is the CSV file", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    await screen.findByText("export.csv");
+    const input = screen.getByLabelText("Choose another file");
+    expect(input.closest("label")).toHaveClass("min-h-11", "has-[:focus-visible]:ring-2");
+    expect(screen.queryByLabelText("CSV file")).toBeNull();
+  });
+
   it("if saved dividends and fees can't load, it says so and won't save", async () => {
     db.eventsDown = true;
     open("stock");
