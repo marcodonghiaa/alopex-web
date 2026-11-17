@@ -1031,3 +1031,58 @@ describe("Double trigger", () => {
     expect(invoke).toHaveBeenCalledTimes(2);
   });
 });
+
+// polish-4 #13: the form's error belongs to its field and goes when the field is fixed
+describe("Connect form errors", () => {
+  const openForm = async () => {
+    rpc.mockResolvedValue(notConnected());
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: "Connect Splitwise" }));
+    return screen.getByRole("dialog", { name: "Connect Splitwise" });
+  };
+
+  it("ties a missing key to the key field, focuses it, and clears once typed", async () => {
+    const dialog = await openForm();
+    const key = within(dialog).getByLabelText("API key");
+    expect(key).not.toHaveAttribute("aria-invalid");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    const alert = within(dialog).getByRole("alert");
+    expect(alert).toHaveTextContent("Paste your Splitwise API key first.");
+    expect(key).toHaveAttribute("aria-invalid", "true");
+    expect(key.getAttribute("aria-describedby")).toBe(alert.id);
+    expect(document.activeElement).toBe(key);
+    await userEvent.type(key, "a");
+    expect(within(dialog).queryByRole("alert")).toBeNull();
+    expect(key).not.toHaveAttribute("aria-invalid");
+  });
+
+  it("ties a missing consent to the checkbox and clears once ticked", async () => {
+    const dialog = await openForm();
+    const key = within(dialog).getByLabelText("API key");
+    const box = within(dialog).getByRole("checkbox");
+    await userEvent.type(key, "abcdefghijkl");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    const alert = within(dialog).getByRole("alert");
+    expect(box).toHaveAttribute("aria-invalid", "true");
+    expect(box.getAttribute("aria-describedby")).toBe(alert.id);
+    expect(key).not.toHaveAttribute("aria-invalid");
+    expect(document.activeElement).toBe(box);
+    await userEvent.click(box);
+    expect(within(dialog).queryByRole("alert")).toBeNull();
+    expect(box).not.toHaveAttribute("aria-invalid");
+  });
+
+  it("ties a key Splitwise refused to the key field", async () => {
+    functions({
+      "splitwise-connect": [httpError(400, { error: "Splitwise did not accept this API key." })],
+    });
+    const dialog = await openForm();
+    const key = within(dialog).getByLabelText("API key");
+    await userEvent.type(key, "abcdefghijkl");
+    await userEvent.click(within(dialog).getByRole("checkbox"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    const alert = await within(dialog).findByRole("alert");
+    expect(key).toHaveAttribute("aria-invalid", "true");
+    expect(key.getAttribute("aria-describedby")).toBe(alert.id);
+  });
+});

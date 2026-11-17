@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -49,7 +49,13 @@ export function ConnectDialog({
   const keyId = useId();
   const [apiKey, setApiKey] = useState("");
   const [consent, setConsent] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  // Which field the problem is about: it is described by the alert and gets focus.
+  const [problem, setProblem] = useState<{ text: string; on: "key" | "consent" } | null>(null);
+  const problemId = useId();
+  const keyRef = useRef<HTMLInputElement>(null);
+  const consentRef = useRef<HTMLInputElement>(null);
+  const invalid = (on: "key" | "consent") =>
+    problem?.on === on ? { "aria-invalid": true, "aria-describedby": problemId } : {};
   const [name, setName] = useState<string | null>(null);
   // A new dry run for every connect, even with the same account.
   const [connectedAt, setConnectedAt] = useState(0);
@@ -71,7 +77,10 @@ export function ConnectDialog({
       setConnectedAt(Date.now());
       void queryClient.invalidateQueries({ queryKey: CONNECTION_KEY });
     },
-    onError: (err) => setProblem(err.message),
+    onError: (err) => {
+      setProblem({ text: err.message, on: "key" });
+      keyRef.current?.focus();
+    },
   });
   const preview = useQuery({
     queryKey: ["splitwise-preview", connectedAt],
@@ -86,8 +95,17 @@ export function ConnectDialog({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (connect.isPending) return;
-    if (apiKey.trim() === "") return setProblem("Paste your Splitwise API key first.");
-    if (!consent) return setProblem("Tick the box to let Alopex read your Splitwise expenses.");
+    if (apiKey.trim() === "") {
+      setProblem({ text: "Paste your Splitwise API key first.", on: "key" });
+      return keyRef.current?.focus();
+    }
+    if (!consent) {
+      setProblem({
+        text: "Tick the box to let Alopex read your Splitwise expenses.",
+        on: "consent",
+      });
+      return consentRef.current?.focus();
+    }
     setProblem(null);
     connect.mutate();
   };
@@ -142,7 +160,12 @@ export function ConnectDialog({
               autoComplete="new-password"
               spellCheck={false}
               value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
+              ref={keyRef}
+              {...invalid("key")}
+              onChange={(e) => {
+                setApiKey(e.target.value);
+                setProblem(null);
+              }}
               // On the dialog's background the default fill and border vanish (1.48:1).
               className="bg-card font-figure"
             />
@@ -150,14 +173,19 @@ export function ConnectDialog({
               <input
                 type="checkbox"
                 checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
+                ref={consentRef}
+                {...invalid("consent")}
+                onChange={(e) => {
+                  setConsent(e.target.checked);
+                  setProblem(null);
+                }}
                 className="mt-0.5 size-5 shrink-0 accent-primary"
               />
               <span>{CONSENT_TEXT}</span>
             </label>
             {problem && (
-              <p role="alert" className="mt-4 text-sm text-negative">
-                {problem}
+              <p id={problemId} role="alert" className="mt-4 text-sm text-negative">
+                {problem.text}
               </p>
             )}
             <Button
