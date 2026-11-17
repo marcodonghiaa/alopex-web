@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { GroupSummary } from "@/lib/import/splitwise-balances";
-import type { SplitPerson } from "@/lib/splits";
+import { NO_NAME, type SplitPerson } from "@/lib/splits";
 import type { TxKey } from "@/lib/transactions";
 
 /** A recent incoming payment nobody has checked yet (see payback_candidates in the backend). */
@@ -57,7 +57,8 @@ export function debtorsFrom(
       hit.fromSplits ||= fromSplits;
     } else byName.set(key, { name: name.trim(), open: value, splitwiseOnly: false, fromSplits });
   };
-  for (const p of people) if (p.open > 0) add(p.name, p.open, true);
+  // Bills with no name ("Not assigned") have nobody to pay them back.
+  for (const p of people) if (p.open > 0 && p.name !== NO_NAME) add(p.name, p.open, true);
   for (const g of groups) {
     const r2e = rate(g.currency);
     if (r2e === null) continue;

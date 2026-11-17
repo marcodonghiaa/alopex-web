@@ -8,7 +8,7 @@ import {
   type PaybackCandidate,
 } from "@/lib/payback";
 import type { GroupSummary } from "@/lib/import/splitwise-balances";
-import type { SplitPerson } from "@/lib/splits";
+import { NO_NAME, type SplitPerson } from "@/lib/splits";
 
 const person = (name: string, open: number): SplitPerson => ({ name, open, rows: [] });
 const group = (currency: string, people: GroupSummary["people"]): GroupSummary => ({
@@ -89,6 +89,12 @@ describe("debtorsFrom", () => {
       rate,
     );
     expect(out).toEqual([{ name: "Crifiore", open: 320, splitwiseOnly: true }]);
+  });
+
+  it("leaves out bills with no name: nobody can pay those back", () => {
+    expect(debtorsFrom([person(NO_NAME, 50), person("Anna", 10)], [], rate)).toEqual([
+      { name: "Anna", open: 10, splitwiseOnly: false },
+    ]);
   });
 
   it("rounds to the cent and drops what is under a cent", () => {
