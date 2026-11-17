@@ -1,5 +1,6 @@
 import type { EventKind, InvestmentEvent } from "@/lib/investment-events";
 import type { Trade } from "@/lib/trades";
+import { cutChars } from "@/lib/transactions";
 import { parseDate, splitLine, unheldKeys } from "./csv";
 import type { BrokerParser } from "./types";
 
@@ -131,7 +132,7 @@ export const tradeRepublic: BrokerParser = {
           if (get("currency") !== "EUR")
             return void errors.push(`${line_}: the price isn't in EUR.`);
           const description = get("description").trim();
-          if (description) note = description.slice(0, 200);
+          if (description) note = cutChars(description, 200);
         } else if (PAID_BACK.has(type)) {
           price = Math.abs(amount) / Math.abs(shares);
           note = "Paid back";
@@ -208,7 +209,7 @@ export const tradeRepublic: BrokerParser = {
           orig_amount: orig !== "" && Number.isFinite(Number(orig)) ? Number(orig) : null,
           orig_currency: /^[A-Z]{3}$/.test(origCurrency) ? origCurrency : null,
           fx_rate: rate !== "" && Number(rate) > 0 ? Number(rate) : null,
-          raw_type: `${category}|${type}`.slice(0, 80),
+          raw_type: cutChars(`${category}|${type}`, 80),
           source: "trade_republic",
           external_id: id,
         };

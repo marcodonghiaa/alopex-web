@@ -186,6 +186,12 @@ describe("Trade Republic, trades", () => {
     expect(errors).toEqual([]);
     expect(trades[0]?.note).toBe("Savings\nplan");
   });
+
+  it("a long description is cut to 200 characters without splitting an emoji or an accent", () => {
+    const description = `${"a".repeat(198)}é😀 and more`;
+    const { trades } = parseTradesCsv(file({ shares: "1", price: "10", description }), stock);
+    expect(trades[0]?.note).toBe(`${"a".repeat(198)}é😀`);
+  });
 });
 
 describe("Trade Republic, crypto", () => {
