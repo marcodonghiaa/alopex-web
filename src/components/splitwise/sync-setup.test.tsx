@@ -608,3 +608,75 @@ describe("Delete synced data after a disconnect", () => {
     expect(await screen.findByRole("button", { name: DELETE })).toBeDisabled();
   });
 });
+
+// polish-3 #9: every action shows that it runs, and refreshes what it changed
+describe("Pending states and refreshes", () => {
+  const held = () => {
+    let finish: (v: unknown) => void = () => {};
+    const promise = new Promise((resolve) => (finish = resolve));
+    return { promise, finish: (v: unknown) => finish(v) };
+  };
+  const refreshed = (spy: { mock: { calls: Array<Array<unknown>> } }) =>
+    spy.mock.calls.map((c) => JSON.stringify((c[0] as { queryKey: unknown }).queryKey));
+  const everything = ['["splitwise-connection"]', '["splitwise-review"]', '["transactions"]'];
+
+  it("Connect says it checks the key, then refreshes the connection", async () => {
+    const call = held();
+    invoke.mockReturnValueOnce(call.promise);
+    invoke.mockResolvedValue(ok({ new: 0, adopted: 0, review: 0, deleted: 0 }));
+    rpc.mockResolvedValue(notConnected());
+    renderSetup();
+    const spy = vi.spyOn(client, "invalidateQueries");
+    await userEvent.click(await screen.findByRole("button", { name: "Connect Splitwise" }));
+    const dialog = screen.getByRole("dialog", { name: "Connect Splitwise" });
+    await userEvent.type(within(dialog).getByLabelText("API key"), "abcdefghijkl");
+    await userEvent.click(within(dialog).getByRole("checkbox"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    expect(within(dialog).getByRole("button", { name: "Checking the key…" })).toBeDisabled();
+    call.finish(ok({ displayName: "Sam" }));
+    await within(dialog).findByText("Connected as Sam");
+    expect(refreshed(spy)).toContain('["splitwise-connection"]');
+  });
+
+  it("Sync now says it syncs, then refreshes everything", async () => {
+    const call = held();
+    invoke.mockReturnValueOnce(call.promise);
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    const spy = vi.spyOn(client, "invalidateQueries");
+    await userEvent.click(await screen.findByRole("button", { name: "Sync now" }));
+    expect(screen.getByRole("button", { name: "Syncing…" })).toBeDisabled();
+    call.finish(ok({ new: 0, adopted: 0, review: 0, deleted: 0 }));
+    await waitFor(() => expect(refreshed(spy)).toEqual(expect.arrayContaining(everything)));
+  });
+
+  it("Disconnect says it disconnects, then refreshes everything", async () => {
+    const call = held();
+    invoke.mockReturnValueOnce(call.promise);
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    const spy = vi.spyOn(client, "invalidateQueries");
+    await userEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
+    const dialog = screen.getByRole("dialog", { name: "Disconnect Splitwise?" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Disconnect" }));
+    expect(within(dialog).getByRole("button", { name: "Disconnecting…" })).toBeDisabled();
+    call.finish(ok({ disconnected: true, deleted: 0 }));
+    await waitFor(() => expect(refreshed(spy)).toEqual(expect.arrayContaining(everything)));
+  });
+
+  it("Delete synced data says it deletes, then refreshes everything", async () => {
+    const call = held();
+    invoke.mockReturnValueOnce(call.promise);
+    rpc.mockResolvedValue(notConnected(true));
+    renderSetup();
+    const spy = vi.spyOn(client, "invalidateQueries");
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Delete synced Splitwise data" }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "Delete synced Splitwise data?" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    expect(within(dialog).getByRole("button", { name: "Deleting…" })).toBeDisabled();
+    call.finish(ok({ disconnected: true, deleted: 0 }));
+    await waitFor(() => expect(refreshed(spy)).toEqual(expect.arrayContaining(everything)));
+  });
+});
