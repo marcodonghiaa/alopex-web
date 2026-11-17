@@ -271,6 +271,13 @@ function ReviewRow({
         </div>
         <div className="shrink-0 text-right">
           <p className="font-figure text-[0.9375rem]">{moneyAmount(item.cost, item.currency)}</p>
+          {/* Several payers: the suggestion is for what you paid, so it can be checked. */}
+          {item.kind === "multi_payer" && (
+            <p className="text-xs text-muted-foreground">
+              you paid{" "}
+              <span className="font-figure">{moneyAmount(item.my_paid, item.currency)}</span>
+            </p>
+          )}
           {canCount(item.kind) && (
             <p className="text-xs text-muted-foreground">
               your share{" "}

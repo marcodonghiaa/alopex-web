@@ -611,3 +611,26 @@ describe("To link load error", () => {
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   });
 });
+
+// polish-4 #18: with several payers the suggestion is for what you paid, so show it
+describe("What you paid", () => {
+  it("shows it for several payers", async () => {
+    tables.splitwise_review = {
+      data: [
+        item({ kind: "multi_payer", description: "Trip", cost: 180, my_paid: 100, my_share: 60 }),
+      ],
+      error: null,
+    };
+    renderList();
+    const row = await screen.findByRole("listitem", { name: "Trip" });
+    expect(row).toHaveTextContent("you paid €100.00");
+    expect(row).toHaveTextContent("your share €60.00");
+  });
+
+  it("leaves it out when you paid it all", async () => {
+    tables.splitwise_review = { data: [item()], error: null };
+    renderList();
+    const row = await screen.findByRole("listitem", { name: "Groceries" });
+    expect(row).not.toHaveTextContent("you paid");
+  });
+});
