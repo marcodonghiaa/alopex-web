@@ -185,7 +185,7 @@ describe("Ledger Live operations export", () => {
     expect(parseTradesCsv(row(longTicker), ctx).errors).toEqual([
       "Line 2: couldn't read this IN row.",
     ]);
-    const longHash = `2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,1,,${"a".repeat(190)},A,a,USD,1,1`;
+    const longHash = `2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,1,,${"a".repeat(195)},A,a,USD,1,1`;
     expect(parseTradesCsv(row(longHash), ctx).errors).toEqual([
       "Line 2: couldn't read this IN row.",
     ]);
