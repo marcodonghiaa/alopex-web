@@ -76,6 +76,10 @@ export function InvestmentIncome({
           </div>
         ))}
       </GroupedList>
+      <p className="mt-2 px-4 text-xs text-muted-foreground">
+        Taxes and fees not tied to a holding, like stamp duty, count here but not in any holding's
+        return.
+      </p>
     </section>
   );
 }

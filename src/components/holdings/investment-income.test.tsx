@@ -42,6 +42,21 @@ describe("InvestmentIncome", () => {
     expect(screen.queryByText("Interest")).toBeNull();
   });
 
+  it("says account taxes and fees count here but not in any holding's return", () => {
+    render(
+      <InvestmentIncome
+        page="stock"
+        today="2026-11-17"
+        events={[ev({ kind: "tax", asset_kind: null, key: null, amount_eur: -1 })]}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "Taxes and fees not tied to a holding, like stamp duty, count here but not in any holding's return.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("coins' events go to Crypto, shares' and cash to Portfolio", () => {
     const coin = ev({ asset_kind: "crypto", key: "BTC" });
     const cash = ev({ kind: "interest", asset_kind: null, key: null });
