@@ -78,13 +78,14 @@ vi.mock("@/integrations/supabase/client", () => {
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { ImportTrades } from "./import-trades";
+import type { Trade } from "@/lib/trades";
 
-function open(kind: "stock" | "crypto") {
+function open(kind: "stock" | "crypto", saved: Array<Trade> = []) {
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <ImportTrades kind={kind} saved={[]} />
+      <ImportTrades kind={kind} saved={saved} />
     </QueryClientProvider>,
   );
   fireEvent.click(screen.getByText("Import trades from CSV"));
@@ -199,6 +200,30 @@ describe("ImportTrades", () => {
       ["asset_symbol", "ETH"],
       ["source", "Manual"],
     ]);
+  });
+
+  it("a coin's Ledger count leaves out what you traded elsewhere", async () => {
+    const onCoinbase: Trade = {
+      kind: "crypto",
+      key: "BTC",
+      side: "buy",
+      trade_date: "2026-01-02",
+      shares: 1,
+      price_eur: 40000,
+      fee_eur: 0,
+      source: "coinbase",
+      external_id: "cb-1",
+    };
+    open("crypto", [onCoinbase]);
+    fireEvent.click(screen.getByRole("button", { name: /Ledger Live/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/ledger_live.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "ops.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
+    // BTC's Ledger holding (0.008) already matches its Ledger moves: only ETH changes.
+    await waitFor(() => expect(db.rpc).toHaveLength(1));
+    expect(db.rpc[0]![1]).toMatchObject({ p_key: "ETH" });
   });
 
   it("a Ledger Live file pasted as a spreadsheet is read the same way", async () => {
