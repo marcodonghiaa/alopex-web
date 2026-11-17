@@ -237,9 +237,25 @@ describe("ImportTrades", () => {
     expect(screen.getByText("By holding")).toBeTruthy();
     // Listed under By holding, and under Share counts corrected too.
     expect(screen.getAllByText("Example World ETF")).toHaveLength(2);
-    expect(screen.getByText("Left out")).toBeTruthy();
+    expect(screen.getByText("Notes")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Save 4 trades" })).toBeTruthy();
     expect(screen.queryByText("How to get the file")).toBeNull();
+  });
+
+  // Some notes are about rows that are imported ("counted at €0"): not all were left out.
+  it("the file's notes sit under Notes, not Left out", async () => {
+    open("crypto");
+    pickText(
+      /Ledger Live/,
+      [
+        readFileSync("src/lib/brokers/fixtures/ledger_live.csv", "utf8").split("\n")[0],
+        "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0.008,,h1,Bitcoin 1,a,USD,,",
+      ].join("\n"),
+    );
+    await screen.findByRole("button", { name: "Save 1 trade" });
+    const note = screen.getByText("1 operation had no value in the file, so it was counted at €0.");
+    expect(note.closest("div")!.parentElement!.previousElementSibling!.textContent).toBe("Notes");
+    expect(screen.queryByText("Left out")).toBeNull();
   });
 
   it("a Ledger Live file is priced in euro, saved, and sets your wallet coins, not synced ones", async () => {

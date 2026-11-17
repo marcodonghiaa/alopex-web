@@ -683,7 +683,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
 
             {parsed.notes.length > 0 && (
               <div>
-                <p className="px-1 pb-1.5 text-xs font-medium text-muted-foreground">Left out</p>
+                <p className="px-1 pb-1.5 text-xs font-medium text-muted-foreground">Notes</p>
                 <GroupedList className="border border-hairline">
                   {parsed.notes.map((note) => (
                     <div key={note} className={cn(row, "items-start text-sm")}>
