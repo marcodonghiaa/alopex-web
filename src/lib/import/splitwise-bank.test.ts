@@ -123,7 +123,7 @@ describe("fetchBankWindow", () => {
     expect(args("transactions", "range").at(-1)).toEqual([10_000, 10_000]);
   });
 
-  it("pages the rates in date order too", async () => {
+  it("pages the rates newest first too", async () => {
     answers.transactions = [{ data: [bankRow({ currency: "CHF" })], error: null }];
     const rates = Array.from({ length: 1000 }, () => ({
       currency: "CHF",
@@ -136,7 +136,26 @@ describe("fetchBankWindow", () => {
     ];
     const w = await fetchBankWindow(["2026-11-10"], []);
     expect(w.fx).toHaveLength(1005);
-    expect(args("fx_rates", "order")[0]).toEqual(["date", { ascending: true }]);
+    expect(args("fx_rates", "order")[0]).toEqual(["date", { ascending: false }]);
     expect(w.capped).toBe(false);
+  });
+
+  // polish-3 round 2: too many rates keeps the newest, and the note dates from them
+  it("with too many rates, keeps the newest and says from when payments have one", async () => {
+    answers.transactions = [
+      { data: [bankRow({ currency: "CHF", booking_date: "2026-11-11" })], error: null },
+    ];
+    const page = {
+      data: Array.from({ length: 1000 }, () => ({
+        currency: "CHF",
+        date: "2026-11-03",
+        rate_to_eur: 1,
+      })),
+      error: null,
+    };
+    answers.fx_rates = Array.from({ length: 11 }, () => page);
+    const w = await fetchBankWindow(["2026-11-10"], []);
+    expect(w.capped).toBe(true);
+    expect(w.completeFrom).toBe("2026-11-04");
   });
 });

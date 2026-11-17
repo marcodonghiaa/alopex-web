@@ -83,16 +83,22 @@ export async function fetchBankWindow(
             .in("currency", wanted)
             .gte("date", addDays(from, -FX_DAYS_BEFORE))
             .lte("date", to)
-            .order("date", { ascending: true })
+            // Newest first, like the bank: if there are too many, the oldest are left out.
+            .order("date", { ascending: false })
             .order("currency")
             .range(a, b),
         );
-  const capped = bank.capped || fx.capped;
+  // Each read that was cut is complete from the day after the last date it reached (rows on that
+  // date may be cut); payments are fully covered from the later of the two.
+  const after = (cut: boolean, last: string | undefined) => (cut && last ? addDays(last, 1) : null);
+  const froms = [
+    after(bank.capped, bank.rows[bank.rows.length - 1]?.booking_date ?? undefined),
+    after(fx.capped, fx.rows[fx.rows.length - 1]?.date),
+  ].filter((d): d is string => d !== null);
   return {
     bank: bank.rows.flatMap((r) => toBankTx(r) ?? []),
     fx: fx.rows,
-    capped,
-    // The last date read may have more rows that were cut: complete only from the day after.
-    completeFrom: capped ? addDays(bank.rows[bank.rows.length - 1]?.booking_date ?? from, 1) : null,
+    capped: bank.capped || fx.capped,
+    completeFrom: froms.length ? froms.sort()[froms.length - 1]! : null,
   };
 }
