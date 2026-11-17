@@ -158,9 +158,10 @@ export function ToLink({ connected }: { connected: boolean }) {
             </p>
           )}
           {bank.data?.completeFrom && (
+            // A gap, not a range: rows from the partly read day before it can still be suggested.
             <p className="mb-2 px-1 text-xs text-muted-foreground">
-              Suggestions and Find in bank only cover bank payments from{" "}
-              {shortDate(bank.data.completeFrom)} on.
+              Bank payments before {shortDate(bank.data.completeFrom)} may be missing from
+              suggestions and Find in bank.
             </p>
           )}
           {count > items.length && (

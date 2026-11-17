@@ -373,11 +373,41 @@ describe("ToLink", () => {
       error: null,
     };
     renderList();
-    // polish-3 round 2: Find in bank searches the same rows, so the note must not send you there
-    const note = await screen.findByText(/^Suggestions and Find in bank only cover/);
+    // polish-3 round 2: Find in bank searches the same rows, so the note must not send you there.
+    // polish-4 #30: a gap, not a range: rows from the partly read day still show.
+    const note = await screen.findByText(/^Bank payments before/);
     expect(note.textContent).toBe(
-      "Suggestions and Find in bank only cover bank payments from 6 Nov on.",
+      "Bank payments before 6 Nov may be missing from suggestions and Find in bank.",
     );
+  });
+
+  // polish-4 #30: the note must not contradict a suggestion from the partly read day
+  it("keeps a suggestion from before the complete date without contradicting it", async () => {
+    tables.splitwise_review = {
+      data: [item({ booking_date: "2026-11-05", cost: 33, my_paid: 33 })],
+      error: null,
+      count: 1,
+    };
+    tables.transactions = {
+      data: [
+        bankRow({
+          entry_reference: "shop",
+          booking_date: "2026-11-05",
+          amount: 33,
+          creditor_name: "Shop 15",
+        }),
+        ...Array.from({ length: 999 }, (_, i) =>
+          bankRow({ entry_reference: `e${i}`, booking_date: "2026-11-05", amount: 500 }),
+        ),
+      ],
+      error: null,
+    };
+    renderList();
+    const row = await screen.findByRole("listitem", { name: "Groceries" });
+    expect(await within(row).findByText("Shop 15")).toBeTruthy();
+    expect(row).toHaveTextContent("5 Nov");
+    const note = screen.getByText(/^Bank payments before 6 Nov/);
+    expect(note.textContent).not.toMatch(/only cover/);
   });
 
   // polish-3 #18: the rates fetched depend on the items' currencies, so the cache key does too
