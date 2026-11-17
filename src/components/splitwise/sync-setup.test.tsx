@@ -224,6 +224,50 @@ describe("Connect dialog", () => {
     expect(within(dialog).getByRole("button", { name: "Start sync" })).toBeEnabled();
   });
 
+  // polish-2 #4: the key leaves the page as soon as it is no longer needed
+  it("clears the key when the dialog closes with Esc", async () => {
+    const dialog = await open();
+    await userEvent.type(within(dialog).getByLabelText("API key"), "abcdefghijkl");
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await userEvent.click(screen.getByRole("button", { name: "Connect Splitwise" }));
+    const again = screen.getByRole("dialog", { name: "Connect Splitwise" });
+    expect(within(again).getByLabelText("API key")).toHaveValue("");
+  });
+
+  it("clears the key after connecting", async () => {
+    functions({
+      "splitwise-connect": [ok({ displayName: "Sam" })],
+      "sync-splitwise": [ok({ new: 0, adopted: 0, review: 0, deleted: 0 })],
+    });
+    const dialog = await open();
+    await userEvent.type(within(dialog).getByLabelText("API key"), "abcdefghijkl");
+    await userEvent.click(within(dialog).getByRole("checkbox"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    await within(dialog).findByText("Connected as Sam");
+    expect(document.body.innerHTML).not.toContain("abcdefghijkl");
+    expect([...document.querySelectorAll("input")].some((i) => i.value === "abcdefghijkl")).toBe(
+      false,
+    );
+  });
+
+  // polish-2 #4: a session without its second step gets the server's own words
+  it("shows the two-step sign-in refusal (403)", async () => {
+    functions({
+      "splitwise-connect": [
+        httpError(403, { error: "Enter your authenticator code first", code: "mfa_required" }),
+      ],
+    });
+    const dialog = await open();
+    await userEvent.type(within(dialog).getByLabelText("API key"), "abcdefghijkl");
+    await userEvent.click(within(dialog).getByRole("checkbox"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "Enter your authenticator code first",
+    );
+    expect(within(dialog).queryByText(/Connected as/)).toBeNull();
+  });
+
   it("says up front that it is off in the demo, and Connect stays off", async () => {
     demo.on = true;
     const dialog = await open();
