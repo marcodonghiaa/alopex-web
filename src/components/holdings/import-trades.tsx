@@ -258,6 +258,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     <Dialog
       open={open}
       onOpenChange={(next) => {
+        // A save finishing later would close and clear whatever is open then: wait for it.
+        if (!next && saving.current) return;
         setOpen(next);
         if (!next) reset();
       }}

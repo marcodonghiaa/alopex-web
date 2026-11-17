@@ -378,6 +378,28 @@ describe("ImportTrades", () => {
     expect(screen.queryByText("Reading…")).toBeNull();
   });
 
+  it("the dialog can't be closed while saving, and closes once saved", async () => {
+    let release!: () => void;
+    db.insertGate = new Promise((r) => (release = r));
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.getByText("ops.csv")).toBeTruthy();
+    release();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(db.inserted).toHaveLength(7);
+  });
+
+  it("Esc closes the dialog when nothing is saving", async () => {
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    await screen.findByRole("button", { name: "Save 7 trades" });
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
   it("a second click while saving saves nothing twice", async () => {
     let release!: () => void;
     db.insertGate = new Promise((r) => (release = r));
