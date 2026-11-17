@@ -42,7 +42,7 @@ typography:
     fontSize: "2rem"
     fontWeight: 600
     lineHeight: 1.15
-    letterSpacing: "-0.03em"
+    letterSpacing: "normal"
   title:
     fontFamily: "Geist Variable, -apple-system, BlinkMacSystemFont, system-ui, sans-serif"
     fontSize: "1.25rem"
@@ -224,12 +224,13 @@ A cold neutral world: snow ground, cold ink for controls, one warm Ember accent,
 ### Hierarchy
 - **Display** (Geist 700, tabular figures, clamp 40px to 60px, line-height 1, -0.02em): the headline figure only. Symbol, whole units and cents at one size; symbol muted, cents at 55% opacity.
 - **Delta** (mono 13px): the change line under the figure, in gain or loss, with its range label in sans muted.
-- **Headline** (sans 600, 32px, 1.15, -0.03em): the large title on list screens without one agreed total (Transactions, Reports, Splitwise, Rules, and Income above its month switcher). 24px in the mobile menu sheet.
+- **Headline** (sans 600, 32px, 1.15, normal letter-spacing like every title): the large title on list screens without one agreed total (Transactions, Reports, Splitwise, Rules, and Income above its month switcher). 24px in the mobile menu sheet.
 - **Title** (600, 20px, -0.02em): the month name in the month switcher.
 - **Section** (600, 18px): section headings above grouped lists (Breakdown).
 - **Body** (400 or 500, 15px): row names, nav items, change lines. 14px for secondary copy.
 - **Figure** (mono 400, 15px, -0.02em): amounts on the right of a row. Secondary figures (percent of total, legend percentages) drop to 12-14px in muted ink.
-- **Label** (500, 13px, 1.25): grouped-list section titles and segment labels. Sentence case, muted.
+- **Label** (500, 13px, 1.25): day headers, counts and segment labels. Sentence case, muted.
+- **Section title** (sans 600, 18px, ink): every section heading, as Net Worth's "Breakdown" card (`SectionTitle`). Page titles differ in size only, never in font or letter-spacing.
 - **Caption** (400, 12px): trust note, FX rate line, sidebar group names (500).
 - **Eyebrow** (mono 11px, 0.08em, uppercase, muted): section indices and small labels ("01 OVERVIEW").
 - **Tab** (500, 11px): mobile tab bar labels under 24px icons.
@@ -284,7 +285,7 @@ The screen's one amount in the display style (`HeadlineFigure`): symbol muted, w
 Skeleton blocks in Fill at the control radius. Buttons show a spinner in place of their icon.
 
 ### Grouped Lists and Rows
-White (Surface) fill, 8px corners, hairline dividers, clipped. Rows are 16px by 12px with a 40px round avatar on the left, name (15px 500) over a muted secondary line (13px), and the amount right-aligned in the figure style. Section titles sit above the list in the label style, inset 16px.
+White (Surface) fill, 8px corners, hairline dividers, clipped. Rows are 16px by 12px with a 40px round avatar on the left, name (15px 500) over a muted secondary line (13px), and the amount right-aligned in the figure style. Section titles sit above the list in the section-title style; day headers and counts keep the label style, inset 16px (`SectionTitle variant="label"`). Percents in rows have one decimal; amounts show cents (Net Worth's Breakdown rounds to euros).
 
 ### Merchant Avatar
 A 40px circle with the merchant's initial (15px 600, ink) on a 22% wash of the category colour mixed into the surface. Neutral rows (Breakdown) use a Fill circle with an 18px line icon.
