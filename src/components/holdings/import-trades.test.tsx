@@ -462,4 +462,20 @@ describe("ImportTrades", () => {
       ["net-worth-daily"],
     ]);
   });
+
+  it("a slow save shows a spinner, disables Save, and a double click saves once", async () => {
+    const release = slowInsert();
+    open("stock");
+    const save = await pickTradeRepublic();
+    expect(save.querySelector(".animate-spin")).toBeNull();
+    fireEvent.click(save);
+    // A real double click: the second press lands a moment after the first.
+    await new Promise((r) => setTimeout(r, 5));
+    fireEvent.click(save);
+    expect(save).toBeDisabled();
+    expect(save.querySelector(".animate-spin")).not.toBeNull();
+    release();
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(db.inserted).toHaveLength(4);
+  });
 });
