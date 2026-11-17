@@ -76,6 +76,15 @@ describe("SyncSetup when not connected", () => {
     expect(onImportFile).toHaveBeenCalled();
   });
 
+  it("adds no note to the file import before connecting", async () => {
+    rpc.mockResolvedValue(notConnected());
+    renderSetup();
+    await screen.findByRole("button", { name: "Connect Splitwise" });
+    expect(
+      screen.getByRole("button", { name: "Import a file instead" }),
+    ).not.toHaveAccessibleDescription();
+  });
+
   // protects=an older backend without the sync still shows the page; fails_when=it crashes
   it("reads a backend without the sync as not connected", async () => {
     rpc.mockResolvedValue({ data: null, error: { message: "Could not find the function" } });
@@ -231,6 +240,17 @@ describe("SyncSetup when connected", () => {
     expect(screen.getByText("Synced 5 min ago")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Connect Splitwise" })).toBeNull();
     expect(screen.getByRole("button", { name: "Import a file instead" })).toBeTruthy();
+  });
+
+  // polish-1 #2: a file imported while connected must not double what the sync brought in
+  it("says the file import skips what the sync already brought in", async () => {
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    await screen.findByText("Splitwise · Sam");
+    const button = screen.getByRole("button", { name: "Import a file instead" });
+    expect(button).toHaveAccessibleDescription(
+      "Expenses the sync already brought in are skipped, so only what it can't see is added.",
+    );
   });
 
   it("syncs now and says what came in", async () => {

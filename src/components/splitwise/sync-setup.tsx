@@ -20,7 +20,8 @@ const ROW =
 
 /**
  * Setup for Splitwise, after the balances: a quiet Connect row (like Connect a bank on Accounts)
- * or, once connected, the sync's status with Sync now and Disconnect. The CSV import stays.
+ * or, once connected, the sync's status with Sync now and Disconnect. The CSV import stays (the
+ * backend skips the shares the sync already has, so a file never doubles them).
  */
 export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
   const connection = useSplitwiseConnection();
@@ -47,10 +48,25 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
             </button>
           )
         )}
-        <button type="button" onClick={onImportFile} className={ROW}>
-          <Upload aria-hidden className="size-4" />
-          Import a file instead
-        </button>
+        <div>
+          <button
+            type="button"
+            onClick={onImportFile}
+            className={ROW}
+            aria-describedby={connected ? "splitwise-file-while-synced" : undefined}
+          >
+            <Upload aria-hidden className="size-4" />
+            Import a file instead
+          </button>
+          {connected && (
+            <p
+              id="splitwise-file-while-synced"
+              className="px-4 pb-3 text-xs text-muted-foreground sm:px-5"
+            >
+              Expenses the sync already brought in are skipped, so only what it can't see is added.
+            </p>
+          )}
+        </div>
       </GroupedList>
       <ConnectDialog
         open={connecting !== null}
