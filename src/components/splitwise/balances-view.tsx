@@ -40,9 +40,12 @@ function GroupCard({
         <Users className="size-[18px]" />
       </span>
       <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-[0.9375rem] font-medium">
-          {g.group}
-          {showCurrency && <span className="text-muted-foreground"> · {g.currency}</span>}
+        {/* The currency stays visible: on a phone the name's ellipsis would eat it first. */}
+        <span className="flex min-w-0 text-[0.9375rem] font-medium">
+          <span className="truncate">{g.group}</span>
+          {showCurrency && (
+            <span className="shrink-0 whitespace-pre text-muted-foreground"> · {g.currency}</span>
+          )}
         </span>
         <span className="block truncate text-[0.8125rem] font-normal text-muted-foreground">
           {meta}

@@ -90,4 +90,23 @@ describe("BalancesView with several currencies in a group", () => {
     expect(screen.getByRole("heading", { name: /^trip\s*· USD/ })).toBeTruthy();
     expect(screen.getByRole("heading", { name: /^berkeley\d/ })).toBeTruthy();
   });
+
+  // polish-4 #4: a long name must not truncate away the currency that tells the cards apart
+  it("keeps the currency outside the name's ellipsis", () => {
+    const long = "Summer road trip across the whole of the west coast";
+    render(
+      <BalancesView
+        groups={[
+          { ...trip, group: long },
+          { ...group, group: long, currency: "EUR" },
+        ]}
+      />,
+    );
+    for (const cur of ["USD", "EUR"]) {
+      const label = screen.getByText(`· ${cur}`, { exact: false });
+      expect(label.closest(".truncate")).toBeNull();
+      expect(label.className).toContain("shrink-0");
+      expect(screen.getAllByText(long)[0]!.className).toContain("truncate");
+    }
+  });
 });
