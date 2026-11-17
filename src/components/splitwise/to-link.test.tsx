@@ -378,6 +378,32 @@ describe("ToLink", () => {
     ).toBeTruthy();
   });
 
+  // polish-3 #18: the rates fetched depend on the items' currencies, so the cache key does too
+  it("fetches rates again when an item in a new currency arrives in the same dates", async () => {
+    tables.splitwise_review = { data: [item()], error: null };
+    tables.transactions = {
+      data: [bankRow(), bankRow({ entry_reference: "e2", amount: 45, creditor_name: "Airline" })],
+      error: null,
+    };
+    tables.fx_rates = {
+      data: [{ currency: "USD", date: "2026-11-01", rate_to_eur: 0.9 }],
+      error: null,
+    };
+    renderList();
+    const groceries = await screen.findByRole("listitem", { name: "Groceries" });
+    await within(groceries).findByText("Market");
+    tables.splitwise_review = {
+      data: [
+        item(),
+        item({ id: "r2", description: "Trip", cost: 50, my_paid: 50, currency: "USD" }),
+      ],
+      error: null,
+    };
+    await client.invalidateQueries({ queryKey: ["splitwise-review"] });
+    const trip = await screen.findByRole("listitem", { name: "Trip" });
+    expect(await within(trip).findByText("Airline")).toBeTruthy();
+  });
+
   it("says what to do when no payment is around", async () => {
     tables.splitwise_review = { data: [item()], error: null };
     renderList();

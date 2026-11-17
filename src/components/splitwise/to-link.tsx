@@ -43,9 +43,11 @@ export function ToLink({ connected }: { connected: boolean }) {
   const review = useQuery({ queryKey: REVIEW_KEY, queryFn: fetchReview });
   const items = useMemo(() => review.data?.items ?? [], [review.data]);
   const dates = items.map((i) => i.booking_date).sort();
+  // Every input of the fetch: the window's ends and the currencies it reads rates for.
+  const currencies = [...new Set(items.map((i) => i.currency))].sort().join(",");
   // Under "transactions" so the import's refresh keys refetch it after a link.
   const bank = useQuery({
-    queryKey: ["transactions", "splitwise-to-link", dates[0], dates[dates.length - 1]],
+    queryKey: ["transactions", "splitwise-to-link", dates[0], dates[dates.length - 1], currencies],
     queryFn: () =>
       fetchBankWindow(
         items.map((i) => i.booking_date),
