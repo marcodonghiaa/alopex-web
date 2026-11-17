@@ -822,7 +822,7 @@ describe("ImportTrades", () => {
       await screen.findByRole("button", { name: "Save 5 trades" });
       const rows = within(corrected()).getAllByRole("listitem");
       expect(rows.map((r) => r.textContent)).toEqual([
-        "EthereumManual · Has 1 trade you added by hand: its return will show as not matching until you remove it0.4 → 0.4988",
+        "EthereumManual · Has 1 trade not from Ledger Live: its return will show as not matching until you remove it0.4 → 0.4988",
       ]);
     });
 
@@ -839,12 +839,12 @@ describe("ImportTrades", () => {
       open("crypto", [byHand("2025-11-01"), byHand("2025-12-01")]);
       pick(/Ledger Live/, "ledger_live.csv");
       await screen.findByRole("button", { name: "Save 5 trades" });
-      expect(within(corrected()).getByText(/Has 2 trades you added by hand/).textContent).toBe(
-        "Manual · Has 2 trades you added by hand: its return will show as not matching until you remove them",
+      expect(within(corrected()).getByText(/Has 2 trades not from Ledger Live/).textContent).toBe(
+        "Manual · Has 2 trades not from Ledger Live: its return will show as not matching until you remove them",
       );
     });
 
-    it("trades from this file's own source don't count as added by hand", async () => {
+    it("trades from this file's own source aren't counted", async () => {
       const fromLedger: Trade = {
         kind: "crypto",
         key: "ETH",
@@ -859,7 +859,7 @@ describe("ImportTrades", () => {
       open("crypto", [fromLedger]);
       pick(/Ledger Live/, "ledger_live.csv");
       await screen.findByRole("button", { name: "Save 5 trades" });
-      expect(within(corrected()).queryByText(/added by hand/)).toBeNull();
+      expect(within(corrected()).queryByText(/not from Ledger Live/)).toBeNull();
     });
 
     describe("a holding the file sets that has other trades, its amount unchanged", () => {
@@ -891,7 +891,7 @@ describe("ImportTrades", () => {
             .getAllByRole("listitem")
             .map((r) => r.textContent),
         ).toEqual([
-          "EthereumManual · Has 1 trade you added by hand: its return will show as not matching until you remove it",
+          "EthereumManual · Has 1 trade not from Ledger Live: its return will show as not matching until you remove it",
         ]);
       });
 
@@ -904,7 +904,7 @@ describe("ImportTrades", () => {
             .getAllByRole("listitem")
             .map((r) => r.textContent),
         ).toEqual([
-          "BitcoinLedger · Has 1 trade you added by hand: its return will show as not matching until you remove it",
+          "BitcoinLedger · Has 1 trade not from Ledger Live: its return will show as not matching until you remove it",
         ]);
       });
 

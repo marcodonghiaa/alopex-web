@@ -213,7 +213,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     return out;
   }, [parsed, saved, wallet, fileBroker]);
   const otherWarning = (n: number) =>
-    `Has ${plural(n, "trade")} you added by hand: its return will show as not matching until you remove ${n === 1 ? "it" : "them"}`;
+    `Has ${plural(n, "trade")} not from ${fileBroker?.name}: its return will show as not matching until you remove ${n === 1 ? "it" : "them"}`;
   const toCheck = [...otherTrades.keys()].filter((key) => !updates.some((u) => u.key === key));
 
   // Two clicks before a re-render would both start a save: only the first one counts.
