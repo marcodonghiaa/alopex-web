@@ -75,7 +75,7 @@ export function debtorsFrom(
     .sort((a, b) => b.open - a.open || a.name.localeCompare(b.name));
 }
 
-// Lower case, no accents, words only: "Cristian  FIÒRE." → ["cristian", "fiore"].
+// Lower case, no accents, words only: "Mario  VÈRDI." → ["mario", "verdi"].
 const words = (name: string): Array<string> =>
   name
     .normalize("NFD")
@@ -129,8 +129,8 @@ const isCompany = (p: Array<string>): boolean => {
 /**
  * Whether the bank's payer name could be the contact you wrote down. Generous on purpose: it only
  * puts a question to you. Matches "Anna" to "Anna Rossi" (one word: a whole word of the payer's),
- * "Cri Fiore" to "Cristian Fiore" (several words: each starts a different word of the payer's, 3+
- * letters, the whole word, or an initial next to a whole word), and run-together nicknames like "Crifiore" (the start of the first
+ * "Mar Verdi" to "Mario Verdi" (several words: each starts a different word of the payer's, 3+
+ * letters, the whole word, or an initial next to a whole word), and run-together nicknames like "Marverdi" (the start of the first
  * name plus the surname). A company payer never matches.
  */
 export function namesLookAlike(payer: string | null, contact: string): boolean {
@@ -140,7 +140,7 @@ export function namesLookAlike(payer: string | null, contact: string): boolean {
   if (p.length === 0 || c.length === 0 || isCompany(p)) return false;
   const used = new Set<number>();
   const several = c.length > 1;
-  // An initial ("C. Fiore", "Luca M") stands for any word starting with it, but only next to a
+  // An initial ("M. Verdi", "Luca M") stands for any word starting with it, but only next to a
   // word of 2+ letters that matched (whole, or as a 3+ letter start): "A R" alone is too little.
   const initial = (a: string, b: string) => a.length === 1 && b.startsWith(a);
   let whole = false;
@@ -160,7 +160,7 @@ export function namesLookAlike(payer: string | null, contact: string): boolean {
   const nick = c[0];
   if (several || p.length < 2 || nick === undefined) return false;
   if (nick === p.join("")) return true;
-  // First-name start + surname, either order of the payer's words ("Fiore Cristian" too).
+  // First-name start + surname, either order of the payer's words ("Verdi Mario" too).
   const ends = [p[0] ?? "", p[p.length - 1] ?? ""];
   for (const [first, last] of [ends, [...ends].reverse()] as Array<[string, string]>) {
     if (last.length < 3 || !nick.endsWith(last)) continue;

@@ -11,21 +11,21 @@ const payment: PaybackCandidate = {
   amount: 320,
   currency: "EUR",
   amount_eur: 320,
-  payer: "CRISTIAN FIORE",
+  payer: "MARIO VERDI",
   linked_contact: null,
 };
-const cri: Debtor = { name: "Crifiore", open: 320, splitwiseOnly: false };
+const mario: Debtor = { name: "Marverdi", open: 320, splitwiseOnly: false };
 const anna: Debtor = { name: "Anna", open: 60, splitwiseOnly: false };
 const suggestion = (over: Partial<PaybackSuggestion> = {}): PaybackSuggestion => ({
   payment,
-  debtor: cri,
+  debtor: mario,
   reason: "name",
   ...over,
 });
 
 function view(
   s: Array<PaybackSuggestion>,
-  debtors: Array<Debtor> = [cri, anna],
+  debtors: Array<Debtor> = [mario, anna],
   busy: string | null = null,
 ) {
   const onConfirm = vi.fn();
@@ -58,8 +58,8 @@ describe("PaymentsToCheck", () => {
   // protects=the "Is this X?" question; fails_when=it hides the amount, payer, date or the reason
   it("asks about the payment with its amount, payer, date and why", () => {
     view([suggestion()]);
-    expect(screen.getByText("Is this Crifiore?")).toBeTruthy();
-    expect(screen.getByText(/from CRISTIAN FIORE/)).toBeTruthy();
+    expect(screen.getByText("Is this Marverdi?")).toBeTruthy();
+    expect(screen.getByText(/from MARIO VERDI/)).toBeTruthy();
     expect(screen.getByText("€320.00")).toBeTruthy();
     expect(screen.getByText(/The name looks alike · owes you €320.00/)).toBeTruthy();
     expect(screen.getByText(/15 Nov/)).toBeTruthy();
@@ -67,20 +67,20 @@ describe("PaymentsToCheck", () => {
 
   it("says why for a linked payer and an exact amount", () => {
     view([suggestion({ reason: "linked" })]);
-    expect(screen.getByText(/Crifiore paid you from this name before/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Not Crifiore" })).toBeTruthy();
+    expect(screen.getByText(/Marverdi paid you from this name before/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Not Marverdi" })).toBeTruthy();
   });
 
   it("an exact amount names the person it matches", () => {
     view([suggestion({ reason: "amount" })]);
-    expect(screen.getByText(/Same as what Crifiore owes you/)).toBeTruthy();
+    expect(screen.getByText(/Same as what Marverdi owes you/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Not a payback" })).toBeTruthy();
   });
 
   it("Yes confirms the suggested person; Not a payback dismisses", async () => {
     const { onConfirm, onDismiss } = view([suggestion()]);
-    await userEvent.click(screen.getByRole("button", { name: "Yes, it's Crifiore" }));
-    expect(onConfirm).toHaveBeenCalledWith(payment, cri);
+    await userEvent.click(screen.getByRole("button", { name: "Yes, it's Marverdi" }));
+    expect(onConfirm).toHaveBeenCalledWith(payment, mario);
     await userEvent.click(screen.getByRole("button", { name: "Not a payback" }));
     expect(onDismiss).toHaveBeenCalledWith(payment, suggestion());
   });
@@ -93,7 +93,7 @@ describe("PaymentsToCheck", () => {
     expect([...(select as HTMLSelectElement).options].map((o) => o.value)).toEqual(["Anna"]);
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onConfirm).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Yes, it's Crifiore" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Yes, it's Marverdi" })).toBeTruthy();
 
     await userEvent.click(screen.getByRole("button", { name: "Someone else" }));
     await userEvent.click(screen.getByRole("button", { name: "Confirm" }));
@@ -105,10 +105,10 @@ describe("PaymentsToCheck", () => {
   // Confirm silently records whoever is now first
   it("Someone else never records a person you didn't pick", async () => {
     const bob: Debtor = { name: "Bob", open: 30, splitwiseOnly: false };
-    const { onConfirm, setDebtors } = view([suggestion()], [cri, anna, bob]);
+    const { onConfirm, setDebtors } = view([suggestion()], [mario, anna, bob]);
     await userEvent.click(screen.getByRole("button", { name: "Someone else" }));
     await userEvent.selectOptions(screen.getByLabelText(/Who paid you/), "Bob");
-    setDebtors([cri, anna]); // Bob settled up elsewhere while the form was open
+    setDebtors([mario, anna]); // Bob settled up elsewhere while the form was open
     await userEvent.click(screen.getByRole("button", { name: "Confirm" }));
     expect(onConfirm).not.toHaveBeenCalled();
     // The form says so instead of showing Anna as if picked.
@@ -143,7 +143,7 @@ describe("PaymentsToCheck", () => {
     await userEvent.keyboard("{Escape}");
     expect(document.activeElement).toBe(screen.getAllByRole("button", { name: "Someone else" })[0]);
 
-    await userEvent.click(screen.getByRole("button", { name: "Yes, it's Crifiore" }));
+    await userEvent.click(screen.getByRole("button", { name: "Yes, it's Marverdi" }));
     setSuggestions([other]); // answered: its row leaves
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Yes, it's Anna" }));
   });
@@ -159,7 +159,7 @@ describe("PaymentsToCheck", () => {
   });
 
   it("no Someone else when nobody else owes you", () => {
-    view([suggestion()], [cri]);
+    view([suggestion()], [mario]);
     expect(screen.queryByRole("button", { name: "Someone else" })).toBeNull();
   });
 
@@ -170,14 +170,14 @@ describe("PaymentsToCheck", () => {
       payment: { ...payment, entry_reference: "p2", payer: "ANNA ROSSI" },
       debtor: anna,
     });
-    view([suggestion(), other], [cri, anna], "acc|p1");
+    view([suggestion(), other], [mario, anna], "acc|p1");
     for (const name of ["Yes, it's Anna", "Not a payback"])
       for (const b of screen.getAllByRole("button", { name })) expect(b).toBeDisabled();
   });
 
   it("while a payment saves, its buttons wait", () => {
-    view([suggestion()], [cri, anna], "acc|p1");
-    for (const name of ["Yes, it's Crifiore", "Someone else", "Not a payback"])
+    view([suggestion()], [mario, anna], "acc|p1");
+    for (const name of ["Yes, it's Marverdi", "Someone else", "Not a payback"])
       expect(screen.getByRole("button", { name })).toBeDisabled();
   });
 });

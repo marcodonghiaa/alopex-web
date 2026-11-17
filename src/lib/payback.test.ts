@@ -28,7 +28,7 @@ const pay = (over: Partial<PaybackCandidate> = {}): PaybackCandidate => ({
   amount: 320,
   currency: "EUR",
   amount_eur: 320,
-  payer: "CRISTIAN FIORE",
+  payer: "MARIO VERDI",
   linked_contact: null,
   ...over,
 });
@@ -36,44 +36,44 @@ const debtor = (name: string, open: number): Debtor => ({ name, open, splitwiseO
 
 describe("namesLookAlike", () => {
   it.each([
-    ["CRISTIAN FIORE", "Crifiore"],
-    ["Fiore Cristian", "Crifiore"],
-    ["Cristian Fiore", "cristianfiore"],
+    ["MARIO VERDI", "Marverdi"],
+    ["Verdi Mario", "Marverdi"],
+    ["Mario Verdi", "marioverdi"],
     ["Anna Rossi", "Anna"],
     ["ANNA  ROSSÌ.", "anna rossi"],
-    ["Cristian Fiore", "Cri Fiore"],
+    ["Mario Verdi", "Mar Verdi"],
     ["Maria José García", "Jose Garcia"],
   ])("%s could be %s", (payer, contact) => expect(namesLookAlike(payer, contact)).toBe(true));
 
   it.each([
-    ["Cristian Fiore", "Anna"],
-    ["Cristian Fiore", "Cr"],
-    ["Cristian Fiore", "Fiorella"],
-    ["Cristian Fiore", "Cristian Fiore Rossi"],
+    ["Mario Verdi", "Anna"],
+    ["Mario Verdi", "Ma"],
+    ["Mario Verdi", "Verdiana"],
+    ["Mario Verdi", "Mario Verdi Rossi"],
     ["Anna", "Annabella"],
     ["Anna Rossi", "Aross"],
     [null, "Anna"],
     ["...", "Anna"],
     ["Anna", " - "],
     // One word you wrote must be a whole word of the payer's (or the nickname rule).
-    ["Cristian Fiore", "Cri"],
+    ["Mario Verdi", "Mar"],
     ["Anna Rossi", "Ross"],
     // A company is never a person paying you back, whatever its name.
     ["ACME SRL", "Acme"],
     ["Rossi Anna S.r.l.", "Anna Rossi"],
-    ["Fiore Cristian S.P.A.", "Crifiore"],
+    ["Verdi Mario S.P.A.", "Marverdi"],
     ["Anna Rossi GmbH", "Anna"],
     ["Bianchi & Co. Ltd", "Bianchi"],
   ])("%s is not %s", (payer, contact) => expect(namesLookAlike(payer, contact)).toBe(false));
 
   it("an initial matches a word that starts with it, either side, next to a whole word", () => {
-    expect(namesLookAlike("C. FIORE", "Cristian Fiore")).toBe(true);
+    expect(namesLookAlike("M. VERDI", "Mario Verdi")).toBe(true);
     expect(namesLookAlike("LUCA MARINO", "Luca M")).toBe(true);
     expect(namesLookAlike("Luca M.", "Luca Marino")).toBe(true);
     expect(namesLookAlike("Anna Rossi", "A R")).toBe(false);
-    expect(namesLookAlike("Cristian Fiore", "Cri F")).toBe(true);
+    expect(namesLookAlike("Mario Verdi", "Mar V")).toBe(true);
     expect(namesLookAlike("Luca Marino", "M")).toBe(false);
-    expect(namesLookAlike("C Fiore", "Cristian Fiore Rossi")).toBe(false);
+    expect(namesLookAlike("M Verdi", "Mario Verdi Rossi")).toBe(false);
     expect(namesLookAlike("L. Bianchi", "Luca Marino")).toBe(false);
   });
 
@@ -108,12 +108,12 @@ describe("debtorsFrom", () => {
     const out = debtorsFrom(
       [],
       [
-        group("EUR", [{ person: "Crifiore", balance: -320, owesYou: true }]),
+        group("EUR", [{ person: "Marverdi", balance: -320, owesYou: true }]),
         group("XYZ", [{ person: "Zed", balance: -5, owesYou: true }]),
       ],
       rate,
     );
-    expect(out).toEqual([{ name: "Crifiore", open: 320, splitwiseOnly: true }]);
+    expect(out).toEqual([{ name: "Marverdi", open: 320, splitwiseOnly: true }]);
   });
 
   it("leaves out names over 100 characters: the server can't record them", () => {
@@ -138,8 +138,8 @@ describe("debtorsFrom", () => {
 
 describe("suggestPaybacks", () => {
   it("a linked payer is asked about while that person still owes you", () => {
-    const debtors = [debtor("Crifiore", 320)];
-    expect(suggestPaybacks([pay({ payer: "X Y", linked_contact: "crifiore" })], debtors)).toEqual([
+    const debtors = [debtor("Marverdi", 320)];
+    expect(suggestPaybacks([pay({ payer: "X Y", linked_contact: "marverdi" })], debtors)).toEqual([
       {
         payment: expect.objectContaining({ entry_reference: "p1" }),
         debtor: debtors[0],
@@ -152,9 +152,9 @@ describe("suggestPaybacks", () => {
   it("a name that looks alike is asked about, whatever the amount", () => {
     const out = suggestPaybacks(
       [pay({ amount_eur: 50 })],
-      [debtor("Anna", 10), debtor("Crifiore", 320)],
+      [debtor("Anna", 10), debtor("Marverdi", 320)],
     );
-    expect(out.map((s) => [s.debtor.name, s.reason])).toEqual([["Crifiore", "name"]]);
+    expect(out.map((s) => [s.debtor.name, s.reason])).toEqual([["Marverdi", "name"]]);
   });
 
   it("of several look-alikes, the one owing closest to the amount", () => {
@@ -213,15 +213,15 @@ describe("paybackMessage", () => {
   it("with nothing settled, says why", () => {
     expect(
       paybackMessage(
-        "Cri",
+        "Mar",
         { settled: [], settled_eur: 0, left_eur: 320, linked: true },
         true,
         money,
       ),
-    ).toBe("Marked as Cri paying you back. Record it in Splitwise too.");
+    ).toBe("Marked as Mar paying you back. Record it in Splitwise too.");
     expect(
       paybackMessage(
-        "Cri",
+        "Mar",
         { settled: [], settled_eur: 0, left_eur: 10, linked: true },
         false,
         money,
