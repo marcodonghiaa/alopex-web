@@ -51,6 +51,12 @@ export function newEvents(
   });
 }
 
+/** What income and returns read from an event. */
+export type EventRow = Pick<
+  InvestmentEvent,
+  "kind" | "asset_kind" | "key" | "event_date" | "amount_eur" | "tax_eur" | "fee_eur"
+>;
+
 export interface IncomeSummary {
   /** Dividends, interest and rewards, after tax. */
   income: number;
@@ -70,7 +76,7 @@ const INCOME: Record<string, "dividends" | "interest" | "rewards"> = {
 };
 
 /** What your investments paid you and what they cost, from `from` (inclusive) on. */
-export function summarizeIncome(events: Array<InvestmentEvent>, from = ""): IncomeSummary {
+export function summarizeIncome(events: Array<EventRow>, from = ""): IncomeSummary {
   const out: IncomeSummary = {
     income: 0,
     dividends: 0,
@@ -98,7 +104,7 @@ export function summarizeIncome(events: Array<InvestmentEvent>, from = ""): Inco
  * What one holding paid you, after tax: added to its return. Tax given back on its trades too,
  * since the tax charged on them lowers it.
  */
-export function incomeByKey(events: Array<InvestmentEvent>): Map<string, number> {
+export function incomeByKey(events: Array<EventRow>): Map<string, number> {
   const by = new Map<string, number>();
   for (const e of events) {
     if (!e.key || !e.asset_kind || !(INCOME[e.kind] || e.kind === "tax_refund")) continue;

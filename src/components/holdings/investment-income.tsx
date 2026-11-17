@@ -1,6 +1,6 @@
 import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
 import { summarizeIncome } from "@/lib/investment-events";
-import type { IncomeSummary, InvestmentEvent } from "@/lib/investment-events";
+import type { EventRow, IncomeSummary } from "@/lib/investment-events";
 import type { Trade } from "@/lib/trades";
 import { formatEur } from "@/lib/transactions";
 
@@ -8,7 +8,7 @@ type TradeCost = Pick<Trade, "trade_date" | "fee_eur" | "tax_eur">;
 
 /** Income and costs from `from` on: the events', plus the fees and taxes paid on trades. */
 export function incomeAndCosts(
-  events: Array<InvestmentEvent>,
+  events: Array<EventRow>,
   trades: Array<TradeCost>,
   from = "",
 ): IncomeSummary {
@@ -30,7 +30,7 @@ const ROWS: Array<{ label: string; field: keyof IncomeSummary; cost?: boolean }>
 ];
 
 /** Events for this page: coins' on Crypto, everything else (shares and cash) on Portfolio. */
-export function eventsForPage(events: Array<InvestmentEvent>, page: "stock" | "crypto") {
+export function eventsForPage(events: Array<EventRow>, page: "stock" | "crypto") {
   return events.filter((e) => (e.asset_kind === "crypto") === (page === "crypto"));
 }
 
@@ -45,7 +45,7 @@ export function InvestmentIncome({
   page,
   today = new Date().toISOString().slice(0, 10),
 }: {
-  events: Array<InvestmentEvent>;
+  events: Array<EventRow>;
   trades?: Array<TradeCost>;
   page: "stock" | "crypto";
   today?: string;

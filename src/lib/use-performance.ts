@@ -10,7 +10,7 @@ import type { ExportRow } from "@/lib/export/tables";
 import { measure, summarizeTrades } from "@/lib/trades";
 import type { Measured, Trade } from "@/lib/trades";
 import { incomeByKey } from "@/lib/investment-events";
-import type { InvestmentEvent } from "@/lib/investment-events";
+import type { EventRow, InvestmentEvent } from "@/lib/investment-events";
 
 export type PerformanceResult = { rows: Array<PerformanceRow> } | { unavailable: true };
 export type SavedTrade = Trade & { id: string };
@@ -49,7 +49,7 @@ export async function fetchTrades(client: SupabaseClient<Database>): Promise<Tra
     const { data, error, count } = await client
       .from("holding_trades")
       .select(
-        "id,kind,key,side,trade_date,shares,price_eur,fee_eur,tax_eur,traded_at,note,source,external_id",
+        "id,kind,key,side,trade_date,shares,price_eur,fee_eur,tax_eur,traded_at,source,external_id",
         {
           count: "exact",
         },
@@ -65,7 +65,7 @@ export async function fetchTrades(client: SupabaseClient<Database>): Promise<Tra
   return missing ? { unavailable: true } : { trades: rows as unknown as Array<SavedTrade> };
 }
 
-export type SavedEvent = InvestmentEvent & { id: string };
+export type SavedEvent = EventRow & Pick<InvestmentEvent, "source" | "external_id">;
 
 /**
  * Every dividend, fee, tax and transfer, paged. A database without the table yet (dashboard
@@ -76,10 +76,9 @@ export async function fetchEvents(client: SupabaseClient<Database>): Promise<Arr
   const rows = await fetchAllRows("investment_events", async (from, to) => {
     const { data, error, count } = await client
       .from("investment_events")
-      .select(
-        "id,kind,asset_kind,key,event_date,occurred_at,amount_eur,tax_eur,fee_eur,shares,orig_amount,orig_currency,fx_rate,raw_type,source,external_id",
-        { count: "exact" },
-      )
+      .select("kind,asset_kind,key,event_date,amount_eur,tax_eur,fee_eur,source,external_id", {
+        count: "exact",
+      })
       .order("id")
       .range(from, to);
     if (error && isMissingTable(error)) {
