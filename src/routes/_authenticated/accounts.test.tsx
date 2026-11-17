@@ -360,6 +360,56 @@ describe("connect a bank", () => {
     rows.v_bank_accounts_latest = [];
   });
 
+  // Polish 5 F3. protects=Connect again for a bank with no country on file starts from an empty
+  // bank; fails_when=the bank an earlier Renew prefilled stays selected
+  it("clears an earlier Renew's bank when the next bank has nothing to prefill", async () => {
+    const soon = new Date(Date.now() + 3 * 86_400_000).toISOString();
+    const base = {
+      iban: null,
+      currency: "EUR",
+      snapshot_date: "2026-10-19",
+      amount: 1000,
+      amount_eur: 1000,
+      account_type: null,
+      manual: false,
+    };
+    rows.v_bank_accounts_latest = [
+      {
+        ...base,
+        uid: "a1",
+        label: "Gone Bank Current",
+        consent_valid_until: soon,
+        bank_name: "Gone Bank",
+        bank_country: "LT",
+      },
+      {
+        ...base,
+        uid: "a2",
+        label: "Old Bank Current",
+        consent_valid_until: null,
+        bank_name: "Old Bank",
+        bank_country: null,
+        sync_error: "ASPSP_ACCOUNT_NOT_ACCESSIBLE",
+      },
+    ];
+    invoke.mockResolvedValue({
+      data: { banks: [{ name: "Other Bank", logo: null }] },
+      error: null,
+    });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    Element.prototype.scrollIntoView = vi.fn();
+    fireEvent.click(await screen.findByRole("button", { name: "Renew access" }));
+    const gone = "Gone Bank isn't listed for this country anymore. Pick your bank again.";
+    expect(await screen.findByText(gone)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Connect again" }));
+    await waitFor(() => expect(screen.queryByText(gone)).not.toBeInTheDocument());
+    rows.v_bank_accounts_latest = [];
+  });
+
   // protects=long country names ("United Kingdom") stay readable; fails_when=the country select
   // gets a fixed width again, which clipped "United Kingdom" at 640-767px (polish 4, P1-1)
   it("sizes the country select to its longest name, not a fixed width", async () => {
