@@ -264,6 +264,12 @@ describe("Ledger Live operations export", () => {
     expect(parseTradesCsv(row(line), ctx).errors).toEqual(["Line 2: couldn't read this IN row."]);
   });
 
+  it("an unreadable value is a line error even where the value sets no price", () => {
+    const line = "2026-01-05T08:00:00.000Z,Confirmed,ATOM,REWARD,2,,h,Cosmos 1,a,USD,abc,20";
+    const result = parseTradesCsv(row(line), { ...ctx, knownKeys: new Set(["ATOM"]) });
+    expect(result.errors).toEqual(["Line 2: couldn't read this REWARD row."]);
+  });
+
   it("amounts are plain decimals: 0x10 is not 16 coins", () => {
     const line = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0x10,,h,Bitcoin 1,a,USD,300,300";
     expect(parseTradesCsv(row(line), ctx).errors).toEqual(["Line 2: couldn't read this IN row."]);

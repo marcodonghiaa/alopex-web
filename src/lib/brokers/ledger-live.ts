@@ -159,10 +159,9 @@ export const ledgerLive: BrokerParser = {
       const valueText = get("countervalue at operation date").trim();
       const value = num(valueText);
       const ok = (n: number) => Number.isFinite(n) && n >= 0;
-      if (!isDay(date) || !key || !ok(amount) || !ok(fee)) {
+      if (!isDay(date) || !key || !ok(amount) || !ok(fee) || !ok(value)) {
         return void errors.push(`Line ${i + 2}: couldn't read this ${type} row.`);
       }
-      if (!ok(value)) return void errors.push(`Line ${i + 2}: couldn't read this ${type} row.`);
       // What leaves or enters the wallet, as Ledger Live counts its balance.
       // A failed send moved nothing but its fee, and a failed receive cost you nothing.
       const failed = get("status") === "Failed";
@@ -180,10 +179,6 @@ export const ledgerLive: BrokerParser = {
       // The value is of the amount; with none (or a fee-only row worth nothing) the coin counts at €0.
       if (valueText === "" || amount === 0) noValue++;
       const price = FREE.has(type) || amount === 0 ? 0 : (value * rate) / amount;
-      // Each number can be fine and still give a price too big to save.
-      if (!Number.isFinite(price) || !Number.isFinite(shares * price)) {
-        return void errors.push(`Line ${i + 2}: couldn't read this ${type} row.`);
-      }
       // Fees, failed sends, staking actions and slashing bring nothing back: their value is a cost.
       const cost =
         family === "stake" || LOST.has(type)
@@ -199,8 +194,10 @@ export const ledgerLive: BrokerParser = {
         seen.set(base, n);
         id = n === 1 ? base : `${base}#${n}`;
       }
-      // The database keeps coin symbols up to 100 characters and ids up to 200.
-      if (key.length > 100 || (id?.length ?? 0) > 200) {
+      // Each number can be fine and still give a price too big to save. The database keeps coin
+      // symbols up to 100 characters and ids up to 200.
+      const tooBig = !Number.isFinite(price) || !Number.isFinite(shares * price);
+      if (tooBig || key.length > 100 || (id?.length ?? 0) > 200) {
         return void errors.push(`Line ${i + 2}: couldn't read this ${type} row.`);
       }
       trades.push({
