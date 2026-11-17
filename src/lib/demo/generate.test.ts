@@ -334,3 +334,28 @@ describe("demo data for the calendar and regular income", () => {
     }
   });
 });
+
+// polish-4 #17: the demo shows To link's main idea and agrees with its own balances
+describe("generateDemoData: Splitwise To link", () => {
+  const db = generateDemoData(NOON);
+
+  it("has a card payment for the expense you paid, the same day and amount", () => {
+    const dinner = db.splitwise_review.find((r) => r.kind === "paid_by_me")!;
+    const paid = db.transactions.filter(
+      (t) =>
+        t.booking_date === dinner.booking_date &&
+        t.credit_debit_indicator === "DBIT" &&
+        Number(t.amount) === Number(dinner.my_paid),
+    );
+    expect(paid).toHaveLength(1);
+  });
+
+  it("puts the settle-up you received in a group where you are owed", () => {
+    for (const r of db.splitwise_review.filter((x) => x.kind === "settle_in")) {
+      const me = db.splitwise_balances.find(
+        (b) => b.group_name === r.group_name && b.currency === r.currency && b.is_me,
+      )!;
+      expect(me.balance).toBeGreaterThan(0);
+    }
+  });
+});

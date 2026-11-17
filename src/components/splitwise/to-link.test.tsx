@@ -422,15 +422,22 @@ describe("ToLink", () => {
     expect(screen.getByRole("listitem", { name: "Groceries" })).toBeTruthy();
   });
 
-  it("turns every action off in the demo", async () => {
+  // polish-4 #17: Find in bank only reads, so the demo can show it
+  it("turns every action off in the demo except Find in bank", async () => {
     demo.on = true;
     tables.splitwise_review = { data: [item()], error: null };
     tables.transactions = { data: [bankRow()], error: null };
     renderList();
     const row = await screen.findByRole("listitem", { name: "Groceries" });
     await within(row).findByRole("button", { name: "Link" });
-    for (const b of within(row).getAllByRole("button")) expect(b).toBeDisabled();
+    for (const b of within(row).getAllByRole("button"))
+      if (b.textContent === "Find in bank") expect(b).toBeEnabled();
+      else expect(b).toBeDisabled();
     expect(screen.getByRole("note")).toHaveTextContent("Linking is off in the demo.");
+    await userEvent.click(within(row).getByRole("button", { name: "Find in bank" }));
+    expect(
+      await screen.findByRole("dialog", { name: "Which payment was Groceries?" }),
+    ).toBeTruthy();
   });
 });
 

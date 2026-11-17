@@ -212,6 +212,18 @@ export function dailyTransactions(n: number, todayNum: number): Array<Tx> {
       }),
     );
   }
+  // The card payment for the demo's "Dinner out" on the Splitwise To link list (same day, €84),
+  // so the list shows a suggested bank payment.
+  if (todayNum - n === 3)
+    out.push(
+      tx({
+        entry_reference: `demo-${date}-dinner`,
+        booking_date: date,
+        amount: 84,
+        category: "Dine Out",
+        creditor_name: "Trattoria da Gino",
+      }),
+    );
   // Fixed rhythms guarantee a refund pair and a split bill in any window.
   if (n % 17 === 3) {
     const original = tx({

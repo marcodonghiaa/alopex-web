@@ -450,7 +450,8 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
     }),
     reviewItem(2, 6, {
       description: "Settle up",
-      group_name: "Viaggio Lisbona",
+      // Casa, where you are owed: in Viaggio Lisbona you owe Giulia.
+      group_name: "Casa",
       kind: "settle_in",
       cost: 22,
       my_share: 0,

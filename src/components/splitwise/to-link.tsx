@@ -319,6 +319,8 @@ function ReviewRow({
           id={`${rowId(item.id)}-find`}
           variant="secondary"
           {...off}
+          // It only reads: the demo can show it (its Link payment hits the demo's refusal).
+          disabled={false}
           onClick={() => busy || onFind()}
         >
           Find in bank
