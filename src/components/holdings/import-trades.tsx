@@ -1,7 +1,16 @@
 import { dateLocale, numberFormat } from "@/lib/locale";
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronLeft, ChevronRight, FileUp, Info, Lock, Loader2 } from "lucide-react";
+import {
+  Check,
+  ChevronLeft,
+  CircleAlert,
+  ChevronRight,
+  FileUp,
+  Info,
+  Lock,
+  Loader2,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -344,7 +353,9 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                       : "bg-positive/15 text-positive",
                   )}
                 >
-                  {parsed || stuck ? (
+                  {(parsed && !ok) || stuck ? (
+                    <CircleAlert className="size-4" strokeWidth={2.5} />
+                  ) : parsed ? (
                     <Check className="size-4" strokeWidth={2.5} />
                   ) : (
                     <Loader2 className="size-4 animate-spin" />

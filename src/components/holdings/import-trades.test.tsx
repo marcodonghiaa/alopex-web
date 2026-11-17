@@ -119,6 +119,16 @@ function pick(name: RegExp, fixture: string) {
   });
 }
 
+/** The file status row's icon: lucide names each svg by its icon. */
+const statusIcon = () => document.querySelector("svg.lucide-check, svg.lucide-circle-alert");
+
+function pickText(name: RegExp, csv: string) {
+  fireEvent.click(screen.getByRole("button", { name }));
+  fireEvent.change(screen.getByLabelText("CSV file"), {
+    target: { files: [new File([csv], "ops.csv", { type: "text/csv" })] },
+  });
+}
+
 function open(kind: "stock" | "crypto", saved: Array<Trade> = []) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } });
   render(
@@ -542,6 +552,33 @@ describe("ImportTrades", () => {
       await saveFails("stock", /update failed/);
       expect(db.updated).toHaveLength(1);
       expect(db.updated[0]![0]).toBe("portfolio_holdings");
+    });
+  });
+
+  describe("the file's icon matches its state", () => {
+    it("read: a check", async () => {
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Save 7 trades" });
+      expect(statusIcon()?.classList.contains("lucide-check")).toBe(true);
+    });
+
+    it("rates failed: an alert, not a check", async () => {
+      db.ratesDown = true;
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Try again" });
+      expect(statusIcon()?.classList.contains("lucide-circle-alert")).toBe(true);
+    });
+
+    it("bad lines: an alert, not a check", async () => {
+      open("stock");
+      pickText(
+        /My own spreadsheet/,
+        "date,side,isin,shares,price\n2026-01-02,buy,XX0000000001,abc,10",
+      );
+      await screen.findByText(/Fix these first/);
+      expect(statusIcon()?.classList.contains("lucide-circle-alert")).toBe(true);
     });
   });
 });
