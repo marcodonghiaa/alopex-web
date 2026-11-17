@@ -320,7 +320,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       ref={fileInputRef}
       type="file"
       accept=".csv,.tsv,.txt,text/csv"
-      aria-label={fileName ? "Choose another file" : "CSV file"}
+      aria-label={fileName ? "Change file" : "CSV file"}
       className="sr-only"
       disabled={save.isPending}
       onChange={(e) => {

@@ -515,7 +515,7 @@ describe("ImportTrades", () => {
       target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
     });
     await screen.findByText("export.csv");
-    const input = screen.getByLabelText("Choose another file");
+    const input = screen.getByLabelText("Change file");
     expect(input.closest("label")).toHaveClass("min-h-11", "has-[:focus-visible]:ring-2");
     expect(screen.queryByLabelText("CSV file")).toBeNull();
   });
@@ -617,7 +617,7 @@ describe("ImportTrades", () => {
       fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
       const a = slowFile(csv(), "a.csv");
       fireEvent.change(screen.getByLabelText("CSV file"), { target: { files: [a.file] } });
-      fireEvent.change(screen.getByLabelText("Choose another file"), {
+      fireEvent.change(screen.getByLabelText("Change file"), {
         target: { files: [new File([csv().split("\n")[0]!], "b.csv")] },
       });
       expect(await screen.findByText("Nothing in this file to import here.")).toBeInTheDocument();
