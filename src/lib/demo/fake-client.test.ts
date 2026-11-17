@@ -405,6 +405,24 @@ describe("fake client: delete_holding", () => {
     expect(await latestTotal(c)).toBeCloseTo(before - lastValue, 1);
   });
 
+  it("removes the deleted holding's dividends and other events, and no one else's", async () => {
+    const c = fresh();
+    const { data: holdings } = await c.from("portfolio_holdings").select("isin");
+    const [isin, other] = [holdings![0]!.isin!, holdings![1]!.isin!];
+    const event = (key: string) => ({
+      kind: "dividend",
+      asset_kind: "stock",
+      key,
+      event_date: "2026-03-01",
+      amount_eur: 1,
+      raw_type: "CASH|DIVIDEND",
+    });
+    await c.from("investment_events").insert([event(isin), event(other)] as never);
+    await (c.rpc as unknown as Rpc)("delete_holding", { p_kind: "stock", p_key: isin });
+    const { data } = await c.from("investment_events").select("key").in("key", [isin, other]);
+    expect([...new Set(data!.map((e) => e.key))]).toEqual([other]);
+  });
+
   it("removes one crypto source and returns 0 when there is nothing to delete", async () => {
     const c = fresh();
     const { data: coins } = await c.from("crypto_holdings").select("asset_symbol,source");

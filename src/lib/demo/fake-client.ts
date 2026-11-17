@@ -482,6 +482,9 @@ class Store {
       db["holding_trades"] = (db["holding_trades"] ?? []).filter(
         (t) => !(t["kind"] === (stock ? "stock" : "crypto") && t["key"] === key),
       );
+      db["investment_events"] = (db["investment_events"] ?? []).filter(
+        (e) => !(e["asset_kind"] === (stock ? "stock" : "crypto") && e["key"] === key),
+      );
     }
     this.refresh();
     return count;
