@@ -176,6 +176,10 @@ export const ledgerLive: BrokerParser = {
         seen.set(base, n);
         id = n === 1 ? base : `${base}#${n}`;
       }
+      // The database keeps coin symbols up to 100 characters and ids up to 200.
+      if (key.length > 100 || (id?.length ?? 0) > 200) {
+        return void errors.push(`Line ${i + 2}: couldn't read this ${type} row.`);
+      }
       trades.push({
         kind,
         key,

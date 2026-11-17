@@ -180,6 +180,17 @@ describe("Ledger Live operations export", () => {
     expect(notes).toContain("1 operation that doesn't move coins (an NFT or similar) was skipped.");
   });
 
+  it("a ticker or hash too long to save is a line error, not a failed save", () => {
+    const longTicker = `2026-01-05T08:00:00.000Z,Confirmed,${"X".repeat(101)},IN,1,,h,A,a,USD,1,1`;
+    expect(parseTradesCsv(row(longTicker), ctx).errors).toEqual([
+      "Line 2: couldn't read this IN row.",
+    ]);
+    const longHash = `2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,1,,${"a".repeat(190)},A,a,USD,1,1`;
+    expect(parseTradesCsv(row(longHash), ctx).errors).toEqual([
+      "Line 2: couldn't read this IN row.",
+    ]);
+  });
+
   it("a broken row or a future date is an error, so nothing is saved", () => {
     const bad = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,abc,,h,Bitcoin 1,a,USD,300,300";
     expect(parseTradesCsv(row(bad), ctx).errors).toEqual(["Line 2: couldn't read this IN row."]);
