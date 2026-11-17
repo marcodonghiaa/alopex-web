@@ -128,7 +128,12 @@ export function ToLink({ connected }: { connected: boolean }) {
         To link · from Splitwise
       </SectionTitle>
       {review.isError ? (
-        <Alert>Couldn't load the Splitwise expenses to link: {review.error.message}</Alert>
+        <>
+          <Alert>Couldn't load the Splitwise expenses to link: {review.error.message}</Alert>
+          <Button variant="quiet" className="mt-2" onClick={() => void review.refetch()}>
+            Retry
+          </Button>
+        </>
       ) : review.isPending ? (
         <Skeleton
           role="status"

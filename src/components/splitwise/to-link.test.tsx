@@ -584,3 +584,23 @@ describe("To link focus around an action", () => {
     );
   });
 });
+
+// polish-4 #16: the To link error has a Retry, like the connection error
+describe("To link load error", () => {
+  it("retries and shows the list", async () => {
+    tables.splitwise_review = { data: null, error: { message: "boom" } };
+    renderList();
+    expect(await screen.findByRole("alert")).toHaveTextContent("boom");
+    tables.splitwise_review = { data: [item()], error: null };
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("listitem", { name: "Groceries" })).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("has no Retry when the list loaded", async () => {
+    tables.splitwise_review = { data: [item()], error: null };
+    renderList();
+    await screen.findByRole("listitem", { name: "Groceries" });
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+  });
+});
