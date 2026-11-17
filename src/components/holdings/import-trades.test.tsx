@@ -17,6 +17,8 @@ const db = vi.hoisted(() => ({
   signedOut: false,
   /** Set, the insert waits for it. */
   insertGate: null as null | Promise<void>,
+  /** Set, the exchange rates wait for it. */
+  ratesGate: null as null | Promise<void>,
   updated: [] as Array<[string, Record<string, unknown>, Array<[string, unknown]>]>,
 }));
 vi.mock("@/integrations/supabase/client", () => {
@@ -54,7 +56,7 @@ vi.mock("@/integrations/supabase/client", () => {
       order: () => query(rows),
       limit: () => query(rows),
       range: () =>
-        Promise.resolve(
+        (rows === tables["fx_rates"] && db.ratesGate ? db.ratesGate : Promise.resolve()).then(() =>
           down
             ? { data: null, error: { message: "offline" }, count: null }
             : { data: rows, error: null, count: rows.length },
@@ -138,6 +140,7 @@ describe("ImportTrades", () => {
     db.updateError = null;
     db.signedOut = false;
     db.insertGate = null;
+    db.ratesGate = null;
   });
 
   it("asks where the trades are from before asking for a file", () => {
@@ -300,6 +303,18 @@ describe("ImportTrades", () => {
     // One retry first (no wait in tests).
     expect(await screen.findByText(/Couldn't load USD exchange rates/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+  });
+
+  it("while the exchange rates load it says Reading… and offers no save yet", async () => {
+    let release!: () => void;
+    db.ratesGate = new Promise((r) => (release = r));
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    expect(await screen.findByText("Reading…")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+    release();
+    expect(await screen.findByRole("button", { name: "Save 7 trades" })).toBeTruthy();
+    expect(screen.queryByText("Reading…")).toBeNull();
   });
 
   it("a second click while saving saves nothing twice", async () => {
