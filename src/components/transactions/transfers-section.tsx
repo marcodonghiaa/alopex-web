@@ -29,7 +29,7 @@ export function TransfersSection({
   return (
     <section className="mt-6 overflow-hidden rounded-lg bg-card">
       <div className="px-4 py-3 sm:px-5">
-        <h2 className="text-sm font-semibold text-foreground">Transfers</h2>
+        <h2 className="text-lg font-semibold text-foreground">Transfers</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">Not counted.</p>
       </div>
       <ul className="divide-y border-t">

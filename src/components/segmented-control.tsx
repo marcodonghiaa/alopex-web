@@ -14,7 +14,7 @@ interface SegmentedControlProps<T extends string> {
   onChange: (value: T) => void;
 }
 
-// Same-surface choice (DESIGN.md "Segmented Control"): a Fill track, sans labels, one ink thumb
+// Same-surface choice (DESIGN.md "Segmented Control"): a Fill pill track, sans labels, one ink pill
 // slides under the selected option. 44px tall on phones (thumb targets, often right under a
 // touch-scrubbed chart), 36px from md up.
 export function SegmentedControl<T extends string>({
@@ -57,12 +57,12 @@ export function SegmentedControl<T extends string>({
       aria-label={labelledBy ? undefined : label}
       aria-labelledby={labelledBy}
       onKeyDown={onKeyDown}
-      className="relative grid rounded-sm bg-muted p-0.5"
+      className="relative grid rounded-full bg-muted p-0.5"
       style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
     >
       <div
         aria-hidden
-        className="absolute inset-y-0.5 left-0.5 rounded-[3px] bg-primary transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none"
+        className="absolute inset-y-0.5 left-0.5 rounded-full bg-primary transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none"
         style={{
           width: `calc((100% - 0.25rem) / ${options.length})`,
           transform: `translateX(${index * 100}%)`,
@@ -78,7 +78,7 @@ export function SegmentedControl<T extends string>({
             aria-checked={selected}
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(option.value)}
-            className={`relative z-10 min-h-11 rounded-[3px] px-3 text-[0.8125rem] font-medium transition-colors md:min-h-9 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+            className={`relative z-10 min-h-11 rounded-full px-3 text-[0.8125rem] font-medium transition-colors md:min-h-9 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
               selected ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground"
             }`}
           >

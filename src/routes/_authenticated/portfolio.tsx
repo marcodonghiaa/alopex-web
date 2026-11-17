@@ -25,11 +25,11 @@ import { ShareBar } from "@/components/share-bar";
 import { Alert } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GroupedList } from "@/components/ui/grouped-list";
-import { RangeChange, ValueHistoryChart } from "@/components/value-history";
+import { RangeChange, ValueHistoryChart, rangeChip } from "@/components/value-history";
 import { DetailRow, HoldingRow } from "@/components/holdings/holding-row";
 import { InvestingSwitch } from "@/components/investing-switch";
 import { useValueHistory } from "@/lib/use-value-history";
-import { usePerformance } from "@/lib/use-performance";
+import { usePerformance, useStartPrices } from "@/lib/use-performance";
 import {
   PerformanceNotice,
   ReturnCell,
@@ -159,13 +159,20 @@ function PortfolioPage() {
   const history = useValueHistory("portfolio_total_eur", totalEur);
   const { scrubbed } = history;
   const perf = usePerformance(history.chartData.at(-1)?.snapshot_date, "stock");
+  const startPrices = useStartPrices(history.first?.snapshot_date, "stock");
 
   return (
     <div className="mx-auto max-w-5xl px-4 pt-4 pb-8 sm:px-8 md:py-12">
       <InvestingSwitch current="/portfolio" />
-      <header className="mb-3 text-[0.9375rem] font-medium text-muted-foreground">
-        <h1 className="inline">Portfolio</h1>
-        {scrubbed && <span> · {formatDay(scrubbed.snapshot_date)}</span>}
+      {/* Titled like Net Worth and the Breakdown card (iOS view board). */}
+      <header className="mb-3 text-lg">
+        <h1 className="inline font-semibold text-foreground">Portfolio</h1>
+        {scrubbed && (
+          <span className="text-[0.9375rem] text-muted-foreground">
+            {" "}
+            · {formatDay(scrubbed.snapshot_date)}
+          </span>
+        )}
       </header>
 
       {query.isError && (
@@ -180,11 +187,15 @@ function PortfolioPage() {
 
       {/* Headline: total value, its change over the chart range, then notices about returns */}
       <section aria-label="Total portfolio value" className="mb-6">
-        <div className="min-h-16" aria-live="polite">
+        <div className="min-h-12" aria-live="polite">
           {query.isPending ? (
-            <Skeleton className="h-16 w-72" />
+            <Skeleton className="h-12 w-72" />
           ) : (
-            <HeadlineFigure value={history.shownEur} currency="EUR" />
+            <HeadlineFigure
+              value={history.shownEur}
+              currency="EUR"
+              change={rangeChip(history, perf, startPrices)}
+            />
           )}
         </div>
         {!query.isPending && <RangeChange {...history} />}
@@ -192,7 +203,7 @@ function PortfolioPage() {
       </section>
 
       {/* Chart: portfolio value over time; scrub it to read any day */}
-      <ValueHistoryChart history={history} title="Portfolio value over time" />
+      <ValueHistoryChart history={history} title="Portfolio value over time" perf={perf} />
 
       {/* How it splits by type */}
       {!query.isPending && holdings.length > 0 && totalEur > 0 && (
@@ -224,7 +235,6 @@ function PortfolioPage() {
           {/* Holdings grouped by type */}
           <GroupedList>
             {groups.map((group) => {
-              const percent = totalEur > 0 ? (group.totalEur / totalEur) * 100 : 0;
               const color = colorForHoldingType(group.type);
               const TypeIcon = TYPE_ICONS[group.type] ?? Shapes;
               const isOpen = expanded.has(group.type);
@@ -251,8 +261,9 @@ function PortfolioPage() {
                         {group.type}
                       </span>
                       <span className="block text-xs text-muted-foreground">
+                        {/* No %: the allocation bar above already shows it (iOS view board). */}
                         {group.holdings.length} holding
-                        {group.holdings.length === 1 ? "" : "s"} · {formatPercent(percent / 100)}
+                        {group.holdings.length === 1 ? "" : "s"}
                       </span>
                     </span>
                     <span className="font-figure text-[0.9375rem] text-foreground">
@@ -376,18 +387,22 @@ function PortfolioPage() {
                               <span className="font-figure">
                                 {row.shares != null ? formatQuantity(row.shares, 3) : "—"}
                               </span>
-                              {row.isin && (
-                                <EditHolding
-                                  target={{ kind: "stock", isin: row.isin }}
-                                  name={row.name ?? row.isin}
-                                  quantity={row.shares ?? 0}
-                                />
-                              )}
                             </DetailRow>
                             {row.isin && (
                               <DetailRow label="ISIN">
                                 <span className="font-figure break-all">{row.isin}</span>
                               </DetailRow>
+                            )}
+                            {/* Under the details, so every value above lines up on the right. */}
+                            {row.isin && (
+                              <div className="flex py-1">
+                                <EditHolding
+                                  target={{ kind: "stock", isin: row.isin }}
+                                  name={row.name ?? row.isin}
+                                  quantity={row.shares ?? 0}
+                                  label="Edit shares"
+                                />
+                              </div>
                             )}
                           </HoldingRow>
                         ))}

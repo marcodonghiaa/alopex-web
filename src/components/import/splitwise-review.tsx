@@ -453,9 +453,7 @@ export function SplitwiseReview({
       <div aria-live="polite">
         {nothingToWrite ? (
           <>
-            <h2 className="text-[1.75rem] leading-tight font-semibold tracking-tight">
-              Nothing new
-            </h2>
+            <h2 className="text-[1.75rem] leading-tight font-semibold">Nothing new</h2>
             <p role="status" className="mt-1 text-[0.9375rem] text-muted-foreground">
               {split.checkpoint
                 ? `Everything up to ${shortDate(split.checkpoint)} is already imported. Nothing will be written.`

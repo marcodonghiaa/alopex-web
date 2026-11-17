@@ -1,7 +1,7 @@
 import { formatQuantity } from "@/lib/locale";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Bitcoin, Coins } from "lucide-react";
 import { colorsForAssets } from "@/lib/crypto-colors";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,12 +14,13 @@ import { ShareBar } from "@/components/share-bar";
 import { Alert } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GroupedList } from "@/components/ui/grouped-list";
-import { RangeChange, ValueHistoryChart } from "@/components/value-history";
+import { RangeChange, ValueHistoryChart, rangeChip } from "@/components/value-history";
 import { DetailRow, HoldingRow } from "@/components/holdings/holding-row";
 import { InvestingSwitch } from "@/components/investing-switch";
 import { EmptyState } from "@/components/empty-state";
 import { useValueHistory } from "@/lib/use-value-history";
-import { usePerformance } from "@/lib/use-performance";
+import { splitSmallBalances } from "@/lib/small-balances";
+import { usePerformance, useStartPrices } from "@/lib/use-performance";
 import {
   PerformanceNotice,
   ReturnCell,
@@ -145,6 +146,10 @@ function CryptoPage() {
     [query.data],
   );
   const assets = useMemo(() => groupBySymbol(rows), [rows]);
+  // Coins under €1 hide behind a link (iOS view board); the total still counts them.
+  const [showSmall, setShowSmall] = useState(false);
+  const { shown, small } = useMemo(() => splitSmallBalances(assets), [assets]);
+  const listed = showSmall ? assets : shown;
   const assetColors = useMemo(() => colorsForAssets(assets.map((a) => a.symbol)), [assets]);
 
   const totalEur = useMemo(() => assets.reduce((sum, a) => sum + a.valueEur, 0), [assets]);
@@ -153,13 +158,20 @@ function CryptoPage() {
   const history = useValueHistory("crypto_total_eur", totalEur);
   const { scrubbed } = history;
   const perf = usePerformance(history.chartData.at(-1)?.snapshot_date, "crypto");
+  const startPrices = useStartPrices(history.first?.snapshot_date, "crypto");
 
   return (
     <div className="mx-auto max-w-5xl px-4 pt-4 pb-8 sm:px-8 md:py-12">
       <InvestingSwitch current="/crypto" />
-      <header className="mb-3 text-[0.9375rem] font-medium text-muted-foreground">
-        <h1 className="inline">Crypto</h1>
-        {scrubbed && <span> · {formatDay(scrubbed.snapshot_date)}</span>}
+      {/* Titled like Net Worth and the Breakdown card (iOS view board). */}
+      <header className="mb-3 text-lg">
+        <h1 className="inline font-semibold text-foreground">Crypto</h1>
+        {scrubbed && (
+          <span className="text-[0.9375rem] text-muted-foreground">
+            {" "}
+            · {formatDay(scrubbed.snapshot_date)}
+          </span>
+        )}
       </header>
 
       {query.isError && (
@@ -172,11 +184,15 @@ function CryptoPage() {
 
       {/* Headline: total value, its change over the chart range, then notices about returns */}
       <section aria-label="Total crypto value" className="mb-6">
-        <div className="min-h-16" aria-live="polite">
+        <div className="min-h-12" aria-live="polite">
           {query.isPending ? (
-            <Skeleton className="h-16 w-72" />
+            <Skeleton className="h-12 w-72" />
           ) : (
-            <HeadlineFigure value={history.shownEur} currency="EUR" />
+            <HeadlineFigure
+              value={history.shownEur}
+              currency="EUR"
+              change={rangeChip(history, perf, startPrices)}
+            />
           )}
         </div>
         {!query.isPending && <RangeChange {...history} />}
@@ -184,7 +200,7 @@ function CryptoPage() {
       </section>
 
       {/* Chart: crypto value over time; scrub it to read any day */}
-      <ValueHistoryChart history={history} title="Crypto value over time" />
+      <ValueHistoryChart history={history} title="Crypto value over time" perf={perf} />
 
       {/* How it splits by coin */}
       <section aria-label="Allocation by holding" className="mb-6">
@@ -234,7 +250,8 @@ function CryptoPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {assets.map((asset, i) => {
+                  {listed.map((asset) => {
+                    const i = assets.indexOf(asset);
                     return (
                       <tr key={asset.symbol}>
                         <td className="px-4 py-3 sm:px-5">
@@ -292,10 +309,12 @@ function CryptoPage() {
 
           {/* Mobile rows: coin and amount left, value and return right; tap for price and edit */}
           <GroupedList className="md:hidden">
-            {assets.map((asset, i) => (
+            {listed.map((asset) => (
               <HoldingRow
                 key={asset.symbol}
-                avatar={<CoinAvatar symbol={asset.symbol} color={assetColors[i]} />}
+                avatar={
+                  <CoinAvatar symbol={asset.symbol} color={assetColors[assets.indexOf(asset)]} />
+                }
                 name={asset.name}
                 amount={
                   <span className="font-figure">
@@ -322,20 +341,40 @@ function CryptoPage() {
                     <span className="font-figure">
                       {formatQuantity(s.amount, 8)} {asset.symbol}
                     </span>
-                    {isEditableCryptoSource(s.source) && (
+                  </DetailRow>
+                ))}
+                {/* Under the details, so every value above lines up on the right. */}
+                {asset.bySource
+                  .filter((s) => isEditableCryptoSource(s.source))
+                  .map((s) => (
+                    <div key={`edit-${s.source}`} className="flex py-1">
                       <EditHolding
                         target={{ kind: "crypto", symbol: asset.symbol, source: s.source }}
                         name={
                           asset.bySource.length > 1 ? `${asset.name} (${s.source})` : asset.name
                         }
                         quantity={s.amount}
+                        label={
+                          asset.bySource.length > 1 ? `Edit ${s.source} amount` : "Edit amount"
+                        }
                       />
-                    )}
-                  </DetailRow>
-                ))}
+                    </div>
+                  ))}
               </HoldingRow>
             ))}
           </GroupedList>
+          {small.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowSmall((v) => !v)}
+              aria-expanded={showSmall}
+              className="mt-3 inline-flex min-h-11 items-center text-sm text-muted-foreground underline decoration-hairline underline-offset-4 hover:text-foreground"
+            >
+              {showSmall
+                ? "Hide small balances"
+                : `Show ${small.length} small ${small.length === 1 ? "balance" : "balances"} (under €1)`}
+            </button>
+          )}
         </>
       )}
 
