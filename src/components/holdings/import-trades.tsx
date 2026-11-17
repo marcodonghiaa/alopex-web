@@ -45,7 +45,8 @@ interface Holdings {
 
 // Every holding, its count and name, sold ones too: the old trades of something you sold are still yours.
 async function fetchHoldings(kind: "stock" | "crypto"): Promise<Holdings> {
-  let list: Array<{ key: string; shares: number; name: string; source?: string; symbol?: string }>;
+  let list: Array<{ key: string; shares: number; name: string }>;
+  const bySource = new Map<string, Map<string, Held>>();
   if (kind === "stock") {
     const { data, error } = await supabase.from("portfolio_holdings").select("isin,shares,name");
     if (error) throw error;
@@ -55,19 +56,15 @@ async function fetchHoldings(kind: "stock" | "crypto"): Promise<Holdings> {
       .from("crypto_holdings")
       .select("asset_symbol,amount,name,source");
     if (error) throw error;
-    list = data.map((r) => ({
-      key: r.asset_symbol.toUpperCase(),
-      shares: r.amount,
-      name: r.name,
-      source: r.source,
-      symbol: r.asset_symbol,
-    }));
-  }
-  const bySource = new Map<string, Map<string, Held>>();
-  for (const r of list) {
-    if (!r.source || !r.symbol) continue;
-    if (!bySource.has(r.source)) bySource.set(r.source, new Map());
-    bySource.get(r.source)!.set(r.key, { shares: r.shares, symbol: r.symbol });
+    list = data.map((r) => ({ key: r.asset_symbol.toUpperCase(), shares: r.amount, name: r.name }));
+    for (const r of data) {
+      if (!r.source || !r.asset_symbol) continue;
+      if (!bySource.has(r.source)) bySource.set(r.source, new Map());
+      bySource.get(r.source)!.set(r.asset_symbol.toUpperCase(), {
+        shares: r.amount,
+        symbol: r.asset_symbol,
+      });
+    }
   }
   return {
     shares: new Map(list.map((r) => [r.key, r.shares])),
