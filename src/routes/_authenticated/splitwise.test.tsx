@@ -1,11 +1,22 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // The demo client mirrors the real tables: split bills plus Splitwise groups on both sides.
+// A test can swap the demo's connection row to see the page in other states.
+const connectionRow = vi.hoisted(() => ({ value: null as null | Record<string, unknown> }));
 vi.mock("@/integrations/supabase/client", async () => {
   const { createFakeClient } = await import("@/lib/demo/fake-client");
-  return { supabase: createFakeClient(new Date("2026-11-08T12:00:00Z")) };
+  const client = createFakeClient(new Date("2026-11-08T12:00:00Z"));
+  const rpc = client.rpc.bind(client);
+  return {
+    supabase: Object.assign(client, {
+      rpc: (fn: string, args?: unknown) =>
+        fn === "get_splitwise_connection" && connectionRow.value
+          ? Promise.resolve({ data: [connectionRow.value], error: null })
+          : (rpc as (f: string, a?: unknown) => unknown)(fn, args),
+    }),
+  };
 });
 
 // The page runs on the demo's own client, so it is in demo mode too.
@@ -82,5 +93,47 @@ describe("Splitwise sync in the demo", () => {
     for (const b of screen.getAllByRole("button", { name: "Ignore" })) expect(b).toBeDisabled();
     expect(screen.getByText("Linking is off in the demo.")).toBeTruthy();
     expect(screen.getByText(/synced from Splitwise/)).toBeTruthy();
+  });
+});
+
+// polish-3 #17: the balances' title says where they came from only when that is sure
+describe("Splitwise groups title", () => {
+  afterEach(() => {
+    connectionRow.value = null;
+  });
+  const row = (over: Record<string, unknown>) => ({
+    connected: false,
+    status: null,
+    display_name: null,
+    last_synced_at: null,
+    last_error: null,
+    synced_data: false,
+    ...over,
+  });
+  const title = async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    // The connection has loaded once its row shows (Connect, or the status with Sync now).
+    await screen.findByRole("button", { name: /^(Connect Splitwise|Sync now|Reconnect)$/ });
+    return screen.getByText(/^Splitwise groups/).textContent;
+  };
+
+  it.each([
+    [
+      { connected: true, status: "ok", synced_data: true },
+      "Splitwise groups · synced from Splitwise",
+    ],
+    [
+      { connected: true, status: "needs_reconnect", synced_data: true },
+      "Splitwise groups · from your last sync",
+    ],
+    [{}, "Splitwise groups · from your last import"],
+    [{ synced_data: true }, "Splitwise groups"],
+  ])("%o → %s", async (over, expected) => {
+    connectionRow.value = row(over);
+    expect(await title()).toBe(expected);
   });
 });
