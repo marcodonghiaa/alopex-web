@@ -429,6 +429,26 @@ describe("ImportTrades", () => {
     expect(db.inserted).toHaveLength(7);
   });
 
+  it("while a pasted spreadsheet saves, its text and the drop zone are locked", async () => {
+    let release!: () => void;
+    db.insertGate = new Promise((r) => (release = r));
+    open("crypto");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/ledger_live.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV text"), { target: { value: csv } });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
+    const area = screen.getByLabelText("CSV text") as HTMLTextAreaElement;
+    await waitFor(() => expect(area.disabled).toBe(true));
+    const dropped = new File([csv], "dropped.csv", { type: "text/csv" });
+    fireEvent.drop(screen.getByLabelText("CSV file").closest("label")!, {
+      dataTransfer: { files: [dropped] },
+    });
+    expect(screen.queryByText("dropped.csv")).toBeNull();
+    release();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(db.inserted).toHaveLength(7);
+  });
+
   it("Esc closes the dialog when nothing is saving", async () => {
     open("crypto");
     pick(/Ledger Live/, "ledger_live.csv");

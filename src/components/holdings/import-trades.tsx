@@ -218,7 +218,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     save.reset();
   }
   function onFile(file: File | undefined) {
-    if (!file) return;
+    // Dropped or picked, a file can't replace the one being saved.
+    if (!file || save.isPending) return;
     setFileName(file.name);
     void file.text().then(setText);
   }
