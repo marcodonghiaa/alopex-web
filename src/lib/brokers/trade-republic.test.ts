@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { summarizeIncome } from "@/lib/investment-events";
 import { parseTradesCsv } from "@/lib/trades-csv";
 
 // The 23 columns of Trade Republic's transaction export, in its order.
@@ -317,6 +318,15 @@ describe("Trade Republic, income, fees, taxes and cash", () => {
       "tax",
     ]);
     expect(events?.every((e) => e.key == null && e.asset_kind == null)).toBe(true);
+  });
+
+  it("a fee row with the fee in the fee column counts the fee once", () => {
+    const { events } = parseTradesCsv(
+      file({ category: "CASH", type: "FEE", symbol: "", name: "", amount: "0", fee: "-1" }),
+      stock,
+    );
+    expect(events?.map((e) => [e.kind, e.amount_eur, e.fee_eur])).toEqual([["fee", -1, 0]]);
+    expect(summarizeIncome(events ?? []).fees).toBe(1);
   });
 
   it("money moved in or out is a deposit or a withdrawal, by its sign", () => {

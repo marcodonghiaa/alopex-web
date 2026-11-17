@@ -184,8 +184,9 @@ export const tradeRepublic: BrokerParser = {
       const eventPage = key && rowKind === "crypto" ? "crypto" : "stock";
       if (eventPage !== kind) return void otherPage++;
       if (key) names.set(key, get("name"));
+      // A fee row's fee is the row itself: kept in the amount only, or it counts twice.
       events.push(
-        taxRow
+        taxRow || eventKind === "fee"
           ? { ...event(eventKind), amount_eur: net, tax_eur: 0, fee_eur: 0 }
           : event(eventKind),
       );
