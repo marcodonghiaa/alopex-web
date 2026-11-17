@@ -43,7 +43,7 @@ export function syncErrorMessage(
     return `Enable Banking refused to sync ${bank}: check that your Enable Banking app is active and that its key in your setup is the right one.`;
   }
   if (code === "SAVE_FAILED")
-    return `${bank} synced, but the transactions couldn't be saved. ${RETRY}`;
+    return `${bank} synced, but the transactions couldn't be saved. ${RETRY} If it keeps happening, check the sync-bank function's logs in Supabase.`;
   if (
     code === "ASPSP_ERROR" ||
     code === "ASPSP_TIMEOUT" ||

@@ -59,6 +59,10 @@ describe("syncErrorMessage", () => {
 
   it("says a failed save apart from a bank failure", () => {
     expect(syncErrorMessage("SAVE_FAILED", "N26")).toMatch(/couldn't be saved/);
+    // A save that keeps failing is on the self-hoster's side: say where to look.
+    expect(syncErrorMessage("SAVE_FAILED", "N26")).toMatch(
+      /If it keeps happening, check the sync-bank function's logs in Supabase\.$/,
+    );
   });
 
   it("names an unknown code instead of hiding it", () => {
