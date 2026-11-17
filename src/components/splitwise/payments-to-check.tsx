@@ -16,12 +16,15 @@ import { Initial } from "@/components/splitwise/owed-view";
 const day = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString(dateLocale(), { day: "numeric", month: "short" });
 
-const why = (s: PaybackSuggestion) =>
-  s.reason === "linked"
-    ? `${s.debtor.name} paid you from this name before`
-    : s.reason === "name"
-      ? "The name looks alike"
-      : `Same as what ${s.debtor.name} owes you`;
+// Why we ask, and what they owe (left out when the payment is exactly that: it's right above).
+const why = (s: PaybackSuggestion, owes: string) => {
+  if (s.reason === "amount") return `Exactly what ${s.debtor.name} owes you`;
+  const because =
+    s.reason === "linked"
+      ? `You linked this payer to ${s.debtor.name} before`
+      : "The names look alike";
+  return `${because} · ${owes}`;
+};
 
 /**
  * Incoming payments that look like someone paying you back: "Is this Anna?". Yes settles their
@@ -108,7 +111,10 @@ export function PaymentsToCheck({
                       {day(p.booking_date)}
                     </p>
                     <p className="text-[0.8125rem] text-muted-foreground">
-                      {why(s)} · {owesLine(s.debtor, (v) => money(v, "EUR"))}
+                      {why(
+                        s,
+                        owesLine(s.debtor, (v) => money(v, "EUR")),
+                      )}
                     </p>
                   </div>
                 </div>

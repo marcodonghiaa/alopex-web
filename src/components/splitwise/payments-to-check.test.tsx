@@ -63,19 +63,22 @@ describe("PaymentsToCheck", () => {
     expect(screen.getByText("Is this Marverdi?")).toBeTruthy();
     expect(screen.getByText(/from MARIO VERDI/)).toBeTruthy();
     expect(screen.getByText("€320.00")).toBeTruthy();
-    expect(screen.getByText(/The name looks alike · owes you €320.00/)).toBeTruthy();
+    expect(screen.getByText(/The names look alike · owes you €320.00/)).toBeTruthy();
     expect(screen.getByText(/15 Nov/)).toBeTruthy();
   });
 
   it("says why for a linked payer and an exact amount", () => {
     view([suggestion({ reason: "linked" })]);
-    expect(screen.getByText(/Marverdi paid you from this name before/)).toBeTruthy();
+    expect(
+      screen.getByText(/You linked this payer to Marverdi before · owes you €320.00/),
+    ).toBeTruthy();
     expect(screen.getByRole("button", { name: "Not Marverdi" })).toBeTruthy();
   });
 
   it("an exact amount names the person it matches", () => {
     view([suggestion({ reason: "amount" })]);
-    expect(screen.getByText(/Same as what Marverdi owes you/)).toBeTruthy();
+    // The payment's amount is right above: no second "owes you €…" (U5).
+    expect(screen.getByText("Exactly what Marverdi owes you")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Not a payback" })).toBeTruthy();
   });
 
