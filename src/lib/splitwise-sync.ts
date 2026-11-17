@@ -58,9 +58,6 @@ export class SyncError extends Error {
   get rateLimited() {
     return this.status === 429;
   }
-  get needsReconnect() {
-    return this.code === "needs_reconnect";
-  }
 }
 
 async function call<T>(name: string, body: Record<string, unknown>, fallback: string): Promise<T> {

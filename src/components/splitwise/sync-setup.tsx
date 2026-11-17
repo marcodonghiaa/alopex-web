@@ -171,7 +171,7 @@ const DELETE_DETAIL =
  * Disconnect deletes the key; the user chooses whether what was synced goes too. In "delete" mode
  * (already disconnected, data kept) it only deletes what was synced, once confirmed.
  */
-export function DisconnectDialog({
+function DisconnectDialog({
   open,
   onOpenChange,
   mode = "disconnect",

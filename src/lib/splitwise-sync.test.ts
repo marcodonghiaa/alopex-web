@@ -178,7 +178,6 @@ describe("Edge Function calls", () => {
       status: 409,
       code: "needs_reconnect",
     });
-    expect((err as SyncError).needsReconnect).toBe(true);
     expect((err as SyncError).rateLimited).toBe(false);
 
     invoke.mockResolvedValue(
