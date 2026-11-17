@@ -113,8 +113,9 @@ export function InvestmentIncome({
         </table>
       </GroupedList>
       <p className="mt-2 px-4 text-xs text-muted-foreground">
-        Dividends and interest are after tax. Taxes and fees not tied to a holding, like stamp duty,
-        count here but not in any holding's return.
+        {page === "crypto"
+          ? "Taxes and fees not tied to a coin count here but not in any coin's return."
+          : "Dividends and interest are after tax. Taxes and fees not tied to a holding, like stamp duty, count here but not in any holding's return."}
       </p>
     </section>
   );

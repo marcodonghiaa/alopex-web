@@ -87,6 +87,22 @@ describe("InvestmentIncome", () => {
     expect(screen.getByText(/^Dividends and interest are after tax\./)).toBeInTheDocument();
   });
 
+  it("polish-4 UB5 the Crypto page's note speaks of coins, not stamp duty", () => {
+    render(
+      <InvestmentIncome
+        page="crypto"
+        today="2026-11-17"
+        events={[ev({ kind: "fee", asset_kind: "crypto", key: null, amount_eur: -3 })]}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "Taxes and fees not tied to a coin count here but not in any coin's return.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/stamp duty/)).toBeNull();
+  });
+
   it("this year is your own calendar's, not UTC's", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-12-31T23:30:00Z"));
