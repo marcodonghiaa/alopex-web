@@ -160,7 +160,7 @@ function SplitwisePage() {
           />
         ) : (
           <>
-            <p className="text-[0.9375rem] font-medium text-muted-foreground">{net.label}</p>
+            <p className="text-[0.9375rem] text-muted-foreground">{net.label}</p>
             <div className="mt-1">
               <HeadlineFigure value={net.amount} currency="EUR" />
             </div>

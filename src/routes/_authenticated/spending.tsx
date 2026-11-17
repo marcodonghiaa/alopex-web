@@ -1,17 +1,21 @@
 import { dateLocale } from "@/lib/locale";
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
+import { ChevronDown, ThumbsDown } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { CategoryAvatar } from "@/components/category-avatar";
 import { CategoryRow } from "@/components/spending/category-row";
 import { supabase } from "@/integrations/supabase/client";
-import { formatISODate } from "@/lib/date";
+import { formatDay, formatISODate } from "@/lib/date";
+import { cleanMerchantName } from "@/lib/merchant-name";
 import { categoryColor } from "@/lib/categories";
 import { shareSummary } from "@/lib/chart-summary";
 import { categorySpend, sharePercent, spendChange, type MonthlySpendRow } from "@/lib/spending";
-import { TONE_TEXT, type Tone } from "@/lib/tone";
+import { TONE_TEXT } from "@/lib/tone";
 import {
   formatEur,
   monthFromParam,
+  monthParam,
   parseTransactionsSearch,
   personalAmountEur,
   startOfMonth,
@@ -22,7 +26,7 @@ import { Stripes } from "@/components/share-bar";
 import { EmptyState } from "@/components/empty-state";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
+import { GroupedList } from "@/components/ui/grouped-list";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_authenticated/spending")({
@@ -54,12 +58,24 @@ interface RegretRow {
   category: string | null;
   personal_signed_amount_eur: number | null;
   signed_amount_eur: number | null;
+  entry_reference: string | null;
+  creditor_name: string | null;
+  booking_date: string | null;
+}
+
+interface RegretPurchase {
+  ref: string | null;
+  name: string | null;
+  date: string | null;
+  amount: number;
 }
 
 interface RegretGroup {
   category: string;
   total: number;
   count: number;
+  /** Newest first. */
+  purchases: Array<RegretPurchase>;
 }
 
 async function fetchSpendForMonth(month: Date): Promise<Array<MonthlySpendRow>> {
@@ -77,7 +93,9 @@ async function fetchRegretSpend(month: Date): Promise<Array<RegretGroup>> {
   const end = formatISODate(new Date(month.getFullYear(), month.getMonth() + 1, 1));
   const { data, error } = await supabase
     .from("v_transactions_eur")
-    .select("category,personal_signed_amount_eur,signed_amount_eur")
+    .select(
+      "category,personal_signed_amount_eur,signed_amount_eur,entry_reference,creditor_name,booking_date",
+    )
     .eq("worth_it", "no")
     .eq("flow_type", "spend") // a refunded charge was money back, not a regret
     .gte("booking_date", start)
@@ -87,15 +105,24 @@ async function fetchRegretSpend(month: Date): Promise<Array<RegretGroup>> {
   for (const row of (data ?? []) as Array<RegretRow>) {
     const category = row.category ?? "Uncategorized";
     const amount = personalAmountEur(row);
+    const purchase = {
+      ref: row.entry_reference,
+      name: cleanMerchantName(row.creditor_name),
+      date: row.booking_date,
+      amount,
+    };
     const existing = byCategory.get(category);
     if (existing) {
       existing.total += amount;
       existing.count += 1;
+      existing.purchases.push(purchase);
     } else {
-      byCategory.set(category, { category, total: amount, count: 1 });
+      byCategory.set(category, { category, total: amount, count: 1, purchases: [purchase] });
     }
   }
-  return Array.from(byCategory.values()).sort((a, b) => b.total - a.total);
+  const groups = Array.from(byCategory.values()).sort((a, b) => b.total - a.total);
+  for (const g of groups) g.purchases.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+  return groups;
 }
 
 function SpendingPage() {
@@ -119,8 +146,6 @@ function SpendingPage() {
     queryFn: () => fetchRegretSpend(month),
   });
   const regretRows = regretQuery.data ?? [];
-  const regretTotal = regretRows.reduce((sum, r) => sum + r.total, 0);
-  const regretCount = regretRows.reduce((sum, r) => sum + r.count, 0);
 
   const rows = useMemo(() => categorySpend(spendQuery.data ?? []), [spendQuery.data]);
   const total = rows.reduce((sum, r) => sum + r.spend_eur, 0);
@@ -177,12 +202,25 @@ function SpendingPage() {
         <>
           {/* Headline: the month's spend, then how it splits by category */}
           <section aria-label={`Spent in ${monthLabel}`} className="mb-8">
-            <p className="text-[0.9375rem] font-medium text-muted-foreground">Spent</p>
+            <p className="text-[0.9375rem] text-muted-foreground">Spent</p>
+            {/* The change chip as on Net Worth: less spent reads green */}
             <div className="mt-1">
-              <HeadlineFigure value={total} currency="EUR" />
+              <HeadlineFigure
+                value={total}
+                currency="EUR"
+                change={
+                  change
+                    ? {
+                        value: change.delta,
+                        percent: change.delta / prevTotal,
+                        className: TONE_TEXT[change.tone],
+                      }
+                    : undefined
+                }
+              />
             </div>
             {change && (
-              <SpendChangeLine delta={change.delta} tone={change.tone} versus={prevMonthName} />
+              <p className="mt-1 text-[0.8125rem] text-muted-foreground">vs {prevMonthName}</p>
             )}
             {/* The stripes show the split at a glance; each row below names its own share */}
             <div className="mt-5 max-w-2xl">
@@ -217,46 +255,84 @@ function SpendingPage() {
         </>
       )}
 
-      {regretCount > 0 && (
-        <section className="mt-6">
-          <SectionTitle>
-            Not worth it — {formatEur(regretTotal)} across {regretCount} purchase
-            {regretCount === 1 ? "" : "s"}
-          </SectionTitle>
-          <GroupedList>
-            <ul className="divide-y divide-hairline">
-              {regretRows.map((row) => (
-                <li
-                  key={row.category}
-                  className="flex items-center justify-between px-4 py-3 text-sm sm:px-5"
-                >
-                  <span className="font-medium text-foreground">
-                    {row.category}{" "}
-                    <span className="text-xs text-muted-foreground">({row.count})</span>
-                  </span>
-                  <span className="font-figure text-foreground">{formatEur(row.total)}</span>
-                </li>
-              ))}
-            </ul>
-          </GroupedList>
-        </section>
-      )}
+      <RegretCard groups={regretRows} month={month} />
     </div>
   );
 }
 
-// "Is that normal?": one plain line against the previous month, coloured by meaning (less is good).
-function SpendChangeLine({ delta, tone, versus }: { delta: number; tone: Tone; versus: string }) {
+// Purchases answered "not worth it", as their own card: a category opens to its purchases,
+// and each one opens in Activity on its row.
+function RegretCard({ groups, month }: { groups: Array<RegretGroup>; month: Date }) {
+  const [open, setOpen] = useState<string | null>(null);
+  if (groups.length === 0) return null;
+  const total = groups.reduce((sum, g) => sum + g.total, 0);
   return (
-    <p className={`mt-1.5 text-sm ${TONE_TEXT[tone]}`}>
-      {tone === "neutral" ? (
-        <>About the same as {versus}</>
-      ) : (
-        <>
-          <span className="font-figure">{formatEur(Math.abs(delta))}</span>{" "}
-          {delta < 0 ? "less" : "more"} than {versus}
-        </>
-      )}
-    </p>
+    <section aria-label="Not worth it" className="mt-6">
+      <GroupedList>
+        <h2 className="flex items-center gap-2 px-4 py-3 text-lg font-semibold text-foreground sm:px-5">
+          <ThumbsDown aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+          <span className="flex-1">Not worth it</span>
+          <span className="font-figure">{formatEur(total)}</span>
+        </h2>
+        <ul className="divide-y divide-hairline">
+          {groups.map((g) => {
+            const isOpen = open === g.category;
+            return (
+              <li key={g.category}>
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  onClick={() => setOpen(isOpen ? null : g.category)}
+                  className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-accent/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:px-5"
+                >
+                  <CategoryAvatar category={g.category === "Uncategorized" ? null : g.category} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium text-foreground">{g.category}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {g.count} purchase{g.count === 1 ? "" : "s"}
+                    </span>
+                  </span>
+                  <span className="font-figure shrink-0 text-foreground">{formatEur(g.total)}</span>
+                  <ChevronDown
+                    aria-hidden
+                    className={`size-4 shrink-0 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {isOpen && (
+                  <ul className="divide-y divide-hairline bg-muted/40">
+                    {g.purchases.map((p, i) => (
+                      <li key={p.ref ?? i}>
+                        <Link
+                          to="/transactions"
+                          // Activity scrolls to the purchase itself; a reset to the top would undo it.
+                          resetScroll={false}
+                          search={{
+                            month: monthParam(month),
+                            ...(p.ref ? { highlight: p.ref } : {}),
+                          }}
+                          className="flex min-h-11 items-center gap-3 py-2 pr-4 pl-15 text-sm transition-colors hover:bg-accent/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:pr-5"
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-foreground">{p.name ?? "—"}</span>
+                            {p.date && (
+                              <span className="block text-xs text-muted-foreground">
+                                {formatDay(p.date)}
+                              </span>
+                            )}
+                          </span>
+                          <span className="font-figure shrink-0 text-foreground">
+                            {formatEur(p.amount)}
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </GroupedList>
+    </section>
   );
 }

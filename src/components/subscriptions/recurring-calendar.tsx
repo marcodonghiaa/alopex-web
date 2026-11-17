@@ -339,10 +339,10 @@ export function RecurringCalendar({
           <GroupedList>
             <ul className="divide-y divide-hairline">
               {[...days].map(([iso, list]) =>
-                list.map((e, i) => (
+                list.map((e) => (
                   <li key={e.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
                     <span className="w-12 shrink-0 font-figure text-xs whitespace-nowrap text-muted-foreground">
-                      {i === 0 ? formatBookingDateShort(iso, month) : ""}
+                      {formatBookingDateShort(iso, month)}
                     </span>
                     <StatusIcon entry={e} />
                     <span className="min-w-0 flex-1">

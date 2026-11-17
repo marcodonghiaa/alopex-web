@@ -4,7 +4,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { ChevronDown, Link2, Loader2 } from "lucide-react";
+import { ChevronDown, Import, Link2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { MaskedIban } from "@/components/masked-iban";
 import { Button } from "@/components/ui/button";
@@ -271,23 +271,28 @@ function AccountsPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8 md:py-12">
-      <header className="mb-10">
-        <h1 className="text-[0.9375rem] font-medium text-muted-foreground">Accounts</h1>
-        <div className="mt-1 min-h-16">
-          {bankQuery.isPending ? (
-            <Skeleton className="h-16 w-72" />
-          ) : bankQuery.isError ? (
-            <p className="figure-display text-muted-foreground">—</p>
-          ) : (
-            <HeadlineFigure value={totalBankEur + totalDebtEur} currency="EUR" />
-          )}
+      {/* Title and total; importing is a tool, so it is an icon, not a line of copy. */}
+      <header className="mb-8 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-lg font-semibold text-foreground">Accounts</h1>
+          <div className="mt-1 min-h-12">
+            {bankQuery.isPending ? (
+              <Skeleton className="h-16 w-72" />
+            ) : bankQuery.isError ? (
+              <p className="figure-display text-muted-foreground">—</p>
+            ) : (
+              <HeadlineFigure value={totalBankEur + totalDebtEur} currency="EUR" />
+            )}
+          </div>
         </div>
-        <p className="mt-3 text-sm text-muted-foreground">
-          {debts.length > 0 ? "Your bank accounts and debts." : "Your bank accounts."}{" "}
-          <Link to="/import" className="text-primary underline-offset-2 hover:underline">
-            Import data
-          </Link>
-        </p>
+        <Link
+          to="/import"
+          aria-label="Import data"
+          title="Import data"
+          className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          <Import aria-hidden className="size-5" />
+        </Link>
       </header>
 
       {/* Bank accounts */}
@@ -362,7 +367,7 @@ function AccountsPage() {
                 return (
                   <li key={group.bank} className="px-4 py-3 sm:px-5">
                     {/* Main (EUR) account */}
-                    <div className="flex items-center gap-3">
+                    <div className="relative flex items-center gap-3">
                       <AccountBadge
                         label={group.main.label ?? group.bank}
                         bank={group.bank}
@@ -470,8 +475,8 @@ function AccountsPage() {
                       <span className="sr-only">(opens in new tab)</span>
                     </a>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      Once per bank: in your app, use Link accounts and pick this bank. Already
-                      done? Skip.
+                      First time with this bank? In Enable Banking, open your app, choose Link
+                      accounts and pick this bank. Only needed once.
                     </p>
                   </li>
                   <li>Pick the bank below, then Approve here and sign in with your bank.</li>
@@ -595,7 +600,7 @@ function AccountsPage() {
             {debts.map((a) => {
               const bank = bankOf(a);
               return (
-                <li key={a.uid} className="flex items-center gap-3 px-4 py-3 sm:px-5">
+                <li key={a.uid} className="relative flex items-center gap-3 px-4 py-3 sm:px-5">
                   <AccountBadge label={a.label ?? bank} bank={bank} logo={a.bank_logo ?? null} />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium text-foreground">

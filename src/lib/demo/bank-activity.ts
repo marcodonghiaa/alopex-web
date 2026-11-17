@@ -35,7 +35,8 @@ const MERCHANTS: ReadonlyArray<Merchant> = [
     lo: 6,
     hi: 48,
   },
-  { category: "Dine Out", names: ["Caffè Centrale", "Bar Stazione"], lo: 2, hi: 9 },
+  // Card statements often carry the processor tag; the list shows the cleaned name.
+  { category: "Dine Out", names: ["Caffè Centrale", "SQ *bar Stazione"], lo: 2, hi: 9 },
   {
     category: "Transports",
     names: ["Trenitalia", "Taxi Milano", "Metro Pass", "Station Fuel"],

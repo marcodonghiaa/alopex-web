@@ -85,9 +85,9 @@ export function formatRate(rate: number | null): string {
   if (rate == null) return "—";
   // Tiny income (a refund, no salary) gives rates like −4,999,900%: show a floor instead.
   if (rate < RATE_FLOOR) return `< ${formatPercent(RATE_FLOOR, { digits: 0, signed: true })}`;
-  // Signed only below zero, with a real minus; a rate that rounds to 0% shows none.
-  const negative = rate < 0 && Math.round(-rate * 100) >= 1;
-  return formatPercent(negative ? rate : Math.abs(rate), { digits: 0, signed: negative });
+  // Signed only below zero, with a real minus; a rate that rounds to 0.0% shows none.
+  const negative = rate < 0 && Math.round(-rate * 1000) >= 1;
+  return formatPercent(negative ? rate : Math.abs(rate), { signed: negative });
 }
 
 const toCents = (v: number) => Math.round(v * 100) / 100 || 0;

@@ -32,9 +32,9 @@ vi.mock("@/integrations/supabase/client", () => ({
       for (const m of ["select", "order", "limit", "in"]) q[m] = () => q;
       q["then"] = (resolve: (v: unknown) => void) => {
         // The exchange rates never arrive: the page must say it is waiting, not that there are none.
+        if (rowsFor[table]) return resolve({ data: rowsFor[table], error: null });
         if (table === "fx_rates") return;
         if (table === failTable) return resolve({ data: null, error: { message: "boom" } });
-        if (rowsFor[table]) return resolve({ data: rowsFor[table], error: null });
         if (historyOnly)
           return resolve({ data: table === "net_worth_history" ? [HISTORY] : [], error: null });
         resolve({ data: table === "v_net_worth_daily" ? [SNAPSHOT] : [], error: null });
@@ -147,32 +147,50 @@ const day = (snapshot_date: string, total_eur: number) => ({
   total_eur,
 });
 
-describe("Net worth page: today", () => {
-  // protects=Today reads like the range line: amount, (percent), label, coloured by sign;
-  // fails_when=Today shows only a percent, or a Month figure comes back
-  it("shows today's move as amount and percent, red when down, with no Month", async () => {
+describe("Net worth page: headline (iOS view board)", () => {
+  // protects=the range change sits beside the figure as a percent, a tap shows the amount, and the
+  // range is named once underneath; fails_when=a separate Today line comes back
+  it("shows the range change beside the figure, with no Today line", async () => {
     rowsFor = {
       v_net_worth_daily: [
-        day("2026-10-31", 1000),
-        day("2026-11-09", 1250),
-        day("2026-11-10", 1000),
+        day("2025-12-31", 1000),
+        day("2026-11-09", 1500),
+        day("2026-11-10", 1250),
       ],
     };
     renderPage();
-    const label = await screen.findByText("Today");
-    const line = label.parentElement!;
-    expect(line.textContent).toBe("−€250 (−20.00%)Today");
-    expect(line.firstElementChild!.className).toContain("text-negative");
-    expect(screen.queryByText("Month")).toBeNull();
+    const chip = await screen.findByRole("button", { name: /show change as amount/i });
+    expect(chip).toHaveTextContent("▲ 25.00%");
+    expect(chip.className).toContain("text-positive");
+    expect(screen.getByText("Year to date")).toBeInTheDocument();
+    expect(screen.queryByText("Today")).toBeNull();
+    await userEvent.click(chip);
+    expect(screen.getByRole("button", { name: /show change as percent/i })).toHaveTextContent(
+      "▲ €250.00",
+    );
     rowsFor = {};
   });
 
-  it("is green and signed + when up", async () => {
-    rowsFor = { v_net_worth_daily: [day("2026-11-09", 1000), day("2026-11-10", 1250)] };
+  it("titles the page like the Breakdown card", async () => {
     renderPage();
-    const line = (await screen.findByText("Today")).parentElement!;
-    expect(line.textContent).toBe("+€250 (+25.00%)Today");
-    expect(line.firstElementChild!.className).toContain("text-positive");
+    const title = await screen.findByRole("heading", { level: 1, name: "Net worth" });
+    expect(title.className).toContain("font-semibold");
+    expect(title.className).toContain("text-foreground");
+  });
+
+  it("offers WTD and no 2Y", async () => {
+    renderPage();
+    expect(await screen.findByRole("radio", { name: "WTD" })).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "2Y" })).toBeNull();
+  });
+
+  // protects=the rate line is just the rate and its source
+  it("writes the exchange rate with no label or date", async () => {
+    rowsFor = { fx_rates: [{ date: "2026-11-12", currency: "USD", rate_to_eur: 0.9024 }] };
+    renderPage();
+    await userEvent.click(await screen.findByRole("radio", { name: "USD" }));
+    expect(await screen.findByText("1 USD = 0.9024 EUR · ECB")).toBeInTheDocument();
+    expect(screen.queryByText(/Rate:/)).toBeNull();
     rowsFor = {};
   });
 });
@@ -191,7 +209,9 @@ describe("Net worth page: sync freshness", () => {
   it("says when the banks last synced, as plain text when all is well", async () => {
     rowsFor = { v_bank_accounts_latest: [bank(new Date().toISOString().slice(0, 10))] };
     renderPage();
-    expect(await screen.findByText("Synced today")).toBeInTheDocument();
+    const synced = await screen.findByText("Synced today");
+    // It sits on the range pills' row, not under the headline.
+    expect(synced.closest("[data-chart-controls]")).not.toBeNull();
     expect(screen.queryByRole("link", { name: /attention/ })).toBeNull();
     rowsFor = {};
   });

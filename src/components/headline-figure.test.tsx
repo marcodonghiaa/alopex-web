@@ -16,7 +16,9 @@ describe("figure-display (HeadlineFigure)", () => {
   it("lets a very long amount wrap instead of widening the page", () => {
     const rule = css.match(/@utility figure-display\s*\{([^}]*)\}/)?.[1] ?? "";
     expect(rule).toMatch(/overflow-wrap:\s*anywhere/);
-    expect(rule).toMatch(/font-weight:\s*400/);
+    expect(rule).toMatch(/font-weight:\s*700/);
+    // Bold sans like the big broker apps, not the mono figure face (iOS view board).
+    expect(rule).toMatch(/font-family:\s*var\(--font-sans\)/);
   });
 
   it("keeps cents and symbol at full size: cents at 55%, symbol muted", () => {
@@ -68,5 +70,48 @@ describe("figure-display (HeadlineFigure)", () => {
   it("writes a negative amount with a real minus sign", () => {
     const { container } = render(<HeadlineFigure value={-1234.5} currency="EUR" />);
     expect(container.textContent).toBe("−€1,234.50");
+  });
+
+  // iOS view board: the change sits beside the figure, Trade Republic style; a tap swaps % and amount.
+  it("shows the change as a percent beside the figure and swaps to the amount on tap", () => {
+    render(
+      <HeadlineFigure
+        value={1000}
+        currency="EUR"
+        change={{ value: 250, percent: 0.25, className: "text-positive" }}
+      />,
+    );
+    const chip = screen.getByRole("button", { name: /show change as amount/i });
+    expect(chip).toHaveTextContent("▲ 25.00%");
+    expect(chip.className).toContain("text-positive");
+    chip.click();
+  });
+
+  it("shows a fall with a down arrow and the amount after a tap", async () => {
+    const { findByRole } = render(
+      <HeadlineFigure
+        value={1000}
+        currency="EUR"
+        change={{ value: -250, percent: -0.2, className: "text-negative" }}
+      />,
+    );
+    const chip = screen.getByRole("button", { name: /show change as amount/i });
+    expect(chip).toHaveTextContent("▼ 20.00%");
+    chip.click();
+    expect(await findByRole("button", { name: /show change as percent/i })).toHaveTextContent(
+      "▼ €250.00",
+    );
+  });
+
+  it("shows the amount when there is no percent to show", () => {
+    render(
+      <HeadlineFigure
+        value={1000}
+        currency="EUR"
+        change={{ value: 5, percent: null, className: "" }}
+      />,
+    );
+    expect(screen.getByText("▲ €5.00")).toBeInTheDocument();
+    expect(screen.queryByRole("button")).toBeNull();
   });
 });

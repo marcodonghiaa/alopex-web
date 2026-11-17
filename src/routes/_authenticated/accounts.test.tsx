@@ -30,7 +30,11 @@ vi.mock("@/integrations/supabase/client", () => {
 });
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tanstack/react-router")>()),
-  Link: ({ children }: { children: React.ReactNode }) => <a href="/import">{children}</a>,
+  Link: ({ children, ...props }: { children: React.ReactNode; "aria-label"?: string }) => (
+    <a href="/import" aria-label={props["aria-label"]}>
+      {children}
+    </a>
+  ),
 }));
 
 import { Route } from "./accounts";
@@ -403,5 +407,65 @@ describe("bank redirect with a one-time code", () => {
       }),
     );
     expect(toast.success).not.toHaveBeenCalled();
+  });
+});
+
+// protects=the iOS view board fixes: a tight header, row-tap editing and plain bank-link steps;
+// fails_when=the subtitle or text link returns, rows go back to a pencil, or the steps lose "once"
+describe("phone layout", () => {
+  afterEach(() => {
+    rows.v_bank_accounts_latest = [];
+  });
+  const renderPage = () =>
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+
+  it("titles the page like Net Worth", async () => {
+    renderPage();
+    const h1 = await screen.findByRole("heading", { level: 1, name: "Accounts" });
+    expect(h1).toHaveClass("font-semibold", "text-foreground");
+  });
+
+  it("has Import data as an icon button in the header and no subtitle", async () => {
+    renderPage();
+    const link = await screen.findByRole("link", { name: "Import data" });
+    expect(link.textContent).toBe("");
+    expect(screen.queryByText(/Your bank accounts/)).toBeNull();
+  });
+
+  it("opens an account's menu from the whole row, marked with a chevron", async () => {
+    rows.v_bank_accounts_latest = [
+      {
+        uid: "a1",
+        label: "Demo Bank Current",
+        iban: null,
+        currency: "EUR",
+        snapshot_date: "2026-10-19",
+        amount: 1000,
+        amount_eur: 1000,
+        consent_valid_until: null,
+        bank_name: "Demo Bank",
+        account_type: null,
+        manual: false,
+      },
+    ];
+    renderPage();
+    const edit = await screen.findByRole("button", { name: "Edit Demo Bank" });
+    expect(edit.className).toContain("after:inset-0"); // stretched over the row
+    expect(edit.querySelector(".lucide-chevron-right")).not.toBeNull();
+    expect(edit.querySelector(".lucide-pencil")).toBeNull();
+  });
+
+  it("says linking in Enable Banking is needed once per bank", async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Connect a bank" }));
+    expect(
+      screen.getByText(
+        "First time with this bank? In Enable Banking, open your app, choose Link accounts and pick this bank. Only needed once.",
+      ),
+    ).toBeInTheDocument();
   });
 });

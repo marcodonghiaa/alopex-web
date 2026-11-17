@@ -8,7 +8,7 @@
 
 /*
  * Alopex design system.
- * "Arctic Ledger": figures in Fragment Mono (money), words in Geist.
+ * "Arctic Ledger": words and figures in Geist (figures with even-width digits); codes in Fragment Mono.
  * Cold snow ground, cold ink as the one control tint, a single Ember accent
  * (fox fur) for focus, the live cursor and counts. Gains/losses are the only
  * other hues; categories are one hue ordered by lightness. Hairlines, not
@@ -63,7 +63,8 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --font-sans:
     "Geist Variable", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, sans-serif;
-  --font-figure: "Fragment Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-figure:
+    "Geist Variable", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, sans-serif;
   --font-mono: "Fragment Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --color-mint: var(--mint);
   --color-ember: var(--ember);
@@ -230,9 +231,7 @@
 
 @utility font-figure {
   font-family: var(--font-figure);
-  /* Fragment Mono ships one weight: never let the browser fake a bold. */
-  font-weight: 400;
-  font-synthesis: none;
+  /* Same font as the words (Net Worth's figure); even-width digits keep columns aligned. */
   font-variant-numeric: tabular-nums lining-nums;
   letter-spacing: -0.02em;
 }
@@ -249,12 +248,12 @@
 
 /* The headline figure on a screen: one exact number, cents set smaller by the component. */
 @utility figure-display {
-  font-family: var(--font-figure);
+  font-family: var(--font-sans);
   font-variant-numeric: tabular-nums lining-nums;
-  font-weight: 400;
+  font-weight: 700;
   font-size: clamp(2.5rem, 1.5rem + 2.8vw, 3.75rem);
   line-height: 1;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.02em;
   color: var(--color-foreground);
   /* A huge amount wraps rather than pushing the page wider than a phone. */
   overflow-wrap: anywhere;
@@ -270,7 +269,7 @@
   font-size: 2rem;
   line-height: 1.15;
   font-weight: 600;
-  letter-spacing: -0.03em;
+  /* Same letter-spacing as the Net Worth title: page titles differ in size only. */
   color: var(--color-foreground);
 }
 
