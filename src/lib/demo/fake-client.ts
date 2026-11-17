@@ -827,60 +827,57 @@ export function createFakeClient(now: Date = new Date()): SupabaseClient<Databas
   const client = {
     from: (table: string) => new Query(store, table),
     rpc: async (fn: string, args: Record<string, unknown> = {}) =>
-      fn === "get_splitwise_connection"
-        ? { data: [demoSplitwiseConnection(now)], error: null }
-        : fn === "holding_performance"
+      fn === "holding_performance"
+        ? {
+            data: demoHoldingPerformance(store.db),
+            error: null,
+          }
+        : fn === "rename_merchant"
           ? {
-              data: demoHoldingPerformance(store.db),
+              data: store.renameMerchant(
+                args["p_entry_reference"] as string,
+                args["p_account_uid"],
+                (args["p_name"] as string | null) ?? null,
+              ),
               error: null,
             }
-          : fn === "rename_merchant"
-            ? {
-                data: store.renameMerchant(
-                  args["p_entry_reference"] as string,
-                  args["p_account_uid"],
-                  (args["p_name"] as string | null) ?? null,
-                ),
-                error: null,
-              }
-            : fn === "resolve_transfer_pair"
-              ? store.resolveTransferPair(args["p_pair"], args["p_keep"] === true)
-              : fn === "stream_action"
-                ? store.streamAction(args["p_stream"], args["p_action"], args["p_args"] as Row)
-                : fn === "add_manual_transaction"
-                  ? store.addManualTransaction(args)
-                  : fn === "set_account_type"
-                    ? store.setAccountType(args["p_account"], args["p_type"] ?? null)
-                    : fn === "add_manual_debt"
-                      ? store.addManualDebt(args)
-                      : fn === "set_manual_balance"
-                        ? store.setManualBalance(args["p_account"], args["p_amount"])
-                        : fn === "delete_manual_debt"
-                          ? store.deleteManualDebt(args["p_account"])
-                          : fn === "set_holding_quantity"
+          : fn === "resolve_transfer_pair"
+            ? store.resolveTransferPair(args["p_pair"], args["p_keep"] === true)
+            : fn === "stream_action"
+              ? store.streamAction(args["p_stream"], args["p_action"], args["p_args"] as Row)
+              : fn === "add_manual_transaction"
+                ? store.addManualTransaction(args)
+                : fn === "set_account_type"
+                  ? store.setAccountType(args["p_account"], args["p_type"] ?? null)
+                  : fn === "add_manual_debt"
+                    ? store.addManualDebt(args)
+                    : fn === "set_manual_balance"
+                      ? store.setManualBalance(args["p_account"], args["p_amount"])
+                      : fn === "delete_manual_debt"
+                        ? store.deleteManualDebt(args["p_account"])
+                        : fn === "set_holding_quantity"
+                          ? {
+                              data: store.setHoldingQuantity(
+                                args["p_kind"],
+                                args["p_key"],
+                                args["p_quantity"],
+                                args["p_source"],
+                              ),
+                              error: null,
+                            }
+                          : fn === "delete_holding"
                             ? {
-                                data: store.setHoldingQuantity(
+                                data: store.deleteHolding(
                                   args["p_kind"],
                                   args["p_key"],
-                                  args["p_quantity"],
                                   args["p_source"],
                                 ),
                                 error: null,
                               }
-                            : fn === "delete_holding"
-                              ? {
-                                  data: store.deleteHolding(
-                                    args["p_kind"],
-                                    args["p_key"],
-                                    args["p_source"],
-                                  ),
-                                  error: null,
-                                }
-                              : fn === "my_transaction_tags"
-                                ? {
-                                    data: demoTagCounts(store.db["transactions"] ?? []),
-                                    error: null,
-                                  }
+                            : fn === "my_transaction_tags"
+                              ? { data: demoTagCounts(store.db["transactions"] ?? []), error: null }
+                              : fn === "get_splitwise_connection"
+                                ? { data: [demoSplitwiseConnection(now)], error: null }
                                 : { data: null, error: DISABLED },
     functions: {
       invoke: async (name: string, opts?: { body?: Record<string, unknown> }) =>
