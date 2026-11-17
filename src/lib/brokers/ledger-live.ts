@@ -196,7 +196,7 @@ export const ledgerLive: BrokerParser = {
     const open = unheldKeys(trades, knownKeys);
     for (const key of open)
       notes.push(
-        `${key} isn't one of your holdings, so it was left out. Add it, then import again.`,
+        `${key} has no Ledger or manual holding, so it was left out. Add it as a coin, then import again.`,
       );
     const ops = (n: number, one: string, many: string) =>
       `${plural(n, "operation")} ${n === 1 ? one : many}`;

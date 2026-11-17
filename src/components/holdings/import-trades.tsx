@@ -21,7 +21,13 @@ import { localToday } from "@/lib/trades";
 import type { Trade } from "@/lib/trades";
 import { BROKERS, NEW_BROKER_URL } from "@/lib/brokers";
 import { loadRates, rateLookup } from "@/lib/brokers/rates";
-import { newTrades, parseTradesCsv, shareUpdates, summarizeImport } from "@/lib/trades-csv";
+import {
+  detectBroker,
+  newTrades,
+  parseTradesCsv,
+  shareUpdates,
+  summarizeImport,
+} from "@/lib/trades-csv";
 
 interface Holdings {
   shares: Map<string, number>;
@@ -62,6 +68,17 @@ async function fetchHoldings(kind: "stock" | "crypto"): Promise<Holdings> {
   };
 }
 
+/** Per coin, the holding a wallet export sets: the wallet's own row, else the one added by hand. */
+function walletHoldings(
+  bySource: Map<string, Map<string, number>>,
+  source: string,
+): Map<string, { source: string; shares: number }> {
+  const out = new Map<string, { source: string; shares: number }>();
+  for (const from of ["Manual", source])
+    for (const [key, shares] of bySource.get(from) ?? []) out.set(key, { source: from, shares });
+  return out;
+}
+
 const dateFormat = new Intl.DateTimeFormat(dateLocale(), {
   day: "numeric",
   month: "short",
@@ -88,10 +105,25 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     enabled: open,
   });
 
+  // A wallet's export (Ledger) is the record of that wallet: it sets the coin's Ledger holding, or
+  // the one you added by hand, never one an exchange sync keeps (Coinbase). Coins with neither are
+  // left out by the parser, with a note.
+  const fileBroker = broker ?? (text.trim() ? detectBroker(text) : undefined);
+  const holdingSource = kind === "crypto" ? fileBroker?.holdingSource : undefined;
+  const wallet = useMemo(
+    () => (holdingSource && keys.data ? walletHoldings(keys.data.bySource, holdingSource) : null),
+    [holdingSource, keys.data],
+  );
   const ctx = useMemo(
     () =>
-      keys.data ? { kind, knownKeys: new Set(keys.data.shares.keys()), today: localToday() } : null,
-    [keys.data, kind],
+      keys.data
+        ? {
+            kind,
+            knownKeys: new Set(wallet ? wallet.keys() : keys.data.shares.keys()),
+            today: localToday(),
+          }
+        : null,
+    [keys.data, kind, wallet],
   );
   // Prices in dollars (a Ledger file): load that currency's daily rates, then read it again.
   const firstPass = useMemo(
@@ -117,19 +149,17 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   }, [firstPass, ctx, need, rates.data, text, broker]);
   const fresh = useMemo(() => (parsed ? newTrades(parsed.trades, saved) : []), [parsed, saved]);
   const summary = useMemo(() => summarizeImport(fresh), [fresh]);
-  // A wallet's file is the record of that wallet only: count its own trades, set its own holding.
-  const fileBroker = BROKERS.find((b) => b.id === parsed?.trades[0]?.source);
-  const holdingSource = kind === "crypto" ? fileBroker?.holdingSource : undefined;
+  // Count only the wallet's own trades for its holding.
   const updates = useMemo(() => {
     if (!parsed?.setsShares || !keys.data) return [];
     if (kind === "stock") return shareUpdates(parsed.trades, saved, keys.data.shares);
-    if (!holdingSource || !fileBroker) return [];
+    if (!wallet || !fileBroker) return [];
     return shareUpdates(
       parsed.trades,
       saved.filter((t) => t.source === fileBroker.id),
-      keys.data.bySource.get(holdingSource) ?? new Map(),
+      new Map([...wallet].map(([key, h]) => [key, h.shares])),
     );
-  }, [parsed, saved, keys.data, kind, holdingSource, fileBroker]);
+  }, [parsed, saved, keys.data, kind, wallet, fileBroker]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -153,7 +183,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                 p_kind: "crypto",
                 p_key: key,
                 p_quantity: shares,
-                p_source: holdingSource!,
+                p_source: wallet!.get(key)!.source,
               });
         if (error) throw error;
       }

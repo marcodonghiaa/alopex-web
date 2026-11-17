@@ -11,6 +11,18 @@ import type { Trade } from "@/lib/trades";
 
 export type { CsvResult } from "@/lib/brokers";
 
+function readHeader(firstLine: string) {
+  const headerLine = firstLine.replace(/^\uFEFF/, "");
+  const separator = [";", "\t", ","].find((s) => headerLine.includes(s)) ?? ",";
+  return { separator, header: splitLine(headerLine, separator).map((h) => h.toLowerCase()) };
+}
+
+/** The broker whose export this is, by its header row; undefined for a plain spreadsheet. */
+export function detectBroker(text: string): BrokerParser | undefined {
+  const first = text.split(/\r?\n/).find((l) => l.trim() !== "");
+  return first ? BROKERS.find((b) => b.detect(readHeader(first).header)) : undefined;
+}
+
 /**
  * All or nothing: any error means nothing is saved, so a half-imported holding can't look right.
  * `from` is the broker you said the file comes from: then only that broker's format is accepted.
@@ -20,9 +32,7 @@ export function parseTradesCsv(text: string, ctx: ParseContext, from?: BrokerPar
   const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
   if (lines.length === 0) return { trades: [], errors: ["The file is empty."], notes: [] };
 
-  const headerLine = lines[0]!.replace(/^\uFEFF/, "");
-  const separator = [";", "\t", ","].find((s) => headerLine.includes(s)) ?? ",";
-  const header = splitLine(headerLine, separator).map((h) => h.toLowerCase());
+  const { separator, header } = readHeader(lines[0]!);
   if (from && !from.detect(header)) {
     return {
       trades: [],

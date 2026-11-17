@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -16,7 +16,7 @@ vi.mock("@/integrations/supabase/client", () => {
     ],
     crypto_holdings: [
       { asset_symbol: "BTC", amount: 0.008, name: "Bitcoin", source: "Ledger" },
-      { asset_symbol: "ETH", amount: 0.4, name: "Ethereum", source: "Ledger" },
+      { asset_symbol: "ETH", amount: 0.4, name: "Ethereum", source: "Manual" },
       { asset_symbol: "USDT", amount: 50, name: "Tether", source: "Coinbase" },
     ],
     // A dollar is 0.9 euro on every day the sample needs.
@@ -76,6 +76,11 @@ function open(kind: "stock" | "crypto") {
 }
 
 describe("ImportTrades", () => {
+  beforeEach(() => {
+    db.inserted.length = 0;
+    db.rpc.length = 0;
+  });
+
   it("asks where the trades are from before asking for a file", () => {
     open("stock");
     expect(screen.getByText("Where are these trades from?")).toBeTruthy();
@@ -137,24 +142,36 @@ describe("ImportTrades", () => {
     expect(screen.queryByText("How to get the file")).toBeNull();
   });
 
-  it("a Ledger Live file is priced in euro, saved, and sets only your Ledger holdings", async () => {
+  it("a Ledger Live file is priced in euro, saved, and sets your wallet coins, not synced ones", async () => {
     open("crypto");
     fireEvent.click(screen.getByRole("button", { name: /Ledger Live/ }));
     const csv = readFileSync("src/lib/brokers/fixtures/ledger_live.csv", "utf8");
     const file = new File([csv], "ledgerwallet-operations.csv", { type: "text/csv" });
     fireEvent.change(screen.getByLabelText("CSV file"), { target: { files: [file] } });
-    const save = await screen.findByRole("button", { name: "Save 9 trades" });
+    // USDT sits only on Coinbase, which syncs itself: its Ledger moves are left out, and it says so.
+    const save = await screen.findByRole("button", { name: "Save 7 trades" });
+    expect(screen.getByText(/USDT has no Ledger or manual holding/)).toBeTruthy();
     expect(screen.getByText("Share counts corrected")).toBeTruthy();
     fireEvent.click(save);
-    await waitFor(() => expect(db.inserted).toHaveLength(9));
+    await waitFor(() => expect(db.inserted).toHaveLength(7));
+    expect(db.inserted.some((t) => t["key"] === "USDT")).toBe(false);
     const firstBuy = db.inserted.find((t) => t["key"] === "BTC" && t["side"] === "buy")!;
     expect(firstBuy["price_eur"]).toBeCloseTo((300 * 0.9) / 0.01);
     expect(firstBuy["user_id"]).toBe("u1");
-    // BTC already matches; ETH is corrected; USDT has no Ledger holding, so it's left alone.
+    // BTC's Ledger holding already matches; ETH, added by hand, is corrected on its own row.
     await waitFor(() => expect(db.rpc).toHaveLength(1));
     expect(db.rpc[0]![0]).toBe("set_holding_quantity");
-    expect(db.rpc[0]![1]).toMatchObject({ p_kind: "crypto", p_key: "ETH", p_source: "Ledger" });
+    expect(db.rpc[0]![1]).toMatchObject({ p_kind: "crypto", p_key: "ETH", p_source: "Manual" });
     expect(db.rpc[0]![1]["p_quantity"]).toBeCloseTo(0.4988);
+  });
+
+  it("a Ledger Live file pasted as a spreadsheet is read the same way", async () => {
+    open("crypto");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/ledger_live.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV text"), { target: { value: csv } });
+    expect(await screen.findByRole("button", { name: "Save 7 trades" })).toBeTruthy();
+    expect(screen.getByText(/USDT has no Ledger or manual holding/)).toBeTruthy();
   });
 
   it("when the exchange rates can't be loaded it says so and offers no save", async () => {

@@ -119,7 +119,7 @@ describe("Ledger Live operations export", () => {
     const noEth = parseTradesCsv(sample, { ...ctx, knownKeys: new Set(["BTC", "USDT"]) });
     expect(noEth.trades.some((t) => t.key === "ETH")).toBe(false);
     expect(noEth.notes).toContain(
-      "ETH isn't one of your holdings, so it was left out. Add it, then import again.",
+      "ETH has no Ledger or manual holding, so it was left out. Add it as a coin, then import again.",
     );
   });
 
