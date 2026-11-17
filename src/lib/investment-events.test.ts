@@ -77,4 +77,12 @@ describe("incomeByKey", () => {
       ["crypto|BTC", 1],
     ]);
   });
+
+  it("tax given back on a holding's trade goes back into its return; an unkeyed refund doesn't", () => {
+    const by = incomeByKey([
+      ev({ kind: "tax_refund", amount_eur: 10 }),
+      ev({ kind: "tax_refund", key: null, asset_kind: null, amount_eur: 5 }),
+    ]);
+    expect([...by]).toEqual([["stock|XX1", 10]]);
+  });
 });

@@ -94,11 +94,14 @@ export function summarizeIncome(events: Array<InvestmentEvent>, from = ""): Inco
   return out;
 }
 
-/** What one holding paid you, after tax: added to its return. */
+/**
+ * What one holding paid you, after tax: added to its return. Tax given back on its trades too,
+ * since the tax charged on them lowers it.
+ */
 export function incomeByKey(events: Array<InvestmentEvent>): Map<string, number> {
   const by = new Map<string, number>();
   for (const e of events) {
-    if (!e.key || !e.asset_kind || !INCOME[e.kind]) continue;
+    if (!e.key || !e.asset_kind || !(INCOME[e.kind] || e.kind === "tax_refund")) continue;
     const k = `${e.asset_kind}|${e.key}`;
     by.set(k, (by.get(k) ?? 0) + e.amount_eur);
   }
