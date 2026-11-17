@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { measure, netShares, parseAmount, summarizeTrades } from "./trades";
+import { measure, netShares, parseAmount, summarizeTrades, tradesMatchHeld } from "./trades";
 import type { Measured, Trade } from "./trades";
 import type { PerformanceRow } from "./performance";
 
@@ -240,5 +240,23 @@ describe("parseAmount", () => {
   });
   it.each(["", "abc", "-1", "1e5"])("refuses %s", (text) => {
     expect(parseAmount(text)).toBeNull();
+  });
+});
+
+// protects=a change by hand is offered as a trade only when trades match what you hold
+describe("tradesMatchHeld", () => {
+  const perf = (state: Measured["state"] | undefined, trades = 1) => ({
+    tradesByKey: new Map([["A", Array.from({ length: trades })]]),
+    measuredByKey: new Map<string, Measured>(state ? [["A", { state } as Measured]] : []),
+  });
+
+  it("is true when the holding's trades add up to what you hold", () => {
+    expect(tradesMatchHeld(perf("ok"), "A")).toBe(true);
+  });
+
+  it("is false without trades, or when they disagree", () => {
+    expect(tradesMatchHeld(perf("ok", 0), "A")).toBe(false);
+    expect(tradesMatchHeld(perf("mismatch"), "A")).toBe(false);
+    expect(tradesMatchHeld(perf("ok"), "B")).toBe(false);
   });
 });
