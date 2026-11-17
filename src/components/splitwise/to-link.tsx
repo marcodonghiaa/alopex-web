@@ -165,8 +165,8 @@ export function ToLink({ connected }: { connected: boolean }) {
           )}
           {count > items.length && (
             <p className="mb-2 px-1 text-xs text-muted-foreground">
-              Showing the newest {formatCount(items.length)} of {formatCount(count)}. Settle these
-              and the rest follow.
+              Showing the newest {formatCount(items.length)} of {formatCount(count)}. Link or ignore
+              these and older ones appear.
             </p>
           )}
           <GroupedList>

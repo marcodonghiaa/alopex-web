@@ -644,3 +644,13 @@ it("lets a long description use two lines", async () => {
   expect(name.className.split(" ")).toContain("line-clamp-2");
   expect(name.className.split(" ")).not.toContain("truncate");
 });
+
+// polish-4 #25: "settle" would read as the Settle-up item type in the same list
+it("tells what brings the older ones in without saying settle", async () => {
+  tables.splitwise_review = { data: [item()], error: null, count: 742 };
+  renderList();
+  const note = await screen.findByText(/^Showing the newest/);
+  expect(note.textContent).toBe(
+    "Showing the newest 1 of 742. Link or ignore these and older ones appear.",
+  );
+});
