@@ -23,10 +23,12 @@ import { useSettleSplitMutation } from "@/components/transactions/mutations";
 import { toast } from "sonner";
 import { fetchSplits, money, netOwed, peopleFrom, type SplitRow } from "@/lib/splits";
 import { HeadlineFigure } from "@/components/headline-figure";
-import { Upload } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SyncSetup } from "@/components/splitwise/sync-setup";
+import { useSplitwiseConnection } from "@/lib/use-splitwise-sync";
+import { ToLink } from "@/components/splitwise/to-link";
 
 export const Route = createFileRoute("/_authenticated/splitwise")({
   head: () => ({
@@ -56,6 +58,7 @@ function SplitwisePage() {
   const queryClient = useQueryClient();
   const splits = useQuery({ queryKey: ["splits"], queryFn: fetchSplits, staleTime: 60_000 });
   const settle = useSettleSplitMutation(queryClient);
+  const connected = useSplitwiseConnection().data?.connected === true;
 
   // The last Splitwise import, kept in this browser so it can be undone after looking at the page.
   const [userId, setUserId] = useState<string | null>(null);
@@ -186,6 +189,8 @@ function SplitwisePage() {
         </p>
       )}
 
+      <ToLink connected={connected} />
+
       <SectionTitle className="mt-8">Split bills · from your transactions</SectionTitle>
       {splits.isError ? (
         <Alert>Couldn't load your splits: {splits.error.message}</Alert>
@@ -199,7 +204,9 @@ function SplitwisePage() {
         />
       )}
 
-      <SectionTitle className="mt-8">Splitwise groups · from your last import</SectionTitle>
+      <SectionTitle className="mt-8">
+        Splitwise groups · {connected ? "synced from Splitwise" : "from your last import"}
+      </SectionTitle>
       {balances.isError ? (
         <Alert>Couldn't load Splitwise balances: {balances.error.message}</Alert>
       ) : balances.isPending ? (
@@ -207,17 +214,8 @@ function SplitwisePage() {
       ) : (
         <BalancesView groups={groups} />
       )}
-      {/* Setup after the balances: a quiet row, like Connect a bank on Accounts. */}
-      <GroupedList className="mt-3">
-        <button
-          type="button"
-          onClick={() => setImporting(true)}
-          className="flex min-h-11 w-full items-center gap-2 px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/40 sm:px-5"
-        >
-          <Upload aria-hidden className="size-4" />
-          Import from Splitwise
-        </button>
-      </GroupedList>
+      {/* Setup after the balances: quiet rows, like Connect a bank on Accounts. */}
+      <SyncSetup onImportFile={() => setImporting(true)} />
       {last && (
         <LastImportRow
           count={last.count}
