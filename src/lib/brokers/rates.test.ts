@@ -105,6 +105,14 @@ describe("loadRates", () => {
     );
   });
 
+  it("asks the exchange-rate site with the currency encoded", async () => {
+    const get = series({});
+    await loadRates("US D", "2026-01-01", "2026-01-05", fakeDb([]), get);
+    expect(get).toHaveBeenCalledWith(
+      "https://api.frankfurter.dev/v1/2025-12-22..2026-01-05?base=EUR&symbols=US%20D",
+    );
+  });
+
   it("says so when the rates can't be loaded", async () => {
     const down = vi.fn(async () => ({ ok: false, json: async () => ({}) }));
     await expect(loadRates("USD", "2025-01-01", "2026-01-05", fakeDb([]), down)).rejects.toThrow(

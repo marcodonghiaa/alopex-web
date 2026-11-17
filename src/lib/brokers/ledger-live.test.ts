@@ -128,6 +128,16 @@ describe("Ledger Live operations export", () => {
     expect(result.needsRates).toEqual({ currency: "USD", from: "2026-01-05", to: "2026-01-05" });
   });
 
+  it("only asks for rates of a real currency code on real days", () => {
+    const odd = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0.01,,h,Bitcoin 1,a,USD&x=1,300,300";
+    const badDate = "zz?x=1,Confirmed,BTC,IN,0.01,,h,Bitcoin 1,a,USD,300,300";
+    for (const line of [odd, badDate]) {
+      const result = parseTradesCsv(row(line), noRates);
+      expect(result.needsRates).toBeUndefined();
+      expect(result.errors).toHaveLength(1);
+    }
+  });
+
   it("values already in euro need no rate", () => {
     const line = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0.01,,h,Bitcoin 1,a,EUR,250,250";
     const result = parseTradesCsv(row(line), noRates);

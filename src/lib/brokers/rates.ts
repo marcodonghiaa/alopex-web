@@ -56,7 +56,7 @@ export async function loadRates(
 
   const until = stored[0]?.date ?? to;
   const res = await get(
-    `https://api.frankfurter.dev/v1/${start}..${until}?base=EUR&symbols=${currency}`,
+    `https://api.frankfurter.dev/v1/${start}..${until}?base=EUR&symbols=${encodeURIComponent(currency)}`,
   ).catch(() => null);
   if (!res?.ok) throw fail();
   // Only real days with a finite rate above zero: a bad answer must never become a price.

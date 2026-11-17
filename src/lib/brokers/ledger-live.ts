@@ -116,7 +116,9 @@ export const ledgerLive: BrokerParser = {
       const priced = rows.filter((get) => !["", "EUR"].includes(get("countervalue ticker")));
       const dates = priced.map((get) => get("operation date").slice(0, 10)).sort();
       const currency = priced[0]?.("countervalue ticker");
-      if (currency && dates.length > 0) {
+      // Only a real currency code on real days; anything else is reported row by row below.
+      const isDay = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
+      if (currency && /^[A-Z]{3}$/.test(currency) && dates.length > 0 && dates.every(isDay)) {
         return {
           trades: [],
           errors: [],
