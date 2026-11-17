@@ -18,6 +18,7 @@ import { formatDay } from "@/lib/date";
 import { localToday, netShares, parseTypedAmount } from "@/lib/trades";
 import { parseQuantity } from "@/lib/holdings";
 import { formatEur } from "@/lib/transactions";
+import { cn } from "@/lib/utils";
 import type { SavedTrade } from "@/lib/use-performance";
 
 interface Form {
@@ -124,6 +125,23 @@ export function TradesDialog({
     else setError(result.error);
   }
 
+  function startEdit(t: SavedTrade) {
+    setEditing(t.id);
+    setError(null);
+    setForm({
+      side: t.side,
+      date: t.trade_date,
+      shares: inputNumber(t.shares),
+      price: inputNumber(t.price_eur),
+      fee: t.fee_eur ? inputNumber(t.fee_eur) : "",
+    });
+  }
+  function cancelEdit() {
+    setForm(blank());
+    setEditing(null);
+    setError(null);
+  }
+
   const set = (field: keyof Form) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
   const sorted = [...trades].sort((a, b) => b.trade_date.localeCompare(a.trade_date));
@@ -157,8 +175,17 @@ export function TradesDialog({
           <p className="flex items-start gap-2 text-sm">
             <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
             <span>
-              A buy has no price, so the return is too high. Edit that trade and enter what you paid
-              per share.
+              A buy has no price, so the return is too high.{" "}
+              <button
+                type="button"
+                className="text-primary underline-offset-2 hover:underline"
+                onClick={() =>
+                  startEdit(trades.find((t) => t.side === "buy" && t.price_eur === 0)!)
+                }
+              >
+                Edit that trade
+              </button>{" "}
+              and enter what you paid per share.
             </span>
           </p>
         )}
@@ -213,8 +240,13 @@ export function TradesDialog({
             </label>
             <Input id="trade-fee" inputMode="decimal" value={form.fee} onChange={set("fee")} />
           </div>
-          <div className="flex items-end">
-            <Button type="submit" disabled={save.isPending} className="w-full">
+          <div className="flex items-end gap-2">
+            {editing && (
+              <Button variant="ghost" onClick={cancelEdit} disabled={save.isPending}>
+                Cancel
+              </Button>
+            )}
+            <Button type="submit" disabled={save.isPending} className="flex-1">
               {save.isPending && <Loader2 className="size-4 animate-spin" />}
               {editing ? "Save trade" : "Add trade"}
             </Button>
@@ -229,7 +261,11 @@ export function TradesDialog({
         {sorted.length > 0 && (
           <ul className="max-h-64 divide-y divide-hairline overflow-y-auto rounded-lg bg-background text-sm">
             {sorted.map((t) => (
-              <li key={t.id} className="flex items-center gap-2 px-3 py-1">
+              <li
+                key={t.id}
+                aria-current={editing === t.id ? "true" : undefined}
+                className={cn("flex items-center gap-2 px-3 py-1", editing === t.id && "bg-accent")}
+              >
                 <span className="min-w-0 flex-1">
                   <span className="font-medium text-foreground">
                     {t.side === "buy" ? "Bought" : "Sold"} {formatQuantity(t.shares, 8)}
@@ -245,17 +281,7 @@ export function TradesDialog({
                   variant="ghost"
                   size="icon"
                   aria-label={`Edit trade of ${t.trade_date}`}
-                  onClick={() => {
-                    setEditing(t.id);
-                    setError(null);
-                    setForm({
-                      side: t.side,
-                      date: t.trade_date,
-                      shares: inputNumber(t.shares),
-                      price: inputNumber(t.price_eur),
-                      fee: t.fee_eur ? inputNumber(t.fee_eur) : "",
-                    });
-                  }}
+                  onClick={() => startEdit(t)}
                 >
                   <Pencil />
                 </Button>
