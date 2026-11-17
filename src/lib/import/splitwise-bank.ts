@@ -89,6 +89,7 @@ export async function fetchBankWindow(
     bank: bank.rows.flatMap((r) => toBankTx(r) ?? []),
     fx: fx.rows,
     capped,
-    completeFrom: capped ? (bank.rows[bank.rows.length - 1]?.booking_date ?? null) : null,
+    // The last date read may have more rows that were cut: complete only from the day after.
+    completeFrom: capped ? addDays(bank.rows[bank.rows.length - 1]?.booking_date ?? from, 1) : null,
   };
 }

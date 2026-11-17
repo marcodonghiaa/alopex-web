@@ -374,7 +374,7 @@ describe("ToLink", () => {
     // polish-3 round 2: Find in bank searches the same rows, so the note must not send you there
     const note = await screen.findByText(/^Suggestions and Find in bank only cover/);
     expect(note.textContent).toBe(
-      "Suggestions and Find in bank only cover bank payments from 5 Nov on.",
+      "Suggestions and Find in bank only cover bank payments from 6 Nov on.",
     );
   });
 

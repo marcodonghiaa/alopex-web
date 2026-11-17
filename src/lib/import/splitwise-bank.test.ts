@@ -105,7 +105,8 @@ describe("fetchBankWindow", () => {
     const w = await fetchBankWindow(["2026-11-10"], []);
     expect(args("transactions", "range")).toHaveLength(10);
     expect(w.capped).toBe(true);
-    expect(w.completeFrom).toBe("2026-11-05");
+    // Other rows on 5 Nov may be the ones cut: complete only from the day after.
+    expect(w.completeFrom).toBe("2026-11-06");
   });
 
   it("pages the rates in date order too", async () => {
