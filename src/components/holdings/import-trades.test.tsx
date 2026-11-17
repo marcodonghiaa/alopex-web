@@ -863,4 +863,29 @@ describe("ImportTrades", () => {
     for (const c of ["sticky", "bottom-0", "bg-background"])
       expect(footer.classList.contains(c), c).toBe(true);
   });
+
+  describe("the spreadsheet route's description follows the file", () => {
+    const description = () => screen.getByRole("dialog").querySelector("h2 + p")!.textContent;
+
+    it("a pasted Ledger Live file is described as Ledger's, in its currency", async () => {
+      open("crypto");
+      fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+      const csv = readFileSync("src/lib/brokers/fixtures/ledger_live.csv", "utf8");
+      fireEvent.change(screen.getByLabelText("CSV text"), { target: { value: csv } });
+      await screen.findByRole("button", { name: "Save 7 trades" });
+      expect(description()).toBe(
+        "A Ledger Live export: read as it comes, its USD values turned into euro with each day's rate.",
+      );
+    });
+
+    it("your own columns keep the columns' description", async () => {
+      open("stock");
+      fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+      fireEvent.change(screen.getByLabelText("CSV text"), {
+        target: { value: "date,side,isin,shares,price\n2026-01-02,buy,XX0000000001,1,10" },
+      });
+      await screen.findByRole("button", { name: "Save 1 trade" });
+      expect(description()).toMatch(/price is per share in EUR/);
+    });
+  });
 });
