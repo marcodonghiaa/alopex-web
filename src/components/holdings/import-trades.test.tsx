@@ -429,6 +429,18 @@ describe("ImportTrades", () => {
     expect(screen.getByText("Fees").parentElement?.textContent).toBe("Fees−€1.00");
   });
 
+  it("polish-4 R3 fees only on the trades don't claim extra rows are saved", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    fireEvent.change(screen.getByLabelText("CSV text"), {
+      target: { value: "date,side,isin,shares,price,fee\n2026-01-15,buy,XX0000000001,1,10,1" },
+    });
+    expect(await screen.findByRole("button", { name: "Save 1 trade" })).toBeTruthy();
+    expect((await screen.findByText("Fees")).parentElement?.textContent).toBe("Fees−€1.00");
+    expect(screen.getByText("Costs on these trades")).toBeInTheDocument();
+    expect(screen.queryByText("Also saved: income, fees and cash")).toBeNull();
+  });
+
   it("polish-4 UB8 the toast calls the other rows income and cash rows", async () => {
     open("stock");
     fireEvent.click(await pickTradeRepublic());

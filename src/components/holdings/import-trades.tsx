@@ -638,7 +638,10 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             {savedEvents.data && (freshEvents.length > 0 || incomeList.length > 0) && (
               <div>
                 <p className="px-1 pb-1.5 text-xs font-medium text-muted-foreground">
-                  Also saved: income, fees and cash
+                  {/* Fees and taxes on the trades alone are no extra rows: don't say "Also saved". */}
+                  {freshEvents.length > 0
+                    ? "Also saved: income, fees and cash"
+                    : "Costs on these trades"}
                 </p>
                 <GroupedList className="border border-hairline">
                   {incomeList.map((r) => (
