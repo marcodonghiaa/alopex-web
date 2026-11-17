@@ -406,6 +406,81 @@ describe("ImportTrades", () => {
     expect(screen.getByText(/USDT has no Ledger or manual holding/)).toBeTruthy();
   });
 
+  describe("polish-5 B1 Trade Republic coins go only to manual coins or ones you don't hold", () => {
+    // Holdings: BTC on Ledger, eth added by hand (0.4), USDT on Coinbase.
+    const tr = (...rows: Array<string>) =>
+      [
+        "datetime,date,category,type,asset_class,name,symbol,shares,price,amount,fee,tax,currency,transaction_id",
+        ...rows.map((r, i) => `2026-03-02T09:30:00Z,2026-03-02,${r},EUR,tr-${i}`),
+      ].join("\n");
+    const ethBuy = "TRADING,BUY,CRYPTO,Ethereum,ETH,0.1,2000,-200,,";
+
+    it("a coin held only on Coinbase is left out, with a note", async () => {
+      open("crypto");
+      pickText(/Trade Republic/, tr("TRADING,BUY,CRYPTO,Tether,USDT,10,0.9,-9,,", ethBuy));
+      fireEvent.click(await screen.findByRole("button", { name: "Save 1 trade" }));
+      expect(
+        screen.getByText(
+          "Tether has no manual holding, so it was left out. Add it as a manual coin, then import again.",
+        ),
+      ).toBeInTheDocument();
+      await waitFor(() => expect(db.inserted).toHaveLength(1));
+      expect(db.inserted[0]).toMatchObject({ key: "ETH", source: "trade_republic" });
+    });
+
+    it("a coin held on Ledger is left out, with a note", async () => {
+      open("crypto");
+      pickText(/Trade Republic/, tr("TRADING,BUY,CRYPTO,Bitcoin,BTC,0.001,60000,-60,,", ethBuy));
+      await screen.findByRole("button", { name: "Save 1 trade" });
+      expect(screen.getByText(/^Bitcoin has no manual holding, so it was left out/)).toBeTruthy();
+    });
+
+    it("a manual coin whose count differs gets its trades, and its count is left alone", async () => {
+      open("crypto");
+      pickText(/Trade Republic/, tr(ethBuy));
+      fireEvent.click(await screen.findByRole("button", { name: "Save 1 trade" }));
+      expect(screen.queryByRole("region", { name: "Holdings to correct" })).toBeNull();
+      expect(screen.queryByText(/has no manual holding/)).toBeNull();
+      await waitFor(() => expect(db.inserted).toHaveLength(1));
+      expect(db.inserted[0]).toMatchObject({ key: "ETH", shares: 0.1 });
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(db.rpc).toEqual([]);
+    });
+
+    it("a coin you don't hold: bought, it's left out with a note; sold off, its trades are kept", async () => {
+      open("crypto");
+      pickText(
+        /Trade Republic/,
+        tr(
+          "TRADING,BUY,CRYPTO,Solana,SOL,2,100,-200,,",
+          "TRADING,BUY,CRYPTO,Cardano,ADA,10,1,-10,,",
+          "TRADING,SELL,CRYPTO,Cardano,ADA,-10,1.2,12,,",
+        ),
+      );
+      await screen.findByRole("button", { name: "Save 2 trades" });
+      expect(
+        screen.getByText(
+          "Solana has no manual holding, so it was left out. Add it as a manual coin, then import again.",
+        ),
+      ).toBeTruthy();
+      expect(screen.getByText(/Cardano · fully sold/)).toBeTruthy();
+    });
+
+    it("a saveback row is saved as a reward and leaves the coin's count alone", async () => {
+      open("crypto");
+      pickText(
+        /Trade Republic/,
+        tr(ethBuy, "BENEFITS,BENEFITS_SAVEBACK,CRYPTO,Ethereum,ETH,0.0015,,3,,"),
+      );
+      fireEvent.click(await screen.findByRole("button", { name: "Save 1 trade and 1 row" }));
+      expect(screen.queryByRole("region", { name: "Holdings to correct" })).toBeNull();
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(db.inserted).toHaveLength(1);
+      expect(db.upserted[0]![1]).toMatchObject([{ kind: "reward", key: "ETH", shares: 0.0015 }]);
+      expect(db.rpc).toEqual([]);
+    });
+  });
+
   it("when the exchange rates can't be loaded it says so and offers no save", async () => {
     db.ratesDown = true;
     open("crypto");

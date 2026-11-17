@@ -63,6 +63,8 @@ export const tradeRepublic: BrokerParser = {
   name: "Trade Republic",
   country: "DE, IT, FR, ES and more",
   kind: "both",
+  // Its coins go only to ones you added by hand: Ledger and Coinbase keep their own records.
+  holdingSource: "Manual",
   howToExport: [
     "Open the Trade Republic app",
     "Profile › Statements › Transaction export",
@@ -238,7 +240,9 @@ export const tradeRepublic: BrokerParser = {
     const open = unheldKeys(trades, knownKeys);
     for (const key of open)
       notes.push(
-        `${names.get(key) || key} isn't in your holdings, so it was left out. Add it, then import again.`,
+        kind === "crypto"
+          ? `${names.get(key) || key} has no manual holding, so it was left out. Add it as a manual coin, then import again.`
+          : `${names.get(key) || key} isn't in your holdings, so it was left out. Add it, then import again.`,
       );
     if (reverse > 0)
       notes.push(
