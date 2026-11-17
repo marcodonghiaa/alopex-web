@@ -1,4 +1,4 @@
-import { addDays, isDay } from "@/lib/date";
+import { addDays, formatDay, isDay } from "@/lib/date";
 import { plural } from "@/lib/plural";
 import type { Trade } from "@/lib/trades";
 import { splitLine, unheldKeys } from "./csv";
@@ -77,6 +77,13 @@ const FREE = new Set(["REWARD", "REWARD_PAYOUT"]);
 const LOST = new Set(["SLASH", "BURN"]);
 const familyOf = (type: string) =>
   IN.has(type) ? "in" : OUT.has(type) ? "out" : STAKE.has(type) ? "stake" : null;
+// An operation type in plain words, for line errors.
+const wordFor = (type: string) =>
+  FREE.has(type)
+    ? "reward"
+    : type === "FEES"
+      ? "fee"
+      : ({ in: "received", out: "sent", stake: "staking" } as const)[familyOf(type)!];
 // A plain decimal (1e-8 too); Number alone would also read 0x10 as 16. Blank is zero.
 const num = (text: string) => {
   const t = text.trim();
@@ -158,10 +165,25 @@ export const ledgerLive: BrokerParser = {
       const fee = num(get("operation fees"));
       const valueText = get("countervalue at operation date").trim();
       const value = num(valueText);
-      const ok = (n: number) => Number.isFinite(n) && n >= 0;
-      if (!isDay(date) || !key || !ok(amount) || !ok(fee) || !ok(value)) {
-        return void errors.push(`Line ${i + 2}: couldn't read this ${type} row.`);
-      }
+      // A line error says what's wrong, then the coin and what the operation was.
+      const fail = (what: string, withCoin = true) => {
+        const when = [wordFor(type), isDay(date) ? formatDay(date) : ""].filter(Boolean).join(" ");
+        const about = withCoin && key ? `${key}, ${when}` : when;
+        return void errors.push(`Line ${i + 2}: ${what} (${about}).`);
+      };
+      const bad = (field: string, n: number, text: string) =>
+        Number.isNaN(n)
+          ? `the ${field} "${text.trim()}" isn't a number`
+          : !Number.isFinite(n)
+            ? `the ${field} "${text.trim()}" is too big`
+            : null;
+      if (!isDay(date)) return fail(`the date "${date}" isn't a date`);
+      if (!key) return fail("there's no coin");
+      const unreadable =
+        bad("amount", amount, get("operation amount")) ??
+        bad("fee", fee, get("operation fees")) ??
+        bad("value", value, valueText);
+      if (unreadable) return fail(unreadable);
       // What leaves or enters the wallet, as Ledger Live counts its balance.
       // A failed send moved nothing but its fee, and a failed receive cost you nothing.
       const failed = get("status") === "Failed";
@@ -196,9 +218,12 @@ export const ledgerLive: BrokerParser = {
       }
       // Each number can be fine and still give a price too big to save. The database keeps coin
       // symbols up to 100 characters and ids up to 200.
-      const tooBig = !Number.isFinite(price) || !Number.isFinite(shares * price);
-      if (tooBig || key.length > 100 || (id?.length ?? 0) > 200) {
-        return void errors.push(`Line ${i + 2}: couldn't read this ${type} row.`);
+      if (key.length > 100) return fail("the coin name is too long", false);
+      if ((id?.length ?? 0) > 200) return fail("the operation hash is too long");
+      if (!Number.isFinite(price) || !Number.isFinite(shares * price)) {
+        return fail(
+          `the value "${valueText}" is too big for the amount "${get("operation amount").trim()}"`,
+        );
       }
       trades.push({
         kind,

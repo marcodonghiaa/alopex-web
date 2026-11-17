@@ -242,11 +242,11 @@ describe("Ledger Live operations export", () => {
   it("a ticker or hash too long to save is a line error, not a failed save", () => {
     const longTicker = `2026-01-05T08:00:00.000Z,Confirmed,${"X".repeat(101)},IN,1,,h,A,a,USD,1,1`;
     expect(parseTradesCsv(row(longTicker), ctx).errors).toEqual([
-      "Line 2: couldn't read this IN row.",
+      "Line 2: the coin name is too long (received 5 Jan 2026).",
     ]);
     const longHash = `2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,1,,${"a".repeat(195)},A,a,USD,1,1`;
     expect(parseTradesCsv(row(longHash), ctx).errors).toEqual([
-      "Line 2: couldn't read this IN row.",
+      "Line 2: the operation hash is too long (BTC, received 5 Jan 2026).",
     ]);
   });
 
@@ -256,23 +256,51 @@ describe("Ledger Live operations export", () => {
       expect(parseTradesCsv(row(line), ctx).errors).toHaveLength(1);
     }
     const value = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,1,,h,Bitcoin 1,a,USD,1e999,1";
-    expect(parseTradesCsv(row(value), ctx).errors).toEqual(["Line 2: couldn't read this IN row."]);
+    expect(parseTradesCsv(row(value), ctx).errors).toEqual([
+      'Line 2: the value "1e999" is too big (BTC, received 5 Jan 2026).',
+    ]);
   });
 
   it("a value too big for its amount is a line error, not a failed save", () => {
     const line = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,1e-10,,h,Bitcoin 1,a,USD,1e308,1";
-    expect(parseTradesCsv(row(line), ctx).errors).toEqual(["Line 2: couldn't read this IN row."]);
+    expect(parseTradesCsv(row(line), ctx).errors).toEqual([
+      'Line 2: the value "1e308" is too big for the amount "1e-10" (BTC, received 5 Jan 2026).',
+    ]);
   });
 
   it("an unreadable value is a line error even where the value sets no price", () => {
     const line = "2026-01-05T08:00:00.000Z,Confirmed,ATOM,REWARD,2,,h,Cosmos 1,a,USD,abc,20";
     const result = parseTradesCsv(row(line), { ...ctx, knownKeys: new Set(["ATOM"]) });
-    expect(result.errors).toEqual(["Line 2: couldn't read this REWARD row."]);
+    expect(result.errors).toEqual([
+      'Line 2: the value "abc" isn\'t a number (ATOM, reward 5 Jan 2026).',
+    ]);
+  });
+
+  it("a line error names the field, its value, the coin and the operation in plain words", () => {
+    const at = (cells: string) =>
+      parseTradesCsv(row(`2026-01-05T08:00:00.000Z,Confirmed,${cells},A,a,USD,300,300`), ctx)
+        .errors;
+    expect(at("BTC,OUT,1,x,h")).toEqual([
+      'Line 2: the fee "x" isn\'t a number (BTC, sent 5 Jan 2026).',
+    ]);
+    expect(at("ETH,FEES,1,x,h")).toEqual([
+      'Line 2: the fee "x" isn\'t a number (ETH, fee 5 Jan 2026).',
+    ]);
+    expect(at("ETH,FREEZE,1,x,h")).toEqual([
+      'Line 2: the fee "x" isn\'t a number (ETH, staking 5 Jan 2026).',
+    ]);
+    expect(at(",IN,1,,h")).toEqual(["Line 2: there's no coin (received 5 Jan 2026)."]);
+    const badDay = "2026-13-45T08:00:00.000Z,Confirmed,BTC,IN,1,,h,A,a,USD,300,300";
+    expect(parseTradesCsv(row(badDay), ctx).errors).toEqual([
+      'Line 2: the date "2026-13-45" isn\'t a date (BTC, received).',
+    ]);
   });
 
   it("amounts are plain decimals: 0x10 is not 16 coins", () => {
     const line = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0x10,,h,Bitcoin 1,a,USD,300,300";
-    expect(parseTradesCsv(row(line), ctx).errors).toEqual(["Line 2: couldn't read this IN row."]);
+    expect(parseTradesCsv(row(line), ctx).errors).toEqual([
+      'Line 2: the amount "0x10" isn\'t a number (BTC, received 5 Jan 2026).',
+    ]);
   });
 
   it("one unreadable row doesn't stop the rates for the others", () => {
@@ -296,7 +324,9 @@ describe("Ledger Live operations export", () => {
 
   it("a broken row or a future date is an error, so nothing is saved", () => {
     const bad = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,abc,,h,Bitcoin 1,a,USD,300,300";
-    expect(parseTradesCsv(row(bad), ctx).errors).toEqual(["Line 2: couldn't read this IN row."]);
+    expect(parseTradesCsv(row(bad), ctx).errors).toEqual([
+      'Line 2: the amount "abc" isn\'t a number (BTC, received 5 Jan 2026).',
+    ]);
     const future = "2027-01-05T08:00:00.000Z,Confirmed,BTC,IN,1,,h,Bitcoin 1,a,USD,300,300";
     expect(parseTradesCsv(row(future), ctx).errors).toEqual(["Line 2: the date is in the future."]);
   });
