@@ -515,6 +515,25 @@ describe("ImportTrades", () => {
     expect(screen.queryByLabelText("CSV file")).toBeNull();
   });
 
+  it("polish-4 UB14 focus moves to the file picker, then to the file's status", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    expect(document.activeElement).toBe(screen.getByLabelText("CSV file"));
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    const status = await screen.findByRole("status");
+    expect(document.activeElement?.contains(screen.getByText("export.csv"))).toBe(true);
+    await waitFor(() => expect(status.textContent).toBe("Read, check what it found below"));
+  });
+
+  it("polish-4 UB14 another broker puts focus on the way to ask for it", () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Another broker/ }));
+    expect(document.activeElement).toBe(screen.getByRole("link", { name: "Ask for your broker" }));
+  });
+
   it("if saved dividends and fees can't load, it says so and won't save", async () => {
     db.eventsDown = true;
     open("stock");

@@ -1,5 +1,5 @@
 import { dateLocale } from "@/lib/locale";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronLeft, ChevronRight, FileUp, Info, Lock, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -266,6 +266,18 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     },
   });
 
+  // Choosing a source or a file removes the control you used: focus goes on to the next step.
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const askRef = useRef<HTMLAnchorElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (from === "other") askRef.current?.focus();
+    else if (from !== null) fileInputRef.current?.focus();
+  }, [from]);
+  useEffect(() => {
+    if (fileName) cardRef.current?.focus();
+  }, [fileName]);
+
   function reset() {
     setText("");
     setFileName(null);
@@ -287,6 +299,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   const row = "flex min-h-12 items-center gap-3 px-4 py-2.5 text-[0.9375rem]";
   const fileInput = (
     <input
+      ref={fileInputRef}
       type="file"
       accept=".csv,.tsv,.txt,text/csv"
       aria-label={fileName ? "Choose another file" : "CSV file"}
@@ -385,6 +398,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
           <div className="flex flex-col gap-3 text-sm">
             <p>
               <a
+                ref={askRef}
                 href={NEW_BROKER_URL}
                 target="_blank"
                 rel="noreferrer"
@@ -404,7 +418,11 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
         {from !== null && from !== "other" && (
           <>
             {fileName ? (
-              <div className="flex items-center gap-3 rounded-lg border border-hairline bg-card px-4 py-3">
+              <div
+                ref={cardRef}
+                tabIndex={-1}
+                className="flex items-center gap-3 rounded-lg border border-hairline bg-card px-4 py-3 outline-none"
+              >
                 <span
                   aria-hidden
                   className={cn(
@@ -428,7 +446,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{fileName}</span>
-                  <span className="block text-xs text-muted-foreground">
+                  <span role="status" className="block text-xs text-muted-foreground">
                     {unreadable
                       ? "Can't be read"
                       : !parsed
