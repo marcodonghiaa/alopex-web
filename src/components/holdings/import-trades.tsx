@@ -184,20 +184,15 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
         if (error) throw error;
       }
       // If this fails the trades are safe: importing again skips them and retries the counts.
+      // set_holding_quantity also writes today's value, so net worth moves at once.
       for (const { key, shares } of updates) {
-        // Coins go through set_holding_quantity, which also writes today's value for net worth.
-        if (kind === "crypto") {
-          await saveQuantity(
-            { kind: "crypto", symbol: wallet!.get(key)!.symbol, source: wallet!.get(key)!.source },
-            shares,
-          );
-          continue;
-        }
-        const { error } = await supabase
-          .from("portfolio_holdings")
-          .update({ shares })
-          .eq("isin", key);
-        if (error) throw error;
+        const held = wallet?.get(key);
+        await saveQuantity(
+          kind === "stock"
+            ? { kind: "stock", isin: key }
+            : { kind: "crypto", symbol: held!.symbol, source: held!.source },
+          shares,
+        );
       }
     },
     onSuccess: () => {

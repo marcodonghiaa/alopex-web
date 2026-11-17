@@ -229,6 +229,16 @@ describe("ImportTrades", () => {
     expect(db.rpc[0]![1]["p_quantity"]).toBeCloseTo(0.4988);
   });
 
+  it("a stock import corrects the share counts through set_holding_quantity", async () => {
+    open("stock");
+    pick(/Trade Republic/, "trade_republic.csv");
+    fireEvent.click(await screen.findByRole("button", { name: "Save 4 trades" }));
+    await waitFor(() => expect(db.rpc.length).toBeGreaterThan(0));
+    expect(db.rpc[0]![0]).toBe("set_holding_quantity");
+    expect(db.rpc[0]![1]).toMatchObject({ p_kind: "stock", p_key: "XX0000000001", p_quantity: 4 });
+    expect(db.updated).toHaveLength(0);
+  });
+
   it("on a backend without set_holding_quantity the count is still set, on the holding itself", async () => {
     db.rpcMissing = true;
     open("crypto");
@@ -409,9 +419,11 @@ describe("ImportTrades", () => {
     });
 
     it("a stock count write fails", async () => {
+      db.rpcMissing = true;
       db.updateError = { message: "update failed" };
       await saveFails("stock", /update failed/);
       expect(db.updated).toHaveLength(1);
+      expect(db.updated[0]![0]).toBe("portfolio_holdings");
     });
   });
 });
