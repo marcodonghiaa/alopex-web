@@ -107,6 +107,13 @@ vi.mock("@/integrations/supabase/client", () => {
     },
   };
 });
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode }) => (
+    <a href={to} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { ImportTrades } from "./import-trades";
@@ -827,5 +834,23 @@ describe("ImportTrades", () => {
     fireEvent.change(area, { target: { value: "date,side" } });
     expect(screen.queryByText("a.csv")).toBeNull();
     expect(document.activeElement).toBe(area);
+  });
+
+  describe("a file for the other page links to it", () => {
+    it("a Ledger Live file on the Portfolio page links to the Crypto page", async () => {
+      open("stock");
+      pick(/My own spreadsheet/, "ledger_live.csv");
+      await screen.findByText(/import it on the Crypto page/);
+      expect(screen.getByRole("link", { name: "Open the Crypto page" }).getAttribute("href")).toBe(
+        "/crypto",
+      );
+    });
+
+    it("on its own page there's no such link", async () => {
+      open("crypto");
+      pick(/My own spreadsheet/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Save 7 trades" });
+      expect(screen.queryByRole("link", { name: /Open the/ })).toBeNull();
+    });
   });
 });

@@ -12,6 +12,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "@tanstack/react-router";
 import {
   Dialog,
   DialogContent,
@@ -535,6 +536,17 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               ))}
             </ul>
             {parsed.errors.length > 20 && <p>…and {parsed.errors.length - 20} more.</p>}
+            {/* A file for the other page (a Ledger export on Portfolio): take you there. */}
+            {detected && detected.kind !== kind && (
+              <p className="mt-1">
+                <Link
+                  to={detected.kind === "crypto" ? "/crypto" : "/portfolio"}
+                  className="text-primary underline underline-offset-2"
+                >
+                  Open the {detected.kind === "crypto" ? "Crypto" : "Portfolio"} page
+                </Link>
+              </p>
+            )}
             {parsed.unknownFormat && (
               <p className="mt-1 text-muted-foreground">
                 Want your broker supported?{" "}
