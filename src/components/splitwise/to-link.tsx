@@ -111,7 +111,8 @@ export function ToLink({ connected }: { connected: boolean }) {
       for (const queryKey of syncRefreshKeys()) void queryClient.invalidateQueries({ queryKey });
     },
   });
-  const busy = (id: string) => demo || (act.isPending && act.variables?.id === id);
+  // One action at a time: each one changes what the others would act on.
+  const busy = demo || act.isPending;
 
   const count = items.length;
   // Disconnected but kept: what's still waiting can be linked. A database without the sync
@@ -163,7 +164,7 @@ export function ToLink({ connected }: { connected: boolean }) {
                   key={item.id}
                   item={item}
                   suggestion={suggestions.get(item.id) ?? null}
-                  busy={busy(item.id)}
+                  busy={busy}
                   onAct={(a) => act.mutate(a)}
                   onFind={() => setFinding(item)}
                 />

@@ -310,6 +310,27 @@ describe("ToLink", () => {
     expect(within(sheet).getByRole("button", { name: "Link payment" })).toBeEnabled();
   });
 
+  // polish-3 #4: one action at a time, so a second row can't turn the first row's buttons back on
+  it("keeps every row off while an action runs", async () => {
+    tables.splitwise_review = {
+      data: [item(), item({ id: "r2", description: "Trip" })],
+      error: null,
+    };
+    let finish: (v: unknown) => void = () => {};
+    rpc.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));
+    renderList();
+    const a = await screen.findByRole("listitem", { name: "Groceries" });
+    const b = screen.getByRole("listitem", { name: "Trip" });
+    await userEvent.click(within(a).getByRole("button", { name: "Ignore" }));
+    await waitFor(() => expect(within(a).getByRole("button", { name: "Ignore" })).toBeDisabled());
+    expect(within(b).getByRole("button", { name: "Ignore" })).toBeDisabled();
+    await userEvent.click(within(b).getByRole("button", { name: "Ignore" }));
+    expect(within(a).getByRole("button", { name: "Ignore" })).toBeDisabled();
+    expect(rpc).toHaveBeenCalledTimes(1);
+    finish({ data: {}, error: null });
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Ignored"));
+  });
+
   it("says what to do when no payment is around", async () => {
     tables.splitwise_review = { data: [item()], error: null };
     renderList();
