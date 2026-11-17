@@ -862,6 +862,61 @@ describe("ImportTrades", () => {
       expect(within(corrected()).queryByText(/added by hand/)).toBeNull();
     });
 
+    describe("a holding the file sets that has other trades, its amount unchanged", () => {
+      const toCheck = () => screen.getByRole("region", { name: "Trades to check" });
+      const byHand = (key: string): Trade => ({
+        kind: "crypto",
+        key,
+        side: "buy",
+        trade_date: "2025-12-01",
+        shares: 0.4988,
+        price_eur: 2000,
+        fee_eur: 0,
+        source: null,
+      });
+
+      it("added by hand, already at the file's amount: warned, though not corrected", async () => {
+        db.extraCoins.push({
+          asset_symbol: "ETH",
+          amount: 0.4988,
+          name: "Ethereum",
+          source: "Manual",
+        });
+        open("crypto", [byHand("ETH")]);
+        pick(/Ledger Live/, "ledger_live.csv");
+        await screen.findByRole("button", { name: "Save 5 trades" });
+        expect(screen.queryByRole("region", { name: "Holdings corrected" })).toBeNull();
+        expect(
+          within(toCheck())
+            .getAllByRole("listitem")
+            .map((r) => r.textContent),
+        ).toEqual([
+          "EthereumManual · Has 1 trade you added by hand: its return will show as not matching until you remove it",
+        ]);
+      });
+
+      it("on Ledger, with a trade added by hand: warned", async () => {
+        open("crypto", [byHand("btc")]);
+        pick(/Ledger Live/, "ledger_live.csv");
+        await screen.findByRole("button", { name: "Save 5 trades" });
+        expect(
+          within(toCheck())
+            .getAllByRole("listitem")
+            .map((r) => r.textContent),
+        ).toEqual([
+          "BitcoinLedger · Has 1 trade you added by hand: its return will show as not matching until you remove it",
+        ]);
+      });
+
+      it("no trades but the file's: no warning", async () => {
+        open("crypto");
+        pick(/Ledger Live/, "ledger_live.csv");
+        await screen.findByRole("button", { name: "Save 5 trades" });
+        expect(screen.queryByRole("region", { name: "Trades to check" })).toBeNull();
+        expect(screen.queryByText(/Has \d+ trade/)).toBeNull();
+      });
+    });
+
     it("the toast counts the trades and the holdings updated", async () => {
       db.extraCoins.push({ asset_symbol: "LTC", amount: 0.5, name: "Litecoin", source: "Manual" });
       open("crypto");
