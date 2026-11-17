@@ -242,7 +242,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     onSuccess: ({ trades, events, counts }) => {
       const imported = [
         trades > 0 && plural(trades, "trade"),
-        events > 0 && plural(events, "other row"),
+        events > 0 && plural(events, "income and cash row"),
       ]
         .filter(Boolean)
         .join(" and ");

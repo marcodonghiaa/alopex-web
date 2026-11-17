@@ -424,6 +424,14 @@ describe("ImportTrades", () => {
     expect(screen.getByText("Fees").parentElement?.textContent).toBe("Fees−€1.00");
   });
 
+  it("polish-4 UB8 the toast calls the other rows income and cash rows", async () => {
+    open("stock");
+    fireEvent.click(await pickTradeRepublic());
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenLastCalledWith("4 trades and 1 income and cash row imported"),
+    );
+  });
+
   it("if saved dividends and fees can't load, it says so and won't save", async () => {
     db.eventsDown = true;
     open("stock");
@@ -451,7 +459,9 @@ describe("ImportTrades", () => {
       target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
     });
     fireEvent.click(await screen.findByRole("button", { name: "Save 1 row" }));
-    await waitFor(() => expect(toast.success).toHaveBeenLastCalledWith("1 other row imported"));
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenLastCalledWith("1 income and cash row imported"),
+    );
     expect(db.inserted).toEqual([]);
     expect(db.upserted.map(([table, rows]) => [table, rows.length])).toEqual([
       ["investment_events", 1],
@@ -487,7 +497,7 @@ describe("ImportTrades", () => {
       expect.objectContaining({ kind: "dividend", amount_eur: 1.2, user_id: "u1" }),
     ]);
     await waitFor(() =>
-      expect(toast.success).toHaveBeenLastCalledWith("4 trades and 1 other row imported"),
+      expect(toast.success).toHaveBeenLastCalledWith("4 trades and 1 income and cash row imported"),
     );
   });
 
@@ -514,7 +524,9 @@ describe("ImportTrades", () => {
     rerender(view(trades));
     release();
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
-    expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe("4 trades and 1 other row imported");
+    expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe(
+      "4 trades and 1 income and cash row imported",
+    );
   });
 
   it("Esc and All sources do nothing during a save, so an old save can't close a new session", async () => {
