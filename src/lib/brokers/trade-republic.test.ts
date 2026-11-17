@@ -387,10 +387,11 @@ describe("Trade Republic, income, fees, taxes and cash", () => {
       file(
         { ...cash, type: "CARD_TRANSACTION", amount: "-9.90" },
         { ...cash, type: "CARD_TRANSACTION_INTERNATIONAL", amount: "-20" },
+        { ...cash, type: "CARD_ORDERING_FEE", amount: "-5" },
       ),
       stock,
     );
-    expect(events).toEqual([]);
+    expect(events?.map((e) => [e.kind, e.amount_eur])).toEqual([["fee", -5]]);
     expect(notes).toContain(
       "2 card payments were skipped: they're your bank account's. Connect Trade Republic as a bank to see them.",
     );
