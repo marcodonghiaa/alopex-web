@@ -238,6 +238,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     />
   );
   const ok = parsed != null && parsed.errors.length === 0;
+  // Without the holdings or the rates the file can't be read: no spinner next to the error.
+  const stuck = !parsed && (keys.isError || rates.isError);
   const title =
     from === null
       ? "Import trades"
@@ -331,10 +333,12 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                   aria-hidden
                   className={cn(
                     "inline-flex size-9 shrink-0 items-center justify-center rounded-full",
-                    parsed && !ok ? "bg-negative/15 text-negative" : "bg-positive/15 text-positive",
+                    (parsed && !ok) || stuck
+                      ? "bg-negative/15 text-negative"
+                      : "bg-positive/15 text-positive",
                   )}
                 >
-                  {parsed ? (
+                  {parsed || stuck ? (
                     <Check className="size-4" strokeWidth={2.5} />
                   ) : (
                     <Loader2 className="size-4 animate-spin" />
@@ -343,7 +347,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{fileName}</span>
                   <span className="block text-xs text-muted-foreground">
-                    {!parsed
+                    {!parsed && !stuck
                       ? "Reading…"
                       : ok
                         ? "Read, check what it found below"

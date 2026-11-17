@@ -352,12 +352,26 @@ describe("ImportTrades", () => {
     expect(await screen.findByText("Couldn't load your holdings: offline")).toBeTruthy();
   });
 
+  it.each([
+    ["the exchange rates", () => (db.ratesDown = true), /Couldn't load USD exchange rates/],
+    ["your holdings", () => (db.holdingsDown = true), /Couldn't load your holdings/],
+  ])("when %s can't be loaded the file stops reading", async (_, fail, message) => {
+    fail();
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    await screen.findByText(message);
+    expect(screen.getByText("Can't be imported")).toBeTruthy();
+    expect(screen.queryByText("Reading…")).toBeNull();
+    expect(document.querySelector(".animate-spin")).toBeNull();
+  });
+
   it("while the exchange rates load it says Reading… and offers no save yet", async () => {
     let release!: () => void;
     db.ratesGate = new Promise((r) => (release = r));
     open("crypto");
     pick(/Ledger Live/, "ledger_live.csv");
     expect(await screen.findByText("Reading…")).toBeTruthy();
+    expect(document.querySelector(".animate-spin")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
     release();
     expect(await screen.findByRole("button", { name: "Save 7 trades" })).toBeTruthy();
