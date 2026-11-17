@@ -9,6 +9,8 @@ const db = vi.hoisted(() => ({
   rpc: [] as Array<[string, Record<string, unknown>]>,
   ratesDown: false,
   rpcMissing: false,
+  // set_holding_quantity fails outright.
+  rpcError: false,
   upsertError: null as string | null,
   eventsDown: false,
   holdingsDown: false,
@@ -102,7 +104,9 @@ vi.mock("@/integrations/supabase/client", () => {
         return Promise.resolve(
           db.rpcMissing
             ? { data: null, error: { code: "PGRST202", message: "not found" } }
-            : { data: 1, error: null },
+            : db.rpcError
+              ? { data: null, error: { code: "XX000", message: "boom" } }
+              : { data: 1, error: null },
         );
       },
       auth: {
@@ -164,6 +168,7 @@ describe("ImportTrades", () => {
     db.rpc.length = 0;
     db.updated.length = 0;
     db.rpcMissing = false;
+    db.rpcError = false;
     db.upsertError = null;
     db.upsertSaved = null;
     db.eventsDown = false;
@@ -568,6 +573,34 @@ describe("ImportTrades", () => {
     const card = screen.getByText("wrong.csv").closest("[tabindex]")!;
     expect(card.querySelector(".lucide-check")).toBeNull();
     expect(card.querySelector(".lucide-x")).not.toBeNull();
+  });
+
+  it("polish-4 N5 if the share counts fail after the trades saved, it says the trades are saved", async () => {
+    db.rpcError = true;
+    open("stock");
+    fireEvent.click(await pickTradeRepublic());
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "4 trades saved, but the share counts and the income, fee and cash rows weren't (boom). Import the file again to save them.",
+    );
+    expect(db.upserted).toEqual([]);
+  });
+
+  it("polish-4 N5 with no trades saved, a share count failure shows the database's error", async () => {
+    db.rpcError = true;
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const { trades, events } = parseTradesCsv(csv, {
+      kind: "stock",
+      knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+      today: "2026-11-17",
+    });
+    db.events.push(...events!.map((e) => ({ ...e })));
+    open("stock", trades);
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save share counts" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("boom");
   });
 
   it("if saved dividends and fees can't load, it says so and won't save", async () => {

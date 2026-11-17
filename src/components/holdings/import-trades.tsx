@@ -207,17 +207,29 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       }
       // If this fails the trades are safe: importing again skips them and retries the counts.
       // set_holding_quantity also writes today's value, so net worth moves at once.
-      for (const { key, shares } of updates)
-        await saveQuantity(
-          kind === "stock"
-            ? { kind: "stock", isin: key }
-            : {
-                kind: "crypto",
-                symbol: wallet!.get(key)!.symbol,
-                source: wallet!.get(key)!.source,
-              },
-          shares,
+      try {
+        for (const { key, shares } of updates)
+          await saveQuantity(
+            kind === "stock"
+              ? { kind: "stock", isin: key }
+              : {
+                  kind: "crypto",
+                  symbol: wallet!.get(key)!.symbol,
+                  source: wallet!.get(key)!.source,
+                },
+            shares,
+          );
+      } catch (e) {
+        // The trades are saved by now: say so, as for the income rows below.
+        if (fresh.length === 0) throw e;
+        const unsaved =
+          freshEvents.length > 0
+            ? "the share counts and the income, fee and cash rows weren't"
+            : "the share counts weren't";
+        throw new Error(
+          `${plural(fresh.length, "trade")} saved, but ${unsaved} (${(e as Error).message}). Import the file again to save them.`,
         );
+      }
       // A re-import is skipped by the database too: the same broker id is saved once.
       if (freshEvents.length > 0) {
         // Only rows the database saved come back: one already there (another tab) isn't counted.
