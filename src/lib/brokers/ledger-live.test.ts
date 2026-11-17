@@ -62,6 +62,35 @@ describe("Ledger Live operations export", () => {
     expect(gas.fee_eur).toBeCloseTo(2 * 0.9);
   });
 
+  it("a failed send takes only its fee, even when the file shows the whole amount", () => {
+    const line = "2026-01-05T08:00:00.000Z,Failed,BTC,OUT,0.5,0.0001,h,Bitcoin 1,a,USD,15000,15000";
+    const [failed] = parseTradesCsv(row(line), ctx).trades;
+    expect(failed!.shares).toBe(0.0001);
+    expect(failed!.shares * failed!.price_eur - failed!.fee_eur).toBeCloseTo(0);
+    const incoming = line.replace(",OUT,", ",IN,");
+    expect(parseTradesCsv(row(incoming), ctx).trades).toEqual([]);
+  });
+
+  it("reads the older export without a Status column", () => {
+    const old = sample
+      .split("\n")
+      .map((l) =>
+        l
+          .split(",")
+          .filter((_, i) => i !== 1)
+          .join(","),
+      )
+      .join("\n");
+    const { trades, errors } = parseTradesCsv(old, ctx);
+    expect(errors).toEqual([]);
+    expect(trades).toHaveLength(9);
+  });
+
+  it("the same operation keeps its id whatever case the hash is in", () => {
+    const line = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0.01,,ABC,Bitcoin 1,a,USD,300,300";
+    expect(parseTradesCsv(row(line), ctx).trades[0]?.external_id).toBe("abc:BTC:IN");
+  });
+
   it("one transaction hash can carry a token and its gas, so the id is hash, coin and type", () => {
     const ids = parseTradesCsv(sample, ctx).trades.map((t) => t.external_id);
     expect(new Set(ids).size).toBe(ids.length);

@@ -5,7 +5,6 @@ import type { BrokerParser } from "./types";
 
 const COLUMNS = [
   "operation date",
-  "status",
   "currency ticker",
   "operation type",
   "operation amount",
@@ -80,9 +79,8 @@ const LOST = new Set(["SLASH", "BURN"]);
  * Ledger Live's operations export (Settings › Accounts › Export operations). It lists what came in
  * and went out of each wallet, not what you paid, so each move is priced at its value that day:
  * coming in is a buy, going out a sale. An OUT amount includes its network fee, a FEES row is gas
- * paid in ETH for a token transfer, and a failed send costs its fee: all count as a cost. Staking
- * rewards come in at no cost. Failed rows are counted like Ledger Live counts them, so the totals
- * match the balance it shows. Values are in the currency Ledger Live shows
+ * paid in ETH for a token transfer, and a failed send costs only its fee: all count as a cost. Staking
+ * rewards come in at no cost. Older exports have no Status column; columns are read by name. Values are in the currency Ledger Live shows
  * (usually USD), turned into euro with that day's rate. One transaction hash can carry a token and
  * its gas, so a trade's id is hash, coin and type. The file is every operation of those wallets, so
  * it sets your Ledger holdings; coins you hold elsewhere stay as they are.
@@ -153,7 +151,10 @@ export const ledgerLive: BrokerParser = {
       }
       if (!(value >= 0)) return void errors.push(`Line ${i + 2}: couldn't read this ${type} row.`);
       // What leaves or enters the wallet, as Ledger Live counts its balance.
-      const shares = family === "stake" ? fee : amount;
+      // A failed send moved nothing but its fee, and a failed receive cost you nothing.
+      const failed = get("status") === "Failed";
+      if (failed && family === "in") return;
+      const shares = family === "stake" || failed ? fee : amount;
       if (shares === 0) return;
       if (date > today) return void errors.push(`Line ${i + 2}: the date is in the future.`);
       const currency = get("countervalue ticker") || "EUR";
@@ -171,7 +172,7 @@ export const ledgerLive: BrokerParser = {
           : family === "out"
             ? Math.min(fee, amount)
             : 0;
-      const hash = get("operation hash").trim();
+      const hash = get("operation hash").trim().toLowerCase();
       let id: string | null = null;
       if (hash) {
         const base = `${hash}:${key}:${type}`;
