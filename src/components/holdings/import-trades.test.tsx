@@ -14,6 +14,8 @@ const db = vi.hoisted(() => ({
   // How many upserted rows the database says it saved (the rest were already there).
   upsertSaved: null as number | null,
   updated: [] as Array<[string, Record<string, unknown>, Array<[string, unknown]>]>,
+  // While set, the trades insert waits for it: a slow save whose pending state really renders.
+  insertGate: null as Promise<void> | null,
 }));
 vi.mock("@/integrations/supabase/client", () => {
   const tables: Record<string, Array<Record<string, unknown>>> = {
@@ -75,7 +77,7 @@ vi.mock("@/integrations/supabase/client", () => {
         },
         insert: (rows: Array<Record<string, unknown>>) => {
           db.inserted.push(...rows);
-          return Promise.resolve({ error: null });
+          return (db.insertGate ?? Promise.resolve()).then(() => ({ error: null }));
         },
         upsert: (rows: Array<Record<string, unknown>>, options: unknown) => {
           db.upserted.push([table, rows, options]);
@@ -105,6 +107,22 @@ import { ImportTrades } from "./import-trades";
 import type { Trade } from "@/lib/trades";
 import { parseTradesCsv } from "@/lib/trades-csv";
 
+/** A slow save: the insert waits until the returned function is called. */
+function slowInsert() {
+  let release!: () => void;
+  db.insertGate = new Promise<void>((r) => (release = r));
+  return release;
+}
+
+async function pickTradeRepublic() {
+  fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+  const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+  fireEvent.change(screen.getByLabelText("CSV file"), {
+    target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+  });
+  return screen.findByRole("button", { name: "Save 4 trades" });
+}
+
 function open(kind: "stock" | "crypto", saved: Array<Trade> = []) {
   render(
     <QueryClientProvider
@@ -125,6 +143,8 @@ describe("ImportTrades", () => {
     db.upsertError = null;
     db.upsertSaved = null;
     db.eventsDown = false;
+    db.insertGate = null;
+    vi.mocked(toast.success).mockClear();
   });
 
   it("asks where the trades are from before asking for a file", () => {
@@ -378,5 +398,18 @@ describe("ImportTrades", () => {
     await waitFor(() =>
       expect(toast.success).toHaveBeenLastCalledWith("4 trades and 1 other row imported"),
     );
+  });
+
+  it("Esc during a slow save still toasts what was saved", async () => {
+    const release = slowInsert();
+    open("stock");
+    fireEvent.click(await pickTradeRepublic());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Save 4 trades" })).toBeDisabled(),
+    );
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    release();
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe("4 trades and 1 other row imported");
   });
 });

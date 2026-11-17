@@ -231,16 +231,14 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             `${plural(fresh.length, "trade")} saved, but the income, fee and cash rows weren't (${error.message}). Import the file again to save them.`,
           );
         if (error) throw error;
-        return savedRows?.length ?? 0;
+        return { trades: fresh.length, events: savedRows?.length ?? 0 };
       }
-      return 0;
+      return { trades: fresh.length, events: 0 };
     },
-    onSuccess: (savedEvents) => {
+    // Counts come from the save itself: the dialog may have been cleared while it ran.
+    onSuccess: ({ trades, events }) => {
       toast.success(
-        ([
-          fresh.length > 0 && plural(fresh.length, "trade"),
-          savedEvents > 0 && plural(savedEvents, "other row"),
-        ]
+        ([trades > 0 && plural(trades, "trade"), events > 0 && plural(events, "other row")]
           .filter(Boolean)
           .join(" and ") || "Nothing new") + " imported",
       );
