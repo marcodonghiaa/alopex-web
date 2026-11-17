@@ -59,7 +59,6 @@ export type EventRow = Pick<
 
 export interface IncomeSummary {
   /** Dividends, interest and rewards, after tax. */
-  income: number;
   dividends: number;
   interest: number;
   rewards: number;
@@ -78,7 +77,6 @@ const INCOME: Record<string, "dividends" | "interest" | "rewards"> = {
 /** What your investments paid you and what they cost, from `from` (inclusive) on. */
 export function summarizeIncome(events: Array<EventRow>, from = ""): IncomeSummary {
   const out: IncomeSummary = {
-    income: 0,
     dividends: 0,
     interest: 0,
     rewards: 0,
@@ -88,10 +86,7 @@ export function summarizeIncome(events: Array<EventRow>, from = ""): IncomeSumma
   for (const e of events) {
     if (e.event_date < from) continue;
     const bucket = INCOME[e.kind];
-    if (bucket) {
-      out[bucket] += e.amount_eur;
-      out.income += e.amount_eur;
-    }
+    if (bucket) out[bucket] += e.amount_eur;
     if (e.kind === "fee") out.fees -= e.amount_eur;
     if (e.kind === "tax" || e.kind === "tax_refund") out.taxes -= e.amount_eur;
     out.taxes += e.tax_eur;

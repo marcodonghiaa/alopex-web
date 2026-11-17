@@ -45,7 +45,6 @@ describe("summarizeIncome", () => {
 
   it("adds up income after tax, and taxes and fees paid, deposits aside", () => {
     expect(summarizeIncome(events, "2026-01-01")).toEqual({
-      income: 12.5,
       dividends: 8,
       interest: 3,
       rewards: 1.5,
