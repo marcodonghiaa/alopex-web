@@ -36,6 +36,21 @@ const ok = (m: Measured) => {
 };
 
 describe("measure", () => {
+  it("on one day, trades with a time go in time order: sold out, then bought back", () => {
+    // 10 bought at 10 (100 in). Next day: sold all at 09:00, bought 10 back at 10:00. At most 100
+    // was ever in at once; buys first would count 200.
+    const at = (t: Trade, traded_at: string | null) => ({ ...t, traded_at });
+    const trades = [
+      buy("2026-01-01", 10, 10),
+      at(buy("2026-01-02", 10, 10), "2026-01-02T10:00:00Z"),
+      at(sell("2026-01-02", 10, 10), "2026-01-02T09:00:00Z"),
+    ];
+    expect(ok(measure(row({ end_price_eur: 12 }), trades)).base).toBe(100);
+    // Without times, buys still go first on a day.
+    const untimed = trades.map((t) => at(t, null));
+    expect(ok(measure(row({ end_price_eur: 12 }), untimed)).base).toBe(200);
+  });
+
   it("is value minus what you paid, fees included (a broker statement by hand)", () => {
     // 10 bought at 80 with a 1 fee: paid 801. Worth 1200 now: +399, +49.81%.
     const m = ok(measure(row(), [buy("2025-01-10", 10, 80, 1)]));

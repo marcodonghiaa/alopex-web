@@ -44,10 +44,14 @@ export type Measured =
 const signed = (t: Trade) => (t.side === "buy" ? t.shares : -t.shares);
 export const netShares = (trades: Array<Trade>) => trades.reduce((s, t) => s + signed(t), 0);
 
-// Oldest first; on one day buys go first, so a same-day sale has shares to sell.
+// Oldest first; on one day by the broker's time when both have one, else buys first, so a
+// same-day sale has shares to sell.
 const inOrder = (trades: Array<Trade>) =>
   [...trades].sort(
-    (a, b) => a.trade_date.localeCompare(b.trade_date) || a.side.localeCompare(b.side),
+    (a, b) =>
+      a.trade_date.localeCompare(b.trade_date) ||
+      (a.traded_at && b.traded_at ? a.traded_at.localeCompare(b.traded_at) : 0) ||
+      a.side.localeCompare(b.side),
   );
 
 /** Cash in, cash out, and the most that was ever in at once. */
