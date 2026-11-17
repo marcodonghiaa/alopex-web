@@ -65,7 +65,7 @@ export const Route = createFileRoute("/_authenticated/splitwise")({
 });
 
 function SplitwisePage() {
-  const { balances, rows, rate } = useSplitwiseBalances();
+  const { balances, rates, rows, rate } = useSplitwiseBalances();
   const groups = useMemo(() => summarizeBalances(rows, rate), [rows, rate]);
   const [importing, setImporting] = useState(false);
   const writing = useIsMutating({ mutationKey: IMPORT_KEY }) > 0;
@@ -162,13 +162,12 @@ function SplitwisePage() {
     () => debtorsFrom(peopleFrom(splits.data ?? []), groups, rate),
     [splits.data, groups, rate],
   );
-  // Asked only once both debts and payments are in: a half-loaded list would guess wrong.
+  // Asked only once debts (with their euro rates) and payments are in: a half-loaded list would
+  // guess wrong.
+  const ready = splits.isSuccess && balances.isSuccess && rates.isSuccess && candidates.isSuccess;
   const suggestions = useMemo(
-    () =>
-      splits.isSuccess && balances.isSuccess && candidates.isSuccess
-        ? suggestPaybacks(candidates.data, debtors)
-        : [],
-    [splits.isSuccess, balances.isSuccess, candidates.isSuccess, candidates.data, debtors],
+    () => (ready ? suggestPaybacks(candidates.data ?? [], debtors) : []),
+    [ready, candidates.data, debtors],
   );
   const busy = record.isPending && record.variables ? txId(record.variables.payment) : null;
 
