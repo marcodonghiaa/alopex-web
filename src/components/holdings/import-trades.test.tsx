@@ -10,6 +10,11 @@ const db = vi.hoisted(() => ({
   /** Coin rows added for one test. */
   extraCoins: [] as Array<Record<string, unknown>>,
   rpcMissing: false,
+  /** Set, a write answers with this error. */
+  insertError: null as null | Record<string, unknown>,
+  rpcError: null as null | Record<string, unknown>,
+  updateError: null as null | Record<string, unknown>,
+  signedOut: false,
   updated: [] as Array<[string, Record<string, unknown>, Array<[string, unknown]>]>,
 }));
 vi.mock("@/integrations/supabase/client", () => {
@@ -68,11 +73,12 @@ vi.mock("@/integrations/supabase/client", () => {
           db.updated.push([table, patch, where]);
           const chain = {
             eq: (c: string, v: unknown) => (where.push([c, v]), chain),
-            then: (resolve: (v: unknown) => void) => resolve({ error: null }),
+            then: (resolve: (v: unknown) => void) => resolve({ error: db.updateError }),
           };
           return chain;
         },
         insert: (rows: Array<Record<string, unknown>>) => {
+          if (db.insertError) return Promise.resolve({ error: db.insertError });
           db.inserted.push(...rows);
           return Promise.resolve({ error: null });
         },
@@ -80,12 +86,16 @@ vi.mock("@/integrations/supabase/client", () => {
       rpc: (name: string, args: Record<string, unknown>) => {
         db.rpc.push([name, args]);
         return Promise.resolve(
-          db.rpcMissing
-            ? { data: null, error: { code: "PGRST202", message: "not found" } }
-            : { data: 1, error: null },
+          db.rpcError
+            ? { data: null, error: db.rpcError }
+            : db.rpcMissing
+              ? { data: null, error: { code: "PGRST202", message: "not found" } }
+              : { data: 1, error: null },
         );
       },
-      auth: { getUser: () => Promise.resolve({ data: { user: { id: "u1" } } }) },
+      auth: {
+        getUser: () => Promise.resolve({ data: { user: db.signedOut ? null : { id: "u1" } } }),
+      },
     },
   };
 });
@@ -93,6 +103,14 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { ImportTrades } from "./import-trades";
 import type { Trade } from "@/lib/trades";
+
+function pick(name: RegExp, fixture: string) {
+  fireEvent.click(screen.getByRole("button", { name }));
+  const csv = readFileSync(`src/lib/brokers/fixtures/${fixture}`, "utf8");
+  fireEvent.change(screen.getByLabelText("CSV file"), {
+    target: { files: [new File([csv], "ops.csv", { type: "text/csv" })] },
+  });
+}
 
 function open(kind: "stock" | "crypto", saved: Array<Trade> = []) {
   render(
@@ -113,6 +131,10 @@ describe("ImportTrades", () => {
     db.rpcMissing = false;
     db.ratesDown = false;
     db.extraCoins.length = 0;
+    db.insertError = null;
+    db.rpcError = null;
+    db.updateError = null;
+    db.signedOut = false;
   });
 
   it("asks where the trades are from before asking for a file", () => {
@@ -275,5 +297,50 @@ describe("ImportTrades", () => {
     // One retry first (no wait in tests).
     expect(await screen.findByText(/Couldn't load USD exchange rates/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+  });
+
+  describe("a failed save says why, saves nothing more and stays open", () => {
+    async function saveFails(kind: "stock" | "crypto", message: RegExp) {
+      open(kind);
+      if (kind === "crypto") pick(/Ledger Live/, "ledger_live.csv");
+      else pick(/Trade Republic/, "trade_republic.csv");
+      fireEvent.click(await screen.findByRole("button", { name: /^Save \d+ trades$/ }));
+      expect((await screen.findByRole("alert")).textContent).toMatch(message);
+      expect(screen.getByRole("dialog")).toBeTruthy();
+    }
+
+    it("the trades can't be written", async () => {
+      db.insertError = { message: "insert failed" };
+      await saveFails("crypto", /insert failed/);
+      expect(db.inserted).toHaveLength(0);
+      expect(db.rpc).toHaveLength(0);
+    });
+
+    it("you're signed out", async () => {
+      db.signedOut = true;
+      await saveFails("crypto", /You're signed out/);
+      expect(db.inserted).toHaveLength(0);
+      expect(db.rpc).toHaveLength(0);
+    });
+
+    it("the count is refused (42501), with no fallback write", async () => {
+      db.rpcError = { code: "42501", message: "permission denied" };
+      await saveFails("crypto", /permission denied/);
+      expect(db.rpc).toHaveLength(1);
+      expect(db.updated).toHaveLength(0);
+    });
+
+    it("the fallback count write fails", async () => {
+      db.rpcMissing = true;
+      db.updateError = { message: "update failed" };
+      await saveFails("crypto", /update failed/);
+      expect(db.updated).toHaveLength(1);
+    });
+
+    it("a stock count write fails", async () => {
+      db.updateError = { message: "update failed" };
+      await saveFails("stock", /update failed/);
+      expect(db.updated).toHaveLength(1);
+    });
   });
 });
