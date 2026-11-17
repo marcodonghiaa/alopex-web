@@ -155,13 +155,15 @@ export function PaymentsToCheck({
                 ) : (
                   <div className="mt-3 flex flex-wrap gap-2 sm:pl-[3.25rem]">
                     <Button
+                      // A long name shortens with "…" rather than leaving the card on a phone.
+                      className="max-w-full shrink"
                       disabled={saving}
                       onClick={() => {
                         setFocusAfter({ to: "next", id });
                         onConfirm(p, s.debtor);
                       }}
                     >
-                      Yes, it's {s.debtor.name}
+                      <span className="truncate">Yes, it's {s.debtor.name}</span>
                     </Button>
                     {others.length > 0 && (
                       <Button

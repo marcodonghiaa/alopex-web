@@ -204,6 +204,20 @@ describe("PaymentsToCheck", () => {
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Yes, it's Anna" }));
   });
 
+  // protects=the Yes button on a phone; fails_when=a long name pushes it out of the card
+  it("a long name shortens inside the Yes button instead of overflowing", () => {
+    const long: Debtor = {
+      name: "Maria Alessandra Bianchi-Ferraris di Montebello",
+      open: 320,
+      splitwiseOnly: false,
+    };
+    view([suggestion({ debtor: long })], [long, anna]);
+    const yes = screen.getByRole("button", { name: `Yes, it's ${long.name}` });
+    expect(yes.className).toMatch(/\bmax-w-full\b/);
+    expect(yes.className.split(" ")).not.toContain("shrink-0");
+    expect(yes.querySelector(".truncate")?.textContent).toBe(`Yes, it's ${long.name}`);
+  });
+
   it("no Someone else when nobody else owes you", () => {
     view([suggestion()], [mario]);
     expect(screen.queryByRole("button", { name: "Someone else" })).toBeNull();
