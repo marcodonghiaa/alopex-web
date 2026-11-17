@@ -34,9 +34,11 @@ import {
   syncNow,
   syncRefreshKeys,
   syncSummary,
+  balancesSource,
   formatCount,
   SyncError,
   type ReviewItem,
+  type SplitwiseConnection,
 } from "./splitwise-sync";
 
 /** What supabase.functions.invoke returns for a non-2xx reply. */
@@ -369,5 +371,33 @@ describe("syncRefreshKeys", () => {
       "splitwise-review",
     ])
       expect(keys).toContain(k);
+  });
+});
+
+// polish-3 #17: the balances' title follows where they came from, not just "connected"
+describe("balancesSource", () => {
+  const c = (over: Partial<SplitwiseConnection>): SplitwiseConnection => ({
+    connected: false,
+    status: null,
+    displayName: null,
+    lastSyncedAt: null,
+    lastError: null,
+    syncedData: false,
+    ...over,
+  });
+  it("names the source only when it is sure", () => {
+    expect(balancesSource(c({ connected: true, status: "ok", syncedData: true }))).toBe(
+      "synced from Splitwise",
+    );
+    expect(
+      balancesSource(c({ connected: true, status: "needs_reconnect", syncedData: true })),
+    ).toBe("from your last sync");
+    expect(balancesSource(c({ connected: true, status: "error", syncedData: true }))).toBe(
+      "from your last sync",
+    );
+    expect(balancesSource(c({}))).toBe("from your last import");
+    // Disconnected with synced data kept: a later file may have replaced a group. Unknown: no claim.
+    expect(balancesSource(c({ syncedData: true }))).toBeNull();
+    expect(balancesSource(undefined)).toBeNull(); // loading or failed
   });
 });

@@ -50,6 +50,16 @@ export async function fetchConnection(): Promise<SplitwiseConnection> {
   };
 }
 
+/**
+ * Where the Splitwise balances on screen come from, for their title, or null when that isn't
+ * sure: loading, failed, or disconnected with synced data kept (a later file may replace a group).
+ */
+export function balancesSource(c: SplitwiseConnection | undefined): string | null {
+  if (!c) return null;
+  if (c.connected) return c.status === "ok" ? "synced from Splitwise" : "from your last sync";
+  return c.syncedData ? null : "from your last import";
+}
+
 /** A failed Edge Function call: the function's own message, its HTTP status and `code`. */
 export class SyncError extends Error {
   constructor(

@@ -27,6 +27,7 @@ import { Alert } from "@/components/ui/alert";
 import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SyncSetup } from "@/components/splitwise/sync-setup";
+import { balancesSource } from "@/lib/splitwise-sync";
 import { useSplitwiseConnection } from "@/lib/use-splitwise-sync";
 import { ToLink } from "@/components/splitwise/to-link";
 
@@ -58,7 +59,9 @@ function SplitwisePage() {
   const queryClient = useQueryClient();
   const splits = useQuery({ queryKey: ["splits"], queryFn: fetchSplits, staleTime: 60_000 });
   const settle = useSettleSplitMutation(queryClient);
-  const connected = useSplitwiseConnection().data?.connected === true;
+  const connection = useSplitwiseConnection().data;
+  const connected = connection?.connected === true;
+  const source = balancesSource(connection);
 
   // The last Splitwise import, kept in this browser so it can be undone after looking at the page.
   const [userId, setUserId] = useState<string | null>(null);
@@ -204,9 +207,7 @@ function SplitwisePage() {
         />
       )}
 
-      <SectionTitle className="mt-8">
-        Splitwise groups · {connected ? "synced from Splitwise" : "from your last import"}
-      </SectionTitle>
+      <SectionTitle className="mt-8">Splitwise groups{source ? ` · ${source}` : ""}</SectionTitle>
       {balances.isError ? (
         <Alert>Couldn't load Splitwise balances: {balances.error.message}</Alert>
       ) : balances.isPending ? (
