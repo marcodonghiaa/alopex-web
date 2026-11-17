@@ -470,6 +470,17 @@ describe("Trade Republic, income, fees, taxes and cash", () => {
     );
   });
 
+  it("polish-4 R2 one card payment is told of in the singular", () => {
+    const cash = { category: "CASH", symbol: "", name: "" };
+    const { notes } = parseTradesCsv(
+      file({ ...cash, type: "CARD_TRANSACTION", amount: "-9.90" }),
+      stock,
+    );
+    expect(notes).toContain(
+      "1 card payment was skipped: it's your bank account's. Connect Trade Republic as a bank to see it.",
+    );
+  });
+
   it("a kind it doesn't know is kept as other, with its name, and you're told", () => {
     const { events, notes } = parseTradesCsv(
       file({ category: "CASH", type: "SOMETHING_NEW", symbol: "", amount: "1" }),

@@ -208,7 +208,7 @@ describe("parseTradesCsv, Trade Republic export", () => {
       known,
     );
     expect(one.notes).toEqual([
-      "1 card payment was skipped: they're your bank account's. Connect Trade Republic as a bank to see them.",
+      "1 card payment was skipped: it's your bank account's. Connect Trade Republic as a bank to see it.",
     ]);
     const none = parseTradesCsv(
       file(line("2026-01-02", "TRADING", "BUY", "A", "AA", "1.0", "10")),

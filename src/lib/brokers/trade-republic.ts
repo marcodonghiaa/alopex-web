@@ -256,7 +256,7 @@ export const tradeRepublic: BrokerParser = {
       );
     if (card > 0)
       notes.push(
-        `${plural(card, "card payment was", "card payments were")} skipped: they're your bank account's. Connect Trade Republic as a bank to see them.`,
+        `${plural(card, "card payment was skipped: it's", "card payments were skipped: they're")} your bank account's. Connect Trade Republic as a bank to see ${card === 1 ? "it" : "them"}.`,
       );
     if (unknown > 0)
       notes.push(

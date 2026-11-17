@@ -88,7 +88,7 @@ describe("Trade Republic sample", () => {
       "Example World ETF",
     );
     expect(notes).toContain(
-      "1 card payment was skipped: they're your bank account's. Connect Trade Republic as a bank to see them.",
+      "1 card payment was skipped: it's your bank account's. Connect Trade Republic as a bank to see it.",
     );
     expect(parseTradesCsv(fixture("trade_republic"), ctx).events?.map((e) => e.kind)).toEqual([
       "dividend",
