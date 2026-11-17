@@ -22,7 +22,7 @@ export interface Debtor {
   splitwiseOnly: boolean;
 }
 
-export type SuggestReason = "linked" | "name" | "amount";
+type SuggestReason = "linked" | "name" | "amount";
 
 export interface PaybackSuggestion {
   payment: PaybackCandidate;
@@ -30,7 +30,7 @@ export interface PaybackSuggestion {
   reason: SuggestReason;
 }
 
-export const CANDIDATE_DAYS = 60;
+const CANDIDATE_DAYS = 60;
 
 export async function fetchPaybackCandidates(): Promise<Array<PaybackCandidate>> {
   const { data, error } = await supabase.rpc("payback_candidates", { p_days: CANDIDATE_DAYS });
