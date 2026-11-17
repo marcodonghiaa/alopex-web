@@ -112,6 +112,15 @@ describe("PaymentsToCheck", () => {
     expect(onConfirm).toHaveBeenCalledWith(payment, anna);
   });
 
+  // protects=a keyboard way out of the form; fails_when=Esc leaves it open
+  it("Esc closes the Someone else form without saving", async () => {
+    const { onConfirm } = view([suggestion()]);
+    await userEvent.click(screen.getByRole("button", { name: "Someone else" }));
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("button", { name: "Confirm" })).toBeNull();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
   it("no Someone else when nobody else owes you", () => {
     view([suggestion()], [cri]);
     expect(screen.queryByRole("button", { name: "Someone else" })).toBeNull();

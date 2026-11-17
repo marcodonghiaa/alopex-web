@@ -74,6 +74,9 @@ export function PaymentsToCheck({
                 {choosing === id ? (
                   <form
                     className="mt-3 flex flex-wrap items-center gap-2 sm:pl-[3.25rem]"
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") setChoosing(null);
+                    }}
                     onSubmit={(e) => {
                       e.preventDefault();
                       const d = others.find((x) => x.name === pick);
