@@ -1,6 +1,7 @@
 import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
 import { summarizeIncome } from "@/lib/investment-events";
 import type { EventRow, IncomeSummary } from "@/lib/investment-events";
+import { localToday } from "@/lib/trades";
 import type { Trade } from "@/lib/trades";
 import { formatEur } from "@/lib/transactions";
 
@@ -43,7 +44,7 @@ export function InvestmentIncome({
   events,
   trades = [],
   page,
-  today = new Date().toISOString().slice(0, 10),
+  today = localToday(),
 }: {
   events: Array<EventRow>;
   trades?: Array<TradeCost>;

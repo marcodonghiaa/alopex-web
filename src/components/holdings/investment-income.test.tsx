@@ -1,7 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { InvestmentEvent } from "@/lib/investment-events";
 import { InvestmentIncome, eventsForPage, incomeAndCosts } from "./investment-income";
+
+// Your own clock: just past midnight on 1 January where you are, still 31 December in UTC.
+vi.mock("@/lib/trades", async (load) => ({
+  ...(await load<typeof import("@/lib/trades")>()),
+  localToday: () => "2027-01-01",
+}));
+afterEach(() => vi.useRealTimers());
 
 const ev = (e: Partial<InvestmentEvent>): InvestmentEvent => ({
   kind: "dividend",
@@ -55,6 +62,13 @@ describe("InvestmentIncome", () => {
         "Taxes and fees not tied to a holding, like stamp duty, count here but not in any holding's return.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("this year is your own calendar's, not UTC's", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-12-31T23:30:00Z"));
+    render(<InvestmentIncome page="stock" events={[ev({ amount_eur: 8 })]} />);
+    expect(screen.getByText("Dividends").parentElement?.textContent).toBe("Dividends€0.00€8.00");
   });
 
   it("coins' events go to Crypto, shares' and cash to Portfolio", () => {
