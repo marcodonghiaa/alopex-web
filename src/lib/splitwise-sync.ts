@@ -188,6 +188,23 @@ export const directionOf = (kind: ReviewKind): BankTx["direction"] =>
   kind === "settle_in" ? "CRDT" : "DBIT";
 
 /** The newest pending items (at most 500), and how many are pending in all. */
+/** For the nav badge: how many expenses wait on To link, as a head-only count (no rows). */
+export const REVIEW_COUNT_KEY = [...REVIEW_KEY, "count"];
+
+/**
+ * The number of pending To link items. An older backend without the table has nothing waiting:
+ * 0, not an error, so the badge stays quietly off and nothing retries.
+ */
+export async function fetchReviewCount(): Promise<number> {
+  const { error, count } = await supabase
+    .from("splitwise_review")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending");
+  if (error?.code === "PGRST205" || error?.code === "42P01") return 0;
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
 export async function fetchReview(): Promise<{ items: Array<ReviewItem>; total: number }> {
   const { data, error, count } = await supabase
     .from("splitwise_review")

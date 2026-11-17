@@ -26,6 +26,7 @@ import {
   disconnectSplitwise,
   fetchConnection,
   fetchReview,
+  fetchReviewCount,
   previewSync,
   reviewRow,
   runReviewAction,
@@ -274,6 +275,30 @@ describe("fetchReview", () => {
     query.result = { data: [item()], error: null, count: 1200 } as typeof query.result;
     expect((await fetchReview()).total).toBe(1200);
     expect(calls).toContainEqual(["select", [expect.any(String), { count: "exact" }]]);
+  });
+});
+
+// re-audit N4: the nav badge needs a number, not up to 500 rows
+describe("fetchReviewCount", () => {
+  it("asks only for the count of pending items", async () => {
+    calls.length = 0;
+    query.result = { data: null, error: null, count: 7 } as typeof query.result;
+    expect(await fetchReviewCount()).toBe(7);
+    expect(calls).toContainEqual(["from", ["splitwise_review"]]);
+    expect(calls).toContainEqual(["select", ["id", { count: "exact", head: true }]]);
+    expect(calls).toContainEqual(["eq", ["status", "pending"]]);
+    expect(calls.some(([m]) => m === "limit" || m === "order")).toBe(false);
+  });
+  it.each([
+    ["PGRST205", "Could not find the table 'public.splitwise_review' in the schema cache"],
+    ["42P01", 'relation "public.splitwise_review" does not exist'],
+  ])("reads an older backend without the table (%s) as nothing waiting", async (code, message) => {
+    query.result = { data: null, error: { code, message } };
+    expect(await fetchReviewCount()).toBe(0);
+  });
+  it("throws any other failure", async () => {
+    query.result = { data: null, error: { code: "57014", message: "timeout" } };
+    await expect(fetchReviewCount()).rejects.toThrow("timeout");
   });
 });
 

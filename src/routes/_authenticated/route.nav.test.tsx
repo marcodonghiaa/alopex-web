@@ -2,10 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-const { rows, review, path } = vi.hoisted(() => ({
+const { rows, review, reviewCalls, reviewError, path } = vi.hoisted(() => ({
   rows: { current: [] as Array<unknown> },
   // Splitwise expenses waiting on the To link list.
   review: { current: [] as Array<unknown> },
+  // What the splitwise_review reads were asked for, and an error to answer with.
+  reviewCalls: { current: [] as Array<unknown> },
+  reviewError: { current: null as unknown },
   path: { current: "/" },
 }));
 
@@ -50,11 +53,16 @@ vi.mock("@/integrations/supabase/client", () => ({
     from: (table: string) =>
       table === "splitwise_review"
         ? {
-            select: () => {
+            select: (...args: Array<unknown>) => {
+              reviewCalls.current.push(args);
               const q: Record<string, unknown> = {};
               for (const m of ["eq", "order", "limit"]) q[m] = () => q;
               q["then"] = (resolve: (v: unknown) => void) =>
-                resolve({ data: review.current, error: null, count: review.current.length });
+                resolve(
+                  reviewError.current
+                    ? { data: null, error: reviewError.current, count: null }
+                    : { data: review.current, error: null, count: review.current.length },
+                );
               return q;
             },
           }
@@ -128,6 +136,36 @@ describe("Who owes you badge", () => {
     await new Promise((r) => setTimeout(r, 20)); // let the queries settle
     expect(links[0]).toHaveTextContent(/^Who owes you$/);
     expect(screen.getByRole("button", { name: "More" })).toBeTruthy();
+  });
+});
+
+// re-audit N4: the badge reads a head-only count, and an older backend without the table is quiet
+describe("Who owes you badge query", () => {
+  it("asks for the count only, never the rows", async () => {
+    reviewCalls.current = [];
+    review.current = [{ id: "r1" }];
+    try {
+      renderLayout();
+      const links = await screen.findAllByRole("link", { name: /^Who owes you/ });
+      await waitFor(() => expect(links[0]).toHaveTextContent("Who owes you1 to review"));
+      expect(reviewCalls.current).toEqual([["id", { count: "exact", head: true }]]);
+    } finally {
+      review.current = [];
+    }
+  });
+
+  it("shows no badge and asks once when the backend has no such table", async () => {
+    reviewCalls.current = [];
+    reviewError.current = { code: "PGRST205", message: "Could not find the table" };
+    try {
+      renderLayout();
+      const links = await screen.findAllByRole("link", { name: /^Who owes you/ });
+      await new Promise((r) => setTimeout(r, 50));
+      expect(links[0]).toHaveTextContent(/^Who owes you$/);
+      expect(reviewCalls.current).toHaveLength(1);
+    } finally {
+      reviewError.current = null;
+    }
   });
 });
 
