@@ -55,8 +55,11 @@ function RememberOpener({ opener }: { opener: React.RefObject<Element | null> })
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, onCloseAutoFocus, ...props }, ref) => {
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    /** A request runs and the dialog won't close: the X shows it's off instead of doing nothing. */
+    closeDisabled?: boolean;
+  }
+>(({ className, children, onCloseAutoFocus, closeDisabled, ...props }, ref) => {
   const opener = React.useRef<Element | null>(null);
   return (
     <DialogPortal>
@@ -73,7 +76,10 @@ const DialogContent = React.forwardRef<
       >
         <RememberOpener opener={opener} />
         {children}
-        <DialogPrimitive.Close className="absolute right-1 top-1 flex size-11 items-center justify-center rounded-sm opacity-70 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+        <DialogPrimitive.Close
+          disabled={closeDisabled}
+          className="absolute right-1 top-1 flex size-11 items-center justify-center rounded-sm opacity-70 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-30 data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+        >
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>
         </DialogPrimitive.Close>

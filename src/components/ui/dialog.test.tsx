@@ -187,3 +187,24 @@ describe("Dialog with a sheet over it", () => {
     expect(screen.getByText("Import")).toBeInTheDocument();
   });
 });
+
+// polish-4 #21: while a request runs the dialog can't close, and its X says so
+describe("Dialog close button", () => {
+  const Open = ({ closeDisabled }: { closeDisabled?: boolean }) => (
+    <Dialog open>
+      <DialogContent aria-describedby={undefined} {...(closeDisabled ? { closeDisabled } : {})}>
+        <DialogTitle>Busy</DialogTitle>
+      </DialogContent>
+    </Dialog>
+  );
+
+  it("is off with closeDisabled", () => {
+    render(<Open closeDisabled />);
+    expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
+  });
+
+  it("is on by default", () => {
+    render(<Open />);
+    expect(screen.getByRole("button", { name: "Close" })).toBeEnabled();
+  });
+});

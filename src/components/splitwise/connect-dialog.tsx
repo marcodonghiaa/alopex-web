@@ -113,7 +113,11 @@ export function ConnectDialog({
   const title = reconnect ? "Reconnect Splitwise" : "Connect Splitwise";
   return (
     <Dialog open={open} onOpenChange={(next) => connect.isPending || onOpenChange(next)}>
-      <DialogContent className="gap-0 rounded-xl p-5 sm:p-6" onCloseAutoFocus={onCloseAutoFocus}>
+      <DialogContent
+        className="gap-0 rounded-xl p-5 sm:p-6"
+        onCloseAutoFocus={onCloseAutoFocus}
+        closeDisabled={connect.isPending}
+      >
         <DialogTitle className="text-xl font-semibold tracking-tight">{title}</DialogTitle>
         {name === null ? (
           <form onSubmit={submit} noValidate>

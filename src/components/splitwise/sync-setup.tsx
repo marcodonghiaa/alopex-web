@@ -275,7 +275,11 @@ function DisconnectDialog({
   ];
   return (
     <Dialog open={open} onOpenChange={(next) => disconnect.isPending || onOpenChange(next)}>
-      <DialogContent className="gap-0 rounded-xl p-5 sm:p-6" onCloseAutoFocus={onCloseAutoFocus}>
+      <DialogContent
+        className="gap-0 rounded-xl p-5 sm:p-6"
+        onCloseAutoFocus={onCloseAutoFocus}
+        closeDisabled={disconnect.isPending}
+      >
         <DialogTitle className="text-xl font-semibold tracking-tight">
           {onlyDelete ? "Delete synced Splitwise data?" : "Disconnect Splitwise?"}
         </DialogTitle>

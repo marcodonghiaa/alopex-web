@@ -1124,3 +1124,34 @@ describe("Setup while the connection loads", () => {
     expect(screen.queryByRole("status", { name: "Loading the Splitwise connection" })).toBeNull();
   });
 });
+
+// polish-4 #21: the X can't close a dialog whose request runs, so it is off too
+describe("Dialog X while a request runs", () => {
+  it("is off while the key is checked, on again after", async () => {
+    let finish: (v: unknown) => void = () => {};
+    invoke.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));
+    rpc.mockResolvedValue(notConnected());
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: "Connect Splitwise" }));
+    const dialog = screen.getByRole("dialog", { name: "Connect Splitwise" });
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeEnabled();
+    await userEvent.type(within(dialog).getByLabelText("API key"), "abcdefghijkl");
+    await userEvent.click(within(dialog).getByRole("checkbox"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeDisabled();
+    finish(httpError(400, { error: "Splitwise did not accept this API key." }));
+    await within(dialog).findByRole("alert");
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeEnabled();
+  });
+
+  it("is off while it disconnects", async () => {
+    invoke.mockReturnValueOnce(new Promise(() => {}));
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
+    const dialog = screen.getByRole("dialog", { name: "Disconnect Splitwise?" });
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeEnabled();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Disconnect" }));
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeDisabled();
+  });
+});
