@@ -216,6 +216,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     setText("");
     setFileName(null);
     setFrom(null);
+    save.reset();
   }
   function onFile(file: File | undefined) {
     if (!file) return;

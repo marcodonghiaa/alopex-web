@@ -400,6 +400,19 @@ describe("ImportTrades", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
+  it("a failed save's error is gone after closing and opening again", async () => {
+    db.insertError = { message: "insert failed" };
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
+    await screen.findByText("insert failed");
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    fireEvent.click(screen.getByText("Import trades from CSV"));
+    expect(screen.getByText("Where are these trades from?")).toBeTruthy();
+    expect(screen.queryByText("insert failed")).toBeNull();
+  });
+
   it("a second click while saving saves nothing twice", async () => {
     let release!: () => void;
     db.insertGate = new Promise((r) => (release = r));
