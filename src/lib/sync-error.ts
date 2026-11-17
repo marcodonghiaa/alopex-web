@@ -1,5 +1,4 @@
 import { bankOf } from "@/components/bank-badge";
-import { formatDay } from "@/lib/date";
 
 // Why a bank stopped updating, from accounts.sync_error (what the last sync-bank run hit: Enable
 // Banking's error name, or HTTP_<status> / TIMEOUT / NETWORK / SAVE_FAILED). Cleared by the next
@@ -10,7 +9,6 @@ export interface SyncErrorAccount {
   bank_name?: string | null;
   // Absent on a database without the bank-sync-health migration.
   sync_error?: string | null;
-  sync_error_at?: string | null;
 }
 
 export interface SyncAlert {
@@ -56,7 +54,8 @@ export function syncErrorMessage(code: string, bank: string): string | null {
   return `The last sync of ${bank} failed (${code}). ${RETRY}`;
 }
 
-// One alert per bank and message, in the order the accounts come; the date is when it began.
+// One alert per bank and message, in the order the accounts come. No date: the account row
+// already shows its last real update.
 export function syncAlerts(accounts: Array<SyncErrorAccount>): Array<SyncAlert> {
   const seen = new Map<string, SyncAlert>();
   for (const a of accounts) {
@@ -66,10 +65,7 @@ export function syncAlerts(accounts: Array<SyncErrorAccount>): Array<SyncAlert> 
     if (!text) continue;
     const key = `${bank}\n${text}`;
     if (seen.has(key)) continue;
-    const since = a.sync_error_at
-      ? ` Not updated since ${formatDay(a.sync_error_at.slice(0, 10))}.`
-      : "";
-    seen.set(key, { bank, message: `${text}${since}` });
+    seen.set(key, { bank, message: text });
   }
   return [...seen.values()];
 }
