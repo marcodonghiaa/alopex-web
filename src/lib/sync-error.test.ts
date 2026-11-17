@@ -116,12 +116,19 @@ describe("syncAlerts", () => {
     expect(syncAlerts([ended, valid], now)).toEqual([syncErrorMessage("ASPSP_TIMEOUT", "N26")]);
   });
 
-  it("names which account a bank stopped sharing", () => {
-    const eur = { ...acc("N26", "ASPSP_ACCOUNT_NOT_ACCESSIBLE"), currency: "EUR" };
-    const usd = { ...acc("N26", "HTTP_404"), currency: "USD" };
-    expect(syncAlerts([eur, usd])).toEqual([
-      "N26 no longer shares N26 EUR. Connect N26 again and pick it.",
-      "N26 no longer shares N26 USD. Connect N26 again and pick it.",
+  it("names which account a bank stopped sharing, by currency and IBAN end", () => {
+    const main = {
+      ...acc("N26", "ASPSP_ACCOUNT_NOT_ACCESSIBLE"),
+      currency: "EUR",
+      iban: "DE89370400440532010001",
+    };
+    const savings = { ...acc("N26", "HTTP_404"), currency: "EUR", iban: "DE89370400440532010002" };
+    const usd = { ...acc("N26", "HTTP_404"), currency: "USD", iban: null };
+    const then = "Connect N26 again and include it when the bank asks which accounts to share.";
+    expect(syncAlerts([main, savings, usd])).toEqual([
+      `N26 no longer shares your EUR account •••• 0001. ${then}`,
+      `N26 no longer shares your EUR account •••• 0002. ${then}`,
+      `N26 no longer shares your USD account. ${then}`,
     ]);
   });
 

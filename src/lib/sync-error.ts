@@ -1,4 +1,4 @@
-import { accountName, bankOf } from "@/components/bank-badge";
+import { bankOf } from "@/components/bank-badge";
 
 // Why a bank stopped updating, from accounts.sync_error (what the last sync-bank run hit: Enable
 // Banking's error name, or HTTP_<status> / TIMEOUT / NETWORK / SAVE_FAILED). Cleared by the next
@@ -8,6 +8,7 @@ export interface SyncErrorAccount {
   label: string | null;
   bank_name?: string | null;
   currency?: string;
+  iban?: string | null;
   // Absent on a database without the bank-sync-health migration.
   sync_error?: string | null;
   consent_valid_until?: string | null;
@@ -31,7 +32,7 @@ export function syncErrorMessage(
     code === "ACCOUNT_DOES_NOT_EXIST" ||
     code === "HTTP_404"
   ) {
-    return `${bank} no longer shares ${account}. Connect ${bank} again and pick it.`;
+    return `${bank} no longer shares ${account}. Connect ${bank} again and include it when the bank asks which accounts to share.`;
   }
   if (
     code === "UNAUTHORIZED_IP" ||
@@ -65,9 +66,14 @@ export function syncAlerts(accounts: Array<SyncErrorAccount>, now = Date.now()):
   for (const a of accounts) {
     if (!a.sync_error) continue;
     if (a.consent_valid_until && Date.parse(a.consent_valid_until) <= now) continue;
-    const account = a.currency ? accountName({ ...a, currency: a.currency }) : undefined;
+    const account = a.currency ? accountLabel(a.currency, a.iban) : undefined;
     const text = syncErrorMessage(a.sync_error, bankOf(a), account);
     if (text) messages.add(text);
   }
   return [...messages];
+}
+
+// "your EUR account •••• 0002": a bank can hold several accounts in one currency.
+function accountLabel(currency: string, iban?: string | null): string {
+  return `your ${currency} account${iban ? ` •••• ${iban.slice(-4)}` : ""}`;
 }
