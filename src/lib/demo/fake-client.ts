@@ -170,7 +170,8 @@ export const payerKey = (name: string | null): string | null =>
     .replace(/[łøđħıßæœ]/gu, (ch) => FOLD[ch] ?? ch)
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim()
-    .slice(0, 200)
+    // Characters, not UTF-16 units, like left() in the database.
+    .match(/^[\s\S]{0,200}/u)?.[0]
     .trim() || null;
 // Mirrors payback_eligible: plain incoming money only.
 const paybackEligible = (t: Row): boolean =>
@@ -595,6 +596,8 @@ class Store {
   }
   /** Mirror of record_payback: oldest open bills of that person first, whole bills only. */
   recordPayback(args: Record<string, unknown>) {
+    if (args["p_contact"] == null)
+      return { data: null, error: { message: "Contact required", code: "P0001" } };
     const txs = this.db["transactions"] ?? [];
     const credit = txs.find(
       (t) =>
@@ -606,8 +609,6 @@ class Store {
     if (!credit) return { data: null, error: { message: "Payment not found", code: "P0001" } };
     if (credit["payback_contact"] != null)
       return { data: null, error: { message: "Payment already checked", code: "P0001" } };
-    if (args["p_contact"] == null)
-      return { data: null, error: { message: "Contact required", code: "P0001" } };
     const contact = String(args["p_contact"]).trim();
     if ([...contact].length > 100)
       return { data: null, error: { message: "Contact name too long", code: "P0001" } };
@@ -666,10 +667,29 @@ class Store {
       settledEur += owed;
       settled.push(String(b["entry_reference"]));
     }
-    if (settled.length > 0) {
-      refunds.forEach(settle);
-      settledEur += credits;
-    } else if (left !== null) left += credits;
+    if (credits < 0) {
+      if (settledEur + credits >= -0.005) {
+        // The settled bills use the refunds in full: close them too.
+        refunds.forEach(settle);
+        settledEur += credits;
+      } else {
+        // Only part of a refund would be used, and it can't settle in part: settle nothing.
+        for (const b of txs)
+          if (
+            b["settled_by_account"] === credit["account_uid"] &&
+            b["settled_by_ref"] === credit["entry_reference"]
+          )
+            Object.assign(b, {
+              owed_settled: false,
+              settled_at: null,
+              settled_by_account: null,
+              settled_by_ref: null,
+            });
+        if (left !== null) left += credits + settledEur;
+        settledEur = 0;
+        settled.length = 0;
+      }
+    }
     let linked = false;
     const key = payerKey(payerNameOf(credit));
     if (args["p_remember"] !== false && key) {

@@ -931,6 +931,66 @@ describe("fake client: payback matching mirrors the database", () => {
     expect(short).toMatchObject({ settled: [], left_eur: 30 });
   });
 
+  it("refund credit is never half used: bills settle only when they use it all", async () => {
+    const c = await seed([
+      row("pr-ref", {
+        amount: 60,
+        personal_amount: 10,
+        owed_by: "Fede",
+        credit_debit_indicator: "CRDT",
+        booking_date: "2026-10-01",
+      }),
+      row("pr-b1", {
+        amount: 20,
+        personal_amount: 10,
+        owed_by: "Fede",
+        booking_date: "2026-10-02",
+      }),
+      row("pr-b2", {
+        amount: 200,
+        personal_amount: 100,
+        owed_by: "Fede",
+        booking_date: "2026-10-03",
+      }),
+      row("pr-pay", {
+        amount: 5,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Fede Rosa",
+        flow_type: "income",
+      }),
+      row("pr-pay2", {
+        amount: 70,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Fede Rosa",
+        flow_type: "income",
+      }),
+    ]);
+    expect((await record(c, "pr-pay", "Fede")).data).toMatchObject({ settled: [], left_eur: 5 });
+    const { data: open } = await c
+      .from("transactions")
+      .select("entry_reference, owed_settled")
+      .in("entry_reference", ["pr-ref", "pr-b1", "pr-b2"]);
+    expect(open!.filter((r) => r.owed_settled)).toEqual([]);
+    expect((await record(c, "pr-pay2", "Fede")).data).toMatchObject({
+      settled: ["pr-b1", "pr-b2"],
+      settled_eur: 60,
+      left_eur: 10,
+    });
+  });
+
+  it("asks for a contact before anything else, like the database", async () => {
+    const c = await seed([
+      row("ck-pay", {
+        amount: 20,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Ugo",
+        flow_type: "income",
+        payback_contact: "",
+      }),
+    ]);
+    expect((await record(c, "ck-pay", null)).error?.message).toBe("Contact required");
+  });
+
   it("names are read like the page: 'Carla,' is Carla alone", async () => {
     const c = await seed([
       row("cm-1", { amount: 20, personal_amount: 10, owed_by: "Carla," }),
@@ -997,5 +1057,7 @@ describe("demo payerKey matches the database's payer_key", () => {
       "rehor lukasz oster stastny dvorak cwik wegrzyn nagy odon gyozo zanic alund aero strasse",
     );
     expect(payerKey("ab ".repeat(150))?.length).toBe(200);
+    // Characters, like the database's left(): a letter outside the BMP is one, not two units.
+    expect([...(payerKey("𠀀".repeat(250)) ?? "")].length).toBe(200);
   });
 });
