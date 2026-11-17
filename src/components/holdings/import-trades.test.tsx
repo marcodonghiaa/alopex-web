@@ -124,14 +124,14 @@ async function pickTradeRepublic() {
 }
 
 function open(kind: "stock" | "crypto", saved: Array<Trade> = []) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
+    <QueryClientProvider client={client}>
       <ImportTrades kind={kind} saved={saved} />
     </QueryClientProvider>,
   );
   fireEvent.click(screen.getByText("Import trades from CSV"));
+  return client;
 }
 
 describe("ImportTrades", () => {
@@ -446,5 +446,20 @@ describe("ImportTrades", () => {
     expect(screen.getByText("Where are these trades from?")).toBeTruthy();
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("after a save it refreshes trades, income and costs, holdings, returns and net worth", async () => {
+    const client = open("stock");
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    fireEvent.click(await pickTradeRepublic());
+    await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(6));
+    expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
+      ["holding-trades"],
+      ["investment-events"],
+      ["holding-keys", "stock"],
+      ["holding-performance"],
+      ["portfolio-latest"],
+      ["net-worth-daily"],
+    ]);
   });
 });
