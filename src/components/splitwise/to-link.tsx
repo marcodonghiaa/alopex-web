@@ -107,9 +107,9 @@ export function ToLink({ connected }: { connected: boolean }) {
     mutationFn: runReviewAction,
     onSuccess: (_d, a) => toast.success(DONE[a.action]),
     onError: (err) => toast.error(err.message),
-    onSettled: () => {
-      for (const queryKey of syncRefreshKeys()) void queryClient.invalidateQueries({ queryKey });
-    },
+    // Awaited: the action stays pending (rows off) until the list shows its result.
+    onSettled: () =>
+      Promise.all(syncRefreshKeys().map((queryKey) => queryClient.invalidateQueries({ queryKey }))),
   });
   // One action at a time: each one changes what the others would act on.
   const busy = demo || act.isPending;

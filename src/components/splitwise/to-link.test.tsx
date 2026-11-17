@@ -331,6 +331,26 @@ describe("ToLink", () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Ignored"));
   });
 
+  // polish-3 #3: the buttons stay off until the list has refreshed, so Ignore can't undo a Link
+  it("keeps the row off until the list has refreshed after an action", async () => {
+    tables.splitwise_review = { data: [item()], error: null };
+    tables.transactions = { data: [bankRow()], error: null };
+    renderList();
+    const row = await screen.findByRole("listitem", { name: "Groceries" });
+    await within(row).findByRole("button", { name: "Link" });
+    let refreshed: () => void = () => {};
+    (tables as Record<string, unknown>)["splitwise_review"] = new Promise(
+      (resolve) => (refreshed = () => resolve({ data: [], error: null })),
+    );
+    await userEvent.click(within(row).getByRole("button", { name: "Link" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Linked to the bank payment"));
+    expect(within(row).getByRole("button", { name: "Ignore" })).toBeDisabled();
+    await userEvent.click(within(row).getByRole("button", { name: "Ignore" }));
+    expect(rpc).toHaveBeenCalledTimes(1);
+    refreshed();
+    await waitFor(() => expect(screen.queryByRole("listitem", { name: "Groceries" })).toBeNull());
+  });
+
   it("says what to do when no payment is around", async () => {
     tables.splitwise_review = { data: [item()], error: null };
     renderList();
