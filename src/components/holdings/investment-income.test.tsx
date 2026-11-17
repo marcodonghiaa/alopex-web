@@ -71,6 +71,20 @@ describe("InvestmentIncome", () => {
     expect(screen.getByText("Dividends").parentElement?.textContent).toBe("Dividends€0.00€8.00");
   });
 
+  it("a total that's only rounding dust (fees charged and given back) shows no row", () => {
+    const fee = (amount_eur: number) =>
+      ev({ kind: "fee", asset_kind: null, key: null, amount_eur });
+    render(
+      <InvestmentIncome
+        page="stock"
+        today="2026-11-17"
+        events={[ev({ amount_eur: 8 }), fee(-0.1), fee(-0.2), fee(0.3)]}
+      />,
+    );
+    expect(screen.getByText("Dividends")).toBeInTheDocument();
+    expect(screen.queryByText("Fees")).toBeNull();
+  });
+
   it("coins' events go to Crypto, shares' and cash to Portfolio", () => {
     const coin = ev({ asset_kind: "crypto", key: "BTC" });
     const cash = ev({ kind: "interest", asset_kind: null, key: null });

@@ -54,7 +54,8 @@ export function InvestmentIncome({
   const mine = eventsForPage(events, page);
   const all = incomeAndCosts(mine, trades);
   const year = incomeAndCosts(mine, trades, `${today.slice(0, 4)}-01-01`);
-  const rows = ROWS.filter((r) => all[r.field] !== 0);
+  // Under half a cent is rounding dust: it would show as "−€0.00".
+  const rows = ROWS.filter((r) => Math.abs(all[r.field]) >= 0.005);
   if (rows.length === 0) return null;
   const shown = (n: number, cost?: boolean) => formatEur(cost ? -n : n);
   return (
