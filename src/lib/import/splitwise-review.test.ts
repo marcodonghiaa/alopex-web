@@ -14,6 +14,14 @@ const dbRow = (over: Partial<BankRowFromDb> = {}): BankRowFromDb => ({
   ...over,
 });
 
+describe("makeRate with a gap limit", () => {
+  it("won't use a rate older than the limit", () => {
+    const rate = makeRate([{ currency: "USD", date: "2026-01-01", rate_to_eur: 0.9 }], 10);
+    expect(rate("USD", "2026-01-11")).toBe(0.9);
+    expect(rate("USD", "2026-01-12")).toBeNull();
+  });
+});
+
 describe("makeRate", () => {
   const rate = makeRate([
     { currency: "USD", date: "2026-08-10", rate_to_eur: 0.9 },

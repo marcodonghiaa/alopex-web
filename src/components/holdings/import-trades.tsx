@@ -20,22 +20,35 @@ import { GroupedList } from "@/components/ui/grouped-list";
 import { localToday } from "@/lib/trades";
 import type { Trade } from "@/lib/trades";
 import { BROKERS, NEW_BROKER_URL } from "@/lib/brokers";
+import { saveQuantity } from "@/lib/holding-quantity";
 import { loadRates, rateLookup } from "@/lib/brokers/rates";
-import { newTrades, parseTradesCsv, shareUpdates, summarizeImport } from "@/lib/trades-csv";
+import {
+  detectBroker,
+  newTrades,
+  parseTradesCsv,
+  shareUpdates,
+  summarizeImport,
+} from "@/lib/trades-csv";
 import { newEvents, summarizeIncome } from "@/lib/investment-events";
 import { formatEur } from "@/lib/transactions";
 import { fetchEvents } from "@/lib/use-performance";
+
+/** A coin holding as stored: its count and its symbol written as saved (the key is in capitals). */
+interface Held {
+  shares: number;
+  symbol: string;
+}
 
 interface Holdings {
   shares: Map<string, number>;
   names: Map<string, string>;
   /** Coins only: each source's own amounts (a coin can sit on Ledger and on Coinbase). */
-  bySource: Map<string, Map<string, number>>;
+  bySource: Map<string, Map<string, Held>>;
 }
 
 // Every holding, its count and name, sold ones too: the old trades of something you sold are still yours.
 async function fetchHoldings(kind: "stock" | "crypto"): Promise<Holdings> {
-  let list: Array<{ key: string; shares: number; name: string; source?: string }>;
+  let list: Array<{ key: string; shares: number; name: string; source?: string; symbol?: string }>;
   if (kind === "stock") {
     const { data, error } = await supabase.from("portfolio_holdings").select("isin,shares,name");
     if (error) throw error;
@@ -50,19 +63,31 @@ async function fetchHoldings(kind: "stock" | "crypto"): Promise<Holdings> {
       shares: r.amount,
       name: r.name,
       source: r.source,
+      symbol: r.asset_symbol,
     }));
   }
-  const bySource = new Map<string, Map<string, number>>();
+  const bySource = new Map<string, Map<string, Held>>();
   for (const r of list) {
-    if (!r.source) continue;
+    if (!r.source || !r.symbol) continue;
     if (!bySource.has(r.source)) bySource.set(r.source, new Map());
-    bySource.get(r.source)!.set(r.key, r.shares);
+    bySource.get(r.source)!.set(r.key, { shares: r.shares, symbol: r.symbol });
   }
   return {
     shares: new Map(list.map((r) => [r.key, r.shares])),
     names: new Map(list.map((r) => [r.key, r.name || r.key])),
     bySource,
   };
+}
+
+/** Per coin, the holding a wallet export sets: the wallet's own row, else the one added by hand. */
+function walletHoldings(
+  bySource: Map<string, Map<string, Held>>,
+  source: string,
+): Map<string, Held & { source: string }> {
+  const out = new Map<string, Held & { source: string }>();
+  for (const from of ["Manual", source])
+    for (const [key, held] of bySource.get(from) ?? []) out.set(key, { ...held, source: from });
+  return out;
 }
 
 const dateFormat = new Intl.DateTimeFormat(dateLocale(), {
@@ -91,10 +116,25 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     enabled: open,
   });
 
+  // A wallet's export (Ledger) is the record of that wallet: it sets the coin's Ledger holding, or
+  // the one you added by hand, never one an exchange sync keeps (Coinbase). Coins with neither are
+  // left out by the parser, with a note.
+  const fileBroker = broker ?? (text.trim() ? detectBroker(text) : undefined);
+  const holdingSource = kind === "crypto" ? fileBroker?.holdingSource : undefined;
+  const wallet = useMemo(
+    () => (holdingSource && keys.data ? walletHoldings(keys.data.bySource, holdingSource) : null),
+    [holdingSource, keys.data],
+  );
   const ctx = useMemo(
     () =>
-      keys.data ? { kind, knownKeys: new Set(keys.data.shares.keys()), today: localToday() } : null,
-    [keys.data, kind],
+      keys.data
+        ? {
+            kind,
+            knownKeys: new Set(wallet ? wallet.keys() : keys.data.shares.keys()),
+            today: localToday(),
+          }
+        : null,
+    [keys.data, kind, wallet],
   );
   // Prices in dollars (a Ledger file): load that currency's daily rates, then read it again.
   const firstPass = useMemo(
@@ -131,19 +171,17 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   );
   const income = useMemo(() => summarizeIncome(freshEvents), [freshEvents]);
   const summary = useMemo(() => summarizeImport(fresh), [fresh]);
-  // A wallet's file is the record of that wallet only: count its own trades, set its own holding.
-  const fileBroker = BROKERS.find((b) => b.id === parsed?.trades[0]?.source);
-  const holdingSource = kind === "crypto" ? fileBroker?.holdingSource : undefined;
+  // Count only the wallet's own trades for its holding.
   const updates = useMemo(() => {
     if (!parsed?.setsShares || !keys.data) return [];
     if (kind === "stock") return shareUpdates(parsed.trades, saved, keys.data.shares);
-    if (!holdingSource || !fileBroker) return [];
+    if (!wallet || !fileBroker) return [];
     return shareUpdates(
       parsed.trades,
       saved.filter((t) => t.source === fileBroker.id),
-      keys.data.bySource.get(holdingSource) ?? new Map(),
+      new Map([...wallet].map(([key, h]) => [key, h.shares])),
     );
-  }, [parsed, saved, keys.data, kind, holdingSource, fileBroker]);
+  }, [parsed, saved, keys.data, kind, wallet, fileBroker]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -171,15 +209,17 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       // If this fails the trades are safe: importing again skips them and retries the counts.
       for (const { key, shares } of updates) {
         // Coins go through set_holding_quantity, which also writes today's value for net worth.
-        const { error } =
-          kind === "stock"
-            ? await supabase.from("portfolio_holdings").update({ shares }).eq("isin", key)
-            : await supabase.rpc("set_holding_quantity", {
-                p_kind: "crypto",
-                p_key: key,
-                p_quantity: shares,
-                p_source: holdingSource!,
-              });
+        if (kind === "crypto") {
+          await saveQuantity(
+            { kind: "crypto", symbol: wallet!.get(key)!.symbol, source: wallet!.get(key)!.source },
+            shares,
+          );
+          continue;
+        }
+        const { error } = await supabase
+          .from("portfolio_holdings")
+          .update({ shares })
+          .eq("isin", key);
         if (error) throw error;
       }
     },

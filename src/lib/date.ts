@@ -48,3 +48,13 @@ export function asOf(snapshotDate: string | null, today: string): string | null 
     ...(snapshotDate.slice(0, 4) === today.slice(0, 4) ? {} : { year: "numeric" }),
   })}`;
 }
+
+/** An ISO day moved by whole days, on the calendar (UTC), so time zones and DST don't shift it. */
+export const addDays = (iso: string, days: number): string =>
+  new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+
+/** A real calendar day written YYYY-MM-DD (not 2026-02-30). */
+export const isDay = (s: string): boolean =>
+  /^\d{4}-\d{2}-\d{2}$/.test(s) &&
+  !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) &&
+  addDays(s, 0) === s;

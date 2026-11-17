@@ -23,6 +23,7 @@ import { isShareRow, type StoredShare } from "@/lib/import/splitwise-corrections
 import { planWrite, splitAtCheckpoint } from "@/lib/import/splitwise-plan";
 import { categorizeRow, ruleTextFor, type UserRule } from "@/lib/import/splitwise-categorize";
 import { defaultSelection, makeRate, toBankTx, type FxRow } from "@/lib/import/splitwise-review";
+import { addDays } from "@/lib/date";
 
 // Bank rows are read from 30 days before the first expense (late-entered ones) to a week after
 // the last one. The database returns at most 1000 rows per call, so more than that is refused.
@@ -30,9 +31,6 @@ const DAYS_BEFORE = 30;
 const DAYS_AFTER = 7;
 const FX_DAYS_BEFORE = 14;
 const PAGE_LIMIT = 1000;
-
-const addDays = (iso: string, days: number) =>
-  new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 
 const expenses = (n: number) => (n === 1 ? "1 expense" : `${n} expenses`);
 

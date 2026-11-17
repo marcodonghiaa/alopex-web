@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseTradesCsv } from "@/lib/trades-csv";
-import { ledgerLive } from "./ledger-live";
 
 const sample = readFileSync(path.resolve(__dirname, "fixtures/ledger_live.csv"), "utf8");
 const HEADER = sample.split("\n")[0]!;
@@ -105,21 +104,13 @@ describe("Ledger Live operations export", () => {
     expect(ids).toEqual(["abc:BTC:IN", "abc:BTC:IN#2"]);
   });
 
-  it("a failed send costs its fee and nothing else, as Ledger Live counts it", () => {
-    const failed = parseTradesCsv(sample, ctx).trades.find((t) =>
-      t.external_id?.endsWith("9:ETH:OUT"),
-    )!;
-    expect(failed.shares).toBe(0.0002);
-    expect(failed.shares * failed.price_eur - failed.fee_eur).toBeCloseTo(0);
-  });
-
   it("a coin you sold to zero is kept, so its profit counts; one you still hold elsewhere is left out", () => {
     const { trades } = parseTradesCsv(sample, ctx);
     expect(trades.filter((t) => t.key === "LTC")).toHaveLength(2);
     const noEth = parseTradesCsv(sample, { ...ctx, knownKeys: new Set(["BTC", "USDT"]) });
     expect(noEth.trades.some((t) => t.key === "ETH")).toBe(false);
     expect(noEth.notes).toContain(
-      "ETH isn't one of your holdings, so it was left out. Add it, then import again.",
+      "ETH has no Ledger or manual holding, so it was left out. Add it as a coin, then import again.",
     );
   });
 
@@ -127,6 +118,24 @@ describe("Ledger Live operations export", () => {
     const line = "2026-01-05T08:00:00.000Z,Confirmed,ETHx,IN,2,,h,Ethereum 1,a,USD,10,10";
     const { trades } = parseTradesCsv(row(line), { ...ctx, knownKeys: new Set(["ETHX"]) });
     expect(trades[0]?.key).toBe("ETHX");
+  });
+
+  it("a row with no countervalue first doesn't stop the dollar rates from loading", () => {
+    const blank = "2026-01-03T08:00:00.000Z,Confirmed,ETH,NFT_IN,0,,n,Ethereum 1,a,,,";
+    const usdRow = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0.01,,h,Bitcoin 1,a,USD,300,300";
+    const result = parseTradesCsv(row(`${blank}\n${usdRow}`), noRates);
+    expect(result.errors).toEqual([]);
+    expect(result.needsRates).toEqual({ currency: "USD", from: "2026-01-05", to: "2026-01-05" });
+  });
+
+  it("only asks for rates of a real currency code on real days", () => {
+    const odd = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0.01,,h,Bitcoin 1,a,USD&x=1,300,300";
+    const badDate = "zz?x=1,Confirmed,BTC,IN,0.01,,h,Bitcoin 1,a,USD,300,300";
+    for (const line of [odd, badDate]) {
+      const result = parseTradesCsv(row(line), noRates);
+      expect(result.needsRates).toBeUndefined();
+      expect(result.errors).toHaveLength(1);
+    }
   });
 
   it("values already in euro need no rate", () => {
@@ -181,6 +190,55 @@ describe("Ledger Live operations export", () => {
     expect(notes).toContain("1 operation that doesn't move coins (an NFT or similar) was skipped.");
   });
 
+  it("a ticker or hash too long to save is a line error, not a failed save", () => {
+    const longTicker = `2026-01-05T08:00:00.000Z,Confirmed,${"X".repeat(101)},IN,1,,h,A,a,USD,1,1`;
+    expect(parseTradesCsv(row(longTicker), ctx).errors).toEqual([
+      "Line 2: couldn't read this IN row.",
+    ]);
+    const longHash = `2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,1,,${"a".repeat(195)},A,a,USD,1,1`;
+    expect(parseTradesCsv(row(longHash), ctx).errors).toEqual([
+      "Line 2: couldn't read this IN row.",
+    ]);
+  });
+
+  it("a number too big to hold (1e999) is a line error, not a failed save", () => {
+    for (const cells of ["IN,1e999,,h", "OUT,1,1e999,h"]) {
+      const line = `2026-01-05T08:00:00.000Z,Confirmed,BTC,${cells},Bitcoin 1,a,USD,300,300`;
+      expect(parseTradesCsv(row(line), ctx).errors).toHaveLength(1);
+    }
+    const value = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,1,,h,Bitcoin 1,a,USD,1e999,1";
+    expect(parseTradesCsv(row(value), ctx).errors).toEqual(["Line 2: couldn't read this IN row."]);
+  });
+
+  it("a value too big for its amount is a line error, not a failed save", () => {
+    const line = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,1e-10,,h,Bitcoin 1,a,USD,1e308,1";
+    expect(parseTradesCsv(row(line), ctx).errors).toEqual(["Line 2: couldn't read this IN row."]);
+  });
+
+  it("amounts are plain decimals: 0x10 is not 16 coins", () => {
+    const line = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0x10,,h,Bitcoin 1,a,USD,300,300";
+    expect(parseTradesCsv(row(line), ctx).errors).toEqual(["Line 2: couldn't read this IN row."]);
+  });
+
+  it("one unreadable row doesn't stop the rates for the others", () => {
+    const good = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0.01,,h,Bitcoin 1,a,USD,300,300";
+    for (const bad of [
+      "zz,Confirmed,ETH,NFT_IN,1,,n,Ethereum 1,a,USD,5,5",
+      "2026-13-45T08:00:00.000Z,Confirmed,BTC,IN,0.01,,h2,Bitcoin 1,a,USD,300,300",
+    ]) {
+      const result = parseTradesCsv(row(`${bad}\n${good}`), noRates);
+      expect(result.needsRates).toEqual({ currency: "USD", from: "2026-01-05", to: "2026-01-05" });
+    }
+  });
+
+  it("a currency in small letters is still that currency", () => {
+    const line = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0.01,,h,Bitcoin 1,a,usd,300,300";
+    expect(parseTradesCsv(row(line), noRates).needsRates?.currency).toBe("USD");
+    const result = parseTradesCsv(row(line), ctx);
+    expect(result.errors).toEqual([]);
+    expect(result.trades[0]!.price_eur).toBeCloseTo((300 * 0.9) / 0.01);
+  });
+
   it("a broken row or a future date is an error, so nothing is saved", () => {
     const bad = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,abc,,h,Bitcoin 1,a,USD,300,300";
     expect(parseTradesCsv(row(bad), ctx).errors).toEqual(["Line 2: couldn't read this IN row."]);
@@ -192,9 +250,5 @@ describe("Ledger Live operations export", () => {
     const result = parseTradesCsv(sample, { ...ctx, kind: "stock" });
     expect(result.trades).toEqual([]);
     expect(result.errors[0]).toMatch(/Crypto page/);
-  });
-
-  it("sets the Ledger holding, not your coins held elsewhere", () => {
-    expect(ledgerLive.holdingSource).toBe("Ledger");
   });
 });

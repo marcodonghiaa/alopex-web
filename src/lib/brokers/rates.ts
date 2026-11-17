@@ -1,4 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRows } from "@/lib/export/fetch-all";
+import { addDays, isDay } from "@/lib/date";
+import { makeRate } from "@/lib/import/splitwise-review";
 
 export interface RateRow {
   date: string;
@@ -9,21 +12,12 @@ export interface RateRow {
 // not one older than this: then the price would be a guess.
 const MAX_GAP_DAYS = 10;
 
-const addDays = (iso: string, n: number) =>
-  new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
-
-/** Euro per one `currency` on a day, from rows sorted by date; null when there's no recent rate. */
-export function rateLookup(currency: string, rows: Array<RateRow>) {
-  return (wanted: string, date: string): number | null => {
-    if (wanted !== currency) return null;
-    let found: RateRow | null = null;
-    for (const r of rows) {
-      if (r.date > date) break;
-      found = r;
-    }
-    return found && found.date >= addDays(date, -MAX_GAP_DAYS) ? found.rate_to_eur : null;
-  };
-}
+/** Euro per one `currency` on a day (or the last day before it); null when there's no recent rate. */
+export const rateLookup = (currency: string, rows: Array<RateRow>) =>
+  makeRate(
+    rows.map((r) => ({ ...r, currency })),
+    MAX_GAP_DAYS,
+  );
 
 type Db = Pick<typeof supabase, "from">;
 type Get = (url: string) => Promise<{ ok: boolean; json: () => Promise<unknown> }>;
@@ -42,27 +36,46 @@ export async function loadRates(
 ): Promise<Array<RateRow>> {
   const fail = () => new Error(`Couldn't load ${currency} exchange rates. Try again in a moment.`);
   const start = addDays(from, -MAX_GAP_DAYS);
-  const { data, error } = await db
-    .from("fx_rates")
-    .select("date, rate_to_eur")
-    .eq("currency", currency)
-    .gte("date", start)
-    .lte("date", to)
-    .order("date", { ascending: true })
-    .limit(5000);
-  if (error) throw fail();
-  const stored = (data ?? []) as Array<RateRow>;
+  // In pages: the server returns at most 1000 rows a request, and years of daily rates are more.
+  let stored: Array<RateRow>;
+  try {
+    stored = (await fetchAllRows("fx_rates", (a, b) =>
+      db
+        .from("fx_rates")
+        .select("date, rate_to_eur", { count: "exact" })
+        .eq("currency", currency)
+        .gte("date", start)
+        .lte("date", to)
+        .order("date", { ascending: true })
+        .range(a, b),
+    )) as unknown as Array<RateRow>;
+  } catch {
+    throw fail();
+  }
   if (stored.length > 0 && stored[0]!.date <= from) return stored;
 
   const until = stored[0]?.date ?? to;
   const res = await get(
-    `https://api.frankfurter.dev/v1/${start}..${until}?base=EUR&symbols=${currency}`,
+    `https://api.frankfurter.dev/v1/${start}..${until}?base=EUR&symbols=${encodeURIComponent(currency)}`,
   ).catch(() => null);
   if (!res?.ok) throw fail();
-  const body = (await res.json()) as { rates?: Record<string, Record<string, number>> };
-  const older = Object.entries(body.rates ?? {})
-    .filter(([date, r]) => r[currency]! > 0 && (stored.length === 0 || date < stored[0]!.date))
-    .map(([date, r]) => ({ date, rate_to_eur: 1 / r[currency]! }))
+  // Only real days with a finite rate above zero: a bad answer must never become a price.
+  let body: { rates?: Record<string, Record<string, unknown> | null> };
+  try {
+    body = (await res.json()) as typeof body;
+  } catch {
+    throw fail();
+  }
+  const older = Object.entries(body?.rates ?? {})
+    .flatMap(([date, r]) => {
+      const units = r?.[currency];
+      if (!isDay(date) || typeof units !== "number") return [];
+      const rate = 1 / units;
+      return units > 0 && Number.isFinite(units) && Number.isFinite(rate)
+        ? [{ date, rate_to_eur: rate }]
+        : [];
+    })
+    .filter(({ date }) => stored.length === 0 || date < stored[0]!.date)
     .sort((a, b) => a.date.localeCompare(b.date));
   return [...older, ...stored];
 }
