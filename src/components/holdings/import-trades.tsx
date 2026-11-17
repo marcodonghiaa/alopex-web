@@ -714,9 +714,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               }}
             >
               {save.isPending && <Loader2 className="size-4 animate-spin" />}
-              {fresh.length > 0
-                ? `Save ${fresh.length} trade${fresh.length === 1 ? "" : "s"}`
-                : "Save trades"}
+              {fresh.length > 0 ? `Save ${plural(fresh.length, "trade")}` : "Save trades"}
             </Button>
           </div>
         )}

@@ -387,21 +387,33 @@ describe("ImportTrades", () => {
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 
-  it("counts are grouped in the reader's locale", async () => {
-    const language = vi.spyOn(navigator, "language", "get").mockReturnValue("en-GB");
-    onTestFinished(() => language.mockRestore());
-    const rows = Array.from({ length: 1234 }, (_, i) => {
-      const day = new Date(Date.UTC(2020, 0, 1 + i)).toISOString().slice(0, 10);
-      return `${day},buy,XX0000000001,1,${100 + i}`;
-    });
-    open("stock");
-    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
-    fireEvent.change(screen.getByLabelText("CSV text"), {
-      target: { value: ["date,side,isin,shares,price", ...rows].join("\n") },
-    });
-    await screen.findByText("new trades to save");
-    expect(screen.getByText("1,234")).toBeTruthy();
-  });
+  it.each([
+    ["en-GB", "1,234"],
+    ["it-IT", "1.234"],
+  ])(
+    "counts are grouped in the reader's locale (%s): the total, the summary, Save and the toast",
+    async (locale, n) => {
+      const language = vi.spyOn(navigator, "language", "get").mockReturnValue(locale);
+      onTestFinished(() => language.mockRestore());
+      const rows = Array.from({ length: 1234 }, (_, i) => {
+        const day = new Date(Date.UTC(2020, 0, 1 + i)).toISOString().slice(0, 10);
+        return `${day},buy,XX0000000001,1,${100 + i}`;
+      });
+      open("stock");
+      fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+      fireEvent.change(screen.getByLabelText("CSV text"), {
+        target: { value: ["date,side,isin,shares,price", ...rows].join("\n") },
+      });
+      await screen.findByText("new trades to save");
+      expect(screen.getByText(n)).toBeTruthy();
+      expect(
+        screen.getByText(new RegExp(`^${n.replace(".", "\\.")} buys · 0 sells ·`)),
+      ).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: `Save ${n} trades` }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(toast.success).toHaveBeenLastCalledWith(`Imported ${n} trades`);
+    },
+  );
 
   it("when your holdings can't be loaded it says so", async () => {
     db.holdingsDown = true;
