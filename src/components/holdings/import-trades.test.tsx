@@ -750,4 +750,24 @@ describe("ImportTrades", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(toast.success).toHaveBeenLastCalledWith("Updated 2 holdings");
   });
+
+  describe("a coin sold to zero with no holding", () => {
+    const byHolding = () => screen.getByText("By holding").nextElementSibling!.textContent;
+
+    it("is labelled by its ticker, fully sold", async () => {
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Save 7 trades" });
+      expect(byHolding()).toContain("LTC · fully sold");
+      expect(byHolding()).not.toContain("Ethereum · fully sold");
+    });
+
+    it("uses the coin's name when it's known", async () => {
+      db.extraCoins.push({ asset_symbol: "LTC", amount: 3, name: "Litecoin", source: "Coinbase" });
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Save 7 trades" });
+      expect(byHolding()).toContain("Litecoin · fully sold");
+    });
+  });
 });
