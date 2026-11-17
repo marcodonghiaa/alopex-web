@@ -40,6 +40,38 @@ describe("TradesDialog", () => {
     expect(await screen.findByText("Bought 1,5")).toBeInTheDocument();
   });
 
+  it("shows an imported trade's tax next to its fee; none when there is no tax", async () => {
+    const trade = {
+      kind: "stock",
+      key: "K",
+      side: "buy",
+      shares: 1,
+      price_eur: 10,
+      fee_eur: 1,
+    };
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TradesDialog
+          kind="stock"
+          holdingKey="K"
+          name="Example ETF"
+          quantity={2}
+          label="Trades"
+          trades={[
+            { ...trade, id: "t1", trade_date: "2026-03-01", tax_eur: 0.12 },
+            { ...trade, id: "t2", trade_date: "2026-03-02", tax_eur: 0 },
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Trades" }));
+    const detail = (date: string) =>
+      screen.getByRole("button", { name: `Edit trade of ${date}` }).closest("li")?.textContent;
+    expect(await screen.findAllByText(/fee/)).toHaveLength(2);
+    expect(detail("2026-03-01")).toMatch(/fee €1\.00 · tax €0\.12$/);
+    expect(detail("2026-03-02")).not.toMatch(/tax/);
+  });
+
   it("polish-5 #5 fills the edit form in the chosen format", async () => {
     setLocaleOverride("it-IT");
     render(
