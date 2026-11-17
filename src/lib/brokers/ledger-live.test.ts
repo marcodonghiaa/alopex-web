@@ -172,6 +172,13 @@ describe("Ledger Live operations export", () => {
     expect(vote!.shares * vote!.price_eur - vote!.fee_eur).toBeCloseTo(0);
   });
 
+  it("a staking action with no fee moves nothing: no trade, no error", () => {
+    const line = "2026-01-05T08:00:00.000Z,Confirmed,TRX,VOTE,0.5,0,h,Tron 1,a,USD,0.10,0.10";
+    const { trades, errors } = parseTradesCsv(row(line), { ...ctx, knownKeys: new Set(["TRX"]) });
+    expect(trades).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
   it("delegating moves the coins out, and slashed coins are a loss", () => {
     const known = { ...ctx, knownKeys: new Set(["ATOM"]) };
     const delegate =
