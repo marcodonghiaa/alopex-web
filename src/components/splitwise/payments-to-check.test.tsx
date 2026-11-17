@@ -79,6 +79,16 @@ describe("PaymentsToCheck", () => {
     }
   });
 
+  // protects=U2 on screen; fails_when=the row shows one lump "owes you" that matches no figure
+  // on the page when part of the debt is on Splitwise
+  it("splits what they owe into bills and Splitwise, like the page", () => {
+    const both: Debtor = { name: "Marverdi", open: 286.5, onSplitwise: 30.5, splitwiseOnly: false };
+    view([suggestion({ debtor: both })], [both, anna]);
+    expect(
+      screen.getByText(/The names look alike · owes you €256.00 in bills \+ €30.50 on Splitwise/),
+    ).toBeTruthy();
+  });
+
   it("shows nothing when there is nothing to ask", () => {
     view([]);
     expect(screen.queryByRole("region", { name: "Did someone pay you back?" })).toBeNull();
