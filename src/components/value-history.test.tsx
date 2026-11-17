@@ -49,93 +49,91 @@ const history = (over: Partial<ValueHistory> = {}) =>
     range: "YTD",
     ...over,
   }) as ValueHistory;
-const buy = {
+// Bought 10 at 100 before the range; 10 more on 16 Jan. Price 100 on 1 Jan, 105 now.
+const trade = (trade_date: string, shares: number, key = "X") => ({
   kind: "stock",
-  key: "X",
+  key,
   side: "buy",
-  trade_date: "2026-01-16",
-  shares: 10,
+  trade_date,
+  shares,
   price_eur: 100,
   fee_eur: 0,
-  id: "1",
-};
+  id: trade_date + key,
+});
 const perf = (over: Partial<Parameters<typeof rangeChip>[1]> = {}) => ({
   isPending: false,
   unavailable: false,
-  tradesByKey: new Map([["X", [buy]]]),
+  tradesByKey: new Map([["X", [trade("2025-06-01", 10), trade("2026-01-16", 10)]]]),
   measuredByKey: new Map([["X", { state: "ok" as const, gain: 0, base: 1, change: 0 }]]),
   summary: { gain: 1234, change: 0.25 },
+  endPrices: new Map([["X", 105]]),
   ...over,
 });
+const startPrices = new Map([["X", 100]]);
 
 // protects=the chip is the return, not money added; fails_when=a savings plan reads as +75% YTD
 describe("rangeChip", () => {
-  it("is the return without money added, toned by the return band", () => {
-    expect(rangeChip(history(), perf())).toEqual({
+  it("is the return of what your trades hold, without money added", () => {
+    // 1000 at the start, 1000 added on 16 Jan, 2100 now: 100 gained on 1000 + 1000 × 15/30.
+    expect(rangeChip(history(), perf(), startPrices)).toEqual({
       value: 100,
       percent: 100 / 1500,
       className: "text-positive",
     });
-    expect(rangeChip(history({ shownEur: 1900 }), perf())?.className).toBe("text-negative");
+    const down = perf({ endPrices: new Map([["X", 95]]) });
+    expect(rangeChip(history(), down, startPrices)?.className).toBe("text-negative");
   });
 
-  it("ends on the scrubbed day", () => {
+  // protects=money in a holding with no trades isn't a gain or a loss; fails_when=USDC cashed out on
+  // an exchange reads as a €2.4k loss (Marco: Crypto ▼ 52.73% YTD), whatever the chart shows
+  it("leaves out holdings without trades, whatever the chart's value does", () => {
+    const chart = history({ first: point("2026-01-01", 5000), shownEur: 0 });
+    const untraded = new Map<string, Measured>([
+      ["X", { state: "ok", gain: 0, base: 1, change: 0 }],
+      ["USDC", { state: "no_trades" }],
+    ]);
+    expect(rangeChip(chart, perf({ measuredByKey: untraded }), startPrices)?.value).toBeCloseTo(
+      100,
+    );
+  });
+
+  it("is absent while scrubbing: there is no price per holding for that day", () => {
     const scrubbed = point("2026-01-10", 1050);
-    expect(rangeChip(history({ scrubbed, shownEur: 1050 }), perf())?.value).toBeCloseTo(50);
+    expect(rangeChip(history({ scrubbed, shownEur: 1050 }), perf(), startPrices)).toBeUndefined();
   });
 
-  it("is absent without a start to compare with", () => {
-    expect(rangeChip(history({ first: undefined, chartData: [] }), perf())).toBeUndefined();
+  it("is absent without a start, or while the start prices load", () => {
+    expect(
+      rangeChip(history({ first: undefined, chartData: [] }), perf(), startPrices),
+    ).toBeUndefined();
+    expect(rangeChip(history(), perf(), undefined)).toBeUndefined();
   });
 
   it("is absent while trades load, or when they can't", () => {
-    expect(rangeChip(history(), perf({ isPending: true }))).toBeUndefined();
-    expect(rangeChip(history(), perf({ unavailable: true }))).toBeUndefined();
+    expect(rangeChip(history(), perf({ isPending: true }), startPrices)).toBeUndefined();
+    expect(rangeChip(history(), perf({ unavailable: true }), startPrices)).toBeUndefined();
   });
 
   it("is absent when no trades are imported", () => {
-    expect(rangeChip(history(), perf({ tradesByKey: new Map() }))).toBeUndefined();
+    expect(rangeChip(history(), perf({ tradesByKey: new Map() }), startPrices)).toBeUndefined();
   });
 
-  it("is absent when some holdings miss trades, so money added would read as gain", () => {
-    const missing = new Map<string, Measured>([
-      ["X", { state: "ok", gain: 0, base: 1, change: 0 }],
-      ["Y", { state: "no_trades" }],
-    ]);
-    expect(rangeChip(history(), perf({ measuredByKey: missing }))).toBeUndefined();
+  it("is absent when trades disagree with the shares you hold", () => {
     const off = new Map<string, Measured>([["X", { state: "mismatch", traded: 5, held: 10 }]]);
-    expect(rangeChip(history(), perf({ measuredByKey: off }))).toBeUndefined();
-  });
-
-  it("still shows when the only gap is a leftover or a missing price", () => {
-    const fine = new Map<string, Measured>([
-      ["X", { state: "dust" }],
-      ["Y", { state: "no_price" }],
-    ]);
-    expect(rangeChip(history(), perf({ measuredByKey: fine }))).toBeDefined();
+    expect(rangeChip(history(), perf({ measuredByKey: off }), startPrices)).toBeUndefined();
   });
 
   // protects=ALL matches the broker's all-time gain; fails_when=imported history holds value with
   // no trades (a bond in an old spreadsheet), whose disappearance reads as a loss (Marco: €8.6k
   // instead of €12.6k)
-  it("on ALL is the all-time return from your trades, not from the chart's first day", () => {
-    expect(rangeChip(history({ range: "ALL" }), perf())).toEqual({
+  it("on ALL is the all-time return from your trades", () => {
+    expect(rangeChip(history({ range: "ALL" }), perf(), undefined)).toEqual({
       value: 1234,
       percent: 0.25,
       className: "text-positive",
     });
-  });
-
-  it("on ALL while scrubbing is the change up to that day, like the other ranges", () => {
-    const scrubbed = point("2026-01-10", 1050);
     expect(
-      rangeChip(history({ range: "ALL", scrubbed, shownEur: 1050 }), perf())?.value,
-    ).toBeCloseTo(50);
-  });
-
-  it("on ALL is absent when trades can't give a return", () => {
-    expect(
-      rangeChip(history({ range: "ALL" }), perf({ summary: { gain: 0, change: null } })),
+      rangeChip(history({ range: "ALL" }), perf({ summary: { gain: 0, change: null } }), undefined),
     ).toBeUndefined();
   });
 });

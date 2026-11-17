@@ -29,7 +29,7 @@ import { RangeChange, ValueHistoryChart, rangeChip } from "@/components/value-hi
 import { DetailRow, HoldingRow } from "@/components/holdings/holding-row";
 import { InvestingSwitch } from "@/components/investing-switch";
 import { useValueHistory } from "@/lib/use-value-history";
-import { usePerformance } from "@/lib/use-performance";
+import { usePerformance, useStartPrices } from "@/lib/use-performance";
 import {
   PerformanceNotice,
   ReturnCell,
@@ -159,6 +159,7 @@ function PortfolioPage() {
   const history = useValueHistory("portfolio_total_eur", totalEur);
   const { scrubbed } = history;
   const perf = usePerformance(history.chartData.at(-1)?.snapshot_date, "stock");
+  const startPrices = useStartPrices(history.first?.snapshot_date, "stock");
 
   return (
     <div className="mx-auto max-w-5xl px-4 pt-4 pb-8 sm:px-8 md:py-12">
@@ -190,7 +191,11 @@ function PortfolioPage() {
           {query.isPending ? (
             <Skeleton className="h-12 w-72" />
           ) : (
-            <HeadlineFigure value={history.shownEur} currency="EUR" change={rangeChip(history, perf)} />
+            <HeadlineFigure
+              value={history.shownEur}
+              currency="EUR"
+              change={rangeChip(history, perf, startPrices)}
+            />
           )}
         </div>
         {!query.isPending && <RangeChange {...history} />}

@@ -111,10 +111,19 @@ export function usePerformance(lastIso: string | undefined, kind: "stock" | "cry
     [measured],
   );
 
+  // Today's price per holding, for valuing what your trades hold now (the range chip).
+  const endPrices = useMemo(() => {
+    const rows = ofKind(prices.data && "rows" in prices.data ? prices.data.rows : [], kind);
+    return new Map(
+      rows.flatMap((r) => (r.end_price_eur != null ? [[r.key, r.end_price_eur] as const] : [])),
+    );
+  }, [prices.data, kind]);
+
   return {
     kind,
     summary,
     measuredByKey,
+    endPrices,
     tradesByKey,
     isPending: lastIso == null || prices.isPending || saved.isPending,
     unavailable:
@@ -122,4 +131,23 @@ export function usePerformance(lastIso: string | undefined, kind: "stock" | "cry
       (saved.data != null && "unavailable" in saved.data),
     error: prices.error ?? saved.error ?? null,
   };
+}
+
+/**
+ * Each holding's price on `from` (the range's first day), for valuing what your trades held then.
+ * Undefined while loading; empty when the database can't answer yet.
+ */
+export function useStartPrices(from: string | undefined, kind: "stock" | "crypto") {
+  const query = useQuery({
+    queryKey: ["holding-performance-from", from],
+    queryFn: () => fetchPerformance(supabase, from!, false),
+    enabled: from != null,
+  });
+  return useMemo(() => {
+    if (!query.data) return undefined;
+    const rows = "rows" in query.data ? ofKind(query.data.rows, kind) : [];
+    return new Map(
+      rows.flatMap((r) => (r.start_price_eur != null ? [[r.key, r.start_price_eur] as const] : [])),
+    );
+  }, [query.data, kind]);
 }

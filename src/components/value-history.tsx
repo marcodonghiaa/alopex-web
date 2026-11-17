@@ -9,7 +9,7 @@ import type { HeadlineChange } from "@/components/headline-figure";
 import { TONE_TEXT, toneOf } from "@/lib/tone";
 import type { ValueHistory } from "@/lib/use-value-history";
 import type { usePerformance } from "@/lib/use-performance";
-import { rangeReturn } from "@/lib/range-return";
+import { rangeReturn, tradedValue } from "@/lib/range-return";
 import { formatEur } from "@/lib/transactions";
 
 type RangeChangeProps = Pick<ValueHistory, "delta" | "change" | "range"> &
@@ -17,14 +17,13 @@ type RangeChangeProps = Pick<ValueHistory, "delta" | "change" | "range"> &
 
 type ChipPerformance = Pick<
   ReturnType<typeof usePerformance>,
-  "isPending" | "unavailable" | "tradesByKey" | "measuredByKey"
+  "isPending" | "unavailable" | "tradesByKey" | "measuredByKey" | "endPrices"
 > & { summary: Pick<ReturnType<typeof usePerformance>["summary"], "gain" | "change"> };
 
-// A holding with no trades, or fewer shares traded than held: money added there can't be told
-// apart from gain, so no return is shown at all.
-const tradesComplete = (perf: ChipPerformance) =>
+// Trades that disagree with the shares you hold can't value what you held: no return at all.
+const tradesUsable = (perf: ChipPerformance) =>
   perf.tradesByKey.size > 0 &&
-  [...perf.measuredByKey.values()].every((m) => m.state !== "no_trades" && m.state !== "mismatch");
+  [...perf.measuredByKey.values()].every((m) => m.state !== "mismatch");
 
 const chip = (gain: number, percent: number | null): HeadlineChange | undefined =>
   percent == null
@@ -32,23 +31,27 @@ const chip = (gain: number, percent: number | null): HeadlineChange | undefined 
     : { value: gain, percent, className: TONE_TEXT[toneOf(percent, RETURN_NOISE_BAND)] };
 
 /**
- * The chip beside the hero figure: the range's return with the money you added or took out
- * removed (from your trades). Absent when trades are missing, since a deposit would read as gain.
- * ALL is the all-time return from the trades alone: imported history can hold value with no trades
- * behind it (an old spreadsheet's bonds), and its disappearance would read as a loss.
+ * The chip beside the hero figure: the range's return of what your trades hold, valued at each
+ * holding's price on the range's first day and today, with buys and sales in between taken out.
+ * Holdings without trades (cash-like coins on an exchange, an old spreadsheet's bonds) are left
+ * out: their money moving in or out would read as a gain or a loss. ALL is the all-time return
+ * from the trades. Absent while scrubbing, since there is no price per holding for that day.
  */
 export function rangeChip(
-  { key, chartData, first, scrubbed, shownEur, range }: ValueHistory,
+  { chartData, first, scrubbed, range }: ValueHistory,
   perf: ChipPerformance,
+  startPrices: Map<string, number> | undefined,
 ): HeadlineChange | undefined {
-  const end = scrubbed ?? chartData.at(-1);
-  if (first == null || end == null || perf.isPending || perf.unavailable) return undefined;
-  if (!tradesComplete(perf)) return undefined;
-  if (range === "ALL" && scrubbed == null) return chip(perf.summary.gain, perf.summary.change);
+  const end = chartData.at(-1);
+  if (first == null || end == null || scrubbed != null) return undefined;
+  if (perf.isPending || perf.unavailable || !tradesUsable(perf)) return undefined;
+  if (range === "ALL") return chip(perf.summary.gain, perf.summary.change);
+  if (startPrices == null) return undefined;
+  const trades = [...perf.tradesByKey.values()].flat();
   const { gain, percent } = rangeReturn(
-    { date: first.snapshot_date, value: first[key] },
-    { date: end.snapshot_date, value: shownEur },
-    [...perf.tradesByKey.values()].flat(),
+    { date: first.snapshot_date, value: tradedValue(trades, first.snapshot_date, startPrices) },
+    { date: end.snapshot_date, value: tradedValue(trades, end.snapshot_date, perf.endPrices) },
+    trades,
   );
   return chip(gain, percent);
 }

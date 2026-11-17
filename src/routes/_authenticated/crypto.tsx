@@ -20,7 +20,7 @@ import { InvestingSwitch } from "@/components/investing-switch";
 import { EmptyState } from "@/components/empty-state";
 import { useValueHistory } from "@/lib/use-value-history";
 import { splitSmallBalances } from "@/lib/small-balances";
-import { usePerformance } from "@/lib/use-performance";
+import { usePerformance, useStartPrices } from "@/lib/use-performance";
 import {
   PerformanceNotice,
   ReturnCell,
@@ -158,6 +158,7 @@ function CryptoPage() {
   const history = useValueHistory("crypto_total_eur", totalEur);
   const { scrubbed } = history;
   const perf = usePerformance(history.chartData.at(-1)?.snapshot_date, "crypto");
+  const startPrices = useStartPrices(history.first?.snapshot_date, "crypto");
 
   return (
     <div className="mx-auto max-w-5xl px-4 pt-4 pb-8 sm:px-8 md:py-12">
@@ -187,7 +188,11 @@ function CryptoPage() {
           {query.isPending ? (
             <Skeleton className="h-12 w-72" />
           ) : (
-            <HeadlineFigure value={history.shownEur} currency="EUR" change={rangeChip(history, perf)} />
+            <HeadlineFigure
+              value={history.shownEur}
+              currency="EUR"
+              change={rangeChip(history, perf, startPrices)}
+            />
           )}
         </div>
         {!query.isPending && <RangeChange {...history} />}

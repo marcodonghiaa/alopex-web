@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rangeReturn } from "./range-return";
+import { rangeReturn, tradedValue } from "./range-return";
 
 const trade = (
   side: string,
@@ -67,5 +67,36 @@ describe("rangeReturn", () => {
     expect(
       rangeReturn({ date: "2026-01-01", value: 0 }, { date: "2026-01-31", value: 0 }, []).percent,
     ).toBeNull();
+  });
+});
+
+// protects=the chip only counts what your trades explain; fails_when=a coin with no trades (USDC
+// cashed out on an exchange) leaves the value and reads as a loss (Marco: Crypto ▼ 52.73% YTD)
+describe("tradedValue", () => {
+  const t = (key: string, side: string, trade_date: string, shares: number, price_eur: number) => ({
+    ...trade(side, trade_date, shares, price_eur),
+    key,
+  });
+
+  it("is the shares your trades hold on that day, at that day's price", () => {
+    const trades = [t("BTC", "buy", "2025-06-01", 2, 50), t("BTC", "sell", "2026-03-01", 1, 80)];
+    const prices = new Map([["BTC", 100]]);
+    expect(tradedValue(trades, "2026-01-01", prices)).toBe(200);
+    expect(tradedValue(trades, "2026-03-01", prices)).toBe(100);
+  });
+
+  it("leaves out what no trade holds", () => {
+    const prices = new Map([
+      ["BTC", 100],
+      ["USDC", 1],
+    ]);
+    expect(tradedValue([t("BTC", "buy", "2025-06-01", 1, 50)], "2026-01-01", prices)).toBe(100);
+  });
+
+  it("falls back to the nearest trade's price when the day has none", () => {
+    // Sold during the range and gone from your holdings: no price for the start day.
+    const trades = [t("NOVO", "buy", "2025-06-01", 4, 80), t("NOVO", "sell", "2026-03-04", 4, 30)];
+    expect(tradedValue(trades, "2026-01-01", new Map())).toBe(4 * 80);
+    expect(tradedValue([t("X", "buy", "2026-02-01", 1, 9)], "2026-01-01", new Map())).toBe(0);
   });
 });
