@@ -30,16 +30,22 @@ import {
   summarizeImport,
 } from "@/lib/trades-csv";
 
+/** A coin holding as stored: its count and its symbol written as saved (the key is in capitals). */
+interface Held {
+  shares: number;
+  symbol: string;
+}
+
 interface Holdings {
   shares: Map<string, number>;
   names: Map<string, string>;
   /** Coins only: each source's own amounts (a coin can sit on Ledger and on Coinbase). */
-  bySource: Map<string, Map<string, number>>;
+  bySource: Map<string, Map<string, Held>>;
 }
 
 // Every holding, its count and name, sold ones too: the old trades of something you sold are still yours.
 async function fetchHoldings(kind: "stock" | "crypto"): Promise<Holdings> {
-  let list: Array<{ key: string; shares: number; name: string; source?: string }>;
+  let list: Array<{ key: string; shares: number; name: string; source?: string; symbol?: string }>;
   if (kind === "stock") {
     const { data, error } = await supabase.from("portfolio_holdings").select("isin,shares,name");
     if (error) throw error;
@@ -54,13 +60,14 @@ async function fetchHoldings(kind: "stock" | "crypto"): Promise<Holdings> {
       shares: r.amount,
       name: r.name,
       source: r.source,
+      symbol: r.asset_symbol,
     }));
   }
-  const bySource = new Map<string, Map<string, number>>();
+  const bySource = new Map<string, Map<string, Held>>();
   for (const r of list) {
-    if (!r.source) continue;
+    if (!r.source || !r.symbol) continue;
     if (!bySource.has(r.source)) bySource.set(r.source, new Map());
-    bySource.get(r.source)!.set(r.key, r.shares);
+    bySource.get(r.source)!.set(r.key, { shares: r.shares, symbol: r.symbol });
   }
   return {
     shares: new Map(list.map((r) => [r.key, r.shares])),
@@ -71,12 +78,12 @@ async function fetchHoldings(kind: "stock" | "crypto"): Promise<Holdings> {
 
 /** Per coin, the holding a wallet export sets: the wallet's own row, else the one added by hand. */
 function walletHoldings(
-  bySource: Map<string, Map<string, number>>,
+  bySource: Map<string, Map<string, Held>>,
   source: string,
-): Map<string, { source: string; shares: number }> {
-  const out = new Map<string, { source: string; shares: number }>();
+): Map<string, Held & { source: string }> {
+  const out = new Map<string, Held & { source: string }>();
   for (const from of ["Manual", source])
-    for (const [key, shares] of bySource.get(from) ?? []) out.set(key, { source: from, shares });
+    for (const [key, held] of bySource.get(from) ?? []) out.set(key, { ...held, source: from });
   return out;
 }
 
@@ -179,7 +186,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
         // Coins go through set_holding_quantity, which also writes today's value for net worth.
         if (kind === "crypto") {
           await saveQuantity(
-            { kind: "crypto", symbol: key, source: wallet!.get(key)!.source },
+            { kind: "crypto", symbol: wallet!.get(key)!.symbol, source: wallet!.get(key)!.source },
             shares,
           );
           continue;

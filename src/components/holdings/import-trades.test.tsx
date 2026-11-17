@@ -18,7 +18,8 @@ vi.mock("@/integrations/supabase/client", () => {
     ],
     crypto_holdings: [
       { asset_symbol: "BTC", amount: 0.008, name: "Bitcoin", source: "Ledger" },
-      { asset_symbol: "ETH", amount: 0.4, name: "Ethereum", source: "Manual" },
+      // Typed in lowercase by hand: the count goes to that row as stored.
+      { asset_symbol: "eth", amount: 0.4, name: "Ethereum", source: "Manual" },
       { asset_symbol: "USDT", amount: 50, name: "Tether", source: "Coinbase" },
     ],
     // A dollar is 0.9 euro on every day the sample needs.
@@ -185,7 +186,7 @@ describe("ImportTrades", () => {
     // BTC's Ledger holding already matches; ETH, added by hand, is corrected on its own row.
     await waitFor(() => expect(db.rpc).toHaveLength(1));
     expect(db.rpc[0]![0]).toBe("set_holding_quantity");
-    expect(db.rpc[0]![1]).toMatchObject({ p_kind: "crypto", p_key: "ETH", p_source: "Manual" });
+    expect(db.rpc[0]![1]).toMatchObject({ p_kind: "crypto", p_key: "eth", p_source: "Manual" });
     expect(db.rpc[0]![1]["p_quantity"]).toBeCloseTo(0.4988);
   });
 
@@ -203,7 +204,7 @@ describe("ImportTrades", () => {
     expect(table).toBe("crypto_holdings");
     expect(patch["amount"]).toBeCloseTo(0.4988);
     expect(where).toEqual([
-      ["asset_symbol", "ETH"],
+      ["asset_symbol", "eth"],
       ["source", "Manual"],
     ]);
   });
@@ -229,7 +230,7 @@ describe("ImportTrades", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
     // BTC's Ledger holding (0.008) already matches its Ledger moves: only ETH changes.
     await waitFor(() => expect(db.rpc).toHaveLength(1));
-    expect(db.rpc[0]![1]).toMatchObject({ p_key: "ETH" });
+    expect(db.rpc[0]![1]).toMatchObject({ p_key: "eth" });
   });
 
   it("a Ledger Live file pasted as a spreadsheet is read the same way", async () => {
