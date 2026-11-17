@@ -626,7 +626,6 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
         {parsed && (
           <Button
             disabled={
-              !parsed ||
               parsed.errors.length > 0 ||
               (fresh.length === 0 && updates.length === 0 && freshEvents.length === 0) ||
               (parsed.events != null && !savedEvents.data) ||
