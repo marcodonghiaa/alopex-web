@@ -248,13 +248,14 @@ export function TradesDialog({
             </label>
             <Input id="trade-fee" inputMode="decimal" value={form.fee} onChange={set("fee")} />
           </div>
-          <div className="flex items-end gap-2">
+          {/* On a phone Cancel sits above Save trade: side by side they don't fit the column. */}
+          <div className="flex flex-wrap items-end justify-end gap-2">
             {editing && (
               <Button variant="ghost" onClick={cancelEdit} disabled={save.isPending}>
                 Cancel
               </Button>
             )}
-            <Button type="submit" disabled={save.isPending} className="flex-1">
+            <Button type="submit" disabled={save.isPending} className="flex-1 basis-28">
               {save.isPending && <Loader2 className="size-4 animate-spin" />}
               {editing ? "Save trade" : "Add trade"}
             </Button>
