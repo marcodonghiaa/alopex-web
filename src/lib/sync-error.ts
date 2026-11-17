@@ -1,4 +1,4 @@
-import { bankOf } from "@/components/bank-badge";
+import { accountName, bankOf } from "@/components/bank-badge";
 
 // Why a bank stopped updating, from accounts.sync_error (what the last sync-bank run hit: Enable
 // Banking's error name, or HTTP_<status> / TIMEOUT / NETWORK / SAVE_FAILED). Cleared by the next
@@ -7,6 +7,7 @@ import { bankOf } from "@/components/bank-badge";
 export interface SyncErrorAccount {
   label: string | null;
   bank_name?: string | null;
+  currency?: string;
   // Absent on a database without the bank-sync-health migration.
   sync_error?: string | null;
   consent_valid_until?: string | null;
@@ -15,7 +16,12 @@ export interface SyncErrorAccount {
 const CONSENT_ENDED = new Set(["EXPIRED_SESSION", "REVOKED_SESSION", "CLOSED_SESSION"]);
 const RETRY = "Alopex tries again at the next sync, every 6 hours.";
 
-export function syncErrorMessage(code: string, bank: string): string | null {
+// `account` names the account when the bank stopped sharing one of several.
+export function syncErrorMessage(
+  code: string,
+  bank: string,
+  account = "this account",
+): string | null {
   if (CONSENT_ENDED.has(code)) return null;
   if (code === "ASPSP_RATE_LIMIT_EXCEEDED") {
     return `${bank} limits automatic updates (often 4 a day) and refused the last one. ${RETRY}`;
@@ -25,7 +31,7 @@ export function syncErrorMessage(code: string, bank: string): string | null {
     code === "ACCOUNT_DOES_NOT_EXIST" ||
     code === "HTTP_404"
   ) {
-    return `${bank} no longer shares this account. Connect ${bank} again and pick it.`;
+    return `${bank} no longer shares ${account}. Connect ${bank} again and pick it.`;
   }
   if (
     code === "UNAUTHORIZED_IP" ||
@@ -59,7 +65,8 @@ export function syncAlerts(accounts: Array<SyncErrorAccount>, now = Date.now()):
   for (const a of accounts) {
     if (!a.sync_error) continue;
     if (a.consent_valid_until && Date.parse(a.consent_valid_until) <= now) continue;
-    const text = syncErrorMessage(a.sync_error, bankOf(a));
+    const account = a.currency ? accountName({ ...a, currency: a.currency }) : undefined;
+    const text = syncErrorMessage(a.sync_error, bankOf(a), account);
     if (text) messages.add(text);
   }
   return [...messages];

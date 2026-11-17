@@ -87,7 +87,9 @@ describe("syncAlerts", () => {
   // The error's time is not the last good update (it moves when the code changes, and a failed
   // save still updated the balance); the account row already shows the real one.
   it("never adds a date, so no time zone can show the wrong day", () => {
-    expect(syncAlerts([acc("Fineco", "ASPSP_TIMEOUT", "2026-11-15T00:17:00Z")])).toEqual(["Fineco didn't answer the last sync. Alopex tries again at the next sync, every 6 hours."]);
+    expect(syncAlerts([acc("Fineco", "ASPSP_TIMEOUT", "2026-11-15T00:17:00Z")])).toEqual([
+      "Fineco didn't answer the last sync. Alopex tries again at the next sync, every 6 hours.",
+    ]);
   });
 
   it("skips ended consents", () => {
@@ -98,8 +100,23 @@ describe("syncAlerts", () => {
   // already covers it, and "tries again" would not be true.
   it("hides the error of a consent that has run out, keeps one still valid", () => {
     const now = Date.parse("2026-11-17T12:00:00Z");
-    const ended = { ...acc("Fineco", "ASPSP_TIMEOUT"), consent_valid_until: "2026-11-17T00:00:00+00:00" };
-    const valid = { ...acc("N26", "ASPSP_TIMEOUT"), consent_valid_until: "2026-11-18T00:00:00+00:00" };
+    const ended = {
+      ...acc("Fineco", "ASPSP_TIMEOUT"),
+      consent_valid_until: "2026-11-17T00:00:00+00:00",
+    };
+    const valid = {
+      ...acc("N26", "ASPSP_TIMEOUT"),
+      consent_valid_until: "2026-11-18T00:00:00+00:00",
+    };
     expect(syncAlerts([ended, valid], now)).toEqual([syncErrorMessage("ASPSP_TIMEOUT", "N26")]);
+  });
+
+  it("names which account a bank stopped sharing", () => {
+    const eur = { ...acc("N26", "ASPSP_ACCOUNT_NOT_ACCESSIBLE"), currency: "EUR" };
+    const usd = { ...acc("N26", "HTTP_404"), currency: "USD" };
+    expect(syncAlerts([eur, usd])).toEqual([
+      "N26 no longer shares N26 EUR. Connect N26 again and pick it.",
+      "N26 no longer shares N26 USD. Connect N26 again and pick it.",
+    ]);
   });
 });

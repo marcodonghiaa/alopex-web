@@ -174,7 +174,9 @@ describe("sync errors", () => {
 
   // protects=a long unknown error code wraps on a phone; fails_when=the banner can grow wider than the screen
   it("wraps a long error code instead of widening the page", async () => {
-    rows.v_bank_accounts_latest = [account({ sync_error: "A".repeat(64), sync_error_at: "2026-11-15T06:17:00Z" })];
+    rows.v_bank_accounts_latest = [
+      account({ sync_error: "A".repeat(64), sync_error_at: "2026-11-15T06:17:00Z" }),
+    ];
     renderPage();
     expect(await screen.findByRole("status")).toHaveClass("break-words");
   });
