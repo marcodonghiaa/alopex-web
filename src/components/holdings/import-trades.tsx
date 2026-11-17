@@ -104,6 +104,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     queryFn: () => loadRates(need!.currency, need!.from, need!.to),
     enabled: need != null,
     staleTime: Infinity,
+    retry: 1,
   });
   const parsed = useMemo(() => {
     if (!firstPass || !ctx || !need) return firstPass;

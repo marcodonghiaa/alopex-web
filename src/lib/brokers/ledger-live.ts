@@ -90,7 +90,7 @@ const LOST = new Set(["SLASH", "BURN"]);
 export const ledgerLive: BrokerParser = {
   id: "ledger_live",
   name: "Ledger Live",
-  country: "Any",
+  country: "Any country",
   kind: "crypto",
   holdingSource: "Ledger",
   howToExport: [
