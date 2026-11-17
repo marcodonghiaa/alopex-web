@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRows } from "@/lib/export/fetch-all";
+import { FX_HISTORY } from "@/lib/csp";
 import { addDays, isDay } from "@/lib/date";
 import { makeRate } from "@/lib/import/splitwise-review";
 
@@ -56,7 +57,7 @@ export async function loadRates(
 
   const until = stored[0]?.date ?? to;
   const res = await get(
-    `https://api.frankfurter.dev/v1/${start}..${until}?base=EUR&symbols=${encodeURIComponent(currency)}`,
+    `${FX_HISTORY}/v1/${start}..${until}?base=EUR&symbols=${encodeURIComponent(currency)}`,
   ).catch(() => null);
   if (!res?.ok) throw fail();
   // Only real days with a finite rate above zero: a bad answer must never become a price.

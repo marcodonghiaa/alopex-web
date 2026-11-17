@@ -114,6 +114,22 @@ describe("loadRates", () => {
     );
   });
 
+  it("asks the exchange-rate site the security policy allows (FX_HISTORY)", async () => {
+    vi.resetModules();
+    vi.doMock("@/lib/csp", () => ({ FX_HISTORY: "https://fx.example" }));
+    try {
+      const fresh = await import("./rates");
+      const get = series({});
+      await fresh.loadRates("USD", "2026-01-01", "2026-01-05", fakeDb([]), get);
+      expect(get).toHaveBeenCalledWith(
+        "https://fx.example/v1/2025-12-22..2026-01-05?base=EUR&symbols=USD",
+      );
+    } finally {
+      vi.doUnmock("@/lib/csp");
+      vi.resetModules();
+    }
+  });
+
   it("says so when the rates can't be loaded", async () => {
     const down = vi.fn(async () => ({ ok: false, json: async () => ({}) }));
     await expect(loadRates("USD", "2025-01-01", "2026-01-05", fakeDb([]), down)).rejects.toThrow(
