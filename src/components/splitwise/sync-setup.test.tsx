@@ -1190,3 +1190,30 @@ it("ends the consent with a period and numbers the steps as a list", async () =>
   expect(steps).toHaveLength(3);
   expect(steps[0]!.textContent).toMatch(/^Open /);
 });
+
+// re-audit N3: only the user's own action moves focus; a background change must not (it scrolled
+// the page to Retry or Connect for a mouse user whose focus was on <body>)
+describe("Focus on a background change", () => {
+  it("stays put when a background refetch fails", async () => {
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    await screen.findByRole("button", { name: "Sync now" });
+    expect(document.activeElement).toBe(document.body);
+    rpc.mockResolvedValue({ data: null, error: { message: "timeout", code: "57014" } });
+    await client.refetchQueries({ queryKey: ["splitwise-connection"] });
+    await screen.findByRole("button", { name: "Retry" });
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("stays put when another tab disconnects", async () => {
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    await screen.findByRole("button", { name: "Sync now" });
+    rpc.mockResolvedValue(notConnected(true));
+    await client.refetchQueries({ queryKey: ["splitwise-connection"] });
+    await screen.findByRole("button", { name: "Connect Splitwise" });
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+    expect(document.activeElement).toBe(document.body);
+  });
+});

@@ -20,13 +20,6 @@ import {
 import { PENDING } from "./pending";
 import { ConnectDialog } from "./connect-dialog";
 
-/** Focuses the setup's main control (Sync now, Reconnect, Connect or Retry) if focus was lost. */
-const focusPrimary = () =>
-  requestAnimationFrame(() => {
-    if (document.activeElement && document.activeElement !== document.body) return;
-    document.querySelector<HTMLElement>("[data-splitwise-primary]")?.focus();
-  });
-
 const ROW =
   "flex min-h-11 w-full items-center gap-2 px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/40 sm:px-5";
 
@@ -43,113 +36,142 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
   const [deleting, setDeleting] = useState(false);
   const c = connection.data;
   const connected = c?.connected === true;
-  // When the row that had focus is replaced (connected, disconnected, data deleted, Retry worked),
-  // focus goes to the setup's new main control, not to <body>. Loading the page moves nothing.
+  // When the row that had focus is replaced by the user's own action (a dialog closed, Retry), focus
+  // goes to the setup's new main control, not to <body>. Loading the page or a background change
+  // (a refetch that fails, another tab disconnecting) moves nothing: that would scroll the page.
   const stateKey = connection.isPending
     ? null
     : `${connected}|${connection.isError}|${c?.syncedData}`;
+  // Focuses the setup's main control (Sync now, Reconnect, Connect or Retry) if focus was lost.
+  // Looked up in this setup only: once it is unmounted (a dialog closing as the page goes) nothing.
+  const root = useRef<HTMLDivElement>(null);
+  const focusPrimary = () =>
+    requestAnimationFrame(() => {
+      if (document.activeElement && document.activeElement !== document.body) return;
+      root.current?.querySelector<HTMLElement>("[data-splitwise-primary]")?.focus();
+    });
   const lastKey = useRef<string | null>(null);
+  const userUntil = useRef(0);
+  // The change the user's action causes lands after its refetch: allow it for a few seconds.
+  const userAction = () => (userUntil.current = Date.now() + 10_000);
+  const afterDialog = () => {
+    userAction();
+    focusPrimary();
+  };
   useEffect(() => {
     if (stateKey === null) return;
-    if (lastKey.current !== null && lastKey.current !== stateKey) focusPrimary();
+    if (
+      lastKey.current !== null &&
+      lastKey.current !== stateKey &&
+      Date.now() < userUntil.current
+    ) {
+      userUntil.current = 0;
+      focusPrimary();
+    }
     lastKey.current = stateKey;
   }, [stateKey]);
 
   return (
     <>
-      <GroupedList className="mt-3">
-        {connection.isError ? (
-          <div className="px-4 py-3 sm:px-5">
-            <Alert>Couldn't load the Splitwise connection: {connection.error.message}</Alert>
-            <Button
-              variant="secondary"
-              className="mt-2"
-              data-splitwise-primary
-              onClick={() => void connection.refetch()}
-              disabled={connection.isFetching}
-            >
-              Retry
-            </Button>
-          </div>
-        ) : connected ? (
-          <StatusRow
-            c={c}
-            onReconnect={() => setConnecting("reconnect")}
-            onDisconnect={() => setDisconnecting(true)}
-          />
-        ) : connection.isPending ? (
-          <div className="px-4 py-3 sm:px-5">
-            <Skeleton
-              role="status"
-              aria-label="Loading the Splitwise connection"
-              aria-hidden={false}
-              className="h-11"
+      <div ref={root}>
+        <GroupedList className="mt-3">
+          {connection.isError ? (
+            <div className="px-4 py-3 sm:px-5">
+              <Alert>Couldn't load the Splitwise connection: {connection.error.message}</Alert>
+              <Button
+                variant="secondary"
+                className="mt-2"
+                data-splitwise-primary
+                onClick={() => {
+                  userAction();
+                  void connection.refetch();
+                }}
+                disabled={connection.isFetching}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : connected ? (
+            <StatusRow
+              c={c}
+              onReconnect={() => setConnecting("reconnect")}
+              onDisconnect={() => setDisconnecting(true)}
             />
-          </div>
-        ) : (
-          <>
-            {c?.syncedData && (
-              <p className="px-4 pt-3 text-[0.8125rem] text-muted-foreground sm:px-5">
-                Disconnected. What was synced stays; nothing new comes in.
-              </p>
-            )}
+          ) : connection.isPending ? (
+            <div className="px-4 py-3 sm:px-5">
+              <Skeleton
+                role="status"
+                aria-label="Loading the Splitwise connection"
+                aria-hidden={false}
+                className="h-11"
+              />
+            </div>
+          ) : (
+            <>
+              {c?.syncedData && (
+                <p className="px-4 pt-3 text-[0.8125rem] text-muted-foreground sm:px-5">
+                  Disconnected. What was synced stays; nothing new comes in.
+                </p>
+              )}
+              <button
+                type="button"
+                data-splitwise-primary
+                onClick={() => setConnecting("connect")}
+                className={ROW}
+              >
+                <Link2 aria-hidden className="size-4" />
+                Connect Splitwise
+              </button>
+            </>
+          )}
+          {!connected && c?.syncedData && (
             <button
               type="button"
-              data-splitwise-primary
-              onClick={() => setConnecting("connect")}
-              className={ROW}
+              onClick={() => setDeleting(true)}
+              className={cn(ROW, "text-negative disabled:opacity-50")}
+              disabled={isDemoMode()}
             >
-              <Link2 aria-hidden className="size-4" />
-              Connect Splitwise
+              <Trash2 aria-hidden className="size-4" />
+              Delete synced Splitwise data
             </button>
-          </>
-        )}
-        {!connected && c?.syncedData && (
-          <button
-            type="button"
-            onClick={() => setDeleting(true)}
-            className={cn(ROW, "text-negative disabled:opacity-50")}
-            disabled={isDemoMode()}
-          >
-            <Trash2 aria-hidden className="size-4" />
-            Delete synced Splitwise data
-          </button>
-        )}
-        <div>
-          <button
-            type="button"
-            onClick={onImportFile}
-            className={ROW}
-            aria-describedby={connected ? "splitwise-file-while-synced" : undefined}
-          >
-            <Upload aria-hidden className="size-4" />
-            Import a Splitwise file
-          </button>
-          {connected && (
-            <p
-              id="splitwise-file-while-synced"
-              className="px-4 pb-3 text-xs text-muted-foreground sm:px-5"
-            >
-              Expenses the sync already brought in are skipped, so only what it can't see is added.
-            </p>
           )}
-        </div>
-      </GroupedList>
+          <div>
+            <button
+              type="button"
+              onClick={onImportFile}
+              className={ROW}
+              aria-describedby={connected ? "splitwise-file-while-synced" : undefined}
+            >
+              <Upload aria-hidden className="size-4" />
+              Import a Splitwise file
+            </button>
+            {connected && (
+              <p
+                id="splitwise-file-while-synced"
+                className="px-4 pb-3 text-xs text-muted-foreground sm:px-5"
+              >
+                Expenses the sync already brought in are skipped, so only what it can't see is
+                added.
+              </p>
+            )}
+          </div>
+        </GroupedList>
+      </div>
       <ConnectDialog
         open={connecting !== null}
         onOpenChange={(open) => open || setConnecting(null)}
-        onCloseAutoFocus={focusPrimary}
+        onCloseAutoFocus={afterDialog}
         reconnect={connecting === "reconnect"}
       />
       <DisconnectDialog
         open={disconnecting}
         onOpenChange={setDisconnecting}
-        onCloseAutoFocus={focusPrimary}
+        onCloseAutoFocus={afterDialog}
       />
       <DisconnectDialog
         open={deleting}
         onOpenChange={setDeleting}
-        onCloseAutoFocus={focusPrimary}
+        onCloseAutoFocus={afterDialog}
         mode="delete"
       />
     </>
