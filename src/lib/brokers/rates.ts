@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRows } from "@/lib/export/fetch-all";
 
 export interface RateRow {
   date: string;
@@ -42,16 +43,22 @@ export async function loadRates(
 ): Promise<Array<RateRow>> {
   const fail = () => new Error(`Couldn't load ${currency} exchange rates. Try again in a moment.`);
   const start = addDays(from, -MAX_GAP_DAYS);
-  const { data, error } = await db
-    .from("fx_rates")
-    .select("date, rate_to_eur")
-    .eq("currency", currency)
-    .gte("date", start)
-    .lte("date", to)
-    .order("date", { ascending: true })
-    .limit(5000);
-  if (error) throw fail();
-  const stored = (data ?? []) as Array<RateRow>;
+  // In pages: the server returns at most 1000 rows a request, and years of daily rates are more.
+  let stored: Array<RateRow>;
+  try {
+    stored = (await fetchAllRows("fx_rates", (a, b) =>
+      db
+        .from("fx_rates")
+        .select("date, rate_to_eur", { count: "exact" })
+        .eq("currency", currency)
+        .gte("date", start)
+        .lte("date", to)
+        .order("date", { ascending: true })
+        .range(a, b),
+    )) as unknown as Array<RateRow>;
+  } catch {
+    throw fail();
+  }
   if (stored.length > 0 && stored[0]!.date <= from) return stored;
 
   const until = stored[0]?.date ?? to;

@@ -22,7 +22,9 @@ describe("rateLookup", () => {
   });
 });
 
-// The few calls loadRates makes on the supabase client, answering with `stored`.
+// The few calls loadRates makes on the supabase client, answering with `stored`. Like the real
+// server, one request returns at most 1000 rows.
+const CAP = 1000;
 const fakeDb = (stored: Array<{ date: string; rate_to_eur: number }>, error: unknown = null) => {
   const q = {
     select: () => q,
@@ -30,7 +32,13 @@ const fakeDb = (stored: Array<{ date: string; rate_to_eur: number }>, error: unk
     gte: () => q,
     lte: () => q,
     order: () => q,
-    limit: () => Promise.resolve({ data: stored, error }),
+    limit: (n: number) => Promise.resolve({ data: stored.slice(0, Math.min(n, CAP)), error }),
+    range: (from: number, to: number) =>
+      Promise.resolve({
+        data: error ? null : stored.slice(from, Math.min(to + 1, from + CAP)),
+        error,
+        count: error ? null : stored.length,
+      }),
   };
   return { from: vi.fn(() => q) } as unknown as Parameters<typeof loadRates>[3];
 };
@@ -48,6 +56,16 @@ describe("loadRates", () => {
     const found = await loadRates("USD", "2026-01-03", "2026-01-05", fakeDb(rows), get);
     expect(found).toEqual(rows);
     expect(get).not.toHaveBeenCalled();
+  });
+
+  it("reads every stored day, past the server's 1000 rows a request", async () => {
+    const many = Array.from({ length: 1500 }, (_, i) => ({
+      date: new Date(Date.UTC(2020, 0, 1) + i * 86_400_000).toISOString().slice(0, 10),
+      rate_to_eur: 0.9,
+    }));
+    const found = await loadRates("USD", "2020-01-01", "2024-02-08", fakeDb(many), series({}));
+    expect(found).toHaveLength(1500);
+    expect(found.at(-1)!.date).toBe(many.at(-1)!.date);
   });
 
   it("fetches the older days a fresh install hasn't stored, as euro per dollar", async () => {

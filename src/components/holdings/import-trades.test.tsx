@@ -43,6 +43,12 @@ vi.mock("@/integrations/supabase/client", () => {
       lte: () => query(rows),
       order: () => query(rows),
       limit: () => query(rows),
+      range: () =>
+        Promise.resolve(
+          down
+            ? { data: null, error: { message: "offline" }, count: null }
+            : { data: rows, error: null, count: rows.length },
+        ),
     });
   };
   return {
