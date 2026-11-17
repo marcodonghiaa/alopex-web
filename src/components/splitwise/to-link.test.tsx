@@ -288,6 +288,28 @@ describe("ToLink", () => {
     );
   });
 
+  // polish-3 #5: a re-render of the list must not wipe the payment picked in Find in bank
+  it("keeps the payment picked in Find in bank when the list refreshes", async () => {
+    tables.splitwise_review = { data: [item({ cost: 80, my_paid: 80 })], error: null };
+    tables.transactions = {
+      data: [bankRow({ entry_reference: "tip", amount: 88, creditor_name: "Bistro" })],
+      error: null,
+    };
+    renderList();
+    const row = await screen.findByRole("listitem", { name: "Groceries" });
+    await userEvent.click(within(row).getByRole("button", { name: "Find in bank" }));
+    const sheet = await screen.findByRole("dialog", { name: "Which payment was Groceries?" });
+    await userEvent.click(within(sheet).getByText("Bistro"));
+    expect(within(sheet).getByRole("button", { name: "Link payment" })).toBeEnabled();
+    tables.splitwise_review = {
+      data: [item({ cost: 80, my_paid: 80 }), item({ id: "r2", description: "Trip" })],
+      error: null,
+    };
+    await client.invalidateQueries({ queryKey: ["splitwise-review"] });
+    await screen.findByRole("listitem", { name: "Trip", hidden: true });
+    expect(within(sheet).getByRole("button", { name: "Link payment" })).toBeEnabled();
+  });
+
   it("says what to do when no payment is around", async () => {
     tables.splitwise_review = { data: [item()], error: null };
     renderList();

@@ -99,6 +99,8 @@ export function ToLink({ connected }: { connected: boolean }) {
     [items, bank.data, rate],
   );
   const [finding, setFinding] = useState<ReviewItem | null>(null);
+  // Stable between renders: Find in bank clears the picked payment when its row changes.
+  const findRow = useMemo(() => (finding ? reviewRow(finding, 0) : null), [finding]);
   const demo = isDemoMode();
 
   const act = useMutation({
@@ -171,7 +173,7 @@ export function ToLink({ connected }: { connected: boolean }) {
         </>
       )}
       <FindInBank
-        row={finding ? reviewRow(finding, 0) : null}
+        row={findRow}
         bank={(bank.data?.bank ?? []).filter(
           (t) => !finding?.rejected_entry_references.includes(t.entryReference),
         )}
