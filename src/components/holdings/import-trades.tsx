@@ -229,16 +229,24 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             `${plural(fresh.length, "trade")} saved, but the income, fee and cash rows weren't (${error.message}). Import the file again to save them.`,
           );
         if (error) throw error;
-        return { trades: fresh.length, events: savedRows?.length ?? 0 };
+        return { trades: fresh.length, events: savedRows?.length ?? 0, counts: updates.length };
       }
-      return { trades: fresh.length, events: 0 };
+      return { trades: fresh.length, events: 0, counts: updates.length };
     },
     // Counts come from the save itself: the dialog may have been cleared while it ran.
-    onSuccess: ({ trades, events }) => {
+    onSuccess: ({ trades, events, counts }) => {
+      const imported = [
+        trades > 0 && plural(trades, "trade"),
+        events > 0 && plural(events, "other row"),
+      ]
+        .filter(Boolean)
+        .join(" and ");
       toast.success(
-        ([trades > 0 && plural(trades, "trade"), events > 0 && plural(events, "other row")]
-          .filter(Boolean)
-          .join(" and ") || "Nothing new") + " imported",
+        imported
+          ? `${imported} imported`
+          : counts > 0
+            ? `${plural(counts, "share count")} corrected`
+            : "Nothing new imported",
       );
       reset();
       setOpen(false);
@@ -639,7 +647,9 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               ? `Save ${plural(fresh.length, "trade")}`
               : freshEvents.length > 0
                 ? `Save ${plural(freshEvents.length, "row")}`
-                : "Save trades"}
+                : updates.length > 0
+                  ? "Save share counts"
+                  : "Save trades"}
           </Button>
         )}
       </DialogContent>

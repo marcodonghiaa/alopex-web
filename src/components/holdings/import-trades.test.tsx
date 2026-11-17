@@ -13,6 +13,8 @@ const db = vi.hoisted(() => ({
   eventsDown: false,
   holdingsDown: false,
   getUserCalls: 0,
+  // The saved investment_events rows (the file's own, once imported).
+  events: [] as Array<Record<string, unknown>>,
   // How many upserted rows the database says it saved (the rest were already there).
   upsertSaved: null as number | null,
   updated: [] as Array<[string, Record<string, unknown>, Array<[string, unknown]>]>,
@@ -32,7 +34,7 @@ vi.mock("@/integrations/supabase/client", () => {
       { asset_symbol: "USDT", amount: 50, name: "Tether", source: "Coinbase" },
     ],
     // A dollar is 0.9 euro on every day the sample needs.
-    investment_events: [],
+    investment_events: db.events,
     fx_rates: [
       "2026-01-01",
       "2026-01-10",
@@ -153,6 +155,7 @@ describe("ImportTrades", () => {
     db.eventsDown = false;
     db.holdingsDown = false;
     db.getUserCalls = 0;
+    db.events.length = 0;
     db.insertGate = null;
     vi.mocked(toast.success).mockClear();
   });
@@ -548,5 +551,25 @@ describe("ImportTrades", () => {
     });
     expect(await screen.findByRole("button", { name: "Save 1 trade" })).toBeTruthy();
     expect(screen.getByText("new trade to save")).toBeTruthy();
+  });
+
+  it("with only share counts to fix, Save and the toast say share counts", async () => {
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const { trades, events } = parseTradesCsv(csv, {
+      kind: "stock",
+      knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+      today: "2026-11-17",
+    });
+    db.events.push(...events!.map((e) => ({ ...e })));
+    open("stock", trades);
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save share counts" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe("2 share counts corrected");
+    expect(db.inserted).toEqual([]);
+    expect(db.rpc).toHaveLength(2);
   });
 });
