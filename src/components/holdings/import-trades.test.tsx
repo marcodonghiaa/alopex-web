@@ -90,7 +90,7 @@ import type { Trade } from "@/lib/trades";
 function open(kind: "stock" | "crypto", saved: Array<Trade> = []) {
   render(
     <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      client={new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } })}
     >
       <ImportTrades kind={kind} saved={saved} />
     </QueryClientProvider>,
@@ -104,6 +104,7 @@ describe("ImportTrades", () => {
     db.rpc.length = 0;
     db.updated.length = 0;
     db.rpcMissing = false;
+    db.ratesDown = false;
   });
 
   it("asks where the trades are from before asking for a file", () => {
@@ -250,11 +251,8 @@ describe("ImportTrades", () => {
     fireEvent.change(screen.getByLabelText("CSV file"), {
       target: { files: [new File([csv], "ops.csv", { type: "text/csv" })] },
     });
-    // One retry first, a second later.
-    expect(
-      await screen.findByText(/Couldn't load USD exchange rates/, {}, { timeout: 4000 }),
-    ).toBeTruthy();
+    // One retry first (no wait in tests).
+    expect(await screen.findByText(/Couldn't load USD exchange rates/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
-    db.ratesDown = false;
   });
 });
