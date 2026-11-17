@@ -791,6 +791,18 @@ function demoAddHolding(store: Store, now: Date, body: Record<string, unknown>) 
   return { data: { added: true, priced: true }, error: null };
 }
 
+// The demo looks connected to Splitwise, as a made-up "Alex", last synced two hours ago. Sync,
+// disconnect and the review actions stay off (functions and other database calls are refused).
+function demoSplitwiseConnection(now: Date) {
+  return {
+    connected: true,
+    status: "ok",
+    display_name: "Alex",
+    last_synced_at: new Date(now.getTime() - 2 * 3_600_000).toISOString(),
+    last_error: null,
+  };
+}
+
 export function createFakeClient(now: Date = new Date()): SupabaseClient<Database> {
   const store = new Store(now);
   const user = {
@@ -814,56 +826,61 @@ export function createFakeClient(now: Date = new Date()): SupabaseClient<Databas
   const client = {
     from: (table: string) => new Query(store, table),
     rpc: async (fn: string, args: Record<string, unknown> = {}) =>
-      fn === "holding_performance"
-        ? {
-            data: demoHoldingPerformance(store.db),
-            error: null,
-          }
-        : fn === "rename_merchant"
+      fn === "get_splitwise_connection"
+        ? { data: [demoSplitwiseConnection(now)], error: null }
+        : fn === "holding_performance"
           ? {
-              data: store.renameMerchant(
-                args["p_entry_reference"] as string,
-                args["p_account_uid"],
-                (args["p_name"] as string | null) ?? null,
-              ),
+              data: demoHoldingPerformance(store.db),
               error: null,
             }
-          : fn === "resolve_transfer_pair"
-            ? store.resolveTransferPair(args["p_pair"], args["p_keep"] === true)
-            : fn === "stream_action"
-              ? store.streamAction(args["p_stream"], args["p_action"], args["p_args"] as Row)
-              : fn === "add_manual_transaction"
-                ? store.addManualTransaction(args)
-                : fn === "set_account_type"
-                  ? store.setAccountType(args["p_account"], args["p_type"] ?? null)
-                  : fn === "add_manual_debt"
-                    ? store.addManualDebt(args)
-                    : fn === "set_manual_balance"
-                      ? store.setManualBalance(args["p_account"], args["p_amount"])
-                      : fn === "delete_manual_debt"
-                        ? store.deleteManualDebt(args["p_account"])
-                        : fn === "set_holding_quantity"
-                          ? {
-                              data: store.setHoldingQuantity(
-                                args["p_kind"],
-                                args["p_key"],
-                                args["p_quantity"],
-                                args["p_source"],
-                              ),
-                              error: null,
-                            }
-                          : fn === "delete_holding"
+          : fn === "rename_merchant"
+            ? {
+                data: store.renameMerchant(
+                  args["p_entry_reference"] as string,
+                  args["p_account_uid"],
+                  (args["p_name"] as string | null) ?? null,
+                ),
+                error: null,
+              }
+            : fn === "resolve_transfer_pair"
+              ? store.resolveTransferPair(args["p_pair"], args["p_keep"] === true)
+              : fn === "stream_action"
+                ? store.streamAction(args["p_stream"], args["p_action"], args["p_args"] as Row)
+                : fn === "add_manual_transaction"
+                  ? store.addManualTransaction(args)
+                  : fn === "set_account_type"
+                    ? store.setAccountType(args["p_account"], args["p_type"] ?? null)
+                    : fn === "add_manual_debt"
+                      ? store.addManualDebt(args)
+                      : fn === "set_manual_balance"
+                        ? store.setManualBalance(args["p_account"], args["p_amount"])
+                        : fn === "delete_manual_debt"
+                          ? store.deleteManualDebt(args["p_account"])
+                          : fn === "set_holding_quantity"
                             ? {
-                                data: store.deleteHolding(
+                                data: store.setHoldingQuantity(
                                   args["p_kind"],
                                   args["p_key"],
+                                  args["p_quantity"],
                                   args["p_source"],
                                 ),
                                 error: null,
                               }
-                            : fn === "my_transaction_tags"
-                              ? { data: demoTagCounts(store.db["transactions"] ?? []), error: null }
-                              : { data: null, error: DISABLED },
+                            : fn === "delete_holding"
+                              ? {
+                                  data: store.deleteHolding(
+                                    args["p_kind"],
+                                    args["p_key"],
+                                    args["p_source"],
+                                  ),
+                                  error: null,
+                                }
+                              : fn === "my_transaction_tags"
+                                ? {
+                                    data: demoTagCounts(store.db["transactions"] ?? []),
+                                    error: null,
+                                  }
+                                : { data: null, error: DISABLED },
     functions: {
       invoke: async (name: string, opts?: { body?: Record<string, unknown> }) =>
         name === "add-holding"

@@ -242,6 +242,37 @@ describe("fake client: auth, functions and rpc", () => {
     );
   });
 
+  // protects=the demo shows the Splitwise sync as connected, under a made-up name, and refuses
+  // every write; fails_when=a real name shows, or a review action or a sync runs in the demo
+  it("looks connected to Splitwise as Alex, with two pending items, and refuses sync and actions", async () => {
+    const c = fresh();
+    const { data } = await c.rpc("get_splitwise_connection");
+    expect(data).toEqual([
+      {
+        connected: true,
+        status: "ok",
+        display_name: "Alex",
+        last_synced_at: new Date(NOW.getTime() - 2 * 3_600_000).toISOString(),
+        last_error: null,
+      },
+    ]);
+    const review = await c
+      .from("splitwise_review")
+      .select("id,kind,status")
+      .eq("status", "pending");
+    expect(review.data?.map((r) => r.kind)).toEqual(["paid_by_me", "settle_in"]);
+    for (const fn of [
+      "link_splitwise_review",
+      "count_splitwise_review",
+      "dismiss_splitwise_review",
+    ])
+      expect(
+        (await (c.rpc as unknown as (f: string) => Promise<{ error: unknown }>)(fn)).error,
+      ).toEqual({ message: "Disabled in the demo." });
+    const sync = await c.functions.invoke("sync-splitwise", { body: {} });
+    expect(await functionErrorMessage(sync.error, "x")).toBe("Disabled in the demo.");
+  });
+
   it("renaming a merchant renames every transaction from it, and clearing undoes that", async () => {
     const c = fresh();
     const rename = (name: string | null, ref: string) =>

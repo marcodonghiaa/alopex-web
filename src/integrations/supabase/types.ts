@@ -634,6 +634,9 @@ export type Database = {
           id: string;
           linked_account_uid: string | null;
           linked_entry_reference: string | null;
+          source: string;
+          splitwise_id: number | null;
+          splitwise_updated_at: string | null;
           user_id: string;
         };
         Insert: {
@@ -649,6 +652,9 @@ export type Database = {
           id?: string;
           linked_account_uid?: string | null;
           linked_entry_reference?: string | null;
+          source?: string;
+          splitwise_id?: number | null;
+          splitwise_updated_at?: string | null;
           user_id: string;
         };
         Update: {
@@ -664,6 +670,69 @@ export type Database = {
           id?: string;
           linked_account_uid?: string | null;
           linked_entry_reference?: string | null;
+          source?: string;
+          splitwise_id?: number | null;
+          splitwise_updated_at?: string | null;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      splitwise_review: {
+        Row: {
+          booking_date: string;
+          cost: number;
+          created_at: string;
+          currency: string;
+          description: string;
+          group_name: string;
+          id: string;
+          kind: string;
+          linked_account_uid: string | null;
+          linked_entry_reference: string | null;
+          my_paid: number;
+          my_share: number;
+          rejected_entry_references: string[];
+          splitwise_id: number;
+          splitwise_updated_at: string | null;
+          status: string;
+          user_id: string;
+        };
+        Insert: {
+          booking_date: string;
+          cost: number;
+          created_at?: string;
+          currency: string;
+          description: string;
+          group_name: string;
+          id?: string;
+          kind: string;
+          linked_account_uid?: string | null;
+          linked_entry_reference?: string | null;
+          my_paid: number;
+          my_share: number;
+          rejected_entry_references?: string[];
+          splitwise_id: number;
+          splitwise_updated_at?: string | null;
+          status?: string;
+          user_id: string;
+        };
+        Update: {
+          booking_date?: string;
+          cost?: number;
+          created_at?: string;
+          currency?: string;
+          description?: string;
+          group_name?: string;
+          id?: string;
+          kind?: string;
+          linked_account_uid?: string | null;
+          linked_entry_reference?: string | null;
+          my_paid?: number;
+          my_share?: number;
+          rejected_entry_references?: string[];
+          splitwise_id?: number;
+          splitwise_updated_at?: string | null;
+          status?: string;
           user_id?: string;
         };
         Relationships: [];
@@ -1259,6 +1328,32 @@ export type Database = {
       stream_action: {
         Args: { p_stream: string; p_action: string; p_args?: Json };
         Returns: undefined;
+      };
+      get_splitwise_connection: {
+        Args: Record<PropertyKey, never>;
+        Returns: Array<{
+          connected: boolean;
+          status: string | null;
+          display_name: string | null;
+          last_synced_at: string | null;
+          last_error: string | null;
+        }>;
+      };
+      link_splitwise_review: {
+        Args: { p_id: string; p_account_uid: string; p_entry_reference: string };
+        Returns: Json;
+      };
+      count_splitwise_review: {
+        Args: { p_id: string };
+        Returns: Json;
+      };
+      dismiss_splitwise_review: {
+        Args: { p_id: string };
+        Returns: Json;
+      };
+      reject_splitwise_match: {
+        Args: { p_id: string; p_entry_reference: string };
+        Returns: Json;
       };
       undo_splitwise_import: {
         Args: { p_batch: string };
