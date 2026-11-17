@@ -183,8 +183,9 @@ export function TradesDialog({
         {hasMissingPrice(trades) && (
           <p className="flex items-start gap-2 text-sm">
             <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+            {/* The row shows a figure that's too high, or — when nothing was paid in at all. */}
             <span>
-              A buy has no price, so the return is too high.{" "}
+              A buy has no price, so the return is too high or can't be worked out.{" "}
               <button
                 type="button"
                 className="text-primary underline-offset-2 hover:underline"

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
@@ -151,6 +151,32 @@ describe("ReturnCell", () => {
     cell(ok(200, 1000));
     expect(screen.queryByText("price missing")).not.toBeInTheDocument();
   });
+
+  it.each([
+    ["a figure", ok(200, 1000), "+20.00% price missing"],
+    ["—", { state: "ok", gain: 1200, base: 0, change: null } as Measured, "— price missing"],
+  ])(
+    "polish-5 A-P3-3 when the row shows %s, the trades dialog's price-missing note says so",
+    async (_, measured, name) => {
+      const free = { ...trade, price_eur: 0 };
+      renderWith(
+        <ReturnCell
+          perf={perf([{ row: row("K"), measured }], {
+            tradesByKey: new Map([["K", name.startsWith("—") ? [free] : [trade, free]]]),
+          })}
+          holdingKey="K"
+          name="Holding"
+          quantity={10}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name }));
+      expect(
+        await screen.findByText(
+          /^A buy has no price, so the return is too high or can't be worked out\./,
+        ),
+      ).toBeInTheDocument();
+    },
+  );
 
   it("polish-4 R1 puts the price-missing flag on its own small line under the return, so the cell gets no wider", () => {
     const free = { ...trade, price_eur: 0 };
