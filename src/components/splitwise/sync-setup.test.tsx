@@ -223,6 +223,33 @@ describe("Connect dialog", () => {
     expect(screen.getByRole("dialog", { name: "Connect Splitwise" })).toBeTruthy();
   });
 
+  // polish-3 #8: one sync at a time, whichever button started it
+  it("keeps Sync now off while the dialog's first sync still runs", async () => {
+    let finish: (v: unknown) => void = () => {};
+    functions({
+      "splitwise-connect": [ok({ displayName: "Sam" })],
+      "sync-splitwise": [
+        ok({ new: 0, adopted: 0, review: 0, deleted: 0 }),
+        new Promise((resolve) => (finish = resolve)),
+      ],
+    });
+    rpc.mockResolvedValueOnce(notConnected());
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: "Connect Splitwise" }));
+    const dialog = screen.getByRole("dialog", { name: "Connect Splitwise" });
+    await userEvent.type(within(dialog).getByLabelText("API key"), "abcdefghijkl");
+    await userEvent.click(within(dialog).getByRole("checkbox"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    await within(dialog).findByText("New expenses");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Start sync" }));
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.getByRole("button", { name: /Sync now|Syncing/ })).toBeDisabled();
+    finish(ok({ new: 1, adopted: 0, review: 0, deleted: 0 }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Sync now" })).toBeEnabled());
+  });
+
   it("shows a preview failure and still lets the sync start", async () => {
     functions({
       "splitwise-connect": [ok({ displayName: "Sam" })],

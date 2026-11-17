@@ -13,7 +13,7 @@ import {
   previewSync,
   type SyncCounts,
 } from "@/lib/splitwise-sync";
-import { useSyncNow } from "@/lib/use-splitwise-sync";
+import { useSyncNow, useSyncRunning } from "@/lib/use-splitwise-sync";
 
 const CONSENT_TEXT =
   "Alopex reads your Splitwise expenses and stores the key encrypted on your own server; disconnect anytime";
@@ -74,6 +74,7 @@ export function ConnectDialog({
     staleTime: Infinity,
   });
   const start = useSyncNow(() => onOpenChange(false));
+  const syncing = useSyncRunning();
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,8 +188,8 @@ export function ConnectDialog({
               <Button variant="secondary" onClick={() => onOpenChange(false)}>
                 Later
               </Button>
-              <Button onClick={() => start.mutate()} disabled={start.isPending}>
-                {start.isPending ? "Syncing…" : "Start sync"}
+              <Button onClick={() => start.mutate()} disabled={syncing}>
+                {syncing ? "Syncing…" : "Start sync"}
               </Button>
             </div>
           </div>

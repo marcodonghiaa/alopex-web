@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { GroupedList } from "@/components/ui/grouped-list";
 import { isDemoMode } from "@/lib/demo/mode";
 import { cn } from "@/lib/utils";
-import { useSplitwiseConnection, useSyncNow } from "@/lib/use-splitwise-sync";
+import { useSplitwiseConnection, useSyncNow, useSyncRunning } from "@/lib/use-splitwise-sync";
 import {
   disconnectSplitwise,
   syncedAgo,
@@ -102,6 +102,7 @@ function StatusRow({
   onDisconnect: () => void;
 }) {
   const sync = useSyncNow();
+  const syncing = useSyncRunning();
   const demo = isDemoMode();
   const reconnect = c.status === "needs_reconnect";
   return (
@@ -128,9 +129,9 @@ function StatusRow({
             size="sm"
             variant="secondary"
             onClick={() => sync.mutate()}
-            disabled={demo || sync.isPending}
+            disabled={demo || syncing}
           >
-            {sync.isPending ? "Syncing…" : "Sync now"}
+            {syncing ? "Syncing…" : "Sync now"}
           </Button>
         )}
       </div>
