@@ -431,3 +431,35 @@ describe("ToLink", () => {
     expect(screen.getByRole("note")).toHaveTextContent("Linking is off in the demo.");
   });
 });
+
+// polish-4 #2: leaving Find in bank hands focus back to the expense, not to <body>
+describe("Find in bank focus", () => {
+  it("returns focus to the row's Find in bank on Esc, and to the row after a link", async () => {
+    tables.splitwise_review = { data: [item({ cost: 80, my_paid: 80 })], error: null };
+    tables.transactions = {
+      data: [bankRow({ entry_reference: "tip", amount: 88, creditor_name: "Bistro" })],
+      error: null,
+    };
+    renderList();
+    const row = await screen.findByRole("listitem", { name: "Groceries" });
+    const find = within(row).getByRole("button", { name: "Find in bank" });
+    await userEvent.click(find);
+    await screen.findByRole("dialog", { name: "Which payment was Groceries?" });
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(document.activeElement).toBe(find));
+    // The same exit through another control: the sheet's X.
+    await userEvent.click(find);
+    const again = await screen.findByRole("dialog", { name: "Which payment was Groceries?" });
+    await userEvent.click(within(again).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(document.activeElement).toBe(find));
+
+    await userEvent.click(find);
+    const sheet = await screen.findByRole("dialog", { name: "Which payment was Groceries?" });
+    await userEvent.click(within(sheet).getByText("Bistro"));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Link payment" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("listitem", { name: "Groceries" })),
+    );
+  });
+});

@@ -26,6 +26,11 @@ import {
   type Suggestion,
 } from "@/lib/splitwise-sync";
 
+// The sheet hands focus back to the expense it was opened from, not to <body> (as the CSV review).
+const rowId = (id: string) => `to-link-${id}`;
+const focusLater = (id: string) =>
+  requestAnimationFrame(() => document.getElementById(id)?.focus());
+
 const DONE: Record<ReviewAction["action"], string> = {
   link: "Linked to the bank payment",
   reject: "Won't suggest that payment again",
@@ -162,10 +167,16 @@ export function ToLink({ connected }: { connected: boolean }) {
             : "If it never went through your bank, ignore it."
         }
         onPick={(tx) => {
-          if (finding) act.mutate({ action: "link", id: finding.id, tx });
+          if (finding) {
+            act.mutate({ action: "link", id: finding.id, tx });
+            focusLater(rowId(finding.id));
+          }
           setFinding(null);
         }}
-        onClose={() => setFinding(null)}
+        onClose={() => {
+          if (finding) focusLater(`${rowId(finding.id)}-find`);
+          setFinding(null);
+        }}
       />
     </section>
   );
@@ -187,7 +198,12 @@ function ReviewRow({
   const tx = suggestion?.tx;
   const out = directionOf(item.kind) === "DBIT";
   return (
-    <li className="px-4 py-3 sm:px-5" aria-label={item.description}>
+    <li
+      id={rowId(item.id)}
+      tabIndex={-1}
+      className="px-4 py-3 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:px-5"
+      aria-label={item.description}
+    >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <p className="truncate text-[0.9375rem] font-medium">{item.description || "Expense"}</p>
@@ -247,7 +263,13 @@ function ReviewRow({
             </Button>
           </>
         ) : null}
-        <Button size="sm" variant="secondary" disabled={busy} onClick={onFind}>
+        <Button
+          id={`${rowId(item.id)}-find`}
+          size="sm"
+          variant="secondary"
+          disabled={busy}
+          onClick={onFind}
+        >
           Find in bank
         </Button>
         {canCount(item.kind) && (
