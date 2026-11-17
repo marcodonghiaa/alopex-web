@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRows } from "@/lib/export/fetch-all";
 import { FX_HISTORY } from "@/lib/csp";
 import { addDays, isDay } from "@/lib/date";
-import { makeRate } from "@/lib/import/splitwise-review";
+import { makeRate } from "@/lib/fx";
 
 export interface RateRow {
   date: string;
