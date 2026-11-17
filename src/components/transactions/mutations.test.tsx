@@ -973,6 +973,22 @@ describe("payback answers", () => {
     expect(cold.queryClient.getQueryData(["payback-candidates"])).toBeUndefined();
   });
 
+  // protects=the toast and its Undo after leaving the page mid-save; fails_when=the result is
+  // announced from a per-call callback, which React Query skips once the page has unmounted
+  it("announces the result even if the page closed while it saved", async () => {
+    const { queryClient, wrapper } = setup();
+    let answer: (v: unknown) => void = () => {};
+    rpc.mockReturnValueOnce(new Promise((r) => (answer = r)));
+    const announce = vi.fn();
+    const { result: hook, unmount } = renderHook(() => useRecordPaybackMutation(queryClient), {
+      wrapper,
+    });
+    act(() => hook.current.mutate({ payment, contact: "Anna", announce }));
+    unmount();
+    answer({ data: result, error: null });
+    await waitFor(() => expect(announce).toHaveBeenCalledWith(result));
+  });
+
   it("'not a payback' sends an empty contact", async () => {
     const { queryClient, wrapper } = setup();
     rpc.mockResolvedValueOnce({ data: { ...result, settled: [], linked: false }, error: null });

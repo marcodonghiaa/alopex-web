@@ -174,39 +174,37 @@ function SplitwisePage() {
 
   const confirmPayback = (payment: PaybackCandidate, debtor: Debtor) => {
     if (record.isPending) return;
-    record.mutate(
-      { payment, contact: debtor.name },
-      {
-        onSuccess: (result) =>
-          toast.success(
-            paybackMessage(debtor.name, result, debtor.splitwiseOnly, (v) => money(v, "EUR")),
-            {
-              duration: 10_000,
-              action: {
-                label: "Undo",
-                onClick: () => undoPayback.mutate({ payment, forget: result.linked }),
-              },
-            },
-          ),
-      },
-    );
-  };
-  const dismissPayback = (payment: PaybackCandidate, s: PaybackSuggestion) => {
-    if (record.isPending) return;
-    record.mutate(
-      { payment, contact: "" },
-      {
-        onSuccess: () =>
-          toast.success(dismissMessage(s.debtor.name, s.reason === "linked"), {
-            // Its only Undo: give it the same time as the Yes toast.
+    record.mutate({
+      payment,
+      contact: debtor.name,
+      announce: (result) =>
+        toast.success(
+          paybackMessage(debtor.name, result, debtor.splitwiseOnly, (v) => money(v, "EUR")),
+          {
             duration: 10_000,
             action: {
               label: "Undo",
-              onClick: () => undoPayback.mutate({ payment, forget: false }),
+              onClick: () => undoPayback.mutate({ payment, forget: result.linked }),
             },
-          }),
-      },
-    );
+          },
+        ),
+    });
+  };
+  const dismissPayback = (payment: PaybackCandidate, s: PaybackSuggestion) => {
+    if (record.isPending) return;
+    record.mutate({
+      payment,
+      contact: "",
+      announce: () =>
+        toast.success(dismissMessage(s.debtor.name, s.reason === "linked"), {
+          // Its only Undo: give it the same time as the Yes toast.
+          duration: 10_000,
+          action: {
+            label: "Undo",
+            onClick: () => undoPayback.mutate({ payment, forget: false }),
+          },
+        }),
+    });
   };
 
   const settleAll = (name: string, rows: Array<SplitRow>) => {

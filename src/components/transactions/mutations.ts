@@ -545,7 +545,12 @@ export function useReviewGroupMutation(queryClient: QueryClient) {
   });
 }
 
-type PaybackVars = { payment: TxKey; contact: string };
+type PaybackVars = {
+  payment: TxKey;
+  contact: string;
+  /** Says what happened (the toast with Undo). Runs from here, so it still runs if the page closed. */
+  announce?: (result: PaybackResult) => void;
+};
 const PAYBACK_KEYS = ["payback-candidates", "splits"];
 function refetchPayback(queryClient: QueryClient) {
   refetchFlows(queryClient);
@@ -570,10 +575,12 @@ export function useRecordPaybackMutation(queryClient: QueryClient) {
       return data as unknown as PaybackResult;
     },
     // The answered payment leaves the list now, not when the refetch lands: no second answer.
-    onSuccess: (_result, { payment }) =>
+    onSuccess: (result, { payment, announce }) => {
       queryClient.setQueryData<Array<TxKey>>(["payback-candidates"], (list) =>
         list?.filter((c) => txId(c) !== txId(payment)),
-      ),
+      );
+      announce?.(result);
+    },
     onError: (error) => saveFailed("Couldn't save", error),
     onSettled: () => refetchPayback(queryClient),
   });
