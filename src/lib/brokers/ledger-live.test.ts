@@ -346,6 +346,8 @@ describe("Ledger Live operations export", () => {
   it("on the Portfolio page it points you to the Crypto page", () => {
     const result = parseTradesCsv(sample, { ...ctx, kind: "stock" });
     expect(result.trades).toEqual([]);
-    expect(result.errors[0]).toMatch(/Crypto page/);
+    expect(result.errors[0]).toBe(
+      "This file comes from Ledger Live: import it on the Crypto page.",
+    );
   });
 });

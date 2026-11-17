@@ -27,7 +27,7 @@ export const tradeRepublic: BrokerParser = {
     if (kind !== "stock") {
       return {
         trades: [],
-        errors: ["This is a Trade Republic export: import it on the Portfolio page."],
+        errors: ["This file comes from Trade Republic: import it on the Portfolio page."],
         notes: [],
       };
     }

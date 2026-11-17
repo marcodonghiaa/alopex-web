@@ -272,7 +272,7 @@ describe("parseTradesCsv, Trade Republic export", () => {
 
   it("belongs on the Portfolio page", () => {
     const { errors } = parseTradesCsv(file(), { ...known, kind: "crypto" });
-    expect(errors[0]).toMatch(/Portfolio page/);
+    expect(errors[0]).toBe("This file comes from Trade Republic: import it on the Portfolio page.");
   });
 });
 

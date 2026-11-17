@@ -117,7 +117,7 @@ export const ledgerLive: BrokerParser = {
     if (kind !== "crypto") {
       return {
         trades: [],
-        errors: ["This is a Ledger Live export: import it on the Crypto page."],
+        errors: ["This file comes from Ledger Live: import it on the Crypto page."],
         notes: [],
       };
     }
