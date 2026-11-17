@@ -11,12 +11,16 @@ export interface CsvResult {
   names?: Map<string, string>;
   /** No parser recognised the file: the screen offers to ask for your broker. */
   unknownFormat?: boolean;
+  /** Prices are in another currency: load its rates for these days, then parse again with them. */
+  needsRates?: { currency: string; from: string; to: string };
 }
 
 export interface ParseContext {
   kind: "stock" | "crypto";
   knownKeys: Set<string>;
   today: string;
+  /** Euro per one unit of a currency on a day (or the last day before it), null when unknown. */
+  rateToEur?: (currency: string, date: string) => number | null;
 }
 
 /**
@@ -32,6 +36,11 @@ export interface BrokerParser {
   kind: "stock" | "crypto";
   /** Where to find the file in the broker's app, one short step each, shown before you upload. */
   howToExport: Array<string>;
+  /**
+   * Crypto only: the holding source the file is the full record of (crypto_holdings.source). Its
+   * share counts are set from this broker's trades alone, so coins held elsewhere stay as they are.
+   */
+  holdingSource?: string;
   /** Last day a real export was imported without problems, or null if only the sample was tested. */
   verifiedAt: string | null;
   /** Lowercased header cells. Must be strict: two parsers may never accept the same file. */

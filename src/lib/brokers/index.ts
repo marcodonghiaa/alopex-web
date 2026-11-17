@@ -1,10 +1,11 @@
+import { ledgerLive } from "./ledger-live";
 import { tradeRepublic } from "./trade-republic";
 import type { BrokerParser } from "./types";
 
 export type { BrokerParser, CsvResult, ParseContext } from "./types";
 
 /** Every broker export Alopex reads. docs/BROKERS.md is checked against this list. */
-export const BROKERS: Array<BrokerParser> = [tradeRepublic];
+export const BROKERS: Array<BrokerParser> = [tradeRepublic, ledgerLive];
 
 /** Where someone whose broker isn't listed asks for it. */
 export const NEW_BROKER_URL =

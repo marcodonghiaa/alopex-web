@@ -1,0 +1,72 @@
+import { describe, expect, it, vi } from "vitest";
+import { loadRates, rateLookup } from "./rates";
+
+const rows = [
+  { date: "2026-01-02", rate_to_eur: 0.9 },
+  { date: "2026-01-05", rate_to_eur: 0.8 },
+];
+
+describe("rateLookup", () => {
+  const rate = rateLookup("USD", rows);
+
+  it("uses the day's rate, or the last one before it (weekends have none)", () => {
+    expect(rate("USD", "2026-01-02")).toBe(0.9);
+    expect(rate("USD", "2026-01-04")).toBe(0.9);
+    expect(rate("USD", "2026-01-05")).toBe(0.8);
+  });
+
+  it("never guesses: no rate before the first day, after a long gap, or for another currency", () => {
+    expect(rate("USD", "2026-01-01")).toBeNull();
+    expect(rate("USD", "2026-02-01")).toBeNull();
+    expect(rate("GBP", "2026-01-02")).toBeNull();
+  });
+});
+
+// The few calls loadRates makes on the supabase client, answering with `stored`.
+const fakeDb = (stored: Array<{ date: string; rate_to_eur: number }>, error: unknown = null) => {
+  const q = {
+    select: () => q,
+    eq: () => q,
+    gte: () => q,
+    lte: () => q,
+    order: () => q,
+    limit: () => Promise.resolve({ data: stored, error }),
+  };
+  return { from: vi.fn(() => q) } as unknown as Parameters<typeof loadRates>[3];
+};
+const series = (rates: Record<string, number>) =>
+  vi.fn(async () => ({
+    ok: true,
+    json: async () => ({
+      rates: Object.fromEntries(Object.entries(rates).map(([d, r]) => [d, { USD: r }])),
+    }),
+  }));
+
+describe("loadRates", () => {
+  it("uses the stored rates when they cover every day", async () => {
+    const get = series({});
+    const found = await loadRates("USD", "2026-01-03", "2026-01-05", fakeDb(rows), get);
+    expect(found).toEqual(rows);
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("fetches the older days a fresh install hasn't stored, as euro per dollar", async () => {
+    const get = series({ "2025-12-29": 1.25 });
+    const found = await loadRates("USD", "2026-01-01", "2026-01-05", fakeDb(rows), get);
+    expect(get).toHaveBeenCalledWith(
+      "https://api.frankfurter.dev/v1/2025-12-22..2026-01-02?base=EUR&symbols=USD",
+    );
+    expect(found[0]).toEqual({ date: "2025-12-29", rate_to_eur: 0.8 });
+    expect(found.slice(1)).toEqual(rows);
+  });
+
+  it("says so when the rates can't be loaded", async () => {
+    const down = vi.fn(async () => ({ ok: false, json: async () => ({}) }));
+    await expect(loadRates("USD", "2025-01-01", "2026-01-05", fakeDb([]), down)).rejects.toThrow(
+      /Couldn't load USD exchange rates/,
+    );
+    await expect(
+      loadRates("USD", "2026-01-03", "2026-01-05", fakeDb([], { message: "x" }), down),
+    ).rejects.toThrow(/Couldn't load USD exchange rates/);
+  });
+});

@@ -1,4 +1,14 @@
 // The small CSV helpers every broker parser shares.
+import { netShares } from "@/lib/trades";
+import type { Trade } from "@/lib/trades";
+
+/** Not in your holdings and not fully sold: there's no price to value what's left, so leave it out. */
+export function unheldKeys(trades: Array<Trade>, knownKeys: Set<string>): Array<string> {
+  return [...new Set(trades.map((t) => t.key))].filter(
+    (key) =>
+      !knownKeys.has(key) && Math.abs(netShares(trades.filter((t) => t.key === key))) > 0.000001,
+  );
+}
 
 export function splitLine(line: string, separator: string): Array<string> {
   const cells: Array<string> = [];

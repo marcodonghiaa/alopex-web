@@ -1,13 +1,15 @@
 # Supported brokers
 
-Alopex reads these broker exports on the Portfolio page (Import trades from CSV). Anything else can be
-imported as a plain CSV with the columns `date, side, isin, shares, price, fee`.
+Alopex reads these exports with Import trades from CSV: stock brokers on the Portfolio page, crypto
+wallets on the Crypto page. Anything else can be imported as a plain CSV with the columns
+`date, side, isin, shares, price, fee` (`symbol` instead of `isin` for coins).
 
 <!-- This table is checked against src/lib/brokers/index.ts (brokers.test.ts). Change both together. -->
 
 | Broker         | Accounts in             | File | Last checked with a real export |
 | -------------- | ----------------------- | ---- | ------------------------------- |
 | Trade Republic | DE, IT, FR, ES and more | CSV  | 2026-11-10                      |
+| Ledger Live    | Any                     | CSV  | 2026-11-17                      |
 
 ## Your broker isn't here, or stopped working?
 

@@ -1,6 +1,5 @@
-import { netShares } from "@/lib/trades";
 import type { Trade } from "@/lib/trades";
-import { parseDate, splitLine } from "./csv";
+import { parseDate, splitLine, unheldKeys } from "./csv";
 import type { BrokerParser } from "./types";
 
 const COLUMNS = ["transaction_id", "category", "type", "symbol", "shares", "price", "currency"];
@@ -86,11 +85,7 @@ export const tradeRepublic: BrokerParser = {
       });
     });
 
-    // Not in your holdings and not fully sold: there's no price to value what's left.
-    const open = [...new Set(trades.map((t) => t.key))].filter(
-      (key) =>
-        !knownKeys.has(key) && Math.abs(netShares(trades.filter((t) => t.key === key))) > 0.000001,
-    );
+    const open = unheldKeys(trades, knownKeys);
     for (const key of open)
       notes.push(
         `${names.get(key)} isn't in your holdings, so it was left out. Add it, then import again.`,

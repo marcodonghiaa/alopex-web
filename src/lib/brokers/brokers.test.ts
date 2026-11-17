@@ -38,12 +38,14 @@ describe("broker registry", () => {
     }
   });
 
-  it("samples carry no personal data: no IBAN, email or phone number", () => {
+  it("samples carry no personal data: no IBAN, email, phone number or wallet public key", () => {
     for (const file of readdirSync(FIXTURES)) {
       const text = readFileSync(path.join(FIXTURES, file), "utf8");
       expect(text).not.toMatch(/\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/); // IBAN
       expect(text).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/); // email
       expect(text).not.toMatch(/\+\d{2}\s?\d{3}/); // phone
+      // An extended public key (xpub, zpub, Ltub...) reveals every address of a wallet.
+      expect(text).not.toMatch(/\b[A-Za-z]{4}[1-9A-HJ-NP-Za-km-z]{100,}\b/);
     }
   });
 
