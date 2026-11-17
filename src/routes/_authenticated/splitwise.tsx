@@ -169,6 +169,8 @@ function SplitwisePage() {
     () => (ready ? suggestPaybacks(candidates.data ?? [], debtors) : []),
     [ready, candidates.data, debtors],
   );
+  // The questions sit above the lists: the lists wait for them, so nothing moves under a tap.
+  const asking = candidates.isPending || rates.isPending;
   const busy = record.isPending && record.variables ? txId(record.variables.payment) : null;
 
   const confirmPayback = (payment: PaybackCandidate, debtor: Debtor) => {
@@ -271,7 +273,7 @@ function SplitwisePage() {
       <SectionTitle className="mt-8">Split bills · from your transactions</SectionTitle>
       {splits.isError ? (
         <Alert>Couldn't load your splits: {splits.error.message}</Alert>
-      ) : splits.isPending ? (
+      ) : splits.isPending || asking ? (
         loading("Loading split bills")
       ) : (
         <OwedView
@@ -284,7 +286,7 @@ function SplitwisePage() {
       <SectionTitle className="mt-8">Splitwise groups · from your last import</SectionTitle>
       {balances.isError ? (
         <Alert>Couldn't load Splitwise balances: {balances.error.message}</Alert>
-      ) : balances.isPending ? (
+      ) : balances.isPending || asking ? (
         loading("Loading Splitwise groups")
       ) : (
         <BalancesView groups={groups} />

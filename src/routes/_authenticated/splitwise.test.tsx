@@ -131,6 +131,28 @@ describe("Who owes you", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  // protects=a steady page: the payment questions sit above the lists, so the lists wait for
+  // them; fails_when=the lists show first and the questions push them down under a tap (U3)
+  it("keeps the lists loading until the payment questions are in, so nothing shifts", async () => {
+    const client = db.client as { rpc: (name: string, args?: unknown) => unknown };
+    const rpc = client.rpc.bind(client);
+    let release = () => {};
+    const held = new Promise<void>((r) => (release = r));
+    client.rpc = (name, args) =>
+      name === "payback_candidates" ? held.then(() => rpc(name, args)) : rpc(name, args);
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText("Net owed to you")).toBeTruthy();
+    expect(screen.getByRole("status", { name: "Loading split bills" })).toBeTruthy();
+    expect(screen.getByRole("status", { name: "Loading Splitwise groups" })).toBeTruthy();
+    release();
+    expect(await screen.findByRole("region", { name: "Payments to check" })).toBeTruthy();
+    expect(screen.queryByRole("status", { name: "Loading split bills" })).toBeNull();
+  });
+
   // protects=the Yes toast and its Undo; fails_when=it doesn't say what was settled, or Undo
   // doesn't reopen the bill
   it("Yes says what it settled, and its Undo reopens the bill", async () => {
