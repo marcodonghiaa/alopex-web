@@ -1107,3 +1107,20 @@ describe("Disconnected with data kept", () => {
     expect(screen.queryByText(NOTE)).toBeNull();
   });
 });
+
+// polish-4 #15: the setup row isn't blank while the connection loads
+describe("Setup while the connection loads", () => {
+  it("holds the row's place with a loading placeholder", async () => {
+    rpc.mockReturnValue(new Promise(() => {}));
+    renderSetup();
+    const ph = await screen.findByRole("status", { name: "Loading the Splitwise connection" });
+    expect(ph.className.split(" ")).toContain("h-11");
+  });
+
+  it("drops it once the connection is known", async () => {
+    rpc.mockResolvedValue(notConnected());
+    renderSetup();
+    await screen.findByRole("button", { name: "Connect Splitwise" });
+    expect(screen.queryByRole("status", { name: "Loading the Splitwise connection" })).toBeNull();
+  });
+});

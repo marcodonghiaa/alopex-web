@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { GroupedList } from "@/components/ui/grouped-list";
+import { Skeleton } from "@/components/ui/skeleton";
 import { isDemoMode } from "@/lib/demo/mode";
 import { cn } from "@/lib/utils";
 import { useSplitwiseConnection, useSyncNow, useSyncRunning } from "@/lib/use-splitwise-sync";
@@ -76,25 +77,32 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
             onReconnect={() => setConnecting("reconnect")}
             onDisconnect={() => setDisconnecting(true)}
           />
+        ) : connection.isPending ? (
+          <div className="px-4 py-3 sm:px-5">
+            <Skeleton
+              role="status"
+              aria-label="Loading the Splitwise connection"
+              aria-hidden={false}
+              className="h-11"
+            />
+          </div>
         ) : (
-          !connection.isPending && (
-            <>
-              {c?.syncedData && (
-                <p className="px-4 pt-3 text-[0.8125rem] text-muted-foreground sm:px-5">
-                  Disconnected. What was synced stays; nothing new comes in.
-                </p>
-              )}
-              <button
-                type="button"
-                data-splitwise-primary
-                onClick={() => setConnecting("connect")}
-                className={ROW}
-              >
-                <Link2 aria-hidden className="size-4" />
-                Connect Splitwise
-              </button>
-            </>
-          )
+          <>
+            {c?.syncedData && (
+              <p className="px-4 pt-3 text-[0.8125rem] text-muted-foreground sm:px-5">
+                Disconnected. What was synced stays; nothing new comes in.
+              </p>
+            )}
+            <button
+              type="button"
+              data-splitwise-primary
+              onClick={() => setConnecting("connect")}
+              className={ROW}
+            >
+              <Link2 aria-hidden className="size-4" />
+              Connect Splitwise
+            </button>
+          </>
         )}
         {!connected && c?.syncedData && (
           <button
