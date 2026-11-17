@@ -210,6 +210,35 @@ describe("Ledger Live operations export", () => {
     expect(parseTradesCsv(row(value), ctx).errors).toEqual(["Line 2: couldn't read this IN row."]);
   });
 
+  it("a value too big for its amount is a line error, not a failed save", () => {
+    const line = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,1e-10,,h,Bitcoin 1,a,USD,1e308,1";
+    expect(parseTradesCsv(row(line), ctx).errors).toEqual(["Line 2: couldn't read this IN row."]);
+  });
+
+  it("amounts are plain decimals: 0x10 is not 16 coins", () => {
+    const line = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0x10,,h,Bitcoin 1,a,USD,300,300";
+    expect(parseTradesCsv(row(line), ctx).errors).toEqual(["Line 2: couldn't read this IN row."]);
+  });
+
+  it("one unreadable row doesn't stop the rates for the others", () => {
+    const good = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0.01,,h,Bitcoin 1,a,USD,300,300";
+    for (const bad of [
+      "zz,Confirmed,ETH,NFT_IN,1,,n,Ethereum 1,a,USD,5,5",
+      "2026-13-45T08:00:00.000Z,Confirmed,BTC,IN,0.01,,h2,Bitcoin 1,a,USD,300,300",
+    ]) {
+      const result = parseTradesCsv(row(`${bad}\n${good}`), noRates);
+      expect(result.needsRates).toEqual({ currency: "USD", from: "2026-01-05", to: "2026-01-05" });
+    }
+  });
+
+  it("a currency in small letters is still that currency", () => {
+    const line = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0.01,,h,Bitcoin 1,a,usd,300,300";
+    expect(parseTradesCsv(row(line), noRates).needsRates?.currency).toBe("USD");
+    const result = parseTradesCsv(row(line), ctx);
+    expect(result.errors).toEqual([]);
+    expect(result.trades[0]!.price_eur).toBeCloseTo((300 * 0.9) / 0.01);
+  });
+
   it("a broken row or a future date is an error, so nothing is saved", () => {
     const bad = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,abc,,h,Bitcoin 1,a,USD,300,300";
     expect(parseTradesCsv(row(bad), ctx).errors).toEqual(["Line 2: couldn't read this IN row."]);

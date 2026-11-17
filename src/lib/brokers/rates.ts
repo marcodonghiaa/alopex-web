@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRows } from "@/lib/export/fetch-all";
-import { addDays } from "@/lib/date";
+import { addDays, isDay } from "@/lib/date";
 import { makeRate } from "@/lib/import/splitwise-review";
 
 export interface RateRow {
@@ -69,7 +69,7 @@ export async function loadRates(
   const older = Object.entries(body?.rates ?? {})
     .flatMap(([date, r]) => {
       const units = r?.[currency];
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || typeof units !== "number") return [];
+      if (!isDay(date) || typeof units !== "number") return [];
       const rate = 1 / units;
       return units > 0 && Number.isFinite(units) && Number.isFinite(rate)
         ? [{ date, rate_to_eur: rate }]

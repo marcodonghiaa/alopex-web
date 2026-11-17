@@ -1,3 +1,4 @@
+import { isDay } from "@/lib/date";
 import { plural } from "@/lib/plural";
 import type { Trade } from "@/lib/trades";
 import { splitLine, unheldKeys } from "./csv";
@@ -74,6 +75,13 @@ const STAKE = new Set([
 // Staking rewards cost you nothing: all their value is gain. Slashed or burnt coins bring nothing back.
 const FREE = new Set(["REWARD", "REWARD_PAYOUT"]);
 const LOST = new Set(["SLASH", "BURN"]);
+const familyOf = (type: string) =>
+  IN.has(type) ? "in" : OUT.has(type) ? "out" : STAKE.has(type) ? "stake" : null;
+// A plain decimal (1e-8 too); Number alone would also read 0x10 as 16. Blank is zero.
+const num = (text: string) => {
+  const t = text.trim();
+  return t === "" ? 0 : /^\d*\.?\d+(e[+-]?\d+)?$/i.test(t) ? Number(t) : NaN;
+};
 
 /**
  * Ledger Live's operations export (Settings › Accounts › Export operations). It lists what came in
@@ -110,15 +118,21 @@ export const ledgerLive: BrokerParser = {
       const cells = splitLine(line, separator);
       return (name: string) => cells[header.indexOf(name)] ?? "";
     });
+    const currencyOf = (get: (name: string) => string) =>
+      get("countervalue ticker").trim().toUpperCase() || "EUR";
 
     // Every day priced in a currency other than euro, so the screen can load its rates first.
     if (!rateToEur) {
-      const priced = rows.filter((get) => !["", "EUR"].includes(get("countervalue ticker")));
+      // Only rows that move coins, on real days; any other row is reported (or skipped) below.
+      const priced = rows.filter(
+        (get) =>
+          familyOf(get("operation type")) &&
+          currencyOf(get) !== "EUR" &&
+          isDay(get("operation date").slice(0, 10)),
+      );
       const dates = priced.map((get) => get("operation date").slice(0, 10)).sort();
-      const currency = priced[0]?.("countervalue ticker");
-      // Only a real currency code on real days; anything else is reported row by row below.
-      const isDay = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
-      if (currency && /^[A-Z]{3}$/.test(currency) && dates.length > 0 && dates.every(isDay)) {
+      const currency = priced[0] ? currencyOf(priced[0]) : "";
+      if (/^[A-Z]{3}$/.test(currency)) {
         return {
           trades: [],
           errors: [],
@@ -136,16 +150,16 @@ export const ledgerLive: BrokerParser = {
     let noValue = 0;
     rows.forEach((get, i) => {
       const type = get("operation type");
-      const family = IN.has(type) ? "in" : OUT.has(type) ? "out" : STAKE.has(type) ? "stake" : null;
+      const family = familyOf(type);
       if (!family) return void skipped++;
       const date = get("operation date").slice(0, 10);
       const key = get("currency ticker").toUpperCase();
-      const amount = Number(get("operation amount") || 0);
-      const fee = Number(get("operation fees") || 0);
+      const amount = num(get("operation amount"));
+      const fee = num(get("operation fees"));
       const valueText = get("countervalue at operation date").trim();
-      const value = Number(valueText);
+      const value = num(valueText);
       const ok = (n: number) => Number.isFinite(n) && n >= 0;
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !key || !ok(amount) || !ok(fee)) {
+      if (!isDay(date) || !key || !ok(amount) || !ok(fee)) {
         return void errors.push(`Line ${i + 2}: couldn't read this ${type} row.`);
       }
       if (!ok(value)) return void errors.push(`Line ${i + 2}: couldn't read this ${type} row.`);
@@ -156,7 +170,7 @@ export const ledgerLive: BrokerParser = {
       const shares = family === "stake" || failed ? fee : amount;
       if (shares === 0) return;
       if (date > today) return void errors.push(`Line ${i + 2}: the date is in the future.`);
-      const currency = get("countervalue ticker") || "EUR";
+      const currency = currencyOf(get);
       const rate = currency === "EUR" ? 1 : (rateToEur?.(currency, date) ?? null);
       if (rate == null) {
         return void errors.push(`Line ${i + 2}: no ${currency} to EUR rate for ${date}.`);
@@ -164,6 +178,10 @@ export const ledgerLive: BrokerParser = {
       // The value is of the amount; with none (or a fee-only row worth nothing) the coin counts at €0.
       if (valueText === "" || amount === 0) noValue++;
       const price = FREE.has(type) || amount === 0 ? 0 : (value * rate) / amount;
+      // Each number can be fine and still give a price too big to save.
+      if (!Number.isFinite(price) || !Number.isFinite(shares * price)) {
+        return void errors.push(`Line ${i + 2}: couldn't read this ${type} row.`);
+      }
       // Fees, failed sends, staking actions and slashing bring nothing back: their value is a cost.
       const cost =
         family === "stake" || LOST.has(type)
