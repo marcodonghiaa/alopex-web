@@ -191,6 +191,15 @@ describe("Ledger Live operations export", () => {
     ]);
   });
 
+  it("a number too big to hold (1e999) is a line error, not a failed save", () => {
+    for (const cells of ["IN,1e999,,h", "OUT,1,1e999,h"]) {
+      const line = `2026-01-05T08:00:00.000Z,Confirmed,BTC,${cells},Bitcoin 1,a,USD,300,300`;
+      expect(parseTradesCsv(row(line), ctx).errors).toHaveLength(1);
+    }
+    const value = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,1,,h,Bitcoin 1,a,USD,1e999,1";
+    expect(parseTradesCsv(row(value), ctx).errors).toEqual(["Line 2: couldn't read this IN row."]);
+  });
+
   it("a broken row or a future date is an error, so nothing is saved", () => {
     const bad = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,abc,,h,Bitcoin 1,a,USD,300,300";
     expect(parseTradesCsv(row(bad), ctx).errors).toEqual(["Line 2: couldn't read this IN row."]);

@@ -142,10 +142,11 @@ export const ledgerLive: BrokerParser = {
       const fee = Number(get("operation fees") || 0);
       const valueText = get("countervalue at operation date").trim();
       const value = Number(valueText);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !key || !(amount >= 0) || !(fee >= 0)) {
+      const ok = (n: number) => Number.isFinite(n) && n >= 0;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !key || !ok(amount) || !ok(fee)) {
         return void errors.push(`Line ${i + 2}: couldn't read this ${type} row.`);
       }
-      if (!(value >= 0)) return void errors.push(`Line ${i + 2}: couldn't read this ${type} row.`);
+      if (!ok(value)) return void errors.push(`Line ${i + 2}: couldn't read this ${type} row.`);
       // What leaves or enters the wallet, as Ledger Live counts its balance.
       // A failed send moved nothing but its fee, and a failed receive cost you nothing.
       const failed = get("status") === "Failed";
