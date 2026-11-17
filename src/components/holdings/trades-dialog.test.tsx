@@ -238,6 +238,10 @@ describe("TradesDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edit that trade" }));
     const current = document.querySelector("li[aria-current='true']");
     expect(current?.textContent).toMatch(/at €0\.00/);
+    // On a phone Cancel and Save trade don't fit side by side, so the row wraps.
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    expect(cancel.parentElement).toHaveClass("flex-wrap");
+    expect(screen.getByRole("button", { name: "Save trade" })).toHaveClass("basis-28");
     expect(screen.getByLabelText(/Date/)).toHaveValue("2026-03-02");
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.getByRole("button", { name: "Add trade" })).toBeInTheDocument();
