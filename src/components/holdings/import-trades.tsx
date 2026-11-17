@@ -290,7 +290,11 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     if (fileName) cardRef.current?.focus();
   }, [fileName]);
 
+  // Each file read gets a number: one that ends after another file, or after a reset, is dropped.
+  const readId = useRef(0);
+
   function reset() {
+    readId.current++;
     setText("");
     setFileName(null);
     setReading(false);
@@ -302,7 +306,9 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     if (!file || save.isPending) return;
     setFileName(file.name);
     setReading(true);
+    const id = ++readId.current;
     void file.text().then((t) => {
+      if (id !== readId.current) return;
       setText(t);
       setReading(false);
     });

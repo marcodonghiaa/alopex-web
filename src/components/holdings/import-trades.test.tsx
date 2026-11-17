@@ -603,6 +603,45 @@ describe("ImportTrades", () => {
     expect((await screen.findByRole("alert")).textContent).toBe("boom");
   });
 
+  describe("polish-4 N6 a file read that ends late is ignored", () => {
+    const csv = () => readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    /** A file whose text arrives only when the returned function is called. */
+    const slowFile = (text: string, name: string) => {
+      let finish!: () => void;
+      const ready = new Promise<string>((r) => (finish = () => r(text)));
+      return { file: Object.assign(new File([text], name), { text: () => ready }), finish };
+    };
+
+    it("a file chosen after it wins", async () => {
+      open("stock");
+      fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+      const a = slowFile(csv(), "a.csv");
+      fireEvent.change(screen.getByLabelText("CSV file"), { target: { files: [a.file] } });
+      fireEvent.change(screen.getByLabelText("Choose another file"), {
+        target: { files: [new File([csv().split("\n")[0]!], "b.csv")] },
+      });
+      expect(await screen.findByText("Nothing in this file to import here.")).toBeInTheDocument();
+      a.finish();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(screen.getByText("b.csv")).toBeInTheDocument();
+      expect(screen.getByText("Nothing in this file to import here.")).toBeInTheDocument();
+    });
+
+    it("after going back to all sources, it doesn't come back", async () => {
+      open("stock");
+      fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+      const a = slowFile(csv(), "a.csv");
+      fireEvent.change(screen.getByLabelText("CSV file"), { target: { files: [a.file] } });
+      fireEvent.click(screen.getByRole("button", { name: /All sources/ }));
+      a.finish();
+      await new Promise((r) => setTimeout(r, 20));
+      fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+      await new Promise((r) => setTimeout(r, 20));
+      expect(screen.getByLabelText("CSV text")).toHaveValue("");
+      expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+    });
+  });
+
   it("if saved dividends and fees can't load, it says so and won't save", async () => {
     db.eventsDown = true;
     open("stock");
