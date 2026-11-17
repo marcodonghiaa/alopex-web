@@ -634,3 +634,13 @@ describe("What you paid", () => {
     expect(row).not.toHaveTextContent("you paid");
   });
 });
+
+// polish-4 #20: a long description wraps to two lines instead of a one-line ellipsis
+it("lets a long description use two lines", async () => {
+  tables.splitwise_review = { data: [item()], error: null };
+  renderList();
+  const row = await screen.findByRole("listitem", { name: "Groceries" });
+  const name = within(row).getByText("Groceries");
+  expect(name.className.split(" ")).toContain("line-clamp-2");
+  expect(name.className.split(" ")).not.toContain("truncate");
+});

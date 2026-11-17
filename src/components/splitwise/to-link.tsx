@@ -263,7 +263,9 @@ function ReviewRow({
     >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[0.9375rem] font-medium">{item.description || "Expense"}</p>
+          <p className="line-clamp-2 text-[0.9375rem] font-medium break-words">
+            {item.description || "Expense"}
+          </p>
           <p className="text-[0.8125rem] text-muted-foreground">
             <span className="font-figure">{shortDate(item.booking_date)}</span> · {item.group_name}{" "}
             · {KIND_LABEL[item.kind]}
