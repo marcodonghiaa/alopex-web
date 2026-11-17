@@ -680,3 +680,34 @@ describe("Pending states and refreshes", () => {
     await waitFor(() => expect(refreshed(spy)).toEqual(expect.arrayContaining(everything)));
   });
 });
+
+// polish-4 #1: dialogs are bg-background, so what sits in them needs the card fill to show
+describe("Surfaces inside the dialogs", () => {
+  it("gives Later, the preview list, Cancel and the keep/delete choice a card fill", async () => {
+    functions({
+      "splitwise-connect": [ok({ displayName: "Sam" })],
+      "sync-splitwise": [ok({ new: 1, adopted: 0, review: 0, deleted: 0 })],
+    });
+    rpc.mockResolvedValue(notConnected());
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: "Connect Splitwise" }));
+    const dialog = screen.getByRole("dialog", { name: "Connect Splitwise" });
+    await userEvent.type(within(dialog).getByLabelText("API key"), "abcdefghijkl");
+    await userEvent.click(within(dialog).getByRole("checkbox"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    const list = (await within(dialog).findByText("New expenses")).closest("dl")!.parentElement!;
+    expect(list.className).toContain("bg-card");
+    expect(list.className).not.toContain("bg-background");
+    const later = within(dialog).getByRole("button", { name: /^(Later|Not now)$/ });
+    expect(later.className).toContain("bg-card");
+  });
+
+  it("fills the disconnect choice and Cancel", async () => {
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
+    const dialog = screen.getByRole("dialog", { name: "Disconnect Splitwise?" });
+    expect(within(dialog).getByRole("group").className).toContain("bg-card");
+    expect(within(dialog).getByRole("button", { name: "Cancel" }).className).toContain("bg-card");
+  });
+});

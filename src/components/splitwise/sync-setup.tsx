@@ -235,7 +235,7 @@ function DisconnectDialog({
             : "Alopex deletes your API key from your server and stops syncing."}
         </DialogDescription>
         {!onlyDelete && (
-          <fieldset className="mt-5 divide-y divide-hairline overflow-hidden rounded-lg bg-background">
+          <fieldset className="mt-5 divide-y divide-hairline overflow-hidden rounded-lg bg-card">
             <legend className="sr-only">What was synced</legend>
             {options.map(([value, label, detail]) => (
               <label
@@ -259,7 +259,7 @@ function DisconnectDialog({
         )}
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button
-            variant="secondary"
+            variant="quiet"
             onClick={() => onOpenChange(false)}
             disabled={disconnect.isPending}
           >

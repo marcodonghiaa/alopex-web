@@ -170,7 +170,7 @@ export function ConnectDialog({
             ) : preview.isError ? (
               <Alert className="mt-2">{preview.error.message}</Alert>
             ) : (
-              <GroupedList className="mt-2 bg-background">
+              <GroupedList className="mt-2">
                 <dl className="divide-y divide-hairline">
                   {COUNTS.map(([k, label]) => (
                     <div key={k} className="flex min-h-11 items-center justify-between px-4">
@@ -188,7 +188,7 @@ export function ConnectDialog({
               you paid and settle-ups, to match with a bank payment.
             </p>
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button variant="secondary" onClick={() => onOpenChange(false)}>
+              <Button variant="quiet" onClick={() => onOpenChange(false)}>
                 Later
               </Button>
               <Button onClick={() => start.mutate()} disabled={syncing}>
