@@ -1086,3 +1086,24 @@ describe("Connect form errors", () => {
     expect(key.getAttribute("aria-describedby")).toBe(alert.id);
   });
 });
+
+// polish-4 #14: after "Disconnect, keep data" the page says the sync is off
+describe("Disconnected with data kept", () => {
+  const NOTE = "Disconnected. What was synced stays; nothing new comes in.";
+
+  it("says nothing new comes in", async () => {
+    rpc.mockResolvedValue(notConnected(true));
+    renderSetup();
+    expect(await screen.findByText(NOTE)).toBeTruthy();
+  });
+
+  it.each([
+    ["never connected", notConnected(false)],
+    ["connected", connection()],
+  ])("says nothing of the kind when %s", async (_name, answer) => {
+    rpc.mockResolvedValue(answer);
+    renderSetup();
+    await screen.findByRole("button", { name: /^(Connect Splitwise|Sync now)$/ });
+    expect(screen.queryByText(NOTE)).toBeNull();
+  });
+});
