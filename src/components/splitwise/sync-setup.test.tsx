@@ -80,7 +80,7 @@ describe("SyncSetup when not connected", () => {
     rpc.mockResolvedValue(notConnected());
     renderSetup();
     expect(await screen.findByRole("button", { name: "Connect Splitwise" })).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "Import a file instead" }));
+    await userEvent.click(screen.getByRole("button", { name: "Import a Splitwise file" }));
     expect(onImportFile).toHaveBeenCalled();
   });
 
@@ -89,7 +89,7 @@ describe("SyncSetup when not connected", () => {
     renderSetup();
     await screen.findByRole("button", { name: "Connect Splitwise" });
     expect(
-      screen.getByRole("button", { name: "Import a file instead" }),
+      screen.getByRole("button", { name: "Import a Splitwise file" }),
     ).not.toHaveAccessibleDescription();
   });
 
@@ -385,7 +385,7 @@ describe("SyncSetup when connected", () => {
     expect(await screen.findByText("Splitwise · Sam")).toBeTruthy();
     expect(screen.getByText("Synced 5 min ago")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Connect Splitwise" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Import a file instead" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Import a Splitwise file" })).toBeTruthy();
   });
 
   // polish-1 #2: a file imported while connected must not double what the sync brought in
@@ -393,7 +393,7 @@ describe("SyncSetup when connected", () => {
     rpc.mockResolvedValue(connection());
     renderSetup();
     await screen.findByText("Splitwise · Sam");
-    const button = screen.getByRole("button", { name: "Import a file instead" });
+    const button = screen.getByRole("button", { name: "Import a Splitwise file" });
     expect(button).toHaveAccessibleDescription(
       "Expenses the sync already brought in are skipped, so only what it can't see is added.",
     );
@@ -1164,4 +1164,15 @@ it("draws the status row's avatar round", async () => {
   const avatar = name.closest("div.flex")!.querySelector("span[aria-hidden]")!;
   expect(avatar.className.split(" ")).toContain("rounded-full");
   expect(avatar.className.split(" ")).not.toContain("rounded-sm");
+});
+
+// polish-4 #24: once connected a file adds to the sync, it isn't an alternative to it
+it.each([
+  ["connected", () => connection()],
+  ["not connected", () => notConnected()],
+])("names the file import the same way when %s", async (_n, answer) => {
+  rpc.mockResolvedValue(answer());
+  renderSetup();
+  expect(await screen.findByRole("button", { name: "Import a Splitwise file" })).toBeTruthy();
+  expect(screen.queryByText(/instead/)).toBeNull();
 });

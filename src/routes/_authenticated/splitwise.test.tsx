@@ -59,7 +59,7 @@ describe("Who owes you", () => {
         <Page />
       </QueryClientProvider>,
     );
-    const importButton = await screen.findByRole("button", { name: "Import a file instead" });
+    const importButton = await screen.findByRole("button", { name: "Import a Splitwise file" });
     const groups = screen.getByText(/Splitwise groups/);
     expect(
       groups.compareDocumentPosition(importButton) & Node.DOCUMENT_POSITION_FOLLOWING,

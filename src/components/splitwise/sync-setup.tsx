@@ -123,7 +123,7 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
             aria-describedby={connected ? "splitwise-file-while-synced" : undefined}
           >
             <Upload aria-hidden className="size-4" />
-            Import a file instead
+            Import a Splitwise file
           </button>
           {connected && (
             <p
