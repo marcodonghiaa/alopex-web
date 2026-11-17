@@ -51,6 +51,30 @@ describe("Who owes you", () => {
     ).toBeTruthy();
   });
 
+  // protects=taking back a "Not a payback" answer: the toast is its only Undo;
+  // fails_when=it closes as fast as a plain notice
+  it("keeps the 'Not a payback' Undo on screen as long as the Yes one", async () => {
+    const success = vi.spyOn(toast, "success");
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    const section = await screen.findByRole("region", { name: "Payments to check" });
+    await userEvent.click(within(section).getByRole("button", { name: "Not a payback" }));
+    await waitFor(() =>
+      expect(success).toHaveBeenCalledWith(
+        "Got it: not a payback.",
+        expect.objectContaining({ duration: 10_000, action: expect.anything() }),
+      ),
+    );
+    // Its Undo brings the question back (and leaves the demo data as it was for the next test).
+    const opts = success.mock.calls.at(-1)?.[1] as unknown as { action: { onClick: () => void } };
+    opts.action.onClick();
+    expect(await screen.findByRole("region", { name: "Payments to check" })).toBeTruthy();
+    success.mockRestore();
+  });
+
   // protects=matching a friend's bank transfer to what they owe (end to end on the demo data);
   // fails_when=the question doesn't show, or Yes doesn't settle their oldest bill
   it("asks whether a transfer from GIULIA BIANCHI is Giulia, and Yes settles her oldest bill", async () => {
@@ -75,25 +99,5 @@ describe("Who owes you", () => {
         billsBefore - 1,
       ),
     );
-  });
-
-  // protects=taking back a "Not a payback" answer: the toast is its only Undo;
-  // fails_when=it closes as fast as a plain notice
-  it("keeps the 'Not a payback' Undo on screen as long as the Yes one", async () => {
-    const success = vi.spyOn(toast, "success");
-    render(
-      <QueryClientProvider client={new QueryClient()}>
-        <Page />
-      </QueryClientProvider>,
-    );
-    const section = await screen.findByRole("region", { name: "Payments to check" });
-    await userEvent.click(within(section).getByRole("button", { name: "Not a payback" }));
-    await waitFor(() =>
-      expect(success).toHaveBeenCalledWith(
-        "Got it: not a payback.",
-        expect.objectContaining({ duration: 10_000, action: expect.anything() }),
-      ),
-    );
-    success.mockRestore();
   });
 });
