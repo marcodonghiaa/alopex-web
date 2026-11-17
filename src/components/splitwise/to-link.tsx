@@ -34,6 +34,12 @@ const focusLater = (id: string) =>
 // The page's answer is who owes you: a long queue would push the groups far down.
 const FIRST = 5;
 
+// Splitwise names every settle-up "Settle up": the sheet says which kind and how much instead.
+const SETTLE_TITLE: Partial<Record<ReviewItem["kind"], string>> = {
+  settle_out: "Which payment was this settle-up?",
+  settle_in: "Which payment came in for this settle-up?",
+};
+
 const DONE: Record<ReviewAction["action"], string> = {
   link: "Linked to the bank payment",
   reject: "Won't suggest that payment again",
@@ -179,6 +185,12 @@ export function ToLink({ connected }: { connected: boolean }) {
         rate={rate}
         direction={finding ? directionOf(finding.kind) : "DBIT"}
         showSplit={false}
+        {...(finding && SETTLE_TITLE[finding.kind]
+          ? {
+              title: SETTLE_TITLE[finding.kind],
+              detail: `Settle-up of ${moneyAmount(finding.cost, finding.currency)}.`,
+            }
+          : {})}
         otherwise={
           finding && canCount(finding.kind)
             ? "If you paid it some other way, count your share without linking."

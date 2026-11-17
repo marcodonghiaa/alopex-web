@@ -518,3 +518,30 @@ it("makes every row action 44 px tall", async () => {
   ]);
   for (const b of buttons) expect(b.className.split(" ")).toContain("min-h-11");
 });
+
+// polish-4 #10: a settle-up is named as one, with its amount (Splitwise calls them all "Settle up")
+describe("Find in bank for a settle-up", () => {
+  it.each([
+    ["settle_out", "Which payment was this settle-up?"],
+    ["settle_in", "Which payment came in for this settle-up?"],
+  ] as const)("%s → %s", async (kind, title) => {
+    tables.splitwise_review = {
+      data: [item({ kind, description: "Settle up", cost: 40, my_paid: 0, my_share: 0 })],
+      error: null,
+    };
+    renderList();
+    const row = await screen.findByRole("listitem", { name: "Settle up" });
+    await userEvent.click(within(row).getByRole("button", { name: "Find in bank" }));
+    const sheet = await screen.findByRole("dialog", { name: title });
+    expect(sheet).toHaveTextContent("Settle-up of €40.00. Payments around 10 Nov, any amount.");
+  });
+
+  it("keeps the expense's own name for an expense", async () => {
+    tables.splitwise_review = { data: [item()], error: null };
+    renderList();
+    const row = await screen.findByRole("listitem", { name: "Groceries" });
+    await userEvent.click(within(row).getByRole("button", { name: "Find in bank" }));
+    const sheet = await screen.findByRole("dialog", { name: "Which payment was Groceries?" });
+    expect(sheet).toHaveTextContent("Payments around 10 Nov, any amount.");
+  });
+});

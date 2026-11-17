@@ -26,6 +26,8 @@ export function FindInBank({
   direction = "DBIT",
   showSplit = true,
   otherwise = "If you paid it some other way, choose Paid in cash.",
+  title,
+  detail,
 }: {
   /** The expense being linked; null keeps the sheet closed. */
   row: ClassifiedRow | null;
@@ -40,6 +42,10 @@ export function FindInBank({
   showSplit?: boolean;
   /** What to do when no payment fits, after "No payments … around that date." */
   otherwise?: string;
+  /** Replaces "Which payment was <description>?" (a settle-up's description is just "Settle up"). */
+  title?: string;
+  /** Goes before "Payments around <date>, any amount.", e.g. the amount to look for. */
+  detail?: string;
 }) {
   const [chosen, setChosen] = useState<string | null>(null);
   useEffect(() => setChosen(null), [row]);
@@ -59,10 +65,12 @@ export function FindInBank({
       >
         <div aria-hidden className="mx-auto mb-4 h-1.5 w-9 rounded-full bg-foreground/20" />
         <SheetTitle className="text-xl font-semibold tracking-tight">
-          Which payment was {row?.description.trim() ?? "it"}?
+          {title ?? `Which payment was ${row?.description.trim() ?? "it"}?`}
         </SheetTitle>
         <SheetDescription className="mt-1 text-sm text-muted-foreground">
-          {row ? `Payments around ${shortDate(row.date)}, any amount.` : ""}
+          {row
+            ? `${detail ? `${detail} ` : ""}Payments around ${shortDate(row.date)}, any amount.`
+            : ""}
         </SheetDescription>
 
         <div className="mt-5 space-y-4">
