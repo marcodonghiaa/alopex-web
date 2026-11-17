@@ -217,9 +217,9 @@ export const ledgerLive: BrokerParser = {
         id = n === 1 ? base : `${base}#${n}`;
       }
       // Each number can be fine and still give a price too big to save. The database keeps coin
-      // symbols up to 100 characters and ids up to 200.
-      if (key.length > 100) return fail("the coin name is too long", false);
-      if ((id?.length ?? 0) > 200) return fail("the operation hash is too long");
+      // symbols up to 100 characters and ids up to 200, counted as it does (code points).
+      if ([...key].length > 100) return fail("the coin name is too long", false);
+      if ([...(id ?? "")].length > 200) return fail("the operation hash is too long");
       if (!Number.isFinite(price) || !Number.isFinite(shares * price)) {
         return fail(
           `the value "${valueText}" is too big for the amount "${get("operation amount").trim()}"`,

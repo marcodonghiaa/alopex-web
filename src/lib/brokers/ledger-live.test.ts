@@ -250,6 +250,28 @@ describe("Ledger Live operations export", () => {
     ]);
   });
 
+  // protects=lengths count characters like the database (char_length), not UTF-16 units
+  it("a 100-character coin name and a 200-character id fit even with an emoji or accent", () => {
+    const at = (ticker: string, hash = "h") =>
+      parseTradesCsv(
+        row(`2026-01-05T08:00:00.000Z,Confirmed,${ticker},IN,1,,${hash},A,a,USD,1,1`),
+        ctx,
+      ).errors;
+    for (const first of ["😀", "É"]) {
+      expect(at(first + "X".repeat(99))).toEqual([]);
+      expect(at(first + "X".repeat(100))).toEqual([
+        "Line 2: the coin name is too long (received 5 Jan 2026).",
+      ]);
+    }
+    // The id is "<hash>:BTC:IN": a 193-character hash makes it 200.
+    for (const first of ["😀", "é"]) {
+      expect(at("BTC", first + "a".repeat(192))).toEqual([]);
+      expect(at("BTC", first + "a".repeat(193))).toEqual([
+        "Line 2: the operation hash is too long (BTC, received 5 Jan 2026).",
+      ]);
+    }
+  });
+
   it("a number too big to hold (1e999) is a line error, not a failed save", () => {
     for (const cells of ["IN,1e999,,h", "OUT,1,1e999,h"]) {
       const line = `2026-01-05T08:00:00.000Z,Confirmed,BTC,${cells},Bitcoin 1,a,USD,300,300`;
