@@ -30,9 +30,8 @@ import {
   summarizeImport,
 } from "@/lib/trades-csv";
 import { newEvents, summarizeIncome } from "@/lib/investment-events";
-import { formatEur } from "@/lib/transactions";
 import { fetchEvents } from "@/lib/use-performance";
-import { incomeRows } from "@/components/holdings/investment-income";
+import { formatIncome, incomeRows } from "@/components/holdings/investment-income";
 
 /** A coin holding as stored: its count and its symbol written as saved (the key is in capitals). */
 interface Held {
@@ -569,7 +568,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                   {incomeRows(income).map((r) => (
                     <div key={r.label} className={row}>
                       <span className="flex-1">{r.label}</span>
-                      <span className="tabular-nums">{formatEur(r.value)}</span>
+                      <span className="tabular-nums">{formatIncome(r.value)}</span>
                     </div>
                   ))}
                   <div className={row}>

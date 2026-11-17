@@ -37,6 +37,9 @@ function incomeValue(summary: IncomeSummary, r: (typeof INCOME_ROWS)[number]) {
   return Math.abs(v) < 0.005 ? 0 : v;
 }
 
+/** An amount as income and costs show it: money out with a true minus, like formatSignedEur. */
+export const formatIncome = (v: number) => (v < 0 ? `−${formatEur(-v)}` : formatEur(v));
+
 /** The rows with something to show, each with its amount. */
 export function incomeRows(summary: IncomeSummary) {
   return INCOME_ROWS.map((r) => ({ ...r, value: incomeValue(summary, r) })).filter(
@@ -74,21 +77,35 @@ export function InvestmentIncome({
     <section aria-label="Income and costs" className="mb-6">
       <SectionTitle>Income and costs</SectionTitle>
       <GroupedList>
-        <div className="grid grid-cols-[1fr_auto_auto] gap-x-6 px-4 py-2 text-xs text-muted-foreground">
-          <span />
-          <span className="text-right">This year</span>
-          <span className="text-right">All time</span>
-        </div>
-        {rows.map((r) => (
-          <div
-            key={r.field}
-            className="grid min-h-11 grid-cols-[1fr_auto_auto] items-center gap-x-6 px-4 text-[0.9375rem]"
-          >
-            <span className="text-foreground">{r.label}</span>
-            <span className="text-right font-figure">{formatEur(incomeValue(year, r))}</span>
-            <span className="text-right font-figure">{formatEur(r.value)}</span>
-          </div>
-        ))}
+        {/* One table: the columns line up row to row, and a screen reader names each amount's column. */}
+        <table aria-label="Income and costs" className="w-full border-collapse text-[0.9375rem]">
+          <thead className="text-xs text-muted-foreground">
+            <tr>
+              <td className="py-2 pl-4" />
+              <th scope="col" className="py-2 pl-6 text-right font-normal">
+                This year
+              </th>
+              <th scope="col" className="py-2 pr-4 pl-6 text-right font-normal">
+                All time
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.field} className="h-11 border-t border-hairline">
+                <th scope="row" className="pl-4 text-left font-normal text-foreground">
+                  {r.label}
+                </th>
+                <td className="pl-6 text-right font-figure whitespace-nowrap">
+                  {formatIncome(incomeValue(year, r))}
+                </td>
+                <td className="pr-4 pl-6 text-right font-figure whitespace-nowrap">
+                  {formatIncome(r.value)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </GroupedList>
       <p className="mt-2 px-4 text-xs text-muted-foreground">
         Taxes and fees not tied to a holding, like stamp duty, count here but not in any holding's

@@ -44,9 +44,27 @@ describe("InvestmentIncome", () => {
     );
     const row = (label: string) => screen.getByText(label).parentElement?.textContent;
     expect(row("Dividends")).toMatch(/8\.00.*13\.00/);
-    expect(row("Taxes")).toBe("Taxes-€2.00-€2.00");
-    expect(row("Fees")).toBe("Fees-€1.00-€1.00");
+    expect(row("Taxes")).toBe("Taxes−€2.00−€2.00");
+    expect(row("Fees")).toBe("Fees−€1.00−€1.00");
     expect(screen.queryByText("Interest")).toBeNull();
+  });
+
+  it("polish-4 F1/N7 is a real table: each amount has its column and row, costs with a true minus", () => {
+    render(
+      <InvestmentIncome
+        page="stock"
+        today="2026-11-17"
+        events={[ev({ amount_eur: 8, tax_eur: 2 })]}
+      />,
+    );
+    expect(screen.getByRole("table", { name: "Income and costs" })).toBeInTheDocument();
+    expect(screen.getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
+      "This year",
+      "All time",
+    ]);
+    expect(screen.getByRole("rowheader", { name: "Taxes" })).toBeInTheDocument();
+    const taxes = screen.getByRole("row", { name: /Taxes/ });
+    expect(taxes.textContent).toBe("Taxes\u2212€2.00\u2212€2.00");
   });
 
   it("says account taxes and fees count here but not in any holding's return", () => {
@@ -101,7 +119,7 @@ describe("InvestmentIncome", () => {
         ]}
       />,
     );
-    expect(screen.getByText("Fees").parentElement?.textContent).toBe("Fees€0.00-€1.00");
+    expect(screen.getByText("Fees").parentElement?.textContent).toBe("Fees€0.00−€1.00");
   });
 
   it("coins' events go to Crypto, shares' and cash to Portfolio", () => {
