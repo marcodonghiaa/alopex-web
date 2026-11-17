@@ -215,3 +215,66 @@ describe("summarizeBalances", () => {
     expect(g?.people.map((p) => p.person)).toEqual(["Pietro"]);
   });
 });
+
+// The Splitwise sync stores balances with basis 'api', one row per person and currency.
+describe("summarizeBalances with synced balances", () => {
+  const api = (over: Partial<BalanceRow>): BalanceRow => ({
+    group_name: "flat",
+    person: "Me",
+    balance: 0,
+    currency: "EUR",
+    is_me: true,
+    updated_at: "2026-11-10T10:00:00Z",
+    basis: "api",
+    ...over,
+  });
+
+  // protects=synced balances list who owes you; fails_when=basis 'api' is treated as stale
+  it("reads basis 'api' as per-person amounts, not stale", () => {
+    const [g] = summarizeBalances(
+      [api({ balance: 30 }), api({ person: "Ana", balance: -30, is_me: false })],
+      rate,
+    );
+    expect(g).toMatchObject({ stale: false, myBalance: 30, currency: "EUR" });
+    expect(g?.people).toEqual([{ person: "Ana", balance: -30, owesYou: true }]);
+  });
+
+  // protects=a group with debts in two currencies; fails_when=one currency hides the other or
+  // amounts in different currencies are mixed
+  it("gives one summary per group and currency", () => {
+    const out = summarizeBalances(
+      [
+        api({ balance: 30 }),
+        api({ person: "Ana", balance: -30, is_me: false }),
+        api({ balance: -8, currency: "USD" }),
+        api({ person: "Ben", balance: 8, currency: "USD", is_me: false }),
+      ],
+      rate,
+    );
+    expect(out.map((g) => [g.group, g.currency, g.myBalance, g.myBalanceEur])).toEqual([
+      ["flat", "EUR", 30, 30],
+      ["flat", "USD", -8, -4],
+    ]);
+    expect(out[1]?.people).toEqual([{ person: "Ben", balance: 8, owesYou: false }]);
+  });
+
+  // protects=Splitwise leaves out my zero balance; fails_when=a currency where I'm even overall
+  // but owe one friend and am owed by another disappears
+  it("keeps a currency without my row, my total worked out from the others", () => {
+    const [g] = summarizeBalances(
+      [
+        api({ person: "Ana", balance: -5, is_me: false }),
+        api({ person: "Ben", balance: 5, is_me: false, updated_at: "2026-11-12T10:00:00Z" }),
+      ],
+      rate,
+    );
+    expect(g).toMatchObject({ myBalance: 0, updatedAt: "2026-11-12T10:00:00Z", stale: false });
+    expect(g?.people.map((p) => p.person)).toEqual(["Ana", "Ben"]);
+  });
+
+  it("still skips a CSV group without my row", () => {
+    expect(
+      summarizeBalances([api({ basis: "pairwise", is_me: false, person: "Ana" })], rate),
+    ).toEqual([]);
+  });
+});

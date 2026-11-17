@@ -15,7 +15,16 @@ const day = (iso: string) =>
 
 const people = (n: number) => `${n} ${n === 1 ? "person" : "people"}`;
 
-function GroupCard({ g, defaultOpen }: { g: GroupSummary; defaultOpen: boolean }) {
+function GroupCard({
+  g,
+  defaultOpen,
+  showCurrency,
+}: {
+  g: GroupSummary;
+  defaultOpen: boolean;
+  /** The group has balances in more than one currency: each card names its own. */
+  showCurrency: boolean;
+}) {
   const [open, setOpen] = useState(defaultOpen);
   const id = useId();
   const square = g.people.length === 0;
@@ -31,7 +40,10 @@ function GroupCard({ g, defaultOpen }: { g: GroupSummary; defaultOpen: boolean }
         <Users className="size-[18px]" />
       </span>
       <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-[0.9375rem] font-medium">{g.group}</span>
+        <span className="block truncate text-[0.9375rem] font-medium">
+          {g.group}
+          {showCurrency && <span className="text-muted-foreground"> · {g.currency}</span>}
+        </span>
         <span className="block truncate text-[0.8125rem] font-normal text-muted-foreground">
           {meta}
         </span>
@@ -104,10 +116,17 @@ export function BalancesView({ groups }: { groups: Array<GroupSummary> }) {
   // Groups with money still open first; a lone group opens by itself.
   const done = (g: GroupSummary) => Number(g.people.length === 0 && !g.stale);
   const sorted = [...groups].sort((a, b) => done(a) - done(b));
+  const names = groups.map((g) => g.group);
+  const several = (name: string) => names.indexOf(name) !== names.lastIndexOf(name);
   return (
     <div className="space-y-3">
       {sorted.map((g) => (
-        <GroupCard key={g.group} g={g} defaultOpen={groups.length === 1} />
+        <GroupCard
+          key={`${g.group}|${g.currency}`}
+          g={g}
+          defaultOpen={groups.length === 1}
+          showCurrency={several(g.group)}
+        />
       ))}
       <p className="px-1 text-xs text-muted-foreground">
         Per person this can differ from the Splitwise app, which simplifies debts. Your total is the

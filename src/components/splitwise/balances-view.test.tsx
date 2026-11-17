@@ -79,3 +79,15 @@ describe("BalancesView", () => {
     expect(screen.getByText(/simplifies debts/)).toBeTruthy();
   });
 });
+
+// protects=a synced group with debts in two currencies shows both, each named by its currency;
+// fails_when=the cards share a key and one disappears, or the reader can't tell them apart
+describe("BalancesView with several currencies in a group", () => {
+  it("shows one card per currency, labelled with it", () => {
+    const eur = { ...group, group: "trip", currency: "EUR", myBalance: 8 };
+    render(<BalancesView groups={[trip, eur, group]} />);
+    expect(screen.getByRole("heading", { name: /^trip\s*· EUR/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /^trip\s*· USD/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /^berkeley\d/ })).toBeTruthy();
+  });
+});
