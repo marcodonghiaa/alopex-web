@@ -853,4 +853,14 @@ describe("ImportTrades", () => {
       expect(screen.queryByRole("link", { name: /Open the/ })).toBeNull();
     });
   });
+
+  it("Save stays in view at the dialog's bottom: a sticky footer with the dialog's background", async () => {
+    open("crypto");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/ledger_live.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV text"), { target: { value: csv } });
+    const footer = (await screen.findByRole("button", { name: "Save 7 trades" })).parentElement!;
+    for (const c of ["sticky", "bottom-0", "bg-background"])
+      expect(footer.classList.contains(c), c).toBe(true);
+  });
 });
