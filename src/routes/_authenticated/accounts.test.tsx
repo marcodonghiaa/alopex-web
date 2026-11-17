@@ -215,6 +215,32 @@ describe("sync errors", () => {
     ).toBeInTheDocument();
   });
 
+  // protects=each bank's banners sit together, Renew first, the shared app problem last;
+  // fails_when=one bank's Renew and its sync error are split by another bank's banner
+  it("groups the banners by bank, Renew first, the refused app last", async () => {
+    const soon = new Date(Date.now() + 3 * 86_400_000).toISOString();
+    rows.v_bank_accounts_latest = [
+      account({ uid: "b", bank_name: "Beta Bank", sync_error: "ASPSP_TIMEOUT" }),
+      account({ uid: "c", bank_name: "Gamma Bank", sync_error: "HTTP_401" }),
+      account({
+        uid: "a",
+        bank_name: "Alpha Bank",
+        sync_error: "ASPSP_TIMEOUT",
+        consent_valid_until: soon,
+      }),
+    ];
+    renderPage();
+    await screen.findByText(/Beta Bank didn't answer/);
+    const order = screen.getAllByRole("status").map((s) => s.textContent ?? "");
+    expect(order.map((t) => t.match(/Alpha|Beta|Enable Banking refused/)?.[0])).toEqual([
+      "Alpha",
+      "Alpha",
+      "Beta",
+      "Enable Banking refused",
+    ]);
+    expect(order[0]).toMatch(/Renew access/);
+  });
+
   it("shows nothing when the last sync went through", async () => {
     rows.v_bank_accounts_latest = [account({ sync_error: null })];
     renderPage();
