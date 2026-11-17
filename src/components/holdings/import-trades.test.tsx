@@ -599,4 +599,15 @@ describe("ImportTrades", () => {
       "underline",
     );
   });
+
+  it("the file's status line is announced: Reading…, then the result", async () => {
+    let release!: () => void;
+    db.ratesGate = new Promise((r) => (release = r));
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Reading…"));
+    release();
+    await screen.findByRole("button", { name: "Save 7 trades" });
+    expect(screen.getByRole("status").textContent).toBe("Read, check what it found below");
+  });
 });

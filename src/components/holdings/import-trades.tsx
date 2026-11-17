@@ -363,7 +363,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{fileName}</span>
-                  <span className="block text-xs text-muted-foreground">
+                  <span role="status" className="block text-xs text-muted-foreground">
                     {!parsed && !stuck
                       ? "Reading…"
                       : ok
