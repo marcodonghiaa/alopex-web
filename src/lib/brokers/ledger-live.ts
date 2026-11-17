@@ -191,8 +191,7 @@ export const ledgerLive: BrokerParser = {
       const shares = family === "stake" || failed ? fee : amount;
       if (shares === 0) return;
       // Ledger dates are UTC days; west of UTC that can be a day past your local today.
-      if (date > addDays(today, 1))
-        return void errors.push(`Line ${i + 2}: the date is in the future.`);
+      if (date > addDays(today, 1)) return fail("the date is in the future");
       const currency = currencyOf(get);
       const rate = currency === "EUR" ? 1 : (rateToEur?.(currency, date) ?? null);
       if (rate == null) {

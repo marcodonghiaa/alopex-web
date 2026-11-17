@@ -350,7 +350,9 @@ describe("Ledger Live operations export", () => {
       'Line 2: the amount "abc" isn\'t a number (BTC, received 5 Jan 2026).',
     ]);
     const future = "2027-01-05T08:00:00.000Z,Confirmed,BTC,IN,1,,h,Bitcoin 1,a,USD,300,300";
-    expect(parseTradesCsv(row(future), ctx).errors).toEqual(["Line 2: the date is in the future."]);
+    expect(parseTradesCsv(row(future), ctx).errors).toEqual([
+      "Line 2: the date is in the future (BTC, received 5 Jan 2027).",
+    ]);
   });
 
   it("a UTC day one past your local today is not in the future; two past still is", () => {
@@ -361,7 +363,7 @@ describe("Ledger Live operations export", () => {
     expect(tomorrow.errors).toEqual([]);
     expect(tomorrow.trades[0]?.trade_date).toBe("2026-11-18");
     expect(parseTradesCsv(row(at("2026-11-19")), ctx).errors).toEqual([
-      "Line 2: the date is in the future.",
+      "Line 2: the date is in the future (BTC, received 19 Nov 2026).",
     ]);
   });
 
