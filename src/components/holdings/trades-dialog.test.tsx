@@ -76,10 +76,11 @@ describe("TradesDialog", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Trades" }));
     const detail = (date: string) =>
-      screen.getByRole("button", { name: `Edit trade of ${date}` }).closest("li")?.textContent;
+      screen.getByRole("button", { name: new RegExp(`^Edit: .* on ${date}$`) }).closest("li")
+        ?.textContent;
     expect(await screen.findAllByText(/fee/)).toHaveLength(2);
-    expect(detail("2026-03-01")).toMatch(/fee €1\.00 · tax €0\.12$/);
-    expect(detail("2026-03-02")).not.toMatch(/tax/);
+    expect(detail("1 Mar 2026")).toMatch(/fee €1\.00 · tax €0\.12$/);
+    expect(detail("2 Mar 2026")).not.toMatch(/tax/);
   });
 
   it("polish-4 F3 says when a buy has no price and how to fix it; not when every buy has one", async () => {
@@ -136,7 +137,7 @@ describe("TradesDialog", () => {
       </QueryClientProvider>,
     );
     fireEvent.click(screen.getByRole("button", { name: "Trades" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Edit trade of 2026-03-01" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Edit: bought 0,5 on/ }));
     expect(screen.getByLabelText(/Shares/)).toHaveValue("0,5");
     expect(screen.getByLabelText(/Price/)).toHaveValue("1234,56");
     expect(screen.getByLabelText(/Fee/)).toHaveValue("1,5");
@@ -198,7 +199,7 @@ describe("TradesDialog", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Trades" }));
     const edit = async (date?: string) => {
-      fireEvent.click(await screen.findByRole("button", { name: "Edit trade of 2026-03-01" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Edit: bought 1 on 1 Mar 2026" }));
       if (date) fireEvent.change(screen.getByLabelText(/Date/), { target: { value: date } });
       fireEvent.click(screen.getByRole("button", { name: "Save trade" }));
       await waitFor(() => expect(screen.getByRole("button", { name: "Add trade" })).toBeTruthy());
@@ -300,5 +301,31 @@ describe("TradesDialog", () => {
     const lines = [...document.querySelectorAll("li")].map((li) => li.textContent);
     expect(lines[0]).toMatch(/^Bought 2/);
     expect(lines[1]).toMatch(/^Bought 1/);
+  });
+
+  it("polish-4 N14 names Edit and Remove by the trade, so same-day trades differ", async () => {
+    const day = { kind: "stock", key: "K", fee_eur: 0, price_eur: 10, trade_date: "2026-03-01" };
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TradesDialog
+          kind="stock"
+          holdingKey="K"
+          name="Example ETF"
+          quantity={1}
+          label="Trades"
+          trades={[
+            { ...day, id: "t1", side: "buy", shares: 2 },
+            { ...day, id: "t2", side: "sell", shares: 1 },
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Trades" }));
+    expect(
+      await screen.findByRole("button", { name: "Edit: bought 2 on 1 Mar 2026" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Remove: bought 2 on 1 Mar 2026" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Edit: sold 1 on 1 Mar 2026" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Remove: sold 1 on 1 Mar 2026" })).toBeTruthy();
   });
 });

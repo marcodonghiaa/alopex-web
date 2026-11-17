@@ -52,6 +52,10 @@ function validate(form: Form) {
   };
 }
 
+/** "bought 2 on 1 Mar 2026": names a trade for a screen reader. */
+const tradeName = (t: SavedTrade) =>
+  `${t.side === "buy" ? "bought" : "sold"} ${formatQuantity(t.shares, 8)} on ${formatDay(t.trade_date)}`;
+
 /** A buy saved at €0.00: shares moved in from another broker, whose price the file didn't give. */
 export const hasMissingPrice = (trades: Array<Pick<SavedTrade, "side" | "price_eur">>) =>
   trades.some((t) => t.side === "buy" && t.price_eur === 0);
@@ -282,7 +286,7 @@ export function TradesDialog({
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label={`Edit trade of ${t.trade_date}`}
+                  aria-label={`Edit: ${tradeName(t)}`}
                   onClick={() => startEdit(t)}
                 >
                   <Pencil />
@@ -290,7 +294,7 @@ export function TradesDialog({
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label={`Remove trade of ${t.trade_date}`}
+                  aria-label={`Remove: ${tradeName(t)}`}
                   disabled={remove.isPending}
                   onClick={() => remove.mutate(t.id)}
                 >
