@@ -7,6 +7,8 @@ const db = vi.hoisted(() => ({
   inserted: [] as Array<Record<string, unknown>>,
   rpc: [] as Array<[string, Record<string, unknown>]>,
   ratesDown: false,
+  /** Coin rows added for one test. */
+  extraCoins: [] as Array<Record<string, unknown>>,
   rpcMissing: false,
   updated: [] as Array<[string, Record<string, unknown>, Array<[string, unknown]>]>,
 }));
@@ -55,7 +57,12 @@ vi.mock("@/integrations/supabase/client", () => {
   return {
     supabase: {
       from: (table: string) => ({
-        select: () => query(tables[table] ?? []),
+        select: () =>
+          query(
+            table === "crypto_holdings" && db.extraCoins.length > 0
+              ? [...tables[table]!, ...db.extraCoins]
+              : (tables[table] ?? []),
+          ),
         update: (patch: Record<string, unknown>) => {
           const where: Array<[string, unknown]> = [];
           db.updated.push([table, patch, where]);
@@ -105,6 +112,7 @@ describe("ImportTrades", () => {
     db.updated.length = 0;
     db.rpcMissing = false;
     db.ratesDown = false;
+    db.extraCoins.length = 0;
   });
 
   it("asks where the trades are from before asking for a file", () => {
@@ -208,6 +216,19 @@ describe("ImportTrades", () => {
       ["asset_symbol", "eth"],
       ["source", "Manual"],
     ]);
+  });
+
+  it("a coin held on Ledger and added by hand too is corrected on its Ledger row", async () => {
+    db.extraCoins.push({ asset_symbol: "ETH", amount: 0.1, name: "Ethereum", source: "Ledger" });
+    open("crypto");
+    fireEvent.click(screen.getByRole("button", { name: /Ledger Live/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/ledger_live.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "ops.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
+    await waitFor(() => expect(db.rpc).toHaveLength(1));
+    expect(db.rpc[0]![1]).toMatchObject({ p_key: "ETH", p_source: "Ledger" });
   });
 
   it("a coin's Ledger count leaves out what you traded elsewhere", async () => {
