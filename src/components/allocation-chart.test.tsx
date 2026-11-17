@@ -27,11 +27,11 @@ const live = (liabilities_eur?: number) => ({
 });
 
 describe("AllocationChart", () => {
-  // protects=Net Worth and Portfolio name ETFs the same way; fails_when=ETFs show as plain "Stocks"
-  it("labels non-bond holdings as stocks and ETFs", () => {
+  // protects=the short label from the iOS view board; fails_when="Stocks & ETFs" comes back
+  it("labels non-bond holdings as Stocks", () => {
     render(<AllocationChart history={[]} snapshots={[live()]} />);
-    expect(screen.getByText("Stocks & ETFs")).toBeInTheDocument();
-    expect(screen.queryByText("Stocks")).toBeNull();
+    expect(screen.getByText("Stocks")).toBeInTheDocument();
+    expect(screen.queryByText(/ETFs/)).toBeNull();
   });
 
   // protects=the breakdown adds up to net worth; fails_when=debts are left out of it
@@ -52,7 +52,7 @@ describe("AllocationChart", () => {
   it("links each class to its page and debts to accounts", () => {
     render(<AllocationChart history={[]} snapshots={[{ ...live(300), crypto_total_eur: 50 }]} />);
     const href = (name: RegExp) => screen.getByRole("link", { name }).getAttribute("href");
-    expect(href(/^Stocks & ETFs/)).toBe("/portfolio");
+    expect(href(/^Stocks/)).toBe("/portfolio");
     expect(href(/^Crypto/)).toBe("/crypto");
     expect(href(/^Cash/)).toBe("/accounts");
     expect(href(/^Debts/)).toBe("/accounts");
@@ -98,6 +98,7 @@ describe("AllocationChart", () => {
     const first = { ...live(), snapshot_date: "2026-01-05", bank_total_eur: 111 };
     render(<AllocationChart history={[]} snapshots={[first]} asOf="2026-01-05" />);
     expect(screen.getByText("€111.00").closest("[inert]")).toBeNull();
-    expect(screen.getByText("As of 5 Jan 2026")).toBeInTheDocument();
+    // iOS view board: no "As of" line; a stale sync is flagged at the top of the page instead.
+    expect(screen.queryByText(/As of/)).toBeNull();
   });
 });

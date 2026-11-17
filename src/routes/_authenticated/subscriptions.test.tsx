@@ -116,6 +116,13 @@ beforeEach(() => {
 });
 
 describe("Subscriptions page", () => {
+  // iOS view board: page titles read like Net Worth's (white semibold), not a grey label.
+  it("titles the page like Net Worth", async () => {
+    renderPage();
+    const h1 = await screen.findByRole("heading", { level: 1, name: "Subscriptions" });
+    expect(h1).toHaveClass("font-semibold", "text-foreground");
+  });
+
   it("lists a review queue and totals only active streams", async () => {
     renderPage();
     const queue = await screen.findByRole("region", { name: "To review" });
@@ -123,6 +130,13 @@ describe("Subscriptions page", () => {
     expect(within(queue).getByText("Cloudbox")).toBeInTheDocument();
     expect(within(queue).getByText("Monthly · 3 charges")).toBeInTheDocument();
     expect(screen.getByLabelText("Estimated monthly cost")).toHaveTextContent("€10.00");
+  });
+
+  // iOS view (fonts): one way to write a monthly amount, "€10.00/mo" (as in the found dialog).
+  it("writes a monthly amount with no space before /mo", async () => {
+    renderPage();
+    const queue = await screen.findByRole("region", { name: "To review" });
+    expect(within(queue).getByText(/\/mo$/).parentElement).toHaveTextContent(/€[\d.,]+\/mo$/);
   });
 
   it("hides the queue when nothing needs review and shows the empty state without streams", async () => {

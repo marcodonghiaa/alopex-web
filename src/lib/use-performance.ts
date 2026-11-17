@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -147,10 +147,19 @@ export function usePerformance(lastIso: string | undefined, kind: "stock" | "cry
     [measured],
   );
 
+  // Today's price per holding, for valuing what your trades hold now (the range chip).
+  const endPrices = useMemo(() => {
+    const rows = ofKind(prices.data && "rows" in prices.data ? prices.data.rows : [], kind);
+    return new Map(
+      rows.flatMap((r) => (r.end_price_eur != null ? [[r.key, r.end_price_eur] as const] : [])),
+    );
+  }, [prices.data, kind]);
+
   return {
     kind,
     summary,
     measuredByKey,
+    endPrices,
     tradesByKey,
     events: events.data ?? [],
     isPending: lastIso == null || prices.isPending || saved.isPending || events.isPending,
@@ -159,4 +168,49 @@ export function usePerformance(lastIso: string | undefined, kind: "stock" | "cry
       (saved.data != null && "unavailable" in saved.data),
     error: prices.error ?? saved.error ?? events.error ?? null,
   };
+}
+
+/**
+ * Each holding's price on `from` (the range's first day), for valuing what your trades held then.
+ * Undefined while loading; empty when the database can't answer yet.
+ */
+export function useStartPrices(from: string | undefined, kind: "stock" | "crypto") {
+  const query = useQuery({
+    queryKey: ["holding-performance-from", from],
+    queryFn: () => fetchPerformance(supabase, from!, false),
+    enabled: from != null,
+  });
+  return useMemo(
+    () => (query.data ? startPricesOf(query.data, kind) : undefined),
+    [query.data, kind],
+  );
+}
+
+/**
+ * Each holding's price on each of `dates` (the Return line's days), one request a day, shared
+ * with the range chip's start prices. A holding first priced after the day is left out of it.
+ * An entry is undefined while its day loads.
+ */
+export function useDayPrices(
+  dates: Array<string>,
+  kind: "stock" | "crypto",
+): Array<Map<string, number> | undefined> {
+  return useQueries({
+    queries: dates.map((from) => ({
+      queryKey: ["holding-performance-from", from],
+      queryFn: () => fetchPerformance(supabase, from, false),
+    })),
+    combine: (results) =>
+      results.map(({ data }) => (data ? startPricesOf(data, kind, true) : undefined)),
+  });
+}
+
+/** Each holding's start price; `onTheDay` leaves out holdings first priced after the day. */
+export function startPricesOf(data: PerformanceResult, kind: "stock" | "crypto", onTheDay = false) {
+  const rows = ("rows" in data ? ofKind(data.rows, kind) : []).filter(
+    (r) => !onTheDay || r.status !== "since",
+  );
+  return new Map(
+    rows.flatMap((r) => (r.start_price_eur != null ? [[r.key, r.start_price_eur] as const] : [])),
+  );
 }

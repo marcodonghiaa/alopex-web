@@ -1,4 +1,4 @@
-import { dateLocale, formatNumber, formatPercent, numberFormat } from "@/lib/locale";
+import { formatNumber, numberFormat } from "@/lib/locale";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -64,14 +64,6 @@ async function fetchLatestFxRates(): Promise<Record<string, FxRate>> {
   return latest;
 }
 
-function formatFxDate(iso: string | undefined): string {
-  if (!iso) return "latest";
-  return new Date(`${iso}T00:00:00`).toLocaleDateString(dateLocale(), {
-    day: "numeric",
-    month: "short",
-  });
-}
-
 function formatMoney(value: number, currency: Currency): string {
   return numberFormat({
     style: "currency",
@@ -108,15 +100,6 @@ function NetWorthPage() {
   const chartData = useMemo(() => inRange(chartPoints(allRows), range), [allRows, range]);
   const chartFirst = chartData.at(0);
   const latest = snapshots.at(-1);
-  const previous = snapshots.at(-2);
-  // Today's move, as an amount (EUR) and the share, styled like the range line above it.
-  const today =
-    latest != null && previous != null && previous.total_eur !== 0
-      ? {
-          eur: latest.total_eur - previous.total_eur,
-          share: (latest.total_eur - previous.total_eur) / Math.abs(previous.total_eur),
-        }
-      : null;
   const sync = useSyncStatus();
 
   // These feed the chart history and other currencies; say so when one fails.
@@ -145,9 +128,15 @@ function NetWorthPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8 md:py-12">
       <header className="mb-3 flex items-center justify-between gap-4">
-        <div className="text-[0.9375rem] font-medium text-muted-foreground">
-          <h1 className="inline">Net worth</h1>
-          {scrubbed && <span> · {formatDay(scrubbed.snapshot_date)}</span>}
+        {/* Titled like the Breakdown card (iOS view board). */}
+        <div className="text-lg">
+          <h1 className="inline font-semibold text-foreground">Net worth</h1>
+          {scrubbed && (
+            <span className="text-[0.9375rem] text-muted-foreground">
+              {" "}
+              · {formatDay(scrubbed.snapshot_date)}
+            </span>
+          )}
         </div>
         <div className="shrink-0">
           <SegmentedControl
@@ -173,15 +162,27 @@ function NetWorthPage() {
 
       {/* Headline: the number is the screen */}
       <section aria-label="Net worth today" className="mb-6">
-        <div className="min-h-16">
+        <div className="min-h-12">
           {netWorthQuery.isPending || (currency !== "EUR" && fxQuery.isPending) ? (
-            <Skeleton className="h-16 w-72" />
+            <Skeleton className="h-12 w-72" />
           ) : latest == null ? (
             <p className="text-sm text-muted-foreground">
               No balances yet: connect a bank or add an investment.
             </p>
           ) : headline != null && shownValue != null ? (
-            <HeadlineFigure value={shownValue} currency={currency} />
+            <HeadlineFigure
+              value={shownValue}
+              currency={currency}
+              change={
+                rangeDeltaEur != null && rateToEur != null
+                  ? {
+                      value: rangeDeltaEur / rateToEur,
+                      percent: rangeChange,
+                      className: TONE_TEXT[toneOf(rangeChange ?? 0, NOISE_BAND)],
+                    }
+                  : undefined
+              }
+            />
           ) : (
             <p className="text-sm text-muted-foreground">
               No {currency} exchange rate available yet.
@@ -189,60 +190,19 @@ function NetWorthPage() {
           )}
         </div>
 
-        {rangeDeltaEur != null && rangeChange != null && rateToEur != null && (
-          <p className="mt-3 flex flex-wrap items-baseline gap-x-2 text-[0.9375rem]">
-            <span className={`font-figure ${TONE_TEXT[toneOf(rangeChange, NOISE_BAND)]}`}>
-              {rangeDeltaEur >= 0 ? "+" : "−"}
-              {formatMoney(Math.abs(rangeDeltaEur) / rateToEur, currency)} (
-              {formatPercent(rangeChange, { digits: 2, signed: true })})
-            </span>
-            <span className="text-muted-foreground">
-              {scrubbed && chartFirst
-                ? `${formatDay(chartFirst.snapshot_date)} – ${formatDay(scrubbed.snapshot_date)}`
-                : RANGE_LABEL[range]}
-            </span>
+        {/* The range the change beside the figure covers, named once. */}
+        {rangeDeltaEur != null && rateToEur != null && (
+          <p className="mt-1 text-[0.9375rem] text-muted-foreground">
+            {scrubbed && chartFirst
+              ? `${formatDay(chartFirst.snapshot_date)} – ${formatDay(scrubbed.snapshot_date)}`
+              : RANGE_LABEL[range]}
           </p>
         )}
-
-        {/* Today's context: hidden (space kept) while scrubbing a past day */}
-        <div className={scrubbed ? "invisible" : undefined}>
-          {today && rateToEur != null && (
-            <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[0.9375rem]">
-              <span className={`font-figure ${TONE_TEXT[toneOf(today.share, NOISE_BAND)]}`}>
-                {today.eur >= 0 ? "+" : "−"}
-                {formatMoney(Math.abs(today.eur) / rateToEur, currency)} (
-                {formatPercent(today.share, { digits: 2, signed: true })})
-              </span>
-              <span className="text-muted-foreground">Today</span>
-            </p>
-          )}
-          {currency !== "EUR" && headline != null && rateToEur != null && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Rate: 1 {currency} = {formatNumber(rateToEur, 4)} EUR · ECB,{" "}
-              {formatFxDate(fxQuery.data?.[currency]?.date)}
-            </p>
-          )}
-          {sync && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              {sync.attention > 0 ? (
-                // A failing check: the line becomes the way to it.
-                <Link
-                  to="/settings"
-                  hash="health"
-                  className="inline-flex min-h-6 items-center underline decoration-hairline underline-offset-4 hover:text-foreground"
-                >
-                  {sync.text} ·{" "}
-                  <span className="ml-1 text-warning">
-                    {sync.attention} {sync.attention === 1 ? "check needs" : "checks need"}{" "}
-                    attention
-                  </span>
-                </Link>
-              ) : (
-                sync.text
-              )}
-            </p>
-          )}
-        </div>
+        {currency !== "EUR" && headline != null && rateToEur != null && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            1 {currency} = {formatNumber(rateToEur, 4)} EUR · ECB
+          </p>
+        )}
       </section>
 
       {/* Chart: one line, no grid; scrub it to read any day */}
@@ -282,8 +242,8 @@ function NetWorthPage() {
           )}
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="w-full sm:w-auto">
+        <div data-chart-controls className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
             <SegmentedControl
               label="Chart range"
               options={CHART_RANGES.map((r) => ({ value: r, label: r }))}
@@ -292,6 +252,23 @@ function NetWorthPage() {
             />
           </div>
           <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+            {sync &&
+              (sync.attention > 0 ? (
+                // A failing check: the line becomes the way to it.
+                <Link
+                  to="/settings"
+                  hash="health"
+                  className="inline-flex min-h-6 items-center underline decoration-hairline underline-offset-4 hover:text-foreground"
+                >
+                  {sync.text} ·{" "}
+                  <span className="ml-1 text-warning">
+                    {sync.attention} {sync.attention === 1 ? "check needs" : "checks need"}{" "}
+                    attention
+                  </span>
+                </Link>
+              ) : (
+                <span>{sync.text}</span>
+              ))}
             {chartData.some((p) => p.estimated_eur != null) && (
               <LegendDot
                 color="var(--color-muted-foreground)"

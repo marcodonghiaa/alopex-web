@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  CHART_RANGES,
+  RANGE_LABEL,
   allocationHistory,
   chartPoints,
   inRange,
@@ -130,11 +132,26 @@ describe("period targets", () => {
     expect(inRange(pts, "1M").map((p) => p.total_eur)).toEqual([3, 4]);
     expect(inRange(pts, "3M").map((p) => p.total_eur)).toEqual([3, 4]);
     expect(inRange(pts, "YTD").map((p) => p.total_eur)).toEqual([2, 3, 4]);
-    expect(inRange(pts, "2Y").map((p) => p.total_eur)).toEqual([1, 2, 3, 4]);
-    expect(inRange([snap("2023-01-01", 0), ...pts], "2Y").map((p) => p.total_eur)).toEqual([
-      1, 2, 3, 4,
-    ]);
-    expect(inRange([], "2Y")).toEqual([]);
+    expect(inRange([], "1M")).toEqual([]);
+  });
+
+  // iOS view board: WTD replaces 2Y. The week starts Monday, so it opens on the Sunday before.
+  it("inRange WTD starts on the Sunday before the last point's week", () => {
+    const pts = [
+      snap("2026-11-07", 1), // Sat
+      snap("2026-11-08", 2), // Sun: the base
+      snap("2026-11-10", 3), // Tue
+      snap("2026-11-12", 4), // Thu
+    ];
+    expect(inRange(pts, "WTD").map((p) => p.total_eur)).toEqual([2, 3, 4]);
+    // On a Sunday the week is Monday to that Sunday, based on the Sunday before.
+    const sunday = [snap("2026-11-08", 1), snap("2026-11-12", 2), snap("2026-11-15", 3)];
+    expect(inRange(sunday, "WTD").map((p) => p.total_eur)).toEqual([1, 2, 3]);
+  });
+
+  it("offers WTD instead of 2Y", () => {
+    expect(CHART_RANGES).toEqual(["WTD", "1M", "3M", "YTD", "ALL"]);
+    expect(RANGE_LABEL.WTD).toBe("Week to date");
   });
 
   it("inRange ALL keeps every point", () => {

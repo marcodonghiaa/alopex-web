@@ -87,6 +87,22 @@ describe("HealthSection", () => {
     expect(
       await screen.findByText("Gemini sorted 3 transactions in the last 30 days."),
     ).toBeInTheDocument();
+    // iOS view board: a healthy check is green, not grey.
+    expect(screen.getByRole("img", { name: "Healthy" })).toHaveClass("bg-positive");
+  });
+
+  // iOS view board: a visible title, and only the count under it (no "can fail" preamble).
+  it("titles the section like the rest of the app and states only the count", async () => {
+    accountsResult = { data: [staleAccount], error: null };
+    renderWith(<HealthSection />);
+    expect(await screen.findByText("1 needs attention.")).toBeInTheDocument();
+    expect(screen.queryByText(/can fail/)).toBeNull();
+    // Regression: #health scrolled its title under the phone's sticky top bar.
+    expect(screen.getByRole("region", { name: "Health" })).toHaveClass("scroll-mt-20");
+    expect(screen.getByRole("heading", { level: 2 })).toHaveClass(
+      "font-semibold",
+      "text-foreground",
+    );
   });
 
   // protects=Health output is unchanged by the move; fails_when=sync rows or the count are lost

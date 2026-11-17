@@ -7,7 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { GroupedList } from "@/components/ui/grouped-list";
 
 const DOT: Record<HealthState, string> = {
-  ok: "bg-muted-foreground",
+  ok: "bg-positive", // green when fine (iOS view board)
   warn: "bg-warning",
   bad: "bg-negative",
 };
@@ -78,20 +78,15 @@ export function HealthSection() {
   const attention = attentionCount(rows);
 
   return (
-    <section id="health" aria-labelledby="health-heading" className="scroll-mt-6">
-      <h2 id="health-heading" className="text-[0.9375rem] font-medium text-muted-foreground">
+    <section id="health" aria-labelledby="health-heading" className="scroll-mt-20 md:scroll-mt-6">
+      <h2 id="health-heading" className="text-lg font-semibold text-foreground">
         Health
       </h2>
-      <p className="mt-1 mb-4 text-sm text-muted-foreground">
-        Everything here can fail without an error message. Worst first.
-        {!accounts.isPending && !accounts.isError && (
-          <>
-            {" "}
-            <span className="font-medium text-foreground">
-              {attention} need{attention === 1 ? "s" : ""} attention.
-            </span>
-          </>
-        )}
+      {/* Rows run worst first; the count is all the preamble it needs. */}
+      <p className="mt-1 mb-4 min-h-5 text-sm font-medium text-foreground">
+        {!accounts.isPending &&
+          !accounts.isError &&
+          `${attention} need${attention === 1 ? "s" : ""} attention.`}
       </p>
 
       {accounts.isError && (
@@ -111,11 +106,12 @@ export function NotificationsSection() {
   const { push } = useHealth();
   if (!push) return null;
   return (
-    <section id="notifications" aria-labelledby="notifications-heading" className="scroll-mt-6">
-      <h2
-        id="notifications-heading"
-        className="mb-4 text-[0.9375rem] font-medium text-muted-foreground"
-      >
+    <section
+      id="notifications"
+      aria-labelledby="notifications-heading"
+      className="scroll-mt-20 md:scroll-mt-6"
+    >
+      <h2 id="notifications-heading" className="mb-4 text-lg font-semibold text-foreground">
         Notifications
       </h2>
       <RowList rows={[push]} />

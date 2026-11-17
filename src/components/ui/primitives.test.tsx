@@ -81,6 +81,22 @@ describe("lists, alerts, skeletons", () => {
     expect(screen.getByTestId("list").className).toContain("rounded-lg");
   });
 
+  // protects=one section-title style app-wide, like Net Worth's "Breakdown" (iOS view: fonts)
+  it("titles a section like the Breakdown card; a small grey label stays for day and count headers", () => {
+    render(
+      <>
+        <SectionTitle>Money in and out</SectionTitle>
+        <SectionTitle variant="label">Today</SectionTitle>
+      </>,
+    );
+    expect(screen.getByRole("heading", { name: "Money in and out" }).className).toBe(
+      "text-lg font-semibold text-foreground",
+    );
+    expect(screen.getByRole("heading", { name: "Today" }).className).toContain(
+      "text-muted-foreground",
+    );
+  });
+
   it("announces alerts and hides skeletons from assistive tech", () => {
     render(
       <>

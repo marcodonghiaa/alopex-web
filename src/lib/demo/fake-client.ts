@@ -816,7 +816,7 @@ export function createFakeClient(now: Date = new Date()): SupabaseClient<Databas
     rpc: async (fn: string, args: Record<string, unknown> = {}) =>
       fn === "holding_performance"
         ? {
-            data: demoHoldingPerformance(store.db),
+            data: demoHoldingPerformance(store.db, args["p_from"] as string | undefined),
             error: null,
           }
         : fn === "rename_merchant"

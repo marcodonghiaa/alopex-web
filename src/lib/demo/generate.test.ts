@@ -80,6 +80,14 @@ describe("generateDemoData: rolling 90-day window", () => {
       expect(r.snapshot_date < firstLive!).toBe(true);
     }
   });
+
+  // protects=the Portfolio/Crypto chip on the demo; fails_when=buys land inside the history, so
+  // the chip takes them out of a value that was already there (demo read ▼ 68.89% YTD)
+  it("dates the purchases before the history starts", () => {
+    const db = generateDemoData(NOON);
+    const firstHistory = db.net_worth_history.map((h) => h.snapshot_date).sort()[0]!;
+    for (const t of db.holding_trades) expect(t.trade_date < firstHistory).toBe(true);
+  });
 });
 
 describe("generateDemoData: determinism", () => {

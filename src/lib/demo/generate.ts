@@ -72,6 +72,9 @@ const BOND_ISINS = new Set<string>(HOLDINGS.filter((h) => h.type === "Bond").map
 const COINS = [
   { symbol: "BTC", id: "bitcoin", name: "Bitcoin", amount: 0.05, base: 62000 },
   { symbol: "ETH", id: "ethereum", name: "Ethereum", amount: 1.2, base: 2600 },
+  // Leftover dust, like most exchange accounts have: shows the "small balances" link.
+  { symbol: "DOGE", id: "dogecoin", name: "Dogecoin", amount: 3, base: 0.2 },
+  // Last on purpose: no trades, so the demo shows "Add purchases".
   { symbol: "SOL", id: "solana", name: "Solana", amount: 8, base: 150 },
 ] as const;
 
@@ -248,8 +251,10 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
   );
 
   // One buy per holding at the window's first price, less a bit; the last coin has none, to show
-  // what "Add purchases" looks like.
+  // what "Add purchases" looks like. Dated before the year of history below, so no range counts
+  // the purchase as money added while the value is already there.
   const firstDay = days[0]!;
+  const boughtOn = firstDay - 400;
   const holding_trades: DemoDb["holding_trades"] = [
     ...HOLDINGS.map((h) => ({
       kind: "stock",
@@ -269,7 +274,7 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
     ...t,
     id: `demo-trade-${i}`,
     side: "buy",
-    trade_date: iso(firstDay),
+    trade_date: iso(boughtOn),
     fee_eur: 1,
     tax_eur: 0,
     traded_at: null,
@@ -279,7 +284,7 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
     group_id: null,
     source: null,
     external_id: null,
-    created_at: stamp(iso(firstDay)),
+    created_at: stamp(iso(boughtOn)),
     user_id,
   }));
 

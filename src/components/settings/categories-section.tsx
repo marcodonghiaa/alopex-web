@@ -53,11 +53,12 @@ export function CategoriesSection() {
   }
 
   return (
-    <section id="categories" aria-labelledby="categories-heading" className="scroll-mt-6">
-      <h2
-        id="categories-heading"
-        className="mb-4 text-[0.9375rem] font-medium text-muted-foreground"
-      >
+    <section
+      id="categories"
+      aria-labelledby="categories-heading"
+      className="scroll-mt-20 md:scroll-mt-6"
+    >
+      <h2 id="categories-heading" className="mb-4 text-lg font-semibold text-foreground">
         Categories
       </h2>
       {!isPending && !available ? (
