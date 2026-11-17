@@ -153,6 +153,49 @@ describe("Who owes you", () => {
     expect(screen.queryByRole("status", { name: "Loading split bills" })).toBeNull();
   });
 
+  // protects=split bills when the Splitwise balances fail (their rates then never load);
+  // fails_when=the bills wait forever for questions that can't come (U3 round 2)
+  it("split bills still show when the Splitwise balances fail to load", async () => {
+    const client = db.client as { from: (t: string) => unknown };
+    const from = client.from.bind(client);
+    client.from = (t) =>
+      t === "splitwise_balances"
+        ? { select: () => Promise.resolve({ data: null, error: { message: "boom" } }) }
+        : from(t);
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <Page />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText(/Couldn't load Splitwise balances/)).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.queryByRole("status", { name: "Loading split bills" })).toBeNull(),
+    );
+    expect(screen.getByText("Giulia", { selector: "summary span span" })).toBeTruthy();
+  });
+
+  // protects=no tap lands on a moved row (U3 round 2); fails_when=Import from Splitwise shows
+  // while the questions that will push it down are still loading
+  it("holds Import from Splitwise until the payment questions are in", async () => {
+    const client = db.client as { rpc: (name: string, args?: unknown) => unknown };
+    const rpc = client.rpc.bind(client);
+    let release = () => {};
+    const held = new Promise<void>((r) => (release = r));
+    client.rpc = (name, args) =>
+      name === "payback_candidates" ? held.then(() => rpc(name, args)) : rpc(name, args);
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText("Net owed to you")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Import from Splitwise" })).toBeNull();
+    release();
+    expect(await screen.findByRole("button", { name: "Import from Splitwise" })).toBeTruthy();
+  });
+
   // protects=the Yes toast and its Undo; fails_when=it doesn't say what was settled, or Undo
   // doesn't reopen the bill
   it("Yes says what it settled, and its Undo reopens the bill", async () => {

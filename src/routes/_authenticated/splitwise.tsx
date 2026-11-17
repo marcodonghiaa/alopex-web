@@ -170,7 +170,8 @@ function SplitwisePage() {
     [ready, candidates.data, debtors],
   );
   // The questions sit above the lists: the lists wait for them, so nothing moves under a tap.
-  const asking = candidates.isPending || rates.isPending;
+  // (Rates load only after the balances: if those fail, rates never come and nothing is asked.)
+  const asking = candidates.isPending || (rates.isPending && !balances.isError);
   const busy = record.isPending && record.variables ? txId(record.variables.payment) : null;
 
   const confirmPayback = (payment: PaybackCandidate, debtor: Debtor) => {
@@ -292,16 +293,18 @@ function SplitwisePage() {
         <BalancesView groups={groups} />
       )}
       {/* Setup after the balances: a quiet row, like Connect a bank on Accounts. */}
-      <GroupedList className="mt-3">
-        <button
-          type="button"
-          onClick={() => setImporting(true)}
-          className="flex min-h-11 w-full items-center gap-2 px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/40 sm:px-5"
-        >
-          <Upload aria-hidden className="size-4" />
-          Import from Splitwise
-        </button>
-      </GroupedList>
+      {!asking && (
+        <GroupedList className="mt-3">
+          <button
+            type="button"
+            onClick={() => setImporting(true)}
+            className="flex min-h-11 w-full items-center gap-2 px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/40 sm:px-5"
+          >
+            <Upload aria-hidden className="size-4" />
+            Import from Splitwise
+          </button>
+        </GroupedList>
+      )}
       {last && (
         <LastImportRow
           count={last.count}
