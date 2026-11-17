@@ -860,7 +860,7 @@ describe("ImportTrades", () => {
     const csv = readFileSync("src/lib/brokers/fixtures/ledger_live.csv", "utf8");
     fireEvent.change(screen.getByLabelText("CSV text"), { target: { value: csv } });
     const footer = (await screen.findByRole("button", { name: "Save 7 trades" })).parentElement!;
-    for (const c of ["sticky", "bottom-0", "bg-background"])
+    for (const c of ["sticky", "-bottom-6", "bg-background"])
       expect(footer.classList.contains(c), c).toBe(true);
   });
 

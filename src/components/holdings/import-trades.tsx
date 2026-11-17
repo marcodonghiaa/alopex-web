@@ -682,7 +682,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
         )}
         {ok && (
           // Pinned to the dialog's bottom: a long result (a phone, a pasted file) can't push it out of view.
-          <div className="sticky bottom-0 -mx-6 -mb-6 bg-background px-6 pt-2 pb-6">
+          <div className="sticky -bottom-6 -mx-6 -mb-6 bg-background px-6 pt-2 pb-6">
             <Button
               className="w-full"
               disabled={(fresh.length === 0 && updates.length === 0) || save.isPending}
