@@ -9,6 +9,7 @@ vi.mock("@/integrations/supabase/client", async () => {
   return { supabase: createFakeClient(new Date("2026-11-08T12:00:00Z")) };
 });
 
+import { toast } from "sonner";
 import { Route } from "./splitwise";
 
 const Page = Route.options.component as () => React.JSX.Element;
@@ -74,5 +75,25 @@ describe("Who owes you", () => {
         billsBefore - 1,
       ),
     );
+  });
+
+  // protects=taking back a "Not a payback" answer: the toast is its only Undo;
+  // fails_when=it closes as fast as a plain notice
+  it("keeps the 'Not a payback' Undo on screen as long as the Yes one", async () => {
+    const success = vi.spyOn(toast, "success");
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    const section = await screen.findByRole("region", { name: "Payments to check" });
+    await userEvent.click(within(section).getByRole("button", { name: "Not a payback" }));
+    await waitFor(() =>
+      expect(success).toHaveBeenCalledWith(
+        "Got it: not a payback.",
+        expect.objectContaining({ duration: 10_000, action: expect.anything() }),
+      ),
+    );
+    success.mockRestore();
   });
 });

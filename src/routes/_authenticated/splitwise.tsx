@@ -198,6 +198,8 @@ function SplitwisePage() {
       {
         onSuccess: () =>
           toast.success(dismissMessage(s.debtor.name, s.reason === "linked"), {
+            // Its only Undo: give it the same time as the Yes toast.
+            duration: 10_000,
             action: {
               label: "Undo",
               onClick: () => undoPayback.mutate({ payment, forget: false }),
