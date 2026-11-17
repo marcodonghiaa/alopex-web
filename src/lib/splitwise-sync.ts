@@ -34,8 +34,12 @@ export interface SplitwiseConnection {
 /** The signed-in user's own connection (never the key), from get_splitwise_connection. */
 export async function fetchConnection(): Promise<SplitwiseConnection> {
   const { data, error } = await supabase.rpc("get_splitwise_connection");
-  if (error) throw new Error(error.message);
-  const row = data?.[0];
+  // A backend without the sync (PostgREST: no such function) is simply not connected; any other
+  // failure is an error, never "not connected" (that would offer to connect again).
+  const noSync =
+    error?.code === "PGRST202" || error?.message.startsWith("Could not find the function");
+  if (error && !noSync) throw new Error(error.message);
+  const row = error ? undefined : data?.[0];
   return {
     connected: row?.connected === true,
     status: (row?.status as ConnectionStatus | null | undefined) ?? null,

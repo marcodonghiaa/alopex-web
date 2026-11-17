@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link2, RefreshCw, Trash2, TriangleAlert, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { GroupedList } from "@/components/ui/grouped-list";
 import { isDemoMode } from "@/lib/demo/mode";
@@ -37,7 +38,20 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
   return (
     <>
       <GroupedList className="mt-3">
-        {connected ? (
+        {connection.isError ? (
+          <div className="px-4 py-3 sm:px-5">
+            <Alert>Couldn't load the Splitwise connection: {connection.error.message}</Alert>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="mt-2"
+              onClick={() => void connection.refetch()}
+              disabled={connection.isFetching}
+            >
+              Retry
+            </Button>
+          </div>
+        ) : connected ? (
           <StatusRow
             c={c}
             onReconnect={() => setConnecting("reconnect")}

@@ -101,6 +101,37 @@ describe("SyncSetup when not connected", () => {
   });
 });
 
+// polish-3 #11: an outage must not offer a connected user "Connect Splitwise"
+describe("SyncSetup when the connection can't be read", () => {
+  it("shows the error with Retry instead of Connect", async () => {
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: "upstream timeout", code: "57014" },
+    });
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn't load the Splitwise connection: upstream timeout",
+    );
+    expect(screen.queryByRole("button", { name: "Connect Splitwise" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("Splitwise · Sam")).toBeTruthy();
+  });
+
+  it("still reads a backend without the sync (PGRST202) as not connected", async () => {
+    rpc.mockResolvedValue({
+      data: null,
+      error: {
+        message: "Could not find the function public.get_splitwise_connection",
+        code: "PGRST202",
+      },
+    });
+    renderSetup();
+    expect(await screen.findByRole("button", { name: "Connect Splitwise" })).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
 describe("Connect dialog", () => {
   const open = async () => {
     rpc.mockResolvedValue(notConnected());
