@@ -652,7 +652,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                     <div key={h.key} className={row}>
                       <span className="min-w-0 flex-1 truncate">
                         {keys.data?.names.get(h.key) ?? parsed.names?.get(h.key) ?? h.key}
-                        {/* No holding to set, kept because it nets to zero. */}
+                        {/* A stock with no holding, kept because it nets to zero (a coin is left out, with a note). */}
                         {ctx && !ctx.knownKeys.has(h.key) && " · fully sold"}
                       </span>
                       <span className="shrink-0 text-sm text-muted-foreground tabular-nums">

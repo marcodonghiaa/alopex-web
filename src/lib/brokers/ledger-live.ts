@@ -242,6 +242,12 @@ export const ledgerLive: BrokerParser = {
       notes.push(
         `${key} has no Ledger or manual holding, so it was left out. Add it as a coin, then import again.`,
       );
+    // Sold to zero with no holding here: no screen would show its trades, and none could delete them.
+    for (const key of new Set(trades.map((t) => t.key)))
+      if (!knownKeys.has(key) && !open.includes(key))
+        notes.push(
+          `${key}: sold to zero and not held here, so its ${plural(trades.filter((t) => t.key === key).length, "trade")} were left out.`,
+        );
     const ops = (n: number, one: string, many: string) =>
       `${plural(n, "operation")} ${n === 1 ? one : many}`;
     if (skipped > 0)
@@ -257,7 +263,7 @@ export const ledgerLive: BrokerParser = {
       notes.push(ops(noValue, counted, counted.replace("it was", "they were")));
     }
     return {
-      trades: trades.filter((t) => !open.includes(t.key)),
+      trades: trades.filter((t) => knownKeys.has(t.key)),
       errors,
       notes,
       setsShares: true,

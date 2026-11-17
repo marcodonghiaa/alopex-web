@@ -89,7 +89,8 @@ describe("Ledger Live operations export", () => {
       .join("\n");
     const { trades, errors } = parseTradesCsv(old, ctx);
     expect(errors).toEqual([]);
-    expect(trades).toHaveLength(9);
+    // The 2 LTC trades are left out: sold to zero with no holding here.
+    expect(trades).toHaveLength(7);
   });
 
   it("the same operation keeps its id whatever case the hash is in", () => {
@@ -118,9 +119,15 @@ describe("Ledger Live operations export", () => {
     expect(ids).toEqual(["abc:BTC:IN", "abc:BTC:IN#2"]);
   });
 
-  it("a coin you sold to zero is kept, so its profit counts; one you still hold elsewhere is left out", () => {
-    const { trades } = parseTradesCsv(sample, ctx);
-    expect(trades.filter((t) => t.key === "LTC")).toHaveLength(2);
+  it("a coin sold to zero and not held here is left out, and says so; one you still hold elsewhere is left out", () => {
+    // Its trades would have no holding to show them on, and nothing could delete them.
+    const { trades, notes } = parseTradesCsv(sample, ctx);
+    expect(trades.some((t) => t.key === "LTC")).toBe(false);
+    expect(notes).toContain("LTC: sold to zero and not held here, so its 2 trades were left out.");
+    // Held here (a hand-added Litecoin), its trades are kept and set it to zero.
+    const held = parseTradesCsv(sample, { ...ctx, knownKeys: new Set([...ctx.knownKeys, "LTC"]) });
+    expect(held.trades.filter((t) => t.key === "LTC")).toHaveLength(2);
+    expect(held.notes.some((n) => n.startsWith("LTC"))).toBe(false);
     const noEth = parseTradesCsv(sample, { ...ctx, knownKeys: new Set(["BTC", "USDT"]) });
     expect(noEth.trades.some((t) => t.key === "ETH")).toBe(false);
     expect(noEth.notes).toContain(
