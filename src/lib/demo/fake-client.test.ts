@@ -893,10 +893,31 @@ describe("fake client: payback matching mirrors the database", () => {
 
   it("a split refund counts against the bill and settles with it; alone it stays open", async () => {
     const c = await seed([
-      row("sr-bill", { amount: 100, personal_amount: 40, owed_by: "Bea", booking_date: "2026-10-01" }),
-      row("sr-ref", { amount: 30, personal_amount: 10, owed_by: "Bea", credit_debit_indicator: "CRDT", booking_date: "2026-10-02" }),
-      row("sr-pay", { amount: 40, credit_debit_indicator: "CRDT", debtor_name: "Bea Verdi", flow_type: "income" }),
-      row("sr-pay2", { amount: 30, credit_debit_indicator: "CRDT", debtor_name: "Bea Verdi", flow_type: "income" }),
+      row("sr-bill", {
+        amount: 100,
+        personal_amount: 40,
+        owed_by: "Bea",
+        booking_date: "2026-10-01",
+      }),
+      row("sr-ref", {
+        amount: 30,
+        personal_amount: 10,
+        owed_by: "Bea",
+        credit_debit_indicator: "CRDT",
+        booking_date: "2026-10-02",
+      }),
+      row("sr-pay", {
+        amount: 40,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Bea Verdi",
+        flow_type: "income",
+      }),
+      row("sr-pay2", {
+        amount: 30,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Bea Verdi",
+        flow_type: "income",
+      }),
     ]);
     const { data } = await record(c, "sr-pay", "Bea");
     expect(data).toMatchObject({ settled: ["sr-bill"], settled_eur: 40, left_eur: 0 });
@@ -914,7 +935,12 @@ describe("fake client: payback matching mirrors the database", () => {
     const c = await seed([
       row("cm-1", { amount: 20, personal_amount: 10, owed_by: "Carla," }),
       row("cm-2", { amount: 20, personal_amount: 10, owed_by: "Carla, Dino" }),
-      row("cm-pay", { amount: 20, credit_debit_indicator: "CRDT", debtor_name: "Carla Blu", flow_type: "income" }),
+      row("cm-pay", {
+        amount: 20,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Carla Blu",
+        flow_type: "income",
+      }),
     ]);
     const { data } = await record(c, "cm-pay", "Carla");
     expect(data).toMatchObject({ settled: ["cm-1"], left_eur: 10 });
@@ -922,10 +948,32 @@ describe("fake client: payback matching mirrors the database", () => {
 
   it("refuses a missing contact and a payment that is not plain income", async () => {
     const c = await seed([
-      row("x-pay", { amount: 20, credit_debit_indicator: "CRDT", debtor_name: "Ugo", flow_type: "income" }),
-      row("x-transfer", { amount: 20, credit_debit_indicator: "CRDT", debtor_name: "Ugo", flow_type: "transfer" }),
-      row("x-split", { amount: 20, personal_amount: 5, credit_debit_indicator: "CRDT", debtor_name: "Ugo", flow_type: "income" }),
-      row("x-sw", { amount: 20, import_batch_id: "b1", credit_debit_indicator: "CRDT", debtor_name: "Ugo", flow_type: "income" }),
+      row("x-pay", {
+        amount: 20,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Ugo",
+        flow_type: "income",
+      }),
+      row("x-transfer", {
+        amount: 20,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Ugo",
+        flow_type: "transfer",
+      }),
+      row("x-split", {
+        amount: 20,
+        personal_amount: 5,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Ugo",
+        flow_type: "income",
+      }),
+      row("x-sw", {
+        amount: 20,
+        import_batch_id: "b1",
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Ugo",
+        flow_type: "income",
+      }),
     ]);
     expect((await record(c, "x-pay", null)).error?.message).toBe("Contact required");
     for (const ref of ["x-transfer", "x-split", "x-sw"])
@@ -945,7 +993,9 @@ describe("demo payerKey matches the database's payer_key", () => {
       payerKey(
         "Řehoř ŁUKASZ Øster Šťastný Dvořák Ćwik Węgrzyn Nagy Ödön Győző Žanić Ålund Ærø Straße",
       ),
-    ).toBe("rehor lukasz oster stastny dvorak cwik wegrzyn nagy odon gyozo zanic alund aero strasse");
+    ).toBe(
+      "rehor lukasz oster stastny dvorak cwik wegrzyn nagy odon gyozo zanic alund aero strasse",
+    );
     expect(payerKey("ab ".repeat(150))?.length).toBe(200);
   });
 });

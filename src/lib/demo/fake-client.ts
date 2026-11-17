@@ -152,7 +152,16 @@ function demoStatementRows(now: Date) {
 // accents, spacing or punctuation.
 const payerNameOf = (t: Row): string | null =>
   String(t["debtor_name"] ?? "").trim() || String(t["creditor_name"] ?? "").trim() || null;
-const FOLD: Record<string, string> = { ł: "l", ø: "o", đ: "d", ħ: "h", ı: "i", ß: "ss", æ: "ae", œ: "oe" };
+const FOLD: Record<string, string> = {
+  ł: "l",
+  ø: "o",
+  đ: "d",
+  ħ: "h",
+  ı: "i",
+  ß: "ss",
+  æ: "ae",
+  œ: "oe",
+};
 export const payerKey = (name: string | null): string | null =>
   (name ?? "")
     .toLowerCase()
@@ -564,9 +573,7 @@ class Store {
     const data = (this.db["transactions"] ?? [])
       .filter(
         (t) =>
-          paybackEligible(t) &&
-          t["payback_contact"] == null &&
-          String(t["booking_date"]) >= since,
+          paybackEligible(t) && t["payback_contact"] == null && String(t["booking_date"]) >= since,
       )
       .sort((a, b) => compare(b["booking_date"], a["booking_date"]))
       .slice(0, 200)
