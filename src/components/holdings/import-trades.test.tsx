@@ -165,7 +165,10 @@ describe("ImportTrades", () => {
     fireEvent.change(screen.getByLabelText("CSV file"), {
       target: { files: [new File([csv], "ops.csv", { type: "text/csv" })] },
     });
-    expect(await screen.findByText(/Couldn't load USD exchange rates/)).toBeTruthy();
+    // One retry first, a second later.
+    expect(
+      await screen.findByText(/Couldn't load USD exchange rates/, {}, { timeout: 4000 }),
+    ).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
     db.ratesDown = false;
   });
