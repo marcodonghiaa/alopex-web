@@ -230,6 +230,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       accept=".csv,.tsv,.txt,text/csv"
       aria-label="CSV file"
       className="sr-only"
+      // A file can't be swapped while the last one saves.
+      disabled={save.isPending}
       onChange={(e) => {
         onFile(e.target.files?.[0]);
         // The same file can be chosen again after Change.
@@ -272,6 +274,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
           <button
             type="button"
             onClick={reset}
+            disabled={save.isPending}
             className="-my-2 inline-flex min-h-11 items-center gap-1 self-start text-xs text-muted-foreground hover:text-foreground"
           >
             <ChevronLeft className="size-3.5" /> All sources
@@ -421,6 +424,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               <textarea
                 aria-label="CSV text"
                 value={text}
+                disabled={save.isPending}
                 onChange={(e) => {
                   setText(e.target.value);
                   setFileName(null);

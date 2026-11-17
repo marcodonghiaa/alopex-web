@@ -413,6 +413,22 @@ describe("ImportTrades", () => {
     expect(db.inserted).toHaveLength(7);
   });
 
+  it("while saving, the file can't be swapped or the source left", async () => {
+    let release!: () => void;
+    db.insertGate = new Promise((r) => (release = r));
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
+    const back = screen.getByRole("button", { name: /All sources/ });
+    await waitFor(() => expect((back as HTMLButtonElement).disabled).toBe(true));
+    fireEvent.click(back);
+    expect((screen.getByLabelText("CSV file") as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByText("ops.csv")).toBeTruthy();
+    release();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(db.inserted).toHaveLength(7);
+  });
+
   it("Esc closes the dialog when nothing is saving", async () => {
     open("crypto");
     pick(/Ledger Live/, "ledger_live.csv");
