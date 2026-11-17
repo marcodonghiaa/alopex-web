@@ -19,8 +19,11 @@ page, which makes a holding whose source is `Manual`, and the import corrects it
 already has a holding whose source is `Ledger` (from older data), the import uses that one instead.
 A coin you still hold only under another source (an exchange sync, say) is left out, with a note: add
 it as a coin, then import again. Those other holdings are never changed. A coin the file sold down to zero
-that you don't hold here is left out too, with a note. If the corrected holding already has trades you
-added by hand, the review says so: they stay, and its return shows as not matching until you remove them.
+that you don't hold on Ledger or by hand is left out too, with a note ("sold to zero and not held on
+Ledger or by hand"), even if you hold it under another source. If a holding the file sets (`Manual` or
+`Ledger`) already has trades not from Ledger Live (typed in, or from a spreadsheet import), the review
+says so whether or not its amount changes: on its row under Holdings corrected, or else under Trades to
+check. Those trades stay, and its return shows as not matching until you remove them.
 
 Files priced in dollars need daily USD rates. Alopex uses the ones it has stored, and for older days
 your browser asks `api.frankfurter.dev` (the app's CSP allows it); behind a firewall, allow that host.
