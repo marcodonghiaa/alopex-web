@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Database } from "@/integrations/supabase/types";
 import { syncAlerts, syncErrorMessage } from "./sync-error";
 
 const acc = (
@@ -126,5 +127,20 @@ describe("syncAlerts", () => {
 
   it("names a 4xx it does not know instead of calling it a bank outage", () => {
     expect(syncErrorMessage("HTTP_400", "N26")).toMatch(/failed \(HTTP_400\)/);
+  });
+});
+
+// Checked by tsc: the hand-kept DB types carry the columns the bank-sync-health migration adds.
+type Pub = Database["public"];
+describe("database types", () => {
+  it("list the sync columns on accounts and its Accounts view", () => {
+    const cols = { sync_error: "TIMEOUT", sync_error_at: "2026-11-15T06:17:00Z" };
+    const row: Pick<Pub["Tables"]["accounts"]["Row"], "sync_error" | "sync_error_at"> = cols;
+    const update: Pick<Pub["Tables"]["accounts"]["Update"], "sync_error" | "sync_error_at"> = cols;
+    const view: Pick<
+      Pub["Views"]["v_bank_accounts_latest"]["Row"],
+      "sync_error" | "sync_error_at"
+    > = cols;
+    expect([row, update, view]).toEqual([cols, cols, cols]);
   });
 });
