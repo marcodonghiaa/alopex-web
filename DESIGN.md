@@ -9,6 +9,7 @@ colors:
   fill: "oklch(0.955 0.004 230)"
   ember: "oklch(0.68 0.16 50)"
   ember-soft: "oklch(0.68 0.16 50 / 12%)"
+  ember-text: "oklch(0.52 0.16 50)"
   highlight: "oklch(0.68 0.16 50 / 22%)"
   hairline: "oklch(0.17 0.012 240 / 10%)"
   rule: "oklch(0.17 0.012 240 / 18%)"
@@ -186,7 +187,7 @@ A cold neutral world: snow ground, cold ink for controls, one warm Ember accent,
 
 ### Primary
 - **Ink** (cold, oklch(0.17 0.012 240)): the one control tint. Selected segment, primary buttons, the active tab, the net worth line, caret. In dark mode the role passes to white.
-- **Ember** (fox fur, oklch(0.68 0.16 50); oklch(0.74 0.15 50) on dark): the single accent. Focus ring, the chart's live cursor, counts and badges, links, the loading rule. Never a fill behind text; **Ember Soft** (12%) is its only wash.
+- **Ember** (fox fur, oklch(0.68 0.16 50); oklch(0.74 0.15 50) on dark): the single accent. Focus ring, the chart's live cursor, counts and badges, links, the loading rule. Never a fill behind text; **Ember Soft** (12%) is its only wash. **Ember Text** (oklch(0.52 0.16 50); plain Ember on dark) is Ember for small text such as 12px counts, where plain Ember is under 4.5:1 on the light ground.
 - **Highlight** (Ember at 22%): text selection.
 
 ### Neutral

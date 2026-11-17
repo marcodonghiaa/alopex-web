@@ -38,6 +38,14 @@ describe("FilterSheet", () => {
     expect(screen.getByRole("button", { name: "Filter, 2 active" })).toHaveTextContent("2");
   });
 
+  // re-audit N1: the 12 px count uses the ember made for small text (4.5:1 in light theme)
+  it("draws the count in the small-text ember", () => {
+    render(<FilterSheet {...props({ count: 2 })} />);
+    const count = screen.getByRole("button", { name: "Filter, 2 active" }).querySelector("span")!;
+    expect(count).toHaveClass("text-ember-text");
+    expect(count).not.toHaveClass("text-ember");
+  });
+
   it("opens the sheet; a category choice is reported; one bank means no bank field", async () => {
     const p = props();
     render(<FilterSheet {...p} />);

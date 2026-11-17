@@ -68,6 +68,7 @@
   --color-mint: var(--mint);
   --color-ember: var(--ember);
   --color-ember-soft: var(--ember-soft);
+  --color-ember-text: var(--ember-text);
   --color-hairline: var(--hairline);
   --color-rule: var(--rule);
 }
@@ -94,6 +95,8 @@
   /* Ember: fox fur, the single accent. Focus ring, live cursor, counts, links. Never a fill behind text. */
   --ember: oklch(0.68 0.16 50);
   --ember-soft: oklch(0.68 0.16 50 / 12%);
+  /* Ember for small text (12 px counts): darker, so it reads at 4.5:1 on the light sidebar */
+  --ember-text: oklch(0.52 0.16 50);
   /* Highlight for text selection */
   --mint: oklch(0.68 0.16 50 / 22%);
   /* Status: meaning only (gains, losses, warnings) */
@@ -109,7 +112,7 @@
   --input: var(--rule);
   --ring: var(--ember);
   /* Categorical: one hue, low chroma, ordered by lightness (rank 1 = darkest) */
-  --chart-1: oklch(0.30 0.03 240);
+  --chart-1: oklch(0.3 0.03 240);
   --chart-2: oklch(0.42 0.04 240);
   --chart-3: oklch(0.54 0.05 240);
   --chart-4: oklch(0.66 0.05 240);
@@ -148,11 +151,12 @@
     --secondary: oklch(0.23 0.008 240);
     --secondary-foreground: oklch(0.95 0.006 230);
     --muted: oklch(0.23 0.008 240);
-    --muted-foreground: oklch(0.70 0.01 230);
+    --muted-foreground: oklch(0.7 0.01 230);
     --accent: oklch(0.25 0.008 240);
     --accent-foreground: oklch(0.95 0.006 230);
     --ember: oklch(0.74 0.15 50);
     --ember-soft: oklch(0.74 0.15 50 / 16%);
+    --ember-text: var(--ember);
     --mint: oklch(0.74 0.15 50 / 28%);
     --destructive: oklch(0.72 0.17 20);
     --destructive-foreground: oklch(0.15 0.008 240);
@@ -164,8 +168,8 @@
     --border: var(--hairline);
     --input: var(--rule);
     --ring: var(--ember);
-    --chart-1: oklch(0.90 0.03 240);
-    --chart-2: oklch(0.80 0.04 240);
+    --chart-1: oklch(0.9 0.03 240);
+    --chart-2: oklch(0.8 0.04 240);
     --chart-3: oklch(0.68 0.05 240);
     --chart-4: oklch(0.56 0.05 240);
     --chart-5: oklch(0.44 0.04 240);
