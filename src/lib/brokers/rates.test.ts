@@ -124,6 +124,18 @@ describe("loadRates", () => {
     expect(found).toEqual([...stale, { date: "2026-01-19", rate_to_eur: 0.8 }]);
   });
 
+  it("a gap that leaves one day without a recent rate fetches that day", async () => {
+    // 2026-01-02's rate covers up to 2026-01-12, so 2026-01-13 is bare.
+    const oneBare = [
+      { date: "2026-01-02", rate_to_eur: 0.9 },
+      { date: "2026-01-14", rate_to_eur: 0.8 },
+    ];
+    const get = series({ "2026-01-13": 1.25 });
+    const found = await loadRates("USD", "2026-01-02", "2026-01-20", fakeDb(oneBare), get);
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(rateLookup("USD", found)("USD", "2026-01-13")).toBe(0.8);
+  });
+
   it("a gap every day of which still has a recent enough rate needs no fetch", async () => {
     // 2026-01-13 is the last day 2026-01-02's rate still covers.
     const spaced = [
