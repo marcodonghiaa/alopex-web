@@ -176,6 +176,9 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   // With the new trades' fees and taxes, the same sum as the Income and costs section.
   const income = useMemo(() => incomeAndCosts(freshEvents, fresh), [freshEvents, fresh]);
   const incomeList = incomeRows(income);
+  // Dividends and Interest come first: the index of the last of them, -1 with neither.
+  const afterTax =
+    incomeList.filter((r) => r.label === "Dividends" || r.label === "Interest").length - 1;
   const summary = useMemo(() => summarizeImport(fresh), [fresh]);
   // Count only the wallet's own trades for its holding.
   const updates = useMemo(() => {
@@ -644,10 +647,18 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                     : "Costs on these trades"}
                 </p>
                 <GroupedList className="border border-hairline">
-                  {incomeList.map((r) => (
-                    <div key={r.label} className={row}>
-                      <span className="flex-1">{r.label}</span>
-                      <span className="font-figure">{formatIncome(r.value)}</span>
+                  {incomeList.map((r, i) => (
+                    <div key={r.label}>
+                      <div className={row}>
+                        <span className="flex-1">{r.label}</span>
+                        <span className="font-figure">{formatIncome(r.value)}</span>
+                      </div>
+                      {/* Right under the last of Dividends and Interest, which it's about. */}
+                      {i === afterTax && (
+                        <p className="-mt-1 px-4 pb-2 text-xs text-muted-foreground">
+                          Dividends and interest are after tax.
+                        </p>
+                      )}
                     </div>
                   ))}
                   {freshEvents.length > 0 && (
@@ -659,11 +670,6 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                     </div>
                   )}
                 </GroupedList>
-                {(income.dividends !== 0 || income.interest !== 0) && (
-                  <p className="px-1 pt-1.5 text-xs text-muted-foreground">
-                    Dividends and interest are after tax.
-                  </p>
-                )}
               </div>
             )}
 

@@ -396,6 +396,14 @@ describe("ImportTrades", () => {
     expect(screen.queryByText("Dividends and interest are after tax.")).toBeNull();
   });
 
+  it("polish-4 R4 the after-tax line sits right under the dividends and interest", async () => {
+    open("stock");
+    await pickTradeRepublic();
+    const note = screen.getByText("Dividends and interest are after tax.");
+    // Right after the Dividends row, not below the whole list and its row count.
+    expect(note.previousElementSibling?.textContent).toMatch(/^(Dividends|Interest)€[\d.,]+$/);
+  });
+
   it("polish-4 UB6 the row count says it counts every row saved", async () => {
     open("stock");
     await pickTradeRepublic();
