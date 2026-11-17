@@ -150,7 +150,8 @@ export const tradeRepublic: BrokerParser = {
           shares: Math.abs(shares),
           price_eur: price,
           fee_eur: TRADES.has(type) ? fee : 0,
-          tax_eur: TRADES.has(type) ? tax : 0,
+          // A bond paid back can have tax held back: it lowers that sale's return.
+          tax_eur: TRADES.has(type) || PAID_BACK.has(type) ? tax : 0,
           traded_at: at,
           note,
           source: "trade_republic",
@@ -158,7 +159,8 @@ export const tradeRepublic: BrokerParser = {
         });
         // A corporate action is also kept as an event, so its cash (if any) and type aren't lost.
         if (!TRADES.has(type) && !FREE.has(type)) {
-          events.push(event("corporate_action"));
+          const action = event("corporate_action");
+          events.push(PAID_BACK.has(type) ? { ...action, tax_eur: 0 } : action);
         }
         // Tax given back on a trade is money in: a refund of its own.
         if (TRADES.has(type) && taxSigned > 0) {

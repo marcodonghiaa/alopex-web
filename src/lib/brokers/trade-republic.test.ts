@@ -136,6 +136,22 @@ describe("Trade Republic, trades", () => {
     });
   });
 
+  it("tax held back on a bond paid back goes on its sale, counted once", () => {
+    const { trades, events } = parseTradesCsv(
+      file({
+        category: "CORPORATE_ACTION",
+        type: "FINAL_MATURITY",
+        asset_class: "BOND",
+        shares: "-1000",
+        amount: "1000",
+        tax: "-26",
+      }),
+      stock,
+    );
+    expect(trades[0]).toMatchObject({ side: "sell", price_eur: 1, tax_eur: 26 });
+    expect(events?.map((e) => [e.kind, e.tax_eur])).toEqual([["corporate_action", 0]]);
+  });
+
   it("shares moved in from elsewhere count at no cost, and you're told to fix the price", () => {
     const { trades, notes } = parseTradesCsv(
       file({ category: "CORPORATE_ACTION", type: "MERGER", shares: "3", amount: "" }),
