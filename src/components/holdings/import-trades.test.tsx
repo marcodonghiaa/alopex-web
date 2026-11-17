@@ -215,7 +215,8 @@ describe("ImportTrades", () => {
     // USDT sits only on Coinbase, which syncs itself: its Ledger moves are left out, and it says so.
     const save = await screen.findByRole("button", { name: "Save 7 trades" });
     expect(screen.getByText(/USDT has no Ledger or manual holding/)).toBeTruthy();
-    expect(screen.getByText("Share counts corrected")).toBeTruthy();
+    expect(screen.getByText("Holdings corrected")).toBeTruthy();
+    expect(screen.queryByText("Share counts corrected")).toBeNull();
     fireEvent.click(save);
     await waitFor(() => expect(db.inserted).toHaveLength(7));
     expect(db.inserted.some((t) => t["key"] === "USDT")).toBe(false);
@@ -232,7 +233,9 @@ describe("ImportTrades", () => {
   it("a stock import corrects the share counts through set_holding_quantity", async () => {
     open("stock");
     pick(/Trade Republic/, "trade_republic.csv");
-    fireEvent.click(await screen.findByRole("button", { name: "Save 4 trades" }));
+    const save = await screen.findByRole("button", { name: "Save 4 trades" });
+    expect(screen.getByText("Share counts corrected")).toBeTruthy();
+    fireEvent.click(save);
     await waitFor(() => expect(db.rpc.length).toBeGreaterThan(0));
     expect(db.rpc[0]![0]).toBe("set_holding_quantity");
     expect(db.rpc[0]![1]).toMatchObject({ p_kind: "stock", p_key: "XX0000000001", p_quantity: 4 });

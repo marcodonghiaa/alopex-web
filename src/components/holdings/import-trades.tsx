@@ -501,7 +501,9 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                 )}
                 {updates.length > 0 && (
                   <div className={row}>
-                    <span className="flex-1">Share counts corrected</span>
+                    <span className="flex-1">
+                      {kind === "crypto" ? "Holdings corrected" : "Share counts corrected"}
+                    </span>
                     <span className="tabular-nums">{updates.length}</span>
                   </div>
                 )}
