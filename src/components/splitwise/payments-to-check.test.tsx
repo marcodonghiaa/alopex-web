@@ -72,7 +72,9 @@ describe("PaymentsToCheck", () => {
     expect(
       screen.getByText(/You linked this payer to Marverdi before · owes you €320.00/),
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Not Marverdi" })).toBeTruthy();
+    // Same words as on any row: "Not Marverdi" next to Someone else read like "someone else paid" (U7).
+    expect(screen.getByRole("button", { name: "Not a payback" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Not Marverdi" })).toBeNull();
   });
 
   it("an exact amount names the person it matches", () => {

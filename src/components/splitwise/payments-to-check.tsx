@@ -199,7 +199,7 @@ export function PaymentsToCheck({
                         onDismiss(p, s);
                       }}
                     >
-                      {s.reason === "linked" ? `Not ${s.debtor.name}` : "Not a payback"}
+                      Not a payback
                     </Button>
                   </div>
                 )}
