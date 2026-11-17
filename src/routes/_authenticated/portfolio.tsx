@@ -203,7 +203,7 @@ function PortfolioPage() {
       </section>
 
       {/* Chart: portfolio value over time; scrub it to read any day */}
-      <ValueHistoryChart history={history} title="Portfolio value over time" />
+      <ValueHistoryChart history={history} title="Portfolio value over time" perf={perf} />
 
       {/* How it splits by type */}
       {!query.isPending && holdings.length > 0 && totalEur > 0 && (

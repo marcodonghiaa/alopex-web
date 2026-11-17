@@ -1,6 +1,18 @@
-import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
-import { RangeChange, rangeChip } from "./value-history";
+import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+
+// jsdom has no ResizeObserver; the line itself is not under test.
+vi.mock("recharts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("recharts")>()),
+  ResponsiveContainer: () => null,
+}));
+// Each sampled day's prices: 100 for X, as on the range's first day.
+const dayPrices = vi.fn((dates: Array<string>) => dates.map(() => new Map([["X", 100]])));
+vi.mock("@/lib/use-performance", () => ({
+  useDayPrices: (dates: Array<string>) => dayPrices(dates),
+}));
+
+import { RangeChange, ValueHistoryChart, rangeChip } from "./value-history";
 import type { ValueHistory } from "@/lib/use-value-history";
 import type { Measured } from "@/lib/trades";
 
@@ -135,5 +147,75 @@ describe("rangeChip", () => {
     expect(
       rangeChip(history({ range: "ALL" }), perf({ summary: { gain: 0, change: null } }), undefined),
     ).toBeUndefined();
+  });
+});
+
+// protects=a Value | Return switch on the chart, like a broker's Performance view; fails_when=
+// the line keeps showing money added as growth while the chip says otherwise
+describe("ValueHistoryChart", () => {
+  const chart = history({
+    chartData: [
+      { ...point("2026-01-01", 1000), ts: 1 },
+      { ...point("2026-01-16", 2000), ts: 2 },
+      { ...point("2026-01-31", 2100), ts: 3 },
+    ] as ValueHistory["chartData"],
+    setRange: () => {},
+    setScrubIndex: () => {},
+  });
+
+  it("shows the value, with a switch to the return", () => {
+    render(<ValueHistoryChart history={chart} title="Portfolio value" perf={perf()} />);
+    expect(
+      screen.getByRole("img", { name: /Portfolio value: rose from €1,000/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Return" })).toBeInTheDocument();
+  });
+
+  it("on Return draws the gain without money added, ending at today's prices", () => {
+    render(<ValueHistoryChart history={chart} title="Portfolio value" perf={perf()} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Return" }));
+    // Today's price is 105 on 20 shares; every earlier day is priced at 100.
+    expect(
+      screen.getByRole("img", { name: /^Return: rose from €0\.00 to €100\.00/ }),
+    ).toBeInTheDocument();
+    expect(dayPrices).toHaveBeenLastCalledWith(["2026-01-01", "2026-01-16"]);
+  });
+
+  it("has no switch without usable trades", () => {
+    render(
+      <ValueHistoryChart
+        history={chart}
+        title="Portfolio value"
+        perf={perf({ tradesByKey: new Map() })}
+      />,
+    );
+    expect(screen.queryByRole("radio", { name: "Return" })).toBeNull();
+  });
+
+  // protects=days before the first daily price aren't drawn as "no gain"; fails_when=a range that
+  // starts before prices were kept reads as a flat line at zero
+  it("starts the return on the first day with prices", () => {
+    dayPrices.mockImplementation((dates) =>
+      dates.map((d) => (d === "2026-01-01" ? new Map() : new Map([["X", 100]]))),
+    );
+    render(<ValueHistoryChart history={chart} title="Portfolio value" perf={perf()} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Return" }));
+    // From 16 Jan (20 shares at 100) to today (105): 100.
+    expect(
+      screen.getByRole("img", { name: /^Return: rose from €0\.00 to €100\.00/ }),
+    ).toBeInTheDocument();
+    dayPrices.mockImplementation((dates) => dates.map(() => new Map()));
+    fireEvent.click(screen.getByRole("radio", { name: "Value" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Return" }));
+    expect(screen.getByText("No daily prices in this range yet.")).toBeInTheDocument();
+    dayPrices.mockImplementation((dates) => dates.map(() => new Map([["X", 100]])));
+  });
+
+  it("waits for every day's prices before drawing the return", () => {
+    dayPrices.mockImplementation((dates) => dates.map(() => undefined as never));
+    render(<ValueHistoryChart history={chart} title="Portfolio value" perf={perf()} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Return" }));
+    expect(screen.queryByRole("img", { name: /^Return/ })).toBeNull();
+    dayPrices.mockRestore();
   });
 });

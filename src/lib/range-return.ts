@@ -56,3 +56,27 @@ export function tradedValue(
   }
   return total;
 }
+
+/** Up to `n` evenly spaced indices into a list of `length`, always its first and last. */
+export function sampleIndices(length: number, n: number): Array<number> {
+  if (length <= n) return Array.from({ length }, (_, i) => i);
+  return Array.from({ length: n }, (_, i) => Math.round((i * (length - 1)) / (n - 1)));
+}
+
+/**
+ * The Return line: the gain from the first day to each day, of what your trades held, valued at
+ * that day's prices, with buys and sales in between taken out. The same sum as the range chip.
+ */
+export function returnLine(
+  trades: Array<PricedTrade & Pick<Trade, "fee_eur">>,
+  days: Array<{ date: string; prices: Map<string, number> }>,
+): Array<number> {
+  const first = days[0];
+  if (first == null) return [];
+  const start = { date: first.date, value: tradedValue(trades, first.date, first.prices) };
+  return days.map(
+    (d) =>
+      rangeReturn(start, { date: d.date, value: tradedValue(trades, d.date, d.prices) }, trades)
+        .gain,
+  );
+}

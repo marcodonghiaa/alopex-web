@@ -200,7 +200,7 @@ function CryptoPage() {
       </section>
 
       {/* Chart: crypto value over time; scrub it to read any day */}
-      <ValueHistoryChart history={history} title="Crypto value over time" />
+      <ValueHistoryChart history={history} title="Crypto value over time" perf={perf} />
 
       {/* How it splits by coin */}
       <section aria-label="Allocation by holding" className="mb-6">

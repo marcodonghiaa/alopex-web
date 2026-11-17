@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { SegmentedControl } from "@/components/segmented-control";
 import { ValueChart } from "@/components/value-chart";
 import { trendSummary } from "@/lib/chart-summary";
@@ -8,8 +9,9 @@ import { RETURN_NOISE_BAND } from "@/lib/performance";
 import type { HeadlineChange } from "@/components/headline-figure";
 import { TONE_TEXT, toneOf } from "@/lib/tone";
 import type { ValueHistory } from "@/lib/use-value-history";
+import { useDayPrices } from "@/lib/use-performance";
 import type { usePerformance } from "@/lib/use-performance";
-import { rangeReturn, tradedValue } from "@/lib/range-return";
+import { rangeReturn, returnLine, sampleIndices, tradedValue } from "@/lib/range-return";
 import { formatEur } from "@/lib/transactions";
 
 type RangeChangeProps = Pick<ValueHistory, "delta" | "change" | "range"> &
@@ -18,7 +20,9 @@ type RangeChangeProps = Pick<ValueHistory, "delta" | "change" | "range"> &
 type ChipPerformance = Pick<
   ReturnType<typeof usePerformance>,
   "isPending" | "unavailable" | "tradesByKey" | "measuredByKey" | "endPrices"
-> & { summary: Pick<ReturnType<typeof usePerformance>["summary"], "gain" | "change"> };
+> & { kind?: "stock" | "crypto" } & {
+  summary: Pick<ReturnType<typeof usePerformance>["summary"], "gain" | "change">;
+};
 
 // Trades that disagree with the shares you hold can't value what you held: no return at all.
 const tradesUsable = (perf: ChipPerformance) =>
@@ -71,33 +75,112 @@ export function RangeChange({ delta, change, first, scrubbed, range }: RangeChan
   );
 }
 
-// The holding's value over the chosen range. A value change counts purchases and sales, so the
-// price return is shown separately (performance section), not here.
-export function ValueHistoryChart({ history, title }: { history: ValueHistory; title: string }) {
+// Days on the Return line: one price request each, so a sample of the range, not every day.
+const RETURN_DAYS = 24;
+type ChartMode = "value" | "return";
+
+/**
+ * The holdings' value over the chosen range, or (Return, when your trades are imported) the gain
+ * since the range's first day without the money you added or took out, as a broker's Performance
+ * view. The Return line ends on the chip's figure: same trades, same prices.
+ */
+export function ValueHistoryChart({
+  history,
+  title,
+  perf,
+}: {
+  history: ValueHistory;
+  title: string;
+  perf?: ChipPerformance;
+}) {
   const { chartData, key, range, setRange, setScrubIndex } = history;
+  const [mode, setMode] = useState<ChartMode>("value");
+  const canReturn = perf != null && !perf.isPending && !perf.unavailable && tradesUsable(perf);
+  const onReturn = canReturn && mode === "return";
+  const picked = sampleIndices(chartData.length, RETURN_DAYS);
+  // The last day is today: today's prices, as the chip.
+  const prices = useDayPrices(
+    onReturn ? picked.slice(0, -1).map((i) => chartData[i]!.snapshot_date) : [],
+    perf?.kind ?? "stock",
+  );
+  // Days before the first daily price can't be measured: the line starts where prices do.
+  const from = Math.max(
+    0,
+    prices.findIndex((p) => p != null && p.size > 0),
+  );
+  const returnRows =
+    onReturn && prices.every((p) => p != null)
+      ? (() => {
+          const trades = [...perf.tradesByKey.values()].flat();
+          const kept = picked.slice(from);
+          const gains = returnLine(
+            trades,
+            kept.map((at, i) => ({
+              date: chartData[at]!.snapshot_date,
+              prices: prices[from + i] ?? perf.endPrices,
+            })),
+          );
+          return kept.map((at, i) => ({ ...chartData[at]!, at, return_eur: gains[i]! }));
+        })()
+      : undefined;
   if (chartData.length < 2) return null;
   const valueOf = (row: NetWorthRow) => row[key];
   return (
     <section aria-label={title} className="mb-8">
-      <div
-        className="-mx-1 h-64 sm:h-72"
-        role="img"
-        aria-label={trendSummary(
-          title,
-          valueOf(chartData[0]!),
-          valueOf(chartData.at(-1)!),
-          formatEur,
+      <div className="-mx-1 h-64 sm:h-72" aria-busy={onReturn && returnRows == null}>
+        {onReturn ? (
+          returnRows &&
+          (returnRows.length < 2 || prices.every((p) => p?.size === 0) ? (
+            <p className="pt-24 text-center text-[0.9375rem] text-muted-foreground">
+              No daily prices in this range yet.
+            </p>
+          ) : (
+            <div
+              className="h-full"
+              role="img"
+              aria-label={trendSummary("Return", 0, returnRows.at(-1)!.return_eur, formatEur)}
+            >
+              <ValueChart
+                data={returnRows}
+                dataKey="return_eur"
+                name="Return"
+                onScrub={(i) => setScrubIndex(i == null ? null : (returnRows[i]?.at ?? null))}
+              />
+            </div>
+          ))
+        ) : (
+          <div
+            className="h-full"
+            role="img"
+            aria-label={trendSummary(
+              title,
+              valueOf(chartData[0]!),
+              valueOf(chartData.at(-1)!),
+              formatEur,
+            )}
+          >
+            <ValueChart data={chartData} dataKey={key} name={title} onScrub={setScrubIndex} />
+          </div>
         )}
-      >
-        <ValueChart data={chartData} dataKey={key} name={title} onScrub={setScrubIndex} />
       </div>
-      <div className="mt-4 flex">
+      <div className="mt-4 flex flex-col items-start gap-2">
         <SegmentedControl
           label="Chart range"
           options={CHART_RANGES.map((r) => ({ value: r, label: r }))}
           value={range}
           onChange={setRange}
         />
+        {canReturn && (
+          <SegmentedControl
+            label="Chart shows"
+            options={[
+              { value: "value", label: "Value" },
+              { value: "return", label: "Return" },
+            ]}
+            value={mode}
+            onChange={setMode}
+          />
+        )}
       </div>
     </section>
   );

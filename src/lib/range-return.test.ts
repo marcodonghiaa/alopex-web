@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rangeReturn, tradedValue } from "./range-return";
+import { rangeReturn, returnLine, sampleIndices, tradedValue } from "./range-return";
 
 const trade = (
   side: string,
@@ -98,5 +98,56 @@ describe("tradedValue", () => {
     const trades = [t("NOVO", "buy", "2025-06-01", 4, 80), t("NOVO", "sell", "2026-03-04", 4, 30)];
     expect(tradedValue(trades, "2026-01-01", new Map())).toBe(4 * 80);
     expect(tradedValue([t("X", "buy", "2026-02-01", 1, 9)], "2026-01-01", new Map())).toBe(0);
+  });
+});
+
+// protects=the Return line samples the range ends; fails_when=the line stops short of today
+describe("sampleIndices", () => {
+  it("keeps the first and last day and spaces the rest evenly", () => {
+    expect(sampleIndices(10, 4)).toEqual([0, 3, 6, 9]);
+  });
+
+  it("keeps every day when there are fewer than asked", () => {
+    expect(sampleIndices(3, 24)).toEqual([0, 1, 2]);
+  });
+
+  it("is empty for an empty range", () => {
+    expect(sampleIndices(0, 24)).toEqual([]);
+  });
+});
+
+// protects=the Return line is the gain without money added; fails_when=a buy reads as a jump
+describe("returnLine", () => {
+  const buys = [
+    {
+      key: "X",
+      side: "buy" as const,
+      trade_date: "2026-01-01",
+      shares: 10,
+      price_eur: 100,
+      fee_eur: 0,
+    },
+    {
+      key: "X",
+      side: "buy" as const,
+      trade_date: "2026-01-16",
+      shares: 10,
+      price_eur: 100,
+      fee_eur: 0,
+    },
+  ];
+
+  it("starts at zero and leaves the money you add out", () => {
+    const line = returnLine(buys, [
+      { date: "2026-01-10", prices: new Map([["X", 100]]) },
+      { date: "2026-01-20", prices: new Map([["X", 100]]) },
+      { date: "2026-01-31", prices: new Map([["X", 105]]) },
+    ]);
+    // 10 → 20 shares at 100: no gain; then 20 × 5 = 100.
+    expect(line).toEqual([0, 0, 100]);
+  });
+
+  it("is empty without days", () => {
+    expect(returnLine(buys, [])).toEqual([]);
   });
 });
