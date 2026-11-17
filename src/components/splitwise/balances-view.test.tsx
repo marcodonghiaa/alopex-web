@@ -119,3 +119,17 @@ describe("BalancesView with several currencies in a group", () => {
     }
   });
 });
+
+// polish-4 #19: open debts that net to zero aren't an empty figure slot
+describe("A group that nets to zero", () => {
+  it("says even overall when people still owe each other", () => {
+    render(<BalancesView groups={[{ ...group, myBalance: 0, myBalanceEur: 0 }]} />);
+    expect(screen.getByRole("heading")).toHaveTextContent("even overall");
+  });
+
+  it("says nothing of the kind for an all-square group", () => {
+    render(<BalancesView groups={[{ ...group, myBalance: 0, myBalanceEur: 0, people: [] }]} />);
+    expect(screen.getByRole("heading")).toHaveTextContent("All square");
+    expect(screen.getByRole("heading")).not.toHaveTextContent("even overall");
+  });
+});

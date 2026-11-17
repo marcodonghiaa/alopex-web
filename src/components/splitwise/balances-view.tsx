@@ -51,6 +51,12 @@ function GroupCard({
           {meta}
         </span>
       </span>
+      {g.myBalance === 0 && !square && (
+        // People still owe each other here; only your net is zero.
+        <span className="shrink-0 text-right text-xs font-normal text-muted-foreground">
+          even overall
+        </span>
+      )}
       {g.myBalance !== 0 && (
         <span className="shrink-0 text-right">
           <span className="block font-figure text-[0.9375rem]">
