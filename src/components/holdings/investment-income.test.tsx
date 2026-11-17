@@ -44,8 +44,8 @@ describe("InvestmentIncome", () => {
     );
     const row = (label: string) => screen.getByText(label).parentElement?.textContent;
     expect(row("Dividends")).toMatch(/8\.00.*13\.00/);
-    expect(row("Taxes")).toMatch(/−?-?€?2\.00/);
-    expect(row("Fees")).toContain("1.00");
+    expect(row("Taxes")).toBe("Taxes-€2.00-€2.00");
+    expect(row("Fees")).toBe("Fees-€1.00-€1.00");
     expect(screen.queryByText("Interest")).toBeNull();
   });
 
