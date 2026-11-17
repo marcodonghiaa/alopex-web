@@ -1,4 +1,4 @@
-import { dateLocale } from "@/lib/locale";
+import { dateLocale, numberFormat } from "@/lib/locale";
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronLeft, ChevronRight, FileUp, Info, Lock, Loader2 } from "lucide-react";
@@ -477,7 +477,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             <div className="px-1">
               <p className="flex items-baseline gap-2">
                 <span className="text-3xl leading-none font-semibold tabular-nums">
-                  {fresh.length}
+                  {numberFormat().format(fresh.length)}
                 </span>
                 <span className="text-[0.9375rem] font-medium">
                   new trade{fresh.length === 1 ? "" : "s"} to save
@@ -498,7 +498,9 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                 {parsed.trades.length > fresh.length && (
                   <div className={row}>
                     <span className="flex-1">Already saved, skipped</span>
-                    <span className="tabular-nums">{parsed.trades.length - fresh.length}</span>
+                    <span className="tabular-nums">
+                      {numberFormat().format(parsed.trades.length - fresh.length)}
+                    </span>
                   </div>
                 )}
                 {updates.length > 0 && (
@@ -506,7 +508,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                     <span className="flex-1">
                       {kind === "crypto" ? "Holdings corrected" : "Share counts corrected"}
                     </span>
-                    <span className="tabular-nums">{updates.length}</span>
+                    <span className="tabular-nums">{numberFormat().format(updates.length)}</span>
                   </div>
                 )}
               </GroupedList>

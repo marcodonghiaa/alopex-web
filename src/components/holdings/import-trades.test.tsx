@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -347,6 +347,22 @@ describe("ImportTrades", () => {
     expect(await screen.findByRole("button", { name: "Save 7 trades" })).toBeTruthy();
     expect(screen.queryByText(/Couldn't load USD exchange rates/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("counts are grouped in the reader's locale", async () => {
+    const language = vi.spyOn(navigator, "language", "get").mockReturnValue("en-GB");
+    onTestFinished(() => language.mockRestore());
+    const rows = Array.from({ length: 1234 }, (_, i) => {
+      const day = new Date(Date.UTC(2020, 0, 1 + i)).toISOString().slice(0, 10);
+      return `${day},buy,XX0000000001,1,${100 + i}`;
+    });
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    fireEvent.change(screen.getByLabelText("CSV text"), {
+      target: { value: ["date,side,isin,shares,price", ...rows].join("\n") },
+    });
+    await screen.findByText("new trades to save");
+    expect(screen.getByText("1,234")).toBeTruthy();
   });
 
   it("when your holdings can't be loaded it says so", async () => {
