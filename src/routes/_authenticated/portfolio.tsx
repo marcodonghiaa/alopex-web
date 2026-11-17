@@ -209,7 +209,13 @@ function PortfolioPage() {
         </div>
       )}
 
-      {!query.isPending && <InvestmentIncome events={perf.events} page="stock" />}
+      {!query.isPending && (
+        <InvestmentIncome
+          events={perf.events}
+          trades={[...perf.tradesByKey.values()].flat()}
+          page="stock"
+        />
+      )}
 
       {query.isPending ? (
         <>

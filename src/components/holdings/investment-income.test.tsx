@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { InvestmentEvent } from "@/lib/investment-events";
-import { InvestmentIncome, eventsForPage } from "./investment-income";
+import { InvestmentIncome, eventsForPage, incomeAndCosts } from "./investment-income";
 
 const ev = (e: Partial<InvestmentEvent>): InvestmentEvent => ({
   kind: "dividend",
@@ -48,5 +48,28 @@ describe("InvestmentIncome", () => {
     const share = ev({});
     expect(eventsForPage([coin, cash, share], "crypto")).toEqual([coin]);
     expect(eventsForPage([coin, cash, share], "stock")).toEqual([cash, share]);
+  });
+});
+
+describe("incomeAndCosts", () => {
+  it("adds the fees and taxes paid on trades, from the date on", () => {
+    const trades = [
+      { trade_date: "2026-02-01", fee_eur: 1, tax_eur: 0.5 },
+      { trade_date: "2025-02-01", fee_eur: 1, tax_eur: 0 },
+    ];
+    expect(incomeAndCosts([], trades)).toMatchObject({ fees: 2, taxes: 0.5 });
+    expect(incomeAndCosts([], trades, "2026-01-01")).toMatchObject({ fees: 1, taxes: 0.5 });
+  });
+
+  it("shows trade fees even with no income", () => {
+    render(
+      <InvestmentIncome
+        events={[]}
+        trades={[{ trade_date: "2026-02-01", fee_eur: 1, tax_eur: 0 }]}
+        page="stock"
+        today="2026-11-17"
+      />,
+    );
+    expect(screen.getByText("Fees")).toBeInTheDocument();
   });
 });

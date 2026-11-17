@@ -204,7 +204,13 @@ function CryptoPage() {
         <p className="mt-4 max-w-2xl text-sm text-muted-foreground">Coinbase syncs daily.</p>
       </section>
 
-      {!query.isPending && <InvestmentIncome events={perf.events} page="crypto" />}
+      {!query.isPending && (
+        <InvestmentIncome
+          events={perf.events}
+          trades={[...perf.tradesByKey.values()].flat()}
+          page="crypto"
+        />
+      )}
 
       {query.isPending ? (
         <>

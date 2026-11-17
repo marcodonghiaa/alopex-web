@@ -1,7 +1,25 @@
 import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
 import { summarizeIncome } from "@/lib/investment-events";
 import type { IncomeSummary, InvestmentEvent } from "@/lib/investment-events";
+import type { Trade } from "@/lib/trades";
 import { formatEur } from "@/lib/transactions";
+
+type TradeCost = Pick<Trade, "trade_date" | "fee_eur" | "tax_eur">;
+
+/** Income and costs from `from` on: the events', plus the fees and taxes paid on trades. */
+export function incomeAndCosts(
+  events: Array<InvestmentEvent>,
+  trades: Array<TradeCost>,
+  from = "",
+): IncomeSummary {
+  const out = summarizeIncome(events, from);
+  for (const t of trades) {
+    if (t.trade_date < from) continue;
+    out.fees += t.fee_eur ?? 0;
+    out.taxes += t.tax_eur ?? 0;
+  }
+  return out;
+}
 
 const ROWS: Array<{ label: string; field: keyof IncomeSummary; cost?: boolean }> = [
   { label: "Dividends", field: "dividends" },
@@ -17,21 +35,24 @@ export function eventsForPage(events: Array<InvestmentEvent>, page: "stock" | "c
 }
 
 /**
- * What your investments paid you and what they cost, this year and in all: from imported broker
- * files (dividends, interest, rewards, taxes, fees). Hidden until there's something to show.
+ * What your investments paid you and what they cost, this year and in all: dividends, interest
+ * and rewards from imported broker files, and taxes and fees on their own or on trades. Hidden
+ * until there's something to show.
  */
 export function InvestmentIncome({
   events,
+  trades = [],
   page,
   today = new Date().toISOString().slice(0, 10),
 }: {
   events: Array<InvestmentEvent>;
+  trades?: Array<TradeCost>;
   page: "stock" | "crypto";
   today?: string;
 }) {
   const mine = eventsForPage(events, page);
-  const all = summarizeIncome(mine);
-  const year = summarizeIncome(mine, `${today.slice(0, 4)}-01-01`);
+  const all = incomeAndCosts(mine, trades);
+  const year = incomeAndCosts(mine, trades, `${today.slice(0, 4)}-01-01`);
   const rows = ROWS.filter((r) => all[r.field] !== 0);
   if (rows.length === 0) return null;
   const shown = (n: number, cost?: boolean) => formatEur(cost ? -n : n);

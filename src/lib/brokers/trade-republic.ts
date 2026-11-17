@@ -42,6 +42,8 @@ const CASH: Record<string, EventKind> = {
 const MONEY_MOVE = /^(CUSTOMER_|TRANSFER_|VIBAN_|PAYMENT_|SEPA_|INPAYMENT|OUTPAYMENT)/;
 
 const num = (text: string) => (text.trim() === "" ? 0 : Number(text));
+// Adding cents in floating point leaves dust (0.67 - 0.1 = 0.5700000000000001).
+const add = (...n: Array<number>) => Number(n.reduce((a, b) => a + b, 0).toFixed(8));
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /**
@@ -63,7 +65,7 @@ export const tradeRepublic: BrokerParser = {
     "Pick a start date before your first deposit, create the CSV",
     "Pick the file here, as it comes. Import it again any time: what's saved is skipped",
   ],
-  verifiedAt: "2026-11-10",
+  verifiedAt: "2026-11-17",
   detect: (header) => COLUMNS.every((c) => header.includes(c)),
   parse(lines, separator, header, { kind, knownKeys, today }) {
     const trades: Array<Trade> = [];
@@ -94,9 +96,13 @@ export const tradeRepublic: BrokerParser = {
       if (date > today) return void errors.push(`${line_}: the date is in the future.`);
       const shares = num(get("shares"));
       const amount = num(get("amount"));
-      const fee = Math.abs(num(get("fee")));
-      const tax = Math.abs(num(get("tax")));
-      if (![shares, amount, fee, tax].every(Number.isFinite)) {
+      // amount is before fee and tax (a trade's shares × price, a dividend's gross); fee and tax are
+      // their own signed columns, negative when charged, positive when given back.
+      const feeSigned = num(get("fee"));
+      const taxSigned = num(get("tax"));
+      const fee = Math.max(0, -feeSigned);
+      const tax = Math.max(0, -taxSigned);
+      if (![shares, amount, feeSigned, taxSigned].every(Number.isFinite)) {
         return void errors.push(`${line_}: couldn't read this ${type} row.`);
       }
 
@@ -153,12 +159,21 @@ export const tradeRepublic: BrokerParser = {
         if (!TRADES.has(type) && !FREE.has(type)) {
           events.push(event("corporate_action"));
         }
+        // Tax given back on a trade is money in: a refund of its own.
+        if (TRADES.has(type) && taxSigned > 0) {
+          events.push({ ...event("tax_refund"), amount_eur: taxSigned, tax_eur: 0, fee_eur: 0 });
+        }
         return;
       }
 
       if (CARD.test(type) && type !== "CARD_ORDERING_FEE") return void card++;
       let eventKind: EventKind | undefined = CASH[type];
-      if (eventKind === "tax" && amount > 0) eventKind = "tax_refund";
+      // What reached the account: the amount after its fee and tax.
+      const net = add(amount, feeSigned, taxSigned);
+      // A tax row (stamp duty, a tax optimisation, its cancellation) may carry the tax only in the
+      // tax column, with amount 0: its sign says whether it was charged or given back.
+      const taxRow = eventKind === "tax";
+      if (taxRow && net > 0) eventKind = "tax_refund";
       if (!eventKind && MONEY_MOVE.test(type)) eventKind = amount >= 0 ? "deposit" : "withdrawal";
       if (!eventKind) {
         unknown++;
@@ -169,7 +184,11 @@ export const tradeRepublic: BrokerParser = {
       const eventPage = key && rowKind === "crypto" ? "crypto" : "stock";
       if (eventPage !== kind) return void otherPage++;
       if (key) names.set(key, get("name"));
-      events.push(event(eventKind));
+      events.push(
+        taxRow
+          ? { ...event(eventKind), amount_eur: net, tax_eur: 0, fee_eur: 0 }
+          : event(eventKind),
+      );
 
       function event(k: EventKind): InvestmentEvent {
         const orig = get("original_amount").trim();
@@ -181,7 +200,7 @@ export const tradeRepublic: BrokerParser = {
           key,
           event_date: date,
           occurred_at: at,
-          amount_eur: amount,
+          amount_eur: add(amount, feeSigned, taxSigned),
           tax_eur: tax,
           fee_eur: fee,
           shares: shares !== 0 ? Math.abs(shares) : null,

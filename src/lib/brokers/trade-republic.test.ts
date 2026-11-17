@@ -217,7 +217,7 @@ describe("Trade Republic, crypto", () => {
 });
 
 describe("Trade Republic, income, fees, taxes and cash", () => {
-  it("a foreign dividend keeps its tax, the amount before converting and the rate", () => {
+  it("a foreign dividend is saved after its tax, and keeps the tax, the amount before converting and the rate", () => {
     const { events } = parseTradesCsv(
       file({
         category: "CASH",
@@ -238,7 +238,7 @@ describe("Trade Republic, income, fees, taxes and cash", () => {
         key: "XX0000000001",
         event_date: "2026-03-02",
         occurred_at: "2026-03-02T09:30:00.123Z",
-        amount_eur: 4.21,
+        amount_eur: 3.47,
         tax_eur: 0.74,
         fee_eur: 0,
         shares: 10,
@@ -249,6 +249,50 @@ describe("Trade Republic, income, fees, taxes and cash", () => {
         source: "trade_republic",
       }),
     ]);
+  });
+
+  it("a tax charged only in the tax column (stamp duty) is a tax, its cancellation a refund", () => {
+    const cash = {
+      category: "CASH",
+      symbol: "",
+      name: "",
+      type: "TAX_OPTIMIZATION",
+      amount: "0.000000",
+    };
+    const { events } = parseTradesCsv(
+      file(
+        { ...cash, tax: "-20.34", description: "Stamp Duty Tax (Portfolio)" },
+        { ...cash, tax: "20.34", description: "Cancellation Stamp Duty Tax (Portfolio)" },
+      ),
+      stock,
+    );
+    expect(events?.map((e) => [e.kind, e.amount_eur, e.tax_eur])).toEqual([
+      ["tax", -20.34, 0],
+      ["tax_refund", 20.34, 0],
+    ]);
+  });
+
+  it("interest is saved after the tax held back from it", () => {
+    const { events } = parseTradesCsv(
+      file({
+        category: "CASH",
+        type: "INTEREST_PAYMENT",
+        symbol: "",
+        amount: "19.250000",
+        tax: "-5.01",
+      }),
+      stock,
+    );
+    expect(events?.[0]).toMatchObject({ kind: "interest", amount_eur: 14.24, tax_eur: 5.01 });
+  });
+
+  it("tax given back on a trade is a refund, not a cost", () => {
+    const { trades, events } = parseTradesCsv(
+      file({ type: "SELL", shares: "-1", price: "10", amount: "10", tax: "1.5" }),
+      stock,
+    );
+    expect(trades[0]).toMatchObject({ side: "sell", tax_eur: 0 });
+    expect(events?.[0]).toMatchObject({ kind: "tax_refund", amount_eur: 1.5, key: "XX0000000001" });
   });
 
   it("interest, saveback, fees, taxes and refunds each get their kind", () => {
