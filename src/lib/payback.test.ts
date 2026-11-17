@@ -66,6 +66,16 @@ describe("namesLookAlike", () => {
     ["Bianchi & Co. Ltd", "Bianchi"],
   ])("%s is not %s", (payer, contact) => expect(namesLookAlike(payer, contact)).toBe(false));
 
+  it("an initial matches a word that starts with it, either side, next to a whole word", () => {
+    expect(namesLookAlike("C. FIORE", "Cristian Fiore")).toBe(true);
+    expect(namesLookAlike("LUCA MARINO", "Luca M")).toBe(true);
+    expect(namesLookAlike("Luca M.", "Luca Marino")).toBe(true);
+    expect(namesLookAlike("Anna Rossi", "A R")).toBe(false);
+    expect(namesLookAlike("Luca Marino", "M")).toBe(false);
+    expect(namesLookAlike("C Fiore", "Cristian Fiore Rossi")).toBe(false);
+    expect(namesLookAlike("L. Bianchi", "Luca Marino")).toBe(false);
+  });
+
   it("a surname that looks like a company word is still a person", () => {
     expect(namesLookAlike("Maria Sá", "Maria")).toBe(true);
   });

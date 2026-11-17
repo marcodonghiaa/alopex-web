@@ -129,7 +129,7 @@ const isCompany = (p: Array<string>): boolean => {
  * Whether the bank's payer name could be the contact you wrote down. Generous on purpose: it only
  * puts a question to you. Matches "Anna" to "Anna Rossi" (one word: a whole word of the payer's),
  * "Cri Fiore" to "Cristian Fiore" (several words: each starts a different word of the payer's, 3+
- * letters, or the whole word), and run-together nicknames like "Crifiore" (the start of the first
+ * letters, the whole word, or an initial next to a whole word), and run-together nicknames like "Crifiore" (the start of the first
  * name plus the surname). A company payer never matches.
  */
 export function namesLookAlike(payer: string | null, contact: string): boolean {
@@ -139,15 +139,23 @@ export function namesLookAlike(payer: string | null, contact: string): boolean {
   if (p.length === 0 || c.length === 0 || isCompany(p)) return false;
   const used = new Set<number>();
   const several = c.length > 1;
+  // An initial ("C. Fiore", "Luca M") stands for any word starting with it, but only next to a
+  // word that matched in full: "A R" alone is too little to ask about.
+  const initial = (a: string, b: string) => a.length === 1 && b.startsWith(a);
+  let whole = false;
   const allWords = c.every((w) => {
     const i = p.findIndex(
-      (pw, idx) => !used.has(idx) && (pw === w || (several && w.length >= 3 && pw.startsWith(w))),
+      (pw, idx) =>
+        !used.has(idx) &&
+        (pw === w ||
+          (several && ((w.length >= 3 && pw.startsWith(w)) || initial(w, pw) || initial(pw, w)))),
     );
     if (i < 0) return false;
     used.add(i);
+    whole ||= (p[i] ?? "").length > 1 && w.length > 1;
     return true;
   });
-  if (allWords) return true;
+  if (allWords && whole) return true;
   const nick = c[0];
   if (several || p.length < 2 || nick === undefined) return false;
   if (nick === p.join("")) return true;
