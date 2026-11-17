@@ -1,4 +1,4 @@
-import { isDay } from "@/lib/date";
+import { addDays, isDay } from "@/lib/date";
 import { plural } from "@/lib/plural";
 import type { Trade } from "@/lib/trades";
 import { splitLine, unheldKeys } from "./csv";
@@ -169,7 +169,9 @@ export const ledgerLive: BrokerParser = {
       if (failed && family === "in") return;
       const shares = family === "stake" || failed ? fee : amount;
       if (shares === 0) return;
-      if (date > today) return void errors.push(`Line ${i + 2}: the date is in the future.`);
+      // Ledger dates are UTC days; west of UTC that can be a day past your local today.
+      if (date > addDays(today, 1))
+        return void errors.push(`Line ${i + 2}: the date is in the future.`);
       const currency = currencyOf(get);
       const rate = currency === "EUR" ? 1 : (rateToEur?.(currency, date) ?? null);
       if (rate == null) {

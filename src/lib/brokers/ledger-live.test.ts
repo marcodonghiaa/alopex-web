@@ -246,6 +246,18 @@ describe("Ledger Live operations export", () => {
     expect(parseTradesCsv(row(future), ctx).errors).toEqual(["Line 2: the date is in the future."]);
   });
 
+  it("a UTC day one past your local today is not in the future; two past still is", () => {
+    // Ledger dates are UTC days: late evening west of UTC is already tomorrow there.
+    const at = (day: string) =>
+      `${day}T02:00:00.000Z,Confirmed,BTC,IN,1,,h,Bitcoin 1,a,USD,300,300`;
+    const tomorrow = parseTradesCsv(row(at("2026-11-18")), ctx);
+    expect(tomorrow.errors).toEqual([]);
+    expect(tomorrow.trades[0]?.trade_date).toBe("2026-11-18");
+    expect(parseTradesCsv(row(at("2026-11-19")), ctx).errors).toEqual([
+      "Line 2: the date is in the future.",
+    ]);
+  });
+
   it("on the Portfolio page it points you to the Crypto page", () => {
     const result = parseTradesCsv(sample, { ...ctx, kind: "stock" });
     expect(result.trades).toEqual([]);
