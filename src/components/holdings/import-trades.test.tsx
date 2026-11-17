@@ -615,4 +615,32 @@ describe("ImportTrades", () => {
     await screen.findByRole("button", { name: "Save 7 trades" });
     expect(screen.getByRole("status").textContent).toBe("Read, check what it found below");
   });
+
+  it("Try again shows it's trying until the rates arrive", async () => {
+    db.ratesDown = true;
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    await screen.findByRole("button", { name: "Try again" });
+    let release!: () => void;
+    db.ratesDown = false;
+    db.ratesGate = new Promise((r) => (release = r));
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    const trying = await screen.findByRole("button", { name: "Trying…" });
+    expect((trying as HTMLButtonElement).disabled).toBe(true);
+    expect(trying.querySelector(".animate-spin")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("Reading…");
+    release();
+    expect(await screen.findByRole("button", { name: "Save 7 trades" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Trying|Try again/ })).toBeNull();
+  });
+
+  it("a retry that fails again offers Try again once more", async () => {
+    db.ratesDown = true;
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    const again = await screen.findByRole("button", { name: "Try again" });
+    expect((again as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByRole("status").textContent).toBe("Waiting for exchange rates");
+  });
 });

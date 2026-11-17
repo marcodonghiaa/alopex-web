@@ -154,6 +154,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     staleTime: Infinity,
     retry: 1,
   });
+  // A retry with no rates yet clears the error while it runs: keep the button there, as Trying….
+  const [retrying, setRetrying] = useState(false);
   const parsed = useMemo(() => {
     if (!firstPass || !ctx || !need) return firstPass;
     if (!rates.data) return null;
@@ -251,7 +253,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   );
   const ok = parsed != null && parsed.errors.length === 0;
   // Without the holdings or the rates the file can't be read: no spinner next to the error.
-  const stuck = !parsed && (keys.isError || rates.isError);
+  const stuck = !parsed && (keys.isError || (rates.isError && !retrying));
   const title =
     from === null
       ? "Import trades"
@@ -450,13 +452,28 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             )}
           </>
         )}
-        {rates.isError && (
+        {(rates.isError || retrying) && (
           <div className="flex flex-wrap items-center gap-3">
-            <p role="alert" className="text-sm text-negative">
-              {rates.error.message}
-            </p>
-            <Button variant="quiet" onClick={() => void rates.refetch()}>
-              Try again
+            {rates.error && (
+              <p role="alert" className="text-sm text-negative">
+                {rates.error.message}
+              </p>
+            )}
+            <Button
+              variant="quiet"
+              disabled={retrying}
+              onClick={() => {
+                setRetrying(true);
+                void rates.refetch().finally(() => setRetrying(false));
+              }}
+            >
+              {retrying ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" /> Trying…
+                </>
+              ) : (
+                "Try again"
+              )}
             </Button>
           </div>
         )}
