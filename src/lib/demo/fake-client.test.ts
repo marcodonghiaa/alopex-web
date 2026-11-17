@@ -865,3 +865,87 @@ describe("demo notes and tags", () => {
     );
   });
 });
+
+describe("fake client: payback matching mirrors the database", () => {
+  const ACC = "demo-pb-acc";
+  const row = (ref: string, over: Record<string, unknown>) => ({
+    entry_reference: ref,
+    account_uid: ACC,
+    user_id: DEMO_USER_ID,
+    currency: "EUR",
+    booking_date: "2026-10-10",
+    credit_debit_indicator: "DBIT",
+    owed_settled: false,
+    ...over,
+  });
+  const seed = async (rows: Array<Record<string, unknown>>) => {
+    const c = fresh();
+    await c.from("transactions").insert(rows as never);
+    return c;
+  };
+  const record = (c: ReturnType<typeof fresh>, ref: string, contact: string | null) =>
+    c.rpc("record_payback", {
+      p_account: ACC,
+      p_ref: ref,
+      p_contact: contact as string,
+      p_remember: false,
+    });
+
+  it("a split refund counts against the bill and settles with it; alone it stays open", async () => {
+    const c = await seed([
+      row("sr-bill", { amount: 100, personal_amount: 40, owed_by: "Bea", booking_date: "2026-10-01" }),
+      row("sr-ref", { amount: 30, personal_amount: 10, owed_by: "Bea", credit_debit_indicator: "CRDT", booking_date: "2026-10-02" }),
+      row("sr-pay", { amount: 40, credit_debit_indicator: "CRDT", debtor_name: "Bea Verdi", flow_type: "income" }),
+      row("sr-pay2", { amount: 30, credit_debit_indicator: "CRDT", debtor_name: "Bea Verdi", flow_type: "income" }),
+    ]);
+    const { data } = await record(c, "sr-pay", "Bea");
+    expect(data).toMatchObject({ settled: ["sr-bill"], settled_eur: 40, left_eur: 0 });
+    const { data: rows } = await c
+      .from("transactions")
+      .select("entry_reference, owed_settled")
+      .in("entry_reference", ["sr-bill", "sr-ref"]);
+    expect(rows!.every((r) => r.owed_settled)).toBe(true);
+    await c.rpc("undo_payback", { p_account: ACC, p_ref: "sr-pay", p_forget: false });
+    const { data: short } = await record(c, "sr-pay2", "Bea");
+    expect(short).toMatchObject({ settled: [], left_eur: 30 });
+  });
+
+  it("names are read like the page: 'Carla,' is Carla alone", async () => {
+    const c = await seed([
+      row("cm-1", { amount: 20, personal_amount: 10, owed_by: "Carla," }),
+      row("cm-2", { amount: 20, personal_amount: 10, owed_by: "Carla, Dino" }),
+      row("cm-pay", { amount: 20, credit_debit_indicator: "CRDT", debtor_name: "Carla Blu", flow_type: "income" }),
+    ]);
+    const { data } = await record(c, "cm-pay", "Carla");
+    expect(data).toMatchObject({ settled: ["cm-1"], left_eur: 10 });
+  });
+
+  it("refuses a missing contact and a payment that is not plain income", async () => {
+    const c = await seed([
+      row("x-pay", { amount: 20, credit_debit_indicator: "CRDT", debtor_name: "Ugo", flow_type: "income" }),
+      row("x-transfer", { amount: 20, credit_debit_indicator: "CRDT", debtor_name: "Ugo", flow_type: "transfer" }),
+      row("x-split", { amount: 20, personal_amount: 5, credit_debit_indicator: "CRDT", debtor_name: "Ugo", flow_type: "income" }),
+      row("x-sw", { amount: 20, import_batch_id: "b1", credit_debit_indicator: "CRDT", debtor_name: "Ugo", flow_type: "income" }),
+    ]);
+    expect((await record(c, "x-pay", null)).error?.message).toBe("Contact required");
+    for (const ref of ["x-transfer", "x-split", "x-sw"])
+      expect((await record(c, ref, "Ugo")).error?.message).toBe("Payment not found");
+    const { data } = await c.rpc("payback_candidates", { p_days: 60 });
+    const refs = (data as Array<{ entry_reference: string }>).map((r) => r.entry_reference);
+    expect(refs).toContain("x-pay");
+    expect(refs).not.toEqual(expect.arrayContaining(["x-transfer"]));
+    expect(refs.filter((r) => r.startsWith("x-") && r !== "x-pay")).toEqual([]);
+  });
+});
+
+describe("demo payerKey matches the database's payer_key", () => {
+  it("folds the same letters and cuts at 200", async () => {
+    const { payerKey } = await import("./fake-client");
+    expect(
+      payerKey(
+        "Řehoř ŁUKASZ Øster Šťastný Dvořák Ćwik Węgrzyn Nagy Ödön Győző Žanić Ålund Ærø Straße",
+      ),
+    ).toBe("rehor lukasz oster stastny dvorak cwik wegrzyn nagy odon gyozo zanic alund aero strasse");
+    expect(payerKey("ab ".repeat(150))?.length).toBe(200);
+  });
+});

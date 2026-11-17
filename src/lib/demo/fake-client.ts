@@ -152,13 +152,33 @@ function demoStatementRows(now: Date) {
 // accents, spacing or punctuation.
 const payerNameOf = (t: Row): string | null =>
   String(t["debtor_name"] ?? "").trim() || String(t["creditor_name"] ?? "").trim() || null;
+const FOLD: Record<string, string> = { ł: "l", ø: "o", đ: "d", ħ: "h", ı: "i", ß: "ss", æ: "ae", œ: "oe" };
 export const payerKey = (name: string | null): string | null =>
   (name ?? "")
     .toLowerCase()
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
+    .replace(/[łøđħıßæœ]/gu, (ch) => FOLD[ch] ?? ch)
     .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .slice(0, 200)
     .trim() || null;
+// Mirrors payback_eligible: plain incoming money only.
+const paybackEligible = (t: Row): boolean =>
+  t["credit_debit_indicator"] === "CRDT" &&
+  !t["deleted_at"] &&
+  Number(t["amount"]) > 0 &&
+  String(t["flow_type"] ?? "income") === "income" &&
+  t["import_batch_id"] == null &&
+  t["personal_amount"] == null &&
+  t["refund_of"] == null &&
+  t["own_counterparty"] !== true;
+// owed_by as the page reads it: comma-separated, blanks dropped.
+const owedNames = (t: Row): Array<string> =>
+  String(t["owed_by"] ?? "")
+    .split(",")
+    .map((n) => n.trim().toLowerCase())
+    .filter(Boolean);
 
 class Store {
   readonly db: Record<string, Array<Row>>;
@@ -544,13 +564,8 @@ class Store {
     const data = (this.db["transactions"] ?? [])
       .filter(
         (t) =>
-          t["credit_debit_indicator"] === "CRDT" &&
-          !t["deleted_at"] &&
+          paybackEligible(t) &&
           t["payback_contact"] == null &&
-          t["refund_of"] == null &&
-          t["own_counterparty"] !== true &&
-          !["own_account", "pair"].includes(String(t["flow_source"] ?? "")) &&
-          Number(t["amount"]) > 0 &&
           String(t["booking_date"]) >= since,
       )
       .sort((a, b) => compare(b["booking_date"], a["booking_date"]))
@@ -584,9 +599,13 @@ class Store {
     if (!credit) return { data: null, error: { message: "Payment not found", code: "P0001" } };
     if (credit["payback_contact"] != null)
       return { data: null, error: { message: "Payment already checked", code: "P0001" } };
-    const contact = String(args["p_contact"] ?? "").trim();
-    if (contact.length > 100)
+    if (args["p_contact"] == null)
+      return { data: null, error: { message: "Contact required", code: "P0001" } };
+    const contact = String(args["p_contact"]).trim();
+    if ([...contact].length > 100)
       return { data: null, error: { message: "Contact name too long", code: "P0001" } };
+    if (!paybackEligible(credit))
+      return { data: null, error: { message: "Payment not found", code: "P0001" } };
     if (contact === "") {
       credit["payback_contact"] = "";
       const key = payerKey(payerNameOf(credit));
@@ -599,40 +618,51 @@ class Store {
     let left = credit["currency"] === "EUR" ? Number(credit["amount"]) : null;
     let settledEur = 0;
     const settled: Array<string> = [];
-    const bills = txs
+    // Signed like the view: what they owe on a bill, minus what a split refund owes them.
+    const owedOf = (t: Row) =>
+      Math.round(
+        (Number(t["amount"]) - Number(t["personal_amount"])) *
+          (t["credit_debit_indicator"] === "DBIT" ? 100 : -100),
+      ) / 100;
+    const rows = txs
       .filter(
         (t) =>
           !t["deleted_at"] &&
-          t["credit_debit_indicator"] === "DBIT" &&
           !t["owed_settled"] &&
           t["personal_amount"] != null &&
           Number(t["personal_amount"]) >= 0 &&
-          Number(t["personal_amount"]) < Number(t["amount"]) &&
           t["import_batch_id"] == null &&
-          !["refunded", "transfer"].includes(String(t["flow_type"] ?? "spend")) &&
-          !String(t["owed_by"] ?? "").includes(",") &&
-          String(t["owed_by"] ?? "")
-            .trim()
-            .toLowerCase() === contact.toLowerCase(),
+          !["refunded", "transfer"].includes(String(t["flow_type"] ?? "")) &&
+          owedNames(t).join(",") === contact.toLowerCase() &&
+          owedOf(t) !== 0,
       )
       .sort(
         (a, b) =>
           compare(a["booking_date"], b["booking_date"]) ||
           compare(a["entry_reference"], b["entry_reference"]),
       );
-    for (const b of bills) {
-      const owed = Math.round((Number(b["amount"]) - Number(b["personal_amount"])) * 100) / 100;
-      if (left === null || owed > left + 0.005) break;
+    const refunds = rows.filter((t) => owedOf(t) < 0);
+    const credits = refunds.reduce((sum, t) => sum + owedOf(t), 0);
+    if (left !== null) left -= credits;
+    const settle = (b: Row) =>
       Object.assign(b, {
         owed_settled: true,
         settled_at: this.now.toISOString(),
         settled_by_account: credit["account_uid"],
         settled_by_ref: credit["entry_reference"],
       });
+    for (const b of rows.filter((t) => owedOf(t) > 0)) {
+      const owed = owedOf(b);
+      if (left === null || owed > left + 0.005) break;
+      settle(b);
       left -= owed;
       settledEur += owed;
       settled.push(String(b["entry_reference"]));
     }
+    if (settled.length > 0) {
+      refunds.forEach(settle);
+      settledEur += credits;
+    } else if (left !== null) left += credits;
     let linked = false;
     const key = payerKey(payerNameOf(credit));
     if (args["p_remember"] !== false && key) {
