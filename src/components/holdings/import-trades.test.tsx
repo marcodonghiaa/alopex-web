@@ -328,7 +328,9 @@ describe("ImportTrades", () => {
       target: { files: [new File([csv], "ops.csv", { type: "text/csv" })] },
     });
     // One retry first (no wait in tests).
-    expect(await screen.findByText(/Couldn't load USD exchange rates/)).toBeTruthy();
+    expect((await screen.findByText(/Couldn't load USD to EUR rates/)).textContent).not.toMatch(
+      /Try again/,
+    );
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
   });
 
@@ -353,11 +355,11 @@ describe("ImportTrades", () => {
     db.ratesDown = true;
     open("crypto");
     pick(/Ledger Live/, "ledger_live.csv");
-    await screen.findByText(/Couldn't load USD exchange rates/);
+    await screen.findByText(/Couldn't load USD to EUR rates/);
     db.ratesDown = false;
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByRole("button", { name: "Save 7 trades" })).toBeTruthy();
-    expect(screen.queryByText(/Couldn't load USD exchange rates/)).toBeNull();
+    expect(screen.queryByText(/Couldn't load USD to EUR rates/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 
@@ -384,14 +386,17 @@ describe("ImportTrades", () => {
   });
 
   it.each([
-    ["the exchange rates", () => (db.ratesDown = true), /Couldn't load USD exchange rates/],
+    ["the exchange rates", () => (db.ratesDown = true), /Couldn't load USD to EUR rates/],
     ["your holdings", () => (db.holdingsDown = true), /Couldn't load your holdings/],
-  ])("when %s can't be loaded the file stops reading", async (_, fail, message) => {
+  ])("when %s can't be loaded the file stops reading", async (what, fail, message) => {
     fail();
     open("crypto");
     pick(/Ledger Live/, "ledger_live.csv");
     await screen.findByText(message);
-    expect(screen.getByText("Can't be imported")).toBeTruthy();
+    // Only the rates failed: the file is fine, it waits for them.
+    expect(screen.getByRole("status").textContent).toBe(
+      what === "the exchange rates" ? "Waiting for exchange rates" : "Can't be imported",
+    );
     expect(screen.queryByText("Reading…")).toBeNull();
     expect(document.querySelector(".animate-spin")).toBeNull();
   });

@@ -172,7 +172,7 @@ describe("loadRates", () => {
   it("a broken answer from the exchange-rate site is our error, not a crash", async () => {
     const get = vi.fn(async () => ({ ok: true, json: async () => JSON.parse("{") as unknown }));
     await expect(loadRates("USD", "2026-01-01", "2026-01-05", fakeDb([]), get)).rejects.toThrow(
-      /Couldn't load USD exchange rates/,
+      "Couldn't load USD to EUR rates from api.frankfurter.dev to value this file.",
     );
   });
 
@@ -194,6 +194,10 @@ describe("loadRates", () => {
       expect(get).toHaveBeenCalledWith(
         "https://fx.example/v1/2025-12-22..2026-01-05?base=EUR&symbols=USD",
       );
+      const down = vi.fn(async () => ({ ok: false, json: async () => ({}) }));
+      await expect(
+        fresh.loadRates("GBP", "2026-01-01", "2026-01-05", fakeDb([]), down),
+      ).rejects.toThrow("Couldn't load GBP to EUR rates from fx.example to value this file.");
     } finally {
       vi.doUnmock("@/lib/csp");
       vi.resetModules();
@@ -203,17 +207,18 @@ describe("loadRates", () => {
   it("an exchange-rate site that can't be reached (offline, blocked) is our error", async () => {
     const offline = vi.fn(() => Promise.reject(new TypeError("Failed to fetch")));
     await expect(loadRates("USD", "2026-01-01", "2026-01-05", fakeDb([]), offline)).rejects.toThrow(
-      /Couldn't load USD exchange rates/,
+      "Couldn't load USD to EUR rates from api.frankfurter.dev to value this file.",
     );
   });
 
   it("says so when the rates can't be loaded", async () => {
     const down = vi.fn(async () => ({ ok: false, json: async () => ({}) }));
     await expect(loadRates("USD", "2025-01-01", "2026-01-05", fakeDb([]), down)).rejects.toThrow(
-      /Couldn't load USD exchange rates/,
+      "Couldn't load USD to EUR rates from api.frankfurter.dev to value this file.",
     );
+    // Our own stored rates failed: the exchange-rate site isn't to blame.
     await expect(
       loadRates("USD", "2026-01-03", "2026-01-05", fakeDb([], { message: "x" }), down),
-    ).rejects.toThrow(/Couldn't load USD exchange rates/);
+    ).rejects.toThrow("Couldn't load USD to EUR rates to value this file.");
   });
 });

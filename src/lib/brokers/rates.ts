@@ -36,7 +36,12 @@ export async function loadRates(
   db: Db = supabase,
   get: Get = (url) => fetch(url),
 ): Promise<Array<RateRow>> {
-  const fail = () => new Error(`Couldn't load ${currency} exchange rates. Try again in a moment.`);
+  // Names the site a self-hoster's firewall must let through; our own stored rates aren't on it.
+  const fail = (site?: string) =>
+    new Error(
+      `Couldn't load ${currency} to EUR rates${site ? ` from ${site}` : ""} to value this file.`,
+    );
+  const siteFail = () => fail(new URL(FX_HISTORY).host);
   const start = addDays(from, -MAX_GAP_DAYS);
   // In pages: the server returns at most 1000 rows a request, and years of daily rates are more.
   let stored: Array<RateRow>;
@@ -73,13 +78,13 @@ export async function loadRates(
   const res = await get(
     `${FX_HISTORY}/v1/${since}..${until}?base=EUR&symbols=${encodeURIComponent(currency)}`,
   ).catch(() => null);
-  if (!res?.ok) throw fail();
+  if (!res?.ok) throw siteFail();
   // Only real days with a finite rate above zero: a bad answer must never become a price.
   let body: { rates?: Record<string, Record<string, unknown> | null> };
   try {
     body = (await res.json()) as typeof body;
   } catch {
-    throw fail();
+    throw siteFail();
   }
   const storedDays = new Set(stored.map((r) => r.date));
   const fetched = Object.entries(body?.rates ?? {})

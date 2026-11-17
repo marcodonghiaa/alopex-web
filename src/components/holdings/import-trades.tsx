@@ -368,7 +368,9 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                       ? "Reading…"
                       : ok
                         ? "Read, check what it found below"
-                        : "Can't be imported"}
+                        : !parsed && !keys.isError
+                          ? "Waiting for exchange rates"
+                          : "Can't be imported"}
                   </span>
                 </span>
                 <label className="-my-2 inline-flex min-h-11 cursor-pointer items-center rounded-sm px-2 text-xs text-primary underline underline-offset-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
