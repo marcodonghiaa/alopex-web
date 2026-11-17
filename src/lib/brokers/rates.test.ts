@@ -64,6 +64,13 @@ describe("loadRates", () => {
     expect(get).not.toHaveBeenCalled();
   });
 
+  it("stored rates that start exactly on the first day need nothing else", async () => {
+    const get = series({});
+    const found = await loadRates("USD", "2026-01-02", "2026-01-05", fakeDb(rows), get);
+    expect(found).toEqual(rows);
+    expect(get).not.toHaveBeenCalled();
+  });
+
   it("reads only the rates of the currency asked for", async () => {
     const usd = rows.map((r) => ({ ...r, currency: "USD" }));
     const gbp = [{ date: "2026-01-03", rate_to_eur: 1.2, currency: "GBP" }];
