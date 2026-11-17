@@ -359,7 +359,7 @@ function AccountsPage() {
               className="mb-4 flex flex-wrap items-center justify-between gap-3 break-words rounded-lg bg-warning/10 px-4 py-3 text-sm text-foreground"
             >
               {/* A long code like WRONG_CONTINUATION_KEY breaks after an underscore, not mid-word. */}
-              <span className="min-w-0">
+              <span className="min-w-0 flex-1 basis-64">
                 {issue!.text
                   .split(/(?<=_)/)
                   .flatMap((part, i) => (i ? [<wbr key={i} />, part] : [part]))}

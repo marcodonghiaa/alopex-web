@@ -207,7 +207,10 @@ describe("sync errors", () => {
     });
     renderPage();
     Element.prototype.scrollIntoView = vi.fn();
-    fireEvent.click(await screen.findByRole("button", { name: "Connect again" }));
+    // A long text shrinks beside the button on a wide screen, instead of pushing it to a new line.
+    const button = await screen.findByRole("button", { name: "Connect again" });
+    expect(button.previousElementSibling).toHaveClass("flex-1", "basis-64");
+    fireEvent.click(button);
     expect(
       await screen.findByText(
         "Gone Bank isn't listed for this country anymore. Pick your bank again.",
