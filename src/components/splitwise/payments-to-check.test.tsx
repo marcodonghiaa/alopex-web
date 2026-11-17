@@ -219,6 +219,15 @@ describe("PaymentsToCheck", () => {
     expect(yes.querySelector(".truncate")?.textContent).toBe(`Yes, it's ${long.name}`);
   });
 
+  // protects=a tidy row on a phone; fails_when=a wrapped "Not a payback" sits inset from the
+  // button edge above it (U4)
+  it("Not a payback has no side inset, so when it wraps it lines up with Yes", () => {
+    view([suggestion()]);
+    const not = screen.getByRole("button", { name: "Not a payback" });
+    expect(not.className.split(" ")).toContain("px-0");
+    expect(not.className.split(" ")).not.toContain("px-4");
+  });
+
   it("no Someone else when nobody else owes you", () => {
     view([suggestion()], [mario]);
     expect(screen.queryByRole("button", { name: "Someone else" })).toBeNull();

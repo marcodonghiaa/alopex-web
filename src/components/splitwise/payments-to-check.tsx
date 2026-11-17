@@ -185,6 +185,8 @@ export function PaymentsToCheck({
                     )}
                     <Button
                       variant="ghost"
+                      // A text button: no side inset, so on its own line it lines up with Yes.
+                      className="px-0 hover:bg-transparent hover:underline"
                       disabled={saving}
                       onClick={() => {
                         setFocusAfter({ to: "next", id });
