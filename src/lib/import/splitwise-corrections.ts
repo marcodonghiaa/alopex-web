@@ -76,8 +76,14 @@ export function diffStored(
   const inFile = new Set(fingerprints);
   const known = new Set(stored.map((s) => s.fingerprint));
 
+  // A share the Splitwise sync wrote ("sw:<id>") is never in the file, and only the sync may
+  // remove it (the backend refuses).
   const gone = stored.filter(
-    (s) => !inFile.has(s.fingerprint) && s.booking_date >= first && s.booking_date <= last,
+    (s) =>
+      !s.fingerprint.startsWith("sw:") &&
+      !inFile.has(s.fingerprint) &&
+      s.booking_date >= first &&
+      s.booking_date <= last,
   );
   const unstored: Array<FileRow> = rows.flatMap((row, i) => {
     const fingerprint = fingerprints[i] ?? "";

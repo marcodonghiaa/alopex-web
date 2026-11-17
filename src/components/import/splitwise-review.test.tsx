@@ -483,6 +483,17 @@ describe("SplitwiseReview", () => {
       rpc.mockResolvedValue({ data: { added: 1, edited: 0, removed: 0 }, error: null });
     });
 
+    // polish-1 #4: a share the Splitwise sync wrote is never in the file; the backend refuses to
+    // remove it, so it must not be offered as "removed in Splitwise"
+    it("never offers a share the Splitwise sync wrote for removal", async () => {
+      const SYNCED = { ...share("sw:77", "Brunch", 12), booking_date: "2026-08-16" };
+      tables.splitwise_expenses = { data: [TAXI, GONE, SYNCED], error: null };
+      show();
+      await openChanges();
+      expect(await screen.findByRole("checkbox", { name: /Lunch/ })).toBeInTheDocument();
+      expect(screen.queryByRole("checkbox", { name: /Brunch/ })).toBeNull();
+    });
+
     // protects=nothing old changes without a tick; fails_when=a category starts ticked
     it("starts with nothing ticked and nothing to apply", async () => {
       tables.splitwise_expenses = { data: [TAXI, GONE], error: null };
