@@ -252,6 +252,18 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     },
   });
 
+  // Closing the tab mid-save leaves holdings half-updated: the browser asks first.
+  useEffect(() => {
+    if (!save.isPending) return;
+    const ask = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Older browsers ask only when this is set too.
+      e.returnValue = true;
+    };
+    window.addEventListener("beforeunload", ask);
+    return () => window.removeEventListener("beforeunload", ask);
+  }, [save.isPending]);
+
   function reset() {
     setText("");
     setFileName(null);

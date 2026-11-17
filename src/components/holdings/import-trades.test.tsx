@@ -496,6 +496,40 @@ describe("ImportTrades", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
+  describe("leaving the page while saving", () => {
+    /** A beforeunload as the browser sends it: cancelled means it asks before leaving. */
+    const leave = () => {
+      const event = new Event("beforeunload", { cancelable: true });
+      // jsdom has no BeforeUnloadEvent: give it the browser's string returnValue to set.
+      Object.defineProperty(event, "returnValue", { value: "", writable: true });
+      window.dispatchEvent(event);
+      return event;
+    };
+
+    it("asks first while the save runs, and not once it's done", async () => {
+      let release!: () => void;
+      db.insertGate = new Promise((r) => (release = r));
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      fireEvent.click(await screen.findByRole("button", { name: "Save 5 trades" }));
+      await waitFor(() => expect(db.inserted).toHaveLength(5));
+      const during = leave();
+      expect(during.defaultPrevented).toBe(true);
+      // Older browsers ask only when returnValue is set too.
+      expect((during as BeforeUnloadEvent).returnValue).toBeTruthy();
+      release();
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(leave().defaultPrevented).toBe(false);
+    });
+
+    it("doesn't ask when nothing is saving", async () => {
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Save 5 trades" });
+      expect(leave().defaultPrevented).toBe(false);
+    });
+  });
+
   it("a failed save's error is gone after closing and opening again", async () => {
     db.insertError = { message: "insert failed" };
     open("crypto");
