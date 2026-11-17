@@ -1,8 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
+const updates = vi.hoisted(() => [] as Array<Record<string, unknown>>);
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: {
+    from: () => ({
+      update: (patch: Record<string, unknown>) => {
+        updates.push(patch);
+        return { eq: () => Promise.resolve({ error: null }) };
+      },
+    }),
+  },
+}));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { setLocaleOverride } from "@/lib/locale";
@@ -130,5 +140,45 @@ describe("TradesDialog", () => {
     expect(screen.getByRole("alert")).toHaveTextContent('"2,500" could mean 2500 or 2.5');
     fill("1", "10", "3,000");
     expect(screen.getByRole("alert")).toHaveTextContent('"3,000" could mean 3000 or 3');
+  });
+
+  it("moving an imported trade to another day drops its broker time; keeping the day keeps it", async () => {
+    updates.length = 0;
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TradesDialog
+          kind="stock"
+          holdingKey="K"
+          name="Example ETF"
+          quantity={1}
+          label="Trades"
+          trades={[
+            {
+              id: "t1",
+              kind: "stock",
+              key: "K",
+              side: "buy",
+              trade_date: "2026-03-01",
+              traded_at: "2026-03-01T09:30:00Z",
+              shares: 1,
+              price_eur: 10,
+              fee_eur: 0,
+            },
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Trades" }));
+    const edit = async (date?: string) => {
+      fireEvent.click(await screen.findByRole("button", { name: "Edit trade of 2026-03-01" }));
+      if (date) fireEvent.change(screen.getByLabelText(/Date/), { target: { value: date } });
+      fireEvent.click(screen.getByRole("button", { name: "Save trade" }));
+      await waitFor(() => expect(screen.getByRole("button", { name: "Add trade" })).toBeTruthy());
+    };
+    await edit();
+    await edit("2026-03-05");
+    expect(updates).toHaveLength(2);
+    expect(updates[0]).not.toHaveProperty("traded_at");
+    expect(updates[1]).toMatchObject({ trade_date: "2026-03-05", traded_at: null });
   });
 });

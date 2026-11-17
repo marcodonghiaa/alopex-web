@@ -85,7 +85,11 @@ export function TradesDialog({
   const save = useMutation({
     mutationFn: async (values: NonNullable<ReturnType<typeof validate>["values"]>) => {
       if (editing) {
-        const { error: e } = await supabase.from("holding_trades").update(values).eq("id", editing);
+        // A broker's time is of the old day: kept, it would order the trade among the new day's.
+        const was = trades.find((t) => t.id === editing);
+        const patch =
+          was && was.trade_date !== values.trade_date ? { ...values, traded_at: null } : values;
+        const { error: e } = await supabase.from("holding_trades").update(patch).eq("id", editing);
         if (e) throw e;
         return;
       }
