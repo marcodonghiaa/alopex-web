@@ -7,6 +7,7 @@ const db = vi.hoisted(() => ({
   inserted: [] as Array<Record<string, unknown>>,
   rpc: [] as Array<[string, Record<string, unknown>]>,
   ratesDown: false,
+  holdingsDown: false,
   /** Coin rows added for one test. */
   extraCoins: [] as Array<Record<string, unknown>>,
   rpcMissing: false,
@@ -45,7 +46,7 @@ vi.mock("@/integrations/supabase/client", () => {
   };
   // Every filter is ignored: each table answers with all its rows.
   const query = (rows: Array<Record<string, unknown>>) => {
-    const down = rows === tables["fx_rates"] && db.ratesDown;
+    const down = rows === tables["fx_rates"] ? db.ratesDown : db.holdingsDown;
     const result = Promise.resolve(
       down ? { data: null, error: { message: "offline" } } : { data: rows, error: null },
     );
@@ -141,6 +142,7 @@ describe("ImportTrades", () => {
     db.signedOut = false;
     db.insertGate = null;
     db.ratesGate = null;
+    db.holdingsDown = false;
   });
 
   it("asks where the trades are from before asking for a file", () => {
@@ -303,6 +305,12 @@ describe("ImportTrades", () => {
     // One retry first (no wait in tests).
     expect(await screen.findByText(/Couldn't load USD exchange rates/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+  });
+
+  it("when your holdings can't be loaded it says so", async () => {
+    db.holdingsDown = true;
+    open("crypto");
+    expect(await screen.findByText("Couldn't load your holdings: offline")).toBeTruthy();
   });
 
   it("while the exchange rates load it says Reading… and offers no save yet", async () => {
