@@ -50,7 +50,8 @@ export function debtorsFrom(
   const byName = new Map<string, Debtor & { fromSplits: boolean }>();
   const add = (name: string, value: number, fromSplits: boolean) => {
     const key = name.trim().toLowerCase();
-    if (!key) return;
+    // The server records names up to 100 characters (record_payback): longer ones can't be asked.
+    if (!key || [...name.trim()].length > 100) return;
     const hit = byName.get(key);
     if (hit) {
       hit.open += value;

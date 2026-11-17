@@ -116,6 +116,13 @@ describe("debtorsFrom", () => {
     expect(out).toEqual([{ name: "Crifiore", open: 320, splitwiseOnly: true }]);
   });
 
+  it("leaves out names over 100 characters: the server can't record them", () => {
+    const long = "A".repeat(101);
+    expect(debtorsFrom([person(long, 50), person("😀".repeat(100), 5)], [], rate)).toEqual([
+      { name: "😀".repeat(100), open: 5, splitwiseOnly: false },
+    ]);
+  });
+
   it("leaves out bills with no name: nobody can pay those back", () => {
     expect(debtorsFrom([person(NO_NAME, 50), person("Anna", 10)], [], rate)).toEqual([
       { name: "Anna", open: 10, splitwiseOnly: false },
