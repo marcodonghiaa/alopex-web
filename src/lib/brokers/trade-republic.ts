@@ -190,14 +190,15 @@ export const tradeRepublic: BrokerParser = {
       const taxRow = eventKind === "tax";
       if (taxRow && net > 0) eventKind = "tax_refund";
       if (!eventKind && MONEY_MOVE.test(type)) eventKind = amount >= 0 ? "deposit" : "withdrawal";
-      if (!eventKind) {
-        unknown++;
-        eventKind = "other";
-      }
       // An event about a coin goes with the Crypto page, about a share with Portfolio; cash alone
       // (interest, a deposit) with Portfolio.
       const eventPage = key && rowKind === "crypto" ? "crypto" : "stock";
       if (eventPage !== kind) return void otherPage++;
+      // Counted only once it's kept on this page: a row for the other page is that page's note.
+      if (!eventKind) {
+        unknown++;
+        eventKind = "other";
+      }
       if (key) names.set(key, get("name"));
       // A fee row's fee is the row itself: kept in the amount only, or it counts twice.
       events.push(

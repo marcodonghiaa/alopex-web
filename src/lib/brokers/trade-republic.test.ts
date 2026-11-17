@@ -479,6 +479,17 @@ describe("Trade Republic, income, fees, taxes and cash", () => {
     expect(notes).toContain('1 row of a kind Alopex doesn\'t know yet was kept as "other".');
   });
 
+  it("polish-4 UB3 on Crypto an unknown cash row is counted once, for Portfolio, not as kept", () => {
+    const { events, notes } = parseTradesCsv(
+      file({ category: "CASH", type: "SOMETHING_NEW", symbol: "", amount: "1" }),
+      crypto,
+    );
+    expect(events).toEqual([]);
+    expect(notes).toEqual([
+      "1 row is for shares and cash: import this file on the Portfolio page too.",
+    ]);
+  });
+
   it("a very long kind name is cut to 80 characters without splitting an emoji", () => {
     const type = "X".repeat(74) + "😀É";
     const { events } = parseTradesCsv(
