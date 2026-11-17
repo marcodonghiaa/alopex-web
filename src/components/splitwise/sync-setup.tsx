@@ -87,7 +87,7 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
         reconnect={connecting === "reconnect"}
       />
       <DisconnectDialog open={disconnecting} onOpenChange={setDisconnecting} />
-      <DeleteSyncedDialog open={deleting} onOpenChange={setDeleting} />
+      <DisconnectDialog open={deleting} onOpenChange={setDeleting} mode="delete" />
     </>
   );
 }
@@ -164,15 +164,24 @@ function StatusRow({
   );
 }
 
-/** Disconnect deletes the key; the user chooses whether what was synced goes too. */
+const DELETE_DETAIL =
+  "Removes synced expenses, the To link list and Splitwise balances, and frees the bank payments they changed.";
+
+/**
+ * Disconnect deletes the key; the user chooses whether what was synced goes too. In "delete" mode
+ * (already disconnected, data kept) it only deletes what was synced, once confirmed.
+ */
 export function DisconnectDialog({
   open,
   onOpenChange,
+  mode = "disconnect",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  mode?: "disconnect" | "delete";
 }) {
   const queryClient = useQueryClient();
+  const onlyDelete = mode === "delete";
   const [deleteData, setDeleteData] = useState(false);
   useEffect(() => {
     if (open) setDeleteData(false); // keeping is the default every time
@@ -182,9 +191,11 @@ export function DisconnectDialog({
     mutationFn: (andData: boolean) => disconnectSplitwise(andData),
     onSuccess: ({ deleted }, andData) => {
       toast.success(
-        andData
-          ? `Splitwise disconnected, ${deleted === 1 ? "1 synced expense" : `${deleted} synced expenses`} removed`
-          : "Splitwise disconnected. What was synced stays.",
+        onlyDelete
+          ? `Synced Splitwise data deleted: ${deleted === 1 ? "1 expense" : `${deleted} expenses`}`
+          : andData
+            ? `Splitwise disconnected, ${deleted === 1 ? "1 synced expense" : `${deleted} synced expenses`} removed`
+            : "Splitwise disconnected. What was synced stays.",
       );
       for (const queryKey of syncRefreshKeys()) void queryClient.invalidateQueries({ queryKey });
       onOpenChange(false);
@@ -194,42 +205,42 @@ export function DisconnectDialog({
 
   const options: Array<[boolean, string, string]> = [
     [false, "Keep synced data", "Expenses and balances synced so far stay. Nothing new comes in."],
-    [
-      true,
-      "Delete synced data",
-      "Removes synced expenses, the To link list and Splitwise balances, and frees the bank payments they changed.",
-    ],
+    [true, "Delete synced data", DELETE_DETAIL],
   ];
   return (
     <Dialog open={open} onOpenChange={(next) => disconnect.isPending || onOpenChange(next)}>
       <DialogContent className="gap-0 rounded-xl p-5 sm:p-6">
         <DialogTitle className="text-xl font-semibold tracking-tight">
-          Disconnect Splitwise?
+          {onlyDelete ? "Delete synced Splitwise data?" : "Disconnect Splitwise?"}
         </DialogTitle>
         <DialogDescription className="mt-1 text-sm text-muted-foreground">
-          Alopex deletes your API key from your server and stops syncing.
+          {onlyDelete
+            ? DELETE_DETAIL
+            : "Alopex deletes your API key from your server and stops syncing."}
         </DialogDescription>
-        <fieldset className="mt-5 divide-y divide-hairline overflow-hidden rounded-lg bg-background">
-          <legend className="sr-only">What was synced</legend>
-          {options.map(([value, label, detail]) => (
-            <label
-              key={label}
-              className="flex cursor-pointer items-start gap-3 px-4 py-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-inset"
-            >
-              <input
-                type="radio"
-                name="splitwise-disconnect"
-                checked={deleteData === value}
-                onChange={() => setDeleteData(value)}
-                className="mt-1 size-4 shrink-0 accent-primary"
-              />
-              <span className="min-w-0">
-                <span className="block text-[0.9375rem] font-medium">{label}</span>
-                <span className="block text-[0.8125rem] text-muted-foreground">{detail}</span>
-              </span>
-            </label>
-          ))}
-        </fieldset>
+        {!onlyDelete && (
+          <fieldset className="mt-5 divide-y divide-hairline overflow-hidden rounded-lg bg-background">
+            <legend className="sr-only">What was synced</legend>
+            {options.map(([value, label, detail]) => (
+              <label
+                key={label}
+                className="flex cursor-pointer items-start gap-3 px-4 py-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-inset"
+              >
+                <input
+                  type="radio"
+                  name="splitwise-disconnect"
+                  checked={deleteData === value}
+                  onChange={() => setDeleteData(value)}
+                  className="mt-1 size-4 shrink-0 accent-primary"
+                />
+                <span className="min-w-0">
+                  <span className="block text-[0.9375rem] font-medium">{label}</span>
+                  <span className="block text-[0.8125rem] text-muted-foreground">{detail}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+        )}
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button
             variant="secondary"
@@ -241,62 +252,16 @@ export function DisconnectDialog({
           <Button
             variant="destructive"
             className="bg-negative/10"
-            onClick={() => disconnect.mutate(deleteData)}
+            onClick={() => disconnect.mutate(onlyDelete || deleteData)}
             disabled={disconnect.isPending}
           >
-            {disconnect.isPending ? "Disconnecting…" : "Disconnect"}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/** After "Disconnect, keep data": deletes what the sync brought in, once confirmed. */
-function DeleteSyncedDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const queryClient = useQueryClient();
-  const remove = useMutation({
-    mutationFn: () => disconnectSplitwise(true),
-    onSuccess: ({ deleted }) => {
-      toast.success(
-        `Synced Splitwise data deleted: ${deleted === 1 ? "1 expense" : `${deleted} expenses`}`,
-      );
-      for (const queryKey of syncRefreshKeys()) void queryClient.invalidateQueries({ queryKey });
-      onOpenChange(false);
-    },
-    onError: (err) => toast.error(err.message),
-  });
-  return (
-    <Dialog open={open} onOpenChange={(next) => remove.isPending || onOpenChange(next)}>
-      <DialogContent className="gap-0 rounded-xl p-5 sm:p-6">
-        <DialogTitle className="text-xl font-semibold tracking-tight">
-          Delete synced Splitwise data?
-        </DialogTitle>
-        <DialogDescription className="mt-1 text-sm text-muted-foreground">
-          Removes synced expenses, the To link list and Splitwise balances, and frees the bank
-          payments they changed.
-        </DialogDescription>
-        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button
-            variant="secondary"
-            onClick={() => onOpenChange(false)}
-            disabled={remove.isPending}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            className="bg-negative/10"
-            onClick={() => remove.mutate()}
-            disabled={remove.isPending}
-          >
-            {remove.isPending ? "Deleting…" : "Delete"}
+            {onlyDelete
+              ? disconnect.isPending
+                ? "Deleting…"
+                : "Delete"
+              : disconnect.isPending
+                ? "Disconnecting…"
+                : "Disconnect"}
           </Button>
         </div>
       </DialogContent>
