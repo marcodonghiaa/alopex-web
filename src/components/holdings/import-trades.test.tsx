@@ -545,6 +545,17 @@ describe("ImportTrades", () => {
     expect(document.querySelector(".animate-spin")).toBeNull();
   });
 
+  it("an empty file says it's empty instead of reading forever", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File(["  \n"], "empty.csv", { type: "text/csv" })] },
+    });
+    expect(await screen.findByText("The file is empty.")).toBeTruthy();
+    expect(screen.getByText("Can't be imported")).toBeTruthy();
+    expect(screen.queryByText("Reading…")).toBeNull();
+  });
+
   it("while the file is being read it says Reading…", () => {
     open("stock");
     fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));

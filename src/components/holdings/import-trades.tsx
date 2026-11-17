@@ -104,6 +104,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
+  // A chosen file's text is on its way: until then the card says Reading….
+  const [reading, setReading] = useState(false);
   const [dragging, setDragging] = useState(false);
   // Where the file comes from: a broker's id, "spreadsheet" for your own columns, or "other".
   const [from, setFrom] = useState<string | null>(null);
@@ -139,8 +141,10 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   );
   // Prices in dollars (a Ledger file): load that currency's daily rates, then read it again.
   const firstPass = useMemo(
-    () => (text.trim() && ctx ? parseTradesCsv(text, ctx, broker) : null),
-    [text, ctx, broker],
+    // A chosen file that turns out blank is read too: the parser says it's empty.
+    () =>
+      (text.trim() || (fileName && !reading)) && ctx ? parseTradesCsv(text, ctx, broker) : null,
+    [text, ctx, broker, fileName, reading],
   );
   const need = firstPass?.needsRates;
   const rates = useQuery({
@@ -264,6 +268,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   function reset() {
     setText("");
     setFileName(null);
+    setReading(false);
     setFrom(null);
     save.reset();
   }
@@ -271,7 +276,11 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     // A save in flight ends by clearing the dialog: a file picked or dropped now would be lost.
     if (!file || save.isPending) return;
     setFileName(file.name);
-    void file.text().then(setText);
+    setReading(true);
+    void file.text().then((t) => {
+      setText(t);
+      setReading(false);
+    });
   }
 
   const row = "flex min-h-12 items-center gap-3 px-4 py-2.5 text-[0.9375rem]";
