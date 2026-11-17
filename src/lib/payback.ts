@@ -140,7 +140,7 @@ export function namesLookAlike(payer: string | null, contact: string): boolean {
   const used = new Set<number>();
   const several = c.length > 1;
   // An initial ("C. Fiore", "Luca M") stands for any word starting with it, but only next to a
-  // word that matched in full: "A R" alone is too little to ask about.
+  // word of 2+ letters that matched (whole, or as a 3+ letter start): "A R" alone is too little.
   const initial = (a: string, b: string) => a.length === 1 && b.startsWith(a);
   let whole = false;
   const allWords = c.every((w) => {

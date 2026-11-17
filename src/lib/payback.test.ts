@@ -71,6 +71,7 @@ describe("namesLookAlike", () => {
     expect(namesLookAlike("LUCA MARINO", "Luca M")).toBe(true);
     expect(namesLookAlike("Luca M.", "Luca Marino")).toBe(true);
     expect(namesLookAlike("Anna Rossi", "A R")).toBe(false);
+    expect(namesLookAlike("Cristian Fiore", "Cri F")).toBe(true);
     expect(namesLookAlike("Luca Marino", "M")).toBe(false);
     expect(namesLookAlike("C Fiore", "Cristian Fiore Rossi")).toBe(false);
     expect(namesLookAlike("L. Bianchi", "Luca Marino")).toBe(false);
