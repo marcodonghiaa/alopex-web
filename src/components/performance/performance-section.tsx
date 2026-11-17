@@ -26,11 +26,11 @@ function returnLabel(perf: Performance, holdingKey: string) {
   if (measured?.state === "dust") return dash;
   if (trades.length === 0) return <span className="text-xs text-primary">Add purchases</span>;
   if (measured?.state === "ok" && hasMissingPrice(trades)) {
-    // The €0 buy makes the return look better than it is: say so next to it.
+    // The €0 buy makes the return look better than it is: say so under it, so the cell stays narrow.
     return (
-      <span className="inline-flex items-baseline gap-1.5">
+      <span className="inline-flex flex-col items-end leading-tight">
         <Change change={measured.change} />{" "}
-        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1 text-xs whitespace-nowrap text-muted-foreground">
           <TriangleAlert aria-hidden className="size-3 self-center text-warning" />
           price missing
         </span>

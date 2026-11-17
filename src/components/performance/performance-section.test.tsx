@@ -152,6 +152,23 @@ describe("ReturnCell", () => {
     expect(screen.queryByText("price missing")).not.toBeInTheDocument();
   });
 
+  it("polish-4 R1 puts the price-missing flag on its own small line under the return, so the cell gets no wider", () => {
+    const free = { ...trade, price_eur: 0 };
+    renderWith(
+      <ReturnText
+        perf={perf([{ row: row("K"), measured: ok(200, 1000) }], {
+          tradesByKey: new Map([["K", [trade, free]]]),
+        })}
+        holdingKey="K"
+      />,
+    );
+    const flag = screen.getByText("price missing");
+    // Stacked: the return on one line, the flag on the next, which never wraps.
+    expect(flag.parentElement).toHaveClass("flex-col");
+    expect(flag).toHaveClass("text-xs", "text-muted-foreground", "whitespace-nowrap");
+    expect(flag.parentElement?.firstElementChild).toHaveTextContent("+20.00%");
+  });
+
   it("asks for purchases when there are none", () => {
     cell({ state: "no_trades" });
     expect(screen.getByText("Add purchases")).toBeInTheDocument();
