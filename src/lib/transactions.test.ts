@@ -3,6 +3,7 @@ import {
   monthFromParam,
   monthParam,
   parseTransactionsSearch,
+  withoutHighlight,
   UNCATEGORIZED,
   activeFilterCount,
   formatDayHeading,
@@ -428,6 +429,23 @@ describe("transactions deep-link params", () => {
   it("drops blank, non-string and malformed values", () => {
     expect(parseTransactionsSearch({ category: "  ", month: "2026-1" })).toEqual({});
     expect(parseTransactionsSearch({ category: 3, month: 202610 })).toEqual({});
+    expect(parseTransactionsSearch({ highlight: " " })).toEqual({});
+    expect(parseTransactionsSearch({ highlight: 7 })).toEqual({});
+  });
+
+  // Regression: clearing the highlight also dropped ?month, which remounted Activity on the
+  // current month and lost the row to jump to.
+  it("clears only the highlight from the query string", () => {
+    expect(withoutHighlight("?month=2026-11&highlight=r1")).toBe("?month=2026-11");
+    expect(withoutHighlight("?highlight=r1")).toBe("");
+  });
+
+  // Spending's "Not worth it" purchases link straight to their row in Activity.
+  it("keeps the purchase to highlight", () => {
+    expect(parseTransactionsSearch({ month: "2026-11", highlight: "r1" })).toEqual({
+      month: "2026-11",
+      highlight: "r1",
+    });
   });
 
   it("formats a month as YYYY-MM", () => {

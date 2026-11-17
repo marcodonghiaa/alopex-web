@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchPerformance, fetchTrades } from "./use-performance";
+import { fetchPerformance, fetchTrades, startPricesOf } from "./use-performance";
 
 const client = (result: unknown) =>
   ({ rpc: vi.fn(async () => result) }) as unknown as Parameters<typeof fetchPerformance>[0];
@@ -70,5 +70,34 @@ describe("fetchTrades", () => {
       { data: null, error: { code: "500", message: "boom" }, count: null },
     ]);
     await expect(fetchTrades(client)).rejects.toThrow("boom");
+  });
+});
+
+// protects=the Return line doesn't price a day with a later price; fails_when=days before prices
+// were kept read as a flat "no gain" line
+describe("startPricesOf", () => {
+  const row = (key: string, status: string) => ({
+    kind: "stock",
+    key,
+    name: null,
+    quantity: 1,
+    start_date: "2026-08-20",
+    start_price_eur: 10,
+    end_date: "2026-11-17",
+    end_price_eur: 12,
+    status,
+  });
+  const data = { rows: [row("A", "ok"), row("B", "since"), { ...row("C", "ok"), kind: "crypto" }] };
+
+  it("keeps every holding of the kind for the chip's start", () => {
+    expect([...startPricesOf(data, "stock").keys()]).toEqual(["A", "B"]);
+  });
+
+  it("on the day leaves out holdings first priced after it", () => {
+    expect([...startPricesOf(data, "stock", true).keys()]).toEqual(["A"]);
+  });
+
+  it("is empty when the database can't answer yet", () => {
+    expect(startPricesOf({ unavailable: true }, "stock").size).toBe(0);
   });
 });

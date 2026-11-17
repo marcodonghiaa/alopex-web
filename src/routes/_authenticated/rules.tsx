@@ -532,6 +532,7 @@ function RuleList({ rules }: { rules: RuleRow[] }) {
       )}
 
       <SectionTitle
+        variant="label"
         className="items-center"
         action={
           hasCategoryRules && !checking ? (

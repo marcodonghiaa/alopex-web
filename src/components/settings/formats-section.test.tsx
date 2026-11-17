@@ -21,11 +21,15 @@ describe("FormatsSection", () => {
   it("polish-4 #8 says Automatic follows the browser, and only a picked format is saved", () => {
     const { unmount } = render(<FormatsSection reload={() => {}} />);
     expect(screen.getByText(/Follows your browser \(English \(UK\)\)/)).toBeInTheDocument();
-    expect(screen.queryByText(/Saved on this device/)).toBeNull();
+    expect(screen.queryByText(/Only on this device/)).toBeNull();
+    expect(screen.getByRole("heading", { level: 2 })).toHaveClass(
+      "font-semibold",
+      "text-foreground",
+    );
     unmount();
     setLocaleOverride("de-DE");
     render(<FormatsSection reload={() => {}} />);
-    expect(screen.getByText(/Saved on this device/)).toBeInTheDocument();
+    expect(screen.getByText(/Only on this device/)).toBeInTheDocument();
   });
 
   it("polish-4 #11 lands back on the menu after the reload a change causes", () => {

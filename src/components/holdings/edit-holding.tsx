@@ -62,10 +62,13 @@ export function EditHolding({
   target,
   name,
   quantity,
+  label,
 }: {
   target: HoldingTarget;
   name: string;
   quantity: number;
+  /** A text button (e.g. "Edit shares") instead of the pencil, for the phone details. */
+  label?: string;
 }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -127,9 +130,16 @@ export function EditHolding({
       }}
     >
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={`Edit ${name}`}>
-          <Pencil />
-        </Button>
+        {label ? (
+          <Button variant="ghost" aria-label={`${label} of ${name}`} className="-ml-3 self-start">
+            <Pencil />
+            {label}
+          </Button>
+        ) : (
+          <Button variant="ghost" size="icon" aria-label={`Edit ${name}`}>
+            <Pencil />
+          </Button>
+        )}
       </PopoverTrigger>
       <PopoverContent align="end" className="space-y-3">
         <form onSubmit={handleSave} className="space-y-3">

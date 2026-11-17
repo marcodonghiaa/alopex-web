@@ -11,19 +11,35 @@ export function GroupedList({ className, ...props }: HTMLAttributes<HTMLDivEleme
   );
 }
 
-// The muted 13px label above a grouped list, inset to line up with the rows.
+// A section's title, styled like Net Worth's "Breakdown" card everywhere. `label` is the muted
+// 13px line inset with the rows, for day dividers and counts ("Today", "3 rules").
 export function SectionTitle({
   children,
   action,
   className,
+  variant = "title",
 }: {
   children: ReactNode;
   action?: ReactNode;
   className?: string;
+  variant?: "title" | "label";
 }) {
+  const label = variant === "label";
   return (
-    <div className={cn("flex items-end justify-between gap-3 px-4 pb-1.5", className)}>
-      <h2 className="text-[0.8125rem] leading-tight font-medium text-muted-foreground">
+    <div
+      className={cn(
+        "flex items-end justify-between gap-3",
+        label ? "px-4 pb-1.5" : "pb-2",
+        className,
+      )}
+    >
+      <h2
+        className={
+          label
+            ? "text-[0.8125rem] leading-tight font-medium text-muted-foreground"
+            : "text-lg font-semibold text-foreground"
+        }
+      >
         {children}
       </h2>
       {action}

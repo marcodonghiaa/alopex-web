@@ -53,8 +53,8 @@ export function ExportData() {
   }
 
   return (
-    <section id="data" aria-labelledby="data-heading" className="scroll-mt-6">
-      <h2 id="data-heading" className="mb-4 text-[0.9375rem] font-medium text-muted-foreground">
+    <section id="data" aria-labelledby="data-heading" className="scroll-mt-20 md:scroll-mt-6">
+      <h2 id="data-heading" className="mb-4 text-lg font-semibold text-foreground">
         Your data
       </h2>
       <div className="max-w-sm space-y-4 rounded-lg bg-card p-5">
