@@ -1155,3 +1155,13 @@ describe("Dialog X while a request runs", () => {
     expect(within(dialog).getByRole("button", { name: "Close" })).toBeDisabled();
   });
 });
+
+// polish-4 #23: DESIGN.md's 40 px avatars are round, like the group cards above
+it("draws the status row's avatar round", async () => {
+  rpc.mockResolvedValue(connection());
+  renderSetup();
+  const name = await screen.findByText("Splitwise · Sam");
+  const avatar = name.closest("div.flex")!.querySelector("span[aria-hidden]")!;
+  expect(avatar.className.split(" ")).toContain("rounded-full");
+  expect(avatar.className.split(" ")).not.toContain("rounded-sm");
+});

@@ -174,7 +174,7 @@ function StatusRow({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span
           aria-hidden
-          className="inline-flex size-10 shrink-0 items-center justify-center rounded-sm bg-muted"
+          className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-muted"
         >
           <RefreshCw className="size-[18px]" />
         </span>
