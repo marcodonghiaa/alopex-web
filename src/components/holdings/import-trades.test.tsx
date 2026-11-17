@@ -110,6 +110,7 @@ vi.mock("@/integrations/supabase/client", () => {
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { ImportTrades } from "./import-trades";
+import { parseTradesCsv } from "@/lib/trades-csv";
 import type { Trade } from "@/lib/trades";
 
 function pick(name: RegExp, fixture: string) {
@@ -701,7 +702,7 @@ describe("ImportTrades", () => {
       pick(/Ledger Live/, "ledger_live.csv");
       fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-      expect(toast.success).toHaveBeenLastCalledWith("7 trades imported · 2 holdings updated");
+      expect(toast.success).toHaveBeenLastCalledWith("Imported 7 trades, updated 2 holdings");
     });
 
     it("one holding updated is singular", async () => {
@@ -709,7 +710,7 @@ describe("ImportTrades", () => {
       pick(/Ledger Live/, "ledger_live.csv");
       fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-      expect(toast.success).toHaveBeenLastCalledWith("7 trades imported · 1 holding updated");
+      expect(toast.success).toHaveBeenLastCalledWith("Imported 7 trades, updated 1 holding");
     });
 
     it("nothing corrected: no list, and the toast only counts the trades", async () => {
@@ -721,7 +722,7 @@ describe("ImportTrades", () => {
       fireEvent.click(await screen.findByRole("button", { name: "Save 1 trade" }));
       expect(screen.queryByRole("region", { name: /corrected/ })).toBeNull();
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-      expect(toast.success).toHaveBeenLastCalledWith("1 trade imported");
+      expect(toast.success).toHaveBeenLastCalledWith("Imported 1 trade");
     });
 
     it("a stock's count shows old → new, with no source", async () => {
@@ -733,5 +734,20 @@ describe("ImportTrades", () => {
       ).getAllByRole("listitem");
       expect(rows[0]!.textContent).toBe("Example World ETF1 → 4");
     });
+  });
+
+  it("a file that only corrects counts says Updated, as the sibling import says Imported", async () => {
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const ctx = {
+      kind: "stock" as const,
+      knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+      today: "2099-01-01",
+    };
+    // Every trade already saved: only the share count is left to set.
+    open("stock", parseTradesCsv(csv, ctx).trades);
+    pick(/Trade Republic/, "trade_republic.csv");
+    fireEvent.click(await screen.findByRole("button", { name: "Save trades" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(toast.success).toHaveBeenLastCalledWith("Updated 2 holdings");
   });
 });

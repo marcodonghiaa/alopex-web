@@ -206,13 +206,15 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       }
     },
     onSuccess: () => {
+      // Worded as the sibling CSV import's "Imported 3 rows".
+      const imported = `Imported ${plural(fresh.length, "trade")}`;
+      const updated = plural(updates.length, "holding");
       toast.success(
-        [
-          (fresh.length > 0 || updates.length === 0) && `${plural(fresh.length, "trade")} imported`,
-          updates.length > 0 && `${plural(updates.length, "holding")} updated`,
-        ]
-          .filter(Boolean)
-          .join(" · "),
+        updates.length === 0
+          ? imported
+          : fresh.length === 0
+            ? `Updated ${updated}`
+            : `${imported}, updated ${updated}`,
       );
       reset();
       setOpen(false);
