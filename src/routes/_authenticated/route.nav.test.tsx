@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-const { rows, path } = vi.hoisted(() => ({
+const { rows, review, path } = vi.hoisted(() => ({
   rows: { current: [] as Array<unknown> },
+  // Splitwise expenses waiting on the To link list.
+  review: { current: [] as Array<unknown> },
   path: { current: "/" },
 }));
 
@@ -45,7 +47,18 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     auth: { onAuthStateChange: () => ({ data: { subscription: { unsubscribe: vi.fn() } } }) },
     rpc: () => Promise.resolve({ error: null }),
-    from: () => ({ select: () => Promise.resolve({ data: rows.current, error: null }) }),
+    from: (table: string) =>
+      table === "splitwise_review"
+        ? {
+            select: () => {
+              const q: Record<string, unknown> = {};
+              for (const m of ["eq", "order", "limit"]) q[m] = () => q;
+              q["then"] = (resolve: (v: unknown) => void) =>
+                resolve({ data: review.current, error: null, count: review.current.length });
+              return q;
+            },
+          }
+        : { select: () => Promise.resolve({ data: rows.current, error: null }) },
   },
 }));
 
@@ -89,6 +102,31 @@ describe("nav badge", () => {
     await screen.findAllByText("Subscriptions");
     await new Promise((r) => setTimeout(r, 20)); // let the query settle
     expect(screen.queryByText("to review")).toBeNull();
+    expect(screen.getByRole("button", { name: "More" })).toBeTruthy();
+  });
+});
+
+// polish-4 #22: To link needs action, so its count shows outside the page too
+describe("Who owes you badge", () => {
+  it("shows the To link count on Who owes you and adds it to More", async () => {
+    rows.current = [suggested("a"), suggested("b")];
+    review.current = [{ id: "r1" }, { id: "r2" }, { id: "r3" }];
+    try {
+      renderLayout();
+      const links = await screen.findAllByRole("link", { name: /^Who owes you/ });
+      await waitFor(() => expect(links[0]).toHaveTextContent("Who owes you3 to review"));
+      expect(await screen.findByRole("button", { name: "More, 5 to review" })).toBeTruthy();
+    } finally {
+      review.current = [];
+    }
+  });
+
+  it("shows none when nothing waits", async () => {
+    rows.current = [];
+    renderLayout();
+    const links = await screen.findAllByRole("link", { name: /^Who owes you/ });
+    await new Promise((r) => setTimeout(r, 20)); // let the queries settle
+    expect(links[0]).toHaveTextContent(/^Who owes you$/);
     expect(screen.getByRole("button", { name: "More" })).toBeTruthy();
   });
 });
