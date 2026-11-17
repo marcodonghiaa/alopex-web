@@ -231,7 +231,7 @@ describe("ImportTrades", () => {
     await waitFor(() => expect(screen.getByText("new trades to save")).toBeTruthy());
     expect(screen.getByText("By holding")).toBeTruthy();
     expect(screen.getByText("Example World ETF")).toBeTruthy();
-    expect(screen.getByText("Left out")).toBeTruthy();
+    expect(screen.getByText("Notes")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Save 4 trades and 1 row" })).toBeTruthy();
     // The dividend in the file is shown and saved with the trades.
     expect(screen.getByText("Also saved: income, fees and cash")).toBeTruthy();
@@ -430,6 +430,13 @@ describe("ImportTrades", () => {
     await waitFor(() =>
       expect(toast.success).toHaveBeenLastCalledWith("4 trades and 1 income and cash row imported"),
     );
+  });
+
+  it("polish-4 UB9 the file's notes sit under Notes, as some were saved", async () => {
+    open("stock");
+    await pickTradeRepublic();
+    expect(screen.getByText("Notes")).toBeInTheDocument();
+    expect(screen.queryByText("Left out")).toBeNull();
   });
 
   it("if saved dividends and fees can't load, it says so and won't save", async () => {
