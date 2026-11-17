@@ -327,7 +327,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                 href={NEW_BROKER_URL}
                 target="_blank"
                 rel="noreferrer"
-                className="text-primary underline-offset-2 hover:underline"
+                className="text-primary underline underline-offset-2"
               >
                 Ask for your broker
               </a>{" "}
@@ -371,7 +371,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                         : "Can't be imported"}
                   </span>
                 </span>
-                <label className="cursor-pointer text-xs text-primary underline-offset-2 hover:underline">
+                <label className="-my-2 inline-flex min-h-11 cursor-pointer items-center rounded-sm px-2 text-xs text-primary underline underline-offset-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
                   Change
                   {fileInput}
                 </label>

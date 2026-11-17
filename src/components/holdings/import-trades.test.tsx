@@ -581,4 +581,22 @@ describe("ImportTrades", () => {
       expect(statusIcon()?.classList.contains("lucide-circle-alert")).toBe(true);
     });
   });
+
+  it("Change is a 44px tap target, underlined, with a keyboard focus ring", async () => {
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    await screen.findByRole("button", { name: "Save 7 trades" });
+    const change = screen.getByLabelText("CSV file").closest("label")!;
+    expect(change.textContent).toBe("Change");
+    for (const c of ["underline", "min-h-11", "has-[:focus-visible]:ring-2"])
+      expect(change.classList.contains(c), c).toBe(true);
+  });
+
+  it("the Ask for your broker link is always underlined", () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Another broker/ }));
+    expect(screen.getByRole("link", { name: "Ask for your broker" }).classList).toContain(
+      "underline",
+    );
+  });
 });
