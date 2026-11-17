@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -223,9 +223,11 @@ describe("Connect dialog", () => {
     const row = (label: string) => within(dialog).getByText(label).nextElementSibling?.textContent;
     await within(dialog).findByText("New expenses");
     expect(row("New expenses")).toBe("12");
-    expect(row("Already imported")).toBe("3");
-    expect(row("To link")).toBe("2");
-    expect(row("Removed")).toBe("1");
+    expect(row("Already imported (kept, not doubled)")).toBe("3");
+    expect(row("To link with a bank payment")).toBe("2");
+    expect(row("Removed in Splitwise")).toBe("1");
+    // polish-4 #9: the labels explain themselves, no glossary footnote
+    expect(within(dialog).queryByText(/Already imported: shares/)).toBeNull();
     expect(invoke).toHaveBeenNthCalledWith(2, "sync-splitwise", { body: { preview: true } });
 
     await userEvent.click(within(dialog).getByRole("button", { name: "Start sync" }));
@@ -271,7 +273,7 @@ describe("Connect dialog", () => {
       const row = (label: string) =>
         within(dialog).getByText(label).nextElementSibling?.textContent;
       expect(row("New expenses")).toBe("1.234");
-      expect(row("To link")).toBe("2.500");
+      expect(row("To link with a bank payment")).toBe("2.500");
     } finally {
       setLocaleOverride("");
     }
@@ -295,7 +297,7 @@ describe("Connect dialog", () => {
     await userEvent.type(within(dialog).getByLabelText("API key"), "abcdefghijkl");
     await userEvent.click(within(dialog).getByRole("checkbox"));
     await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
-    await within(dialog).findByText("New expenses");
+    await within(dialog).findByText("Nothing new to bring in.");
     await userEvent.click(within(dialog).getByRole("button", { name: "Start sync" }));
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -828,5 +830,59 @@ describe("Setup tap targets", () => {
     rpc.mockResolvedValue({ data: null, error: { message: "timeout", code: "57014" } });
     renderSetup();
     tall(await screen.findByRole("button", { name: "Retry" }));
+  });
+});
+
+// polish-4 #9: the preview says only what is true for this sync
+describe("Sync preview copy", () => {
+  const connectWith = async (counts: Record<string, number>, reconnect = false) => {
+    functions({
+      "splitwise-connect": [ok({ displayName: "Sam" })],
+      "sync-splitwise": [ok(counts)],
+    });
+    rpc.mockResolvedValue(reconnect ? connection({ status: "needs_reconnect" }) : notConnected());
+    renderSetup();
+    const title = reconnect ? "Reconnect Splitwise" : "Connect Splitwise";
+    await userEvent.click(
+      await screen.findByRole("button", { name: reconnect ? "Reconnect" : "Connect Splitwise" }),
+    );
+    const dialog = screen.getByRole("dialog", { name: title });
+    await userEvent.type(within(dialog).getByLabelText("API key"), "abcdefghijkl");
+    await userEvent.click(within(dialog).getByRole("checkbox"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    await within(dialog).findByText("Connected as Sam");
+    return dialog;
+  };
+
+  it("hides the rows with nothing in them", async () => {
+    const dialog = await connectWith({ new: 2, adopted: 0, review: 1, deleted: 0 });
+    await within(dialog).findByText("New expenses");
+    expect(within(dialog).getByText("To link with a bank payment")).toBeTruthy();
+    expect(within(dialog).queryByText(/^Removed/)).toBeNull();
+    expect(within(dialog).queryByText(/^Already imported/)).toBeNull();
+    expect(within(dialog).getByText(/New expenses add your share to your spending/)).toBeTruthy();
+  });
+
+  it("says nothing new comes in when every count is zero", async () => {
+    const dialog = await connectWith({ new: 0, adopted: 0, review: 0, deleted: 0 });
+    expect(await within(dialog).findByText("Nothing new to bring in.")).toBeTruthy();
+    expect(within(dialog).queryByRole("term")).toBeNull();
+    expect(within(dialog).queryByText(/New expenses add your share/)).toBeNull();
+  });
+
+  it("calls it the first sync on Connect and the next sync on Reconnect", async () => {
+    const first = await connectWith({ new: 1, adopted: 0, review: 0, deleted: 0 });
+    expect(within(first).getByText("The first sync brings in:")).toBeTruthy();
+    cleanup();
+    const next = await connectWith({ new: 1, adopted: 0, review: 0, deleted: 0 }, true);
+    expect(within(next).getByText("The next sync brings in:")).toBeTruthy();
+    expect(within(next).queryByText(/first sync/)).toBeNull();
+  });
+
+  it("offers Not now and says it syncs anyway", async () => {
+    const dialog = await connectWith({ new: 1, adopted: 0, review: 0, deleted: 0 });
+    expect(within(dialog).getByRole("button", { name: "Not now" })).toBeTruthy();
+    expect(within(dialog).queryByRole("button", { name: "Later" })).toBeNull();
+    expect(within(dialog).getByText("Syncs automatically within 6 hours.")).toBeTruthy();
   });
 });

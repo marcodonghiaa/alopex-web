@@ -19,16 +19,17 @@ import { useSyncNow, useSyncRunning } from "@/lib/use-splitwise-sync";
 const CONSENT_TEXT =
   "Alopex reads your Splitwise expenses and stores the key encrypted on your own server; disconnect anytime";
 
+// Each label explains itself; rows with nothing in them are hidden.
 const COUNTS: Array<[keyof SyncCounts, string]> = [
   ["new", "New expenses"],
-  ["adopted", "Already imported"],
-  ["review", "To link"],
-  ["deleted", "Removed"],
+  ["adopted", "Already imported (kept, not doubled)"],
+  ["review", "To link with a bank payment"],
+  ["deleted", "Removed in Splitwise"],
 ];
 
 /**
  * Connect (or reconnect) Splitwise: three steps to get the personal API key, the key, consent.
- * Once connected, a dry run says what the first sync will bring in before it starts.
+ * Once connected, a dry run says what the next sync will bring in before it starts.
  */
 export function ConnectDialog({
   open,
@@ -166,34 +167,45 @@ export function ConnectDialog({
               <Check aria-hidden className="size-4" />
               Connected as {name}
             </DialogDescription>
-            <p className="mt-4 text-sm text-muted-foreground">The first sync brings in:</p>
+            <p className="mt-4 text-sm text-muted-foreground">
+              {reconnect ? "The next sync brings in:" : "The first sync brings in:"}
+            </p>
             {preview.isPending ? (
               <p role="status" className="mt-2 text-sm text-muted-foreground">
                 Checking what Splitwise has…
               </p>
             ) : preview.isError ? (
               <Alert className="mt-2">{preview.error.message}</Alert>
+            ) : COUNTS.every(([k]) => preview.data[k] === 0) ? (
+              <p className="mt-2 text-sm">Nothing new to bring in.</p>
             ) : (
-              <GroupedList className="mt-2">
-                <dl className="divide-y divide-hairline">
-                  {COUNTS.map(([k, label]) => (
-                    <div key={k} className="flex min-h-11 items-center justify-between px-4">
-                      <dt className="text-sm">{label}</dt>
-                      <dd className="font-figure text-[0.9375rem]">
-                        {formatCount(preview.data[k])}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              </GroupedList>
+              <>
+                <GroupedList className="mt-2">
+                  <dl className="divide-y divide-hairline">
+                    {COUNTS.filter(([k]) => preview.data[k] > 0).map(([k, label]) => (
+                      <div key={k} className="flex min-h-11 items-center justify-between px-4">
+                        <dt className="text-sm">{label}</dt>
+                        <dd className="font-figure text-[0.9375rem]">
+                          {formatCount(preview.data[k])}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </GroupedList>
+                {preview.data.new > 0 && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    New expenses add your share to your spending, no review needed.
+                  </p>
+                )}
+              </>
             )}
-            <p className="mt-2 text-xs text-muted-foreground">
-              Already imported: shares from a Splitwise file, kept, not doubled. To link: expenses
-              you paid and settle-ups, to match with a bank payment.
+            {/* Already connected: closing doesn't stop the sync. */}
+            <p className="mt-4 text-xs text-muted-foreground">
+              Syncs automatically within 6 hours.
             </p>
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button variant="quiet" onClick={() => onOpenChange(false)}>
-                Later
+                Not now
               </Button>
               <Button onClick={() => start.mutate()} disabled={syncing}>
                 {syncing ? "Syncing…" : "Start sync"}
