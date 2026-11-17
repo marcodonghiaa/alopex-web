@@ -30,11 +30,11 @@ function view(
 ) {
   const onConfirm = vi.fn();
   const onDismiss = vi.fn();
-  const ui = (d: Array<Debtor>, sg = s) => (
+  const ui = (d: Array<Debtor>, sg = s, b = busy) => (
     <PaymentsToCheck
       suggestions={sg}
       debtors={d}
-      busy={busy}
+      busy={b}
       onConfirm={onConfirm}
       onDismiss={onDismiss}
     />
@@ -45,6 +45,7 @@ function view(
     onDismiss,
     setDebtors: (d: Array<Debtor>) => rerender(ui(d)),
     setSuggestions: (sg: Array<PaybackSuggestion>) => rerender(ui(debtors, sg)),
+    setBusy: (b: string | null) => rerender(ui(debtors, s, b)),
   };
 }
 
@@ -145,6 +146,16 @@ describe("PaymentsToCheck", () => {
     await userEvent.click(screen.getByRole("button", { name: "Yes, it's Crifiore" }));
     setSuggestions([other]); // answered: its row leaves
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Yes, it's Anna" }));
+  });
+
+  it("Confirm waits too while a payment saves", async () => {
+    const { onConfirm, setBusy } = view([suggestion()]);
+    await userEvent.click(screen.getByRole("button", { name: "Someone else" }));
+    setBusy("acc|p2"); // another answer started saving
+    const confirm = screen.getByRole("button", { name: "Confirm" });
+    expect(confirm).toBeDisabled();
+    await userEvent.click(confirm);
+    expect(onConfirm).not.toHaveBeenCalled();
   });
 
   it("no Someone else when nobody else owes you", () => {

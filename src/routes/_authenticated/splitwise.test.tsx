@@ -107,4 +107,56 @@ describe("Who owes you", () => {
       ),
     );
   });
+
+  // protects=self-hosters on a database without the payback functions; fails_when=the page breaks
+  // or shows an error instead of just leaving the questions out
+  it("without the payback functions, the page works and asks nothing", async () => {
+    const client = db.client as { rpc: (name: string, args?: unknown) => unknown };
+    const rpc = client.rpc.bind(client);
+    client.rpc = (name, args) =>
+      name === "payback_candidates"
+        ? Promise.resolve({
+            data: null,
+            error: { message: "function does not exist", code: "PGRST202" },
+          })
+        : rpc(name, args);
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText("Net owed to you")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Import from Splitwise" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Payments to check" })).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  // protects=the Yes toast and its Undo; fails_when=it doesn't say what was settled, or Undo
+  // doesn't reopen the bill
+  it("Yes says what it settled, and its Undo reopens the bill", async () => {
+    const success = vi.spyOn(toast, "success");
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    const section = await screen.findByRole("region", { name: "Payments to check" });
+    const giulia = () =>
+      screen.getByText("Giulia", { selector: "summary span span" }).closest("summary")!;
+    const bills = () => Number(/(\d+) open bills?/.exec(giulia().textContent ?? "")?.[1]);
+    const before = bills();
+    await userEvent.click(within(section).getByRole("button", { name: "Yes, it's Giulia" }));
+    await waitFor(() =>
+      expect(success).toHaveBeenCalledWith(
+        expect.stringMatching(/^Giulia paid you back: 1 bill settled/),
+        expect.objectContaining({ duration: 10_000 }),
+      ),
+    );
+    await waitFor(() => expect(bills()).toBe(before - 1));
+    const opts = success.mock.calls.at(-1)?.[1] as unknown as { action: { onClick: () => void } };
+    opts.action.onClick();
+    await waitFor(() => expect(bills()).toBe(before));
+    expect(await screen.findByRole("region", { name: "Payments to check" })).toBeTruthy();
+    success.mockRestore();
+  });
 });

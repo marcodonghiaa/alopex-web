@@ -991,6 +991,42 @@ describe("fake client: payback matching mirrors the database", () => {
     expect((await record(c, "ck-pay", null)).error?.message).toBe("Contact required");
   });
 
+  it("a yes links the payer: the next payment comes back linked; undo with forget unlinks", async () => {
+    const c = await seed([
+      row("lk-bill", { amount: 40, personal_amount: 20, owed_by: "Ida" }),
+      row("lk-pay", {
+        amount: 20,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "IDA NERI",
+        flow_type: "income",
+      }),
+      row("lk-next", {
+        amount: 5,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Ida  Neri.",
+        flow_type: "income",
+      }),
+    ]);
+    const { data } = await c.rpc("record_payback", {
+      p_account: ACC,
+      p_ref: "lk-pay",
+      p_contact: "Ida",
+      p_remember: true,
+    });
+    expect(data).toMatchObject({ settled: ["lk-bill"], linked: true });
+    expect((await record(c, "lk-pay", "Ida")).error?.message).toBe("Payment already checked");
+    const linked = async () =>
+      (
+        (await c.rpc("payback_candidates", { p_days: 60 })).data as Array<{
+          entry_reference: string;
+          linked_contact: string | null;
+        }>
+      ).find((r) => r.entry_reference === "lk-next")?.linked_contact;
+    expect(await linked()).toBe("Ida");
+    await c.rpc("undo_payback", { p_account: ACC, p_ref: "lk-pay", p_forget: true });
+    expect(await linked()).toBeNull();
+  });
+
   it("names are read like the page: 'Carla,' is Carla alone", async () => {
     const c = await seed([
       row("cm-1", { amount: 20, personal_amount: 10, owed_by: "Carla," }),
