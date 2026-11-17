@@ -90,15 +90,11 @@ function candidateFor(
       return [];
     }
     const days = dayNumber(tx.bookingDate) - dayNumber(r.date);
-    const txRate = rate(tx.currency, tx.bookingDate);
-    if (
-      !Number.isFinite(days) ||
-      days < -EARLY_DAYS ||
-      days > DAYS_AFTER ||
-      txRate === null ||
-      rowEur === 0
-    )
+    if (!Number.isFinite(days) || days < -EARLY_DAYS || days > DAYS_AFTER || rowEur === 0) {
       return [];
+    }
+    const txRate = rate(tx.currency, tx.bookingDate); // only inside the window: lookups add up
+    if (txRate === null) return [];
     const early = days < -DAYS_BEFORE;
     const gap = Math.abs(rowEur - tx.amountCents * txRate) / rowEur;
     if (gap > (early ? EARLY_TOLERANCE : AMOUNT_TOLERANCE)) return [];

@@ -67,6 +67,23 @@ describe("fingerprintRows", () => {
   });
 });
 
+// polish-3 #1: a rate is looked up only for bank rows inside the date window
+describe("matchBank rate lookups", () => {
+  it("skips the rate for bank rows outside the date window", () => {
+    const lookups: Array<string> = [];
+    const counting = (currency: string, date: string) => {
+      lookups.push(`${currency} ${date}`);
+      return rate(currency);
+    };
+    const far = Array.from({ length: 50 }, (_, i) =>
+      tx({ entryReference: `old${i}`, bookingDate: "2025-01-10", currency: "CHF" }),
+    );
+    const result = matchBank(classify([row()]), [...far, tx()], counting);
+    expect(result.map((m) => m.entryReference)).toEqual(["e1"]);
+    expect(lookups.filter((l) => l.startsWith("CHF"))).toEqual([]);
+  });
+});
+
 describe("matchBank", () => {
   // protects=suggestions shown to the user; fails_when=a wrong bank transaction is proposed or a
   // handled one is touched again; no_claim=anything is written (these are only suggestions)

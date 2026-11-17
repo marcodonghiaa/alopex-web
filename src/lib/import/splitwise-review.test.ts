@@ -35,6 +35,28 @@ describe("makeRate", () => {
   });
 });
 
+// polish-3 #1: the To link page looks a rate up for many (item, bank row) pairs
+describe("makeRate at scale", () => {
+  it("answers 100k lookups over 3000 rates quickly, and the same as a scan", () => {
+    const rows = Array.from({ length: 3000 }, (_, i) => ({
+      currency: i % 2 ? "CHF" : "USD",
+      date: new Date(Date.UTC(2020, 0, 1) + Math.floor(i / 2) * 86_400_000)
+        .toISOString()
+        .slice(0, 10),
+      rate_to_eur: 1 + i / 10_000,
+    }));
+    const rate = makeRate(rows.slice().reverse());
+    expect(rate("CHF", "2019-12-31")).toBeNull();
+    expect(rate("USD", "2020-01-01")).toBe(1);
+    expect(rate("CHF", "2020-01-01")).toBe(1.0001);
+    expect(rate("CHF", "2020-01-02")).toBe(1.0003);
+    expect(rate("USD", "2030-01-01")).toBe(1.2998);
+    const start = performance.now();
+    for (let i = 0; i < 100_000; i++) rate(i % 2 ? "CHF" : "USD", `2022-0${1 + (i % 9)}-15`);
+    expect(performance.now() - start).toBeLessThan(500);
+  });
+});
+
 describe("toBankTx", () => {
   it("converts a bank row to cents and a direction", () => {
     expect(toBankTx(dbRow({ personal_amount: 5 }))).toEqual({
