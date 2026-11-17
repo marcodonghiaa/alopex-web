@@ -141,6 +141,7 @@ describe("database types", () => {
       Pub["Views"]["v_bank_accounts_latest"]["Row"],
       "sync_error" | "sync_error_at"
     > = cols;
-    expect([row, update, view]).toEqual([cols, cols, cols]);
+    const insert: Pick<Pub["Tables"]["accounts"]["Insert"], "sync_error" | "sync_error_at"> = cols;
+    expect([row, update, insert, view]).toEqual([cols, cols, cols, cols]);
   });
 });
