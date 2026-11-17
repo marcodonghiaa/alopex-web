@@ -100,6 +100,43 @@ describe("loadRates", () => {
     expect(found.slice(1)).toEqual(rows);
   });
 
+  it("fills a gap the sync left in the stored rates, keeping the stored days", async () => {
+    const holed = [
+      { date: "2026-01-02", rate_to_eur: 0.9 },
+      { date: "2026-01-16", rate_to_eur: 0.8 },
+    ];
+    const get = series({ "2026-01-02": 2, "2026-01-09": 1.25 });
+    const found = await loadRates("USD", "2026-01-05", "2026-01-20", fakeDb(holed), get);
+    expect(get).toHaveBeenCalledWith(
+      "https://api.frankfurter.dev/v1/2026-01-02..2026-01-16?base=EUR&symbols=USD",
+    );
+    expect(found).toEqual([holed[0], { date: "2026-01-09", rate_to_eur: 0.8 }, holed[1]]);
+    expect(rateLookup("USD", found)("USD", "2026-01-14")).toBe(0.8);
+  });
+
+  it("fills the days after the last stored rate when the sync stopped", async () => {
+    const get = series({ "2026-01-19": 1.25 });
+    const stale = [{ date: "2026-01-02", rate_to_eur: 0.9 }];
+    const found = await loadRates("USD", "2026-01-02", "2026-01-20", fakeDb(stale), get);
+    expect(get).toHaveBeenCalledWith(
+      "https://api.frankfurter.dev/v1/2026-01-02..2026-01-20?base=EUR&symbols=USD",
+    );
+    expect(found).toEqual([...stale, { date: "2026-01-19", rate_to_eur: 0.8 }]);
+  });
+
+  it("a gap every day of which still has a recent enough rate needs no fetch", async () => {
+    // 2026-01-13 is the last day 2026-01-02's rate still covers.
+    const spaced = [
+      { date: "2026-01-02", rate_to_eur: 0.9 },
+      { date: "2026-01-13", rate_to_eur: 0.8 },
+    ];
+    const get = series({});
+    await loadRates("USD", "2026-01-02", "2026-01-20", fakeDb(spaced), get);
+    expect(get).not.toHaveBeenCalled();
+    await loadRates("USD", "2026-01-02", "2026-01-12", fakeDb(spaced.slice(0, 1)), get);
+    expect(get).not.toHaveBeenCalled();
+  });
+
   it("keeps only real days with a usable rate from the exchange-rate site", async () => {
     const get = vi.fn(async () => ({
       ok: true,

@@ -25,8 +25,9 @@ type Get = (url: string) => Promise<{ ok: boolean; json: () => Promise<unknown> 
 
 /**
  * The daily rates for `currency` between two days. The ones the sync stored, and for the days
- * before them (a fresh install keeps about 100 days) the same source the sync uses, Frankfurter,
- * asked from your browser: it learns only the currency and the dates.
+ * they leave bare (before them, as a fresh install keeps about 100 days, or a gap where the sync
+ * didn't run) the same source the sync uses, Frankfurter, asked from your browser: it learns only
+ * the currency and the dates.
  */
 export async function loadRates(
   currency: string,
@@ -53,11 +54,24 @@ export async function loadRates(
   } catch {
     throw fail();
   }
-  if (stored.length > 0 && stored[0]!.date <= from) return stored;
+  // The days with no rate at most MAX_GAP_DAYS old: before the first stored day, in a gap the
+  // sync left, or after the last stored day. One request covers them all.
+  const days = [...stored.map((r) => r.date), addDays(to, 1)];
+  let since = days[0]! > from ? start : null;
+  let until = days[0]!;
+  for (let i = 1; i < days.length; i++) {
+    const firstBare = addDays(days[i - 1]!, MAX_GAP_DAYS + 1);
+    const lastBare = addDays(days[i]!, -1);
+    if ((firstBare > from ? firstBare : from) <= (lastBare < to ? lastBare : to)) {
+      since ??= days[i - 1]!;
+      until = days[i]!;
+    }
+  }
+  if (since === null) return stored;
+  if (until > to) until = to;
 
-  const until = stored[0]?.date ?? to;
   const res = await get(
-    `${FX_HISTORY}/v1/${start}..${until}?base=EUR&symbols=${encodeURIComponent(currency)}`,
+    `${FX_HISTORY}/v1/${since}..${until}?base=EUR&symbols=${encodeURIComponent(currency)}`,
   ).catch(() => null);
   if (!res?.ok) throw fail();
   // Only real days with a finite rate above zero: a bad answer must never become a price.
@@ -67,7 +81,8 @@ export async function loadRates(
   } catch {
     throw fail();
   }
-  const older = Object.entries(body?.rates ?? {})
+  const storedDays = new Set(stored.map((r) => r.date));
+  const fetched = Object.entries(body?.rates ?? {})
     .flatMap(([date, r]) => {
       const units = r?.[currency];
       if (!isDay(date) || typeof units !== "number") return [];
@@ -76,7 +91,7 @@ export async function loadRates(
         ? [{ date, rate_to_eur: rate }]
         : [];
     })
-    .filter(({ date }) => stored.length === 0 || date < stored[0]!.date)
-    .sort((a, b) => a.date.localeCompare(b.date));
-  return [...older, ...stored];
+    // A day the sync stored keeps its stored rate.
+    .filter(({ date }) => !storedDays.has(date));
+  return [...fetched, ...stored].sort((a, b) => a.date.localeCompare(b.date));
 }
