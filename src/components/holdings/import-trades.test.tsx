@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { toast } from "sonner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const db = vi.hoisted(() => ({
@@ -212,7 +213,8 @@ describe("ImportTrades", () => {
     expect(await screen.findByText("Transaction export.csv")).toBeTruthy();
     await waitFor(() => expect(screen.getByText("new trades to save")).toBeTruthy());
     expect(screen.getByText("By holding")).toBeTruthy();
-    expect(screen.getByText("Example World ETF")).toBeTruthy();
+    // Listed under By holding, and under Share counts corrected too.
+    expect(screen.getAllByText("Example World ETF")).toHaveLength(2);
     expect(screen.getByText("Left out")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Save 4 trades" })).toBeTruthy();
     expect(screen.queryByText("How to get the file")).toBeNull();
@@ -676,5 +678,60 @@ describe("ImportTrades", () => {
       },
     });
     expect(await screen.findByRole("button", { name: "Save 1 trade" })).toBeTruthy();
+  });
+
+  describe("corrected holdings", () => {
+    const corrected = () => screen.getByRole("region", { name: "Holdings corrected" });
+
+    it("lists each one: name, source, old → new, with its decimals", async () => {
+      db.extraCoins.push({ asset_symbol: "LTC", amount: 0.5, name: "Litecoin", source: "Manual" });
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Save 7 trades" });
+      const rows = within(corrected()).getAllByRole("listitem");
+      expect(rows.map((r) => r.textContent)).toEqual([
+        "EthereumManual0.4 → 0.4988",
+        "LitecoinManual0.5 → 0",
+      ]);
+    });
+
+    it("the toast counts the trades and the holdings updated", async () => {
+      db.extraCoins.push({ asset_symbol: "LTC", amount: 0.5, name: "Litecoin", source: "Manual" });
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(toast.success).toHaveBeenLastCalledWith("7 trades imported · 2 holdings updated");
+    });
+
+    it("one holding updated is singular", async () => {
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(toast.success).toHaveBeenLastCalledWith("7 trades imported · 1 holding updated");
+    });
+
+    it("nothing corrected: no list, and the toast only counts the trades", async () => {
+      open("stock");
+      pickText(
+        /My own spreadsheet/,
+        "date,side,isin,shares,price\n2026-01-02,buy,XX0000000001,1,10",
+      );
+      fireEvent.click(await screen.findByRole("button", { name: "Save 1 trade" }));
+      expect(screen.queryByRole("region", { name: /corrected/ })).toBeNull();
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(toast.success).toHaveBeenLastCalledWith("1 trade imported");
+    });
+
+    it("a stock's count shows old → new, with no source", async () => {
+      open("stock");
+      pick(/Trade Republic/, "trade_republic.csv");
+      await screen.findByRole("button", { name: "Save 4 trades" });
+      const rows = within(
+        screen.getByRole("region", { name: "Share counts corrected" }),
+      ).getAllByRole("listitem");
+      expect(rows[0]!.textContent).toBe("Example World ETF1 → 4");
+    });
   });
 });

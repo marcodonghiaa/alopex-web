@@ -1,5 +1,5 @@
 import { dateLocale, numberFormat } from "@/lib/locale";
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -206,7 +206,14 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       }
     },
     onSuccess: () => {
-      toast.success(`${fresh.length} trade${fresh.length === 1 ? "" : "s"} imported`);
+      toast.success(
+        [
+          (fresh.length > 0 || updates.length === 0) && `${plural(fresh.length, "trade")} imported`,
+          updates.length > 0 && `${plural(updates.length, "holding")} updated`,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      );
       reset();
       setOpen(false);
     },
@@ -235,6 +242,9 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     void file.text().then(setText);
   }
 
+  const correctedId = useId();
+  // Coin amounts keep their decimals (0.4988), share counts too.
+  const amount = numberFormat({ maximumFractionDigits: 8 });
   const row = "flex min-h-12 items-center gap-3 px-4 py-2.5 text-[0.9375rem]";
   const fileInput = (
     <input
@@ -533,25 +543,52 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               )}
             </div>
 
-            {(parsed.trades.length > fresh.length || updates.length > 0) && (
+            {parsed.trades.length > fresh.length && (
               <GroupedList className="border border-hairline">
-                {parsed.trades.length > fresh.length && (
-                  <div className={row}>
-                    <span className="flex-1">Already saved, skipped</span>
-                    <span className="tabular-nums">
-                      {numberFormat().format(parsed.trades.length - fresh.length)}
-                    </span>
-                  </div>
-                )}
-                {updates.length > 0 && (
-                  <div className={row}>
-                    <span className="flex-1">
-                      {kind === "crypto" ? "Holdings corrected" : "Share counts corrected"}
-                    </span>
-                    <span className="tabular-nums">{numberFormat().format(updates.length)}</span>
-                  </div>
-                )}
+                <div className={row}>
+                  <span className="flex-1">Already saved, skipped</span>
+                  <span className="tabular-nums">
+                    {numberFormat().format(parsed.trades.length - fresh.length)}
+                  </span>
+                </div>
               </GroupedList>
+            )}
+
+            {updates.length > 0 && (
+              <section aria-labelledby={correctedId}>
+                <p
+                  id={correctedId}
+                  className="px-1 pb-1.5 text-xs font-medium text-muted-foreground"
+                >
+                  {kind === "crypto" ? "Holdings corrected" : "Share counts corrected"}
+                </p>
+                <GroupedList className="border border-hairline">
+                  <ul>
+                    {updates.map(({ key, shares }) => {
+                      const held = wallet?.get(key);
+                      const old = held ? held.shares : keys.data?.shares.get(key);
+                      return (
+                        <li key={key} className={cn(row, "border-hairline not-first:border-t")}>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate">
+                              {keys.data?.names.get(key) ?? key}
+                            </span>
+                            {held && (
+                              <span className="block text-xs text-muted-foreground">
+                                {held.source}
+                              </span>
+                            )}
+                          </span>
+                          <span className="shrink-0 text-sm tabular-nums">
+                            {old !== undefined && `${amount.format(old)} → `}
+                            {amount.format(shares)}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </GroupedList>
+              </section>
             )}
 
             {summary && (
