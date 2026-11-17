@@ -253,7 +253,7 @@ describe("ImportTrades", () => {
     // USDT sits only on Coinbase, which syncs itself: its Ledger moves are left out, and it says so.
     const save = await screen.findByRole("button", { name: "Save 7 trades" });
     expect(screen.getByText(/USDT has no Ledger or manual holding/)).toBeTruthy();
-    expect(screen.getByText("Share counts corrected")).toBeTruthy();
+    expect(screen.getByText("Share counts to correct")).toBeTruthy();
     fireEvent.click(save);
     await waitFor(() => expect(db.inserted).toHaveLength(7));
     expect(db.inserted.some((t) => t["key"] === "USDT")).toBe(false);
@@ -640,6 +640,14 @@ describe("ImportTrades", () => {
       expect(screen.getByLabelText("CSV text")).toHaveValue("");
       expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
     });
+  });
+
+  it("polish-4 N10 before Save the share counts are still to correct", async () => {
+    open("stock");
+    await pickTradeRepublic();
+    expect(screen.getByText("Share counts to correct").parentElement?.textContent).toBe(
+      "Share counts to correct2",
+    );
   });
 
   it("if saved dividends and fees can't load, it says so and won't save", async () => {
