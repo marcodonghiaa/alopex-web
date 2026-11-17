@@ -830,6 +830,49 @@ describe("ImportTrades", () => {
     });
   });
 
+  describe("polish-5 B4 the stale file read guard", () => {
+    const csv = () => readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    /** A file whose text is a deferred promise: it arrives when finish() is called. */
+    const deferredFile = (text: string, name: string) => {
+      let finish!: () => void;
+      const ready = new Promise<string>((r) => (finish = () => r(text)));
+      return { file: Object.assign(new File([text], name), { text: () => ready }), finish };
+    };
+    const settle = () => new Promise((r) => setTimeout(r, 20));
+
+    it("file A read late, after file B: B's content wins, A's result is ignored", async () => {
+      open("stock");
+      fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+      const a = deferredFile(csv(), "a.csv");
+      const b = deferredFile(csv().split("\n")[0]!, "b.csv");
+      fireEvent.change(screen.getByLabelText("CSV file"), { target: { files: [a.file] } });
+      fireEvent.change(screen.getByLabelText("Change file"), { target: { files: [b.file] } });
+      b.finish();
+      expect(await screen.findByText("Nothing in this file to import here.")).toBeInTheDocument();
+      a.finish();
+      await settle();
+      expect(screen.getByText("b.csv")).toBeInTheDocument();
+      expect(screen.getByText("Nothing in this file to import here.")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+    });
+
+    it("a read that ends after the dialog closed doesn't come back on reopening", async () => {
+      open("stock");
+      fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+      const a = deferredFile(csv(), "a.csv");
+      fireEvent.change(screen.getByLabelText("CSV file"), { target: { files: [a.file] } });
+      fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      a.finish();
+      await settle();
+      fireEvent.click(screen.getByText("Import trades from CSV"));
+      fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+      await settle();
+      expect(screen.getByLabelText("CSV text")).toHaveValue("");
+      expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+    });
+  });
+
   it("polish-4 N10 before Save the share counts are still to correct", async () => {
     open("stock");
     await pickTradeRepublic();
