@@ -113,7 +113,9 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   // A wallet's export (Ledger) is the record of that wallet: it sets the coin's Ledger holding, or
   // the one you added by hand, never one an exchange sync keeps (Coinbase). Coins with neither are
   // left out by the parser, with a note.
-  const fileBroker = broker ?? (text.trim() ? detectBroker(text) : undefined);
+  // Read once per file, not on every render: detecting splits the whole file.
+  const detected = useMemo(() => (text.trim() ? detectBroker(text) : undefined), [text]);
+  const fileBroker = broker ?? detected;
   const holdingSource = kind === "crypto" ? fileBroker?.holdingSource : undefined;
   const wallet = useMemo(
     () => (holdingSource && keys.data ? walletHoldings(keys.data.bySource, holdingSource) : null),
