@@ -54,6 +54,10 @@ describe("buildZip", () => {
     expect(json.exported_at).toBe("2026-10-30T10:00:00.000Z");
   });
 
+  it("includes the payer names you linked to contacts", () => {
+    expect(EXPORT_TABLES.map((t) => t.name)).toContain("payer_links");
+  });
+
   it("makes one holdings row per holding of every kind", () => {
     const lines = text("holdings.csv").trim().split("\r\n");
     expect(lines).toHaveLength(4);
