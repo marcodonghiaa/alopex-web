@@ -1176,3 +1176,17 @@ it.each([
   expect(await screen.findByRole("button", { name: "Import a Splitwise file" })).toBeTruthy();
   expect(screen.queryByText(/instead/)).toBeNull();
 });
+
+// polish-4 #27: a full sentence, and the steps numbered like Connect a bank (list-decimal)
+it("ends the consent with a period and numbers the steps as a list", async () => {
+  rpc.mockResolvedValue(notConnected());
+  renderSetup();
+  await userEvent.click(await screen.findByRole("button", { name: "Connect Splitwise" }));
+  const dialog = screen.getByRole("dialog", { name: "Connect Splitwise" });
+  expect(within(dialog).getByRole("checkbox", { name: /disconnect anytime\.$/ })).toBeTruthy();
+  const list = within(dialog).getByRole("list");
+  expect(list.className.split(" ")).toContain("list-decimal");
+  const steps = within(list).getAllByRole("listitem");
+  expect(steps).toHaveLength(3);
+  expect(steps[0]!.textContent).toMatch(/^Open /);
+});

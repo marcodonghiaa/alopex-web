@@ -19,7 +19,7 @@ import {
 import { useSyncNow, useSyncRunning } from "@/lib/use-splitwise-sync";
 
 const CONSENT_TEXT =
-  "Alopex reads your Splitwise expenses and stores the key encrypted on your own server; disconnect anytime";
+  "Alopex reads your Splitwise expenses and stores the key encrypted on your own server; disconnect anytime.";
 
 // Each label explains itself; rows with nothing in them are hidden.
 const COUNTS: Array<[keyof SyncCounts, string]> = [
@@ -129,7 +129,7 @@ export function ConnectDialog({
                 Splitwise sync is off in the demo. Look around: Connect won't send anything.
               </p>
             )}
-            <ol className="mt-5 space-y-3 text-sm">
+            <ol className="mt-5 list-decimal space-y-3 pl-5 text-sm marker:text-muted-foreground">
               {[
                 <>
                   Open{" "}
@@ -147,11 +147,8 @@ export function ConnectDialog({
                 <>Choose Register your application. Any name works; the URLs don't matter.</>,
                 <>Copy the API key and paste it below.</>,
               ].map((step, i) => (
-                <li key={i} className="flex gap-3">
-                  <span aria-hidden className="w-4 shrink-0 font-figure text-muted-foreground">
-                    {i + 1}
-                  </span>
-                  <span className="min-w-0">{step}</span>
+                <li key={i} className="pl-1">
+                  {step}
                 </li>
               ))}
             </ol>
