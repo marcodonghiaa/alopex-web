@@ -86,7 +86,7 @@ describe("InvestmentIncome", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-12-31T23:30:00Z"));
     render(<InvestmentIncome page="stock" events={[ev({ amount_eur: 8 })]} />);
-    expect(screen.getByText("Dividends").parentElement?.textContent).toBe("Dividends€0.00€8.00");
+    expect(screen.getByText("Dividends").parentElement?.textContent).toBe("Dividends—€8.00");
   });
 
   it("a total that's only rounding dust (fees charged and given back) shows no row", () => {
@@ -103,7 +103,7 @@ describe("InvestmentIncome", () => {
     expect(screen.queryByText("Fees")).toBeNull();
   });
 
-  it("a cost of nothing this year shows €0.00 there, not -€0.00", () => {
+  it("a cost of nothing this year shows a dash there, not -€0.00", () => {
     render(
       <InvestmentIncome
         page="stock"
@@ -119,7 +119,28 @@ describe("InvestmentIncome", () => {
         ]}
       />,
     );
-    expect(screen.getByText("Fees").parentElement?.textContent).toBe("Fees€0.00−€1.00");
+    expect(screen.getByText("Fees").parentElement?.textContent).toBe("Fees—−€1.00");
+  });
+
+  it("polish-4 F2 nothing this year reads as a dash, not €0.00; something this year shows its amount", () => {
+    render(
+      <InvestmentIncome
+        page="stock"
+        today="2026-11-17"
+        events={[
+          ev({
+            kind: "fee",
+            asset_kind: null,
+            key: null,
+            event_date: "2025-06-01",
+            amount_eur: -1,
+          }),
+          ev({ amount_eur: 8 }),
+        ]}
+      />,
+    );
+    expect(screen.getByRole("row", { name: /Fees/ }).textContent).toBe("Fees—−€1.00");
+    expect(screen.getByRole("row", { name: /Dividends/ }).textContent).toBe("Dividends€8.00€8.00");
   });
 
   it("coins' events go to Crypto, shares' and cash to Portfolio", () => {

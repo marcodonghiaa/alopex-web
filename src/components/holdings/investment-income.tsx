@@ -97,7 +97,12 @@ export function InvestmentIncome({
                   {r.label}
                 </th>
                 <td className="pl-6 text-right font-figure whitespace-nowrap">
-                  {formatIncome(incomeValue(year, r))}
+                  {/* None this year is "none", not an amount. */}
+                  {incomeValue(year, r) === 0 ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : (
+                    formatIncome(incomeValue(year, r))
+                  )}
                 </td>
                 <td className="pr-4 pl-6 text-right font-figure whitespace-nowrap">
                   {formatIncome(r.value)}
