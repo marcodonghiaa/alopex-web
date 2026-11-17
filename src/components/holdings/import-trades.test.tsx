@@ -887,5 +887,18 @@ describe("ImportTrades", () => {
       await screen.findByRole("button", { name: "Save 1 trade" });
       expect(description()).toMatch(/price is per share in EUR/);
     });
+
+    it.each([
+      ["stock", "ledger_live.csv", "Crypto"],
+      ["crypto", "trade_republic.csv", "Portfolio"],
+    ] as const)(
+      "on the %s page, the other page's file (%s) keeps the columns' description",
+      async (kind, fixture, page) => {
+        open(kind);
+        pick(/My own spreadsheet/, fixture);
+        await screen.findByRole("link", { name: `Open the ${page} page` });
+        expect(description()).toMatch(/^A header row with date, side/);
+      },
+    );
   });
 });

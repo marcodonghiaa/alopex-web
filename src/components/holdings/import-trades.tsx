@@ -339,7 +339,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               ? "Where are these trades from?"
               : broker
                 ? "Upload the export as it comes. Alopex reads it on your device and shows you what it found first."
-                : from === "spreadsheet" && detected
+                : from === "spreadsheet" && detected && detected.kind === kind
                   ? // A broker's own file pasted here is read as that broker's, not by our columns.
                     `A ${detected.name} export: read as it comes${need ? `, its ${need.currency} values turned into euro with each day's rate` : ""}.`
                   : from === "spreadsheet"
