@@ -88,14 +88,14 @@ export const connectSplitwise = (apiKey: string) =>
   call<{ displayName: string }>(
     "splitwise-connect",
     { apiKey: apiKey.trim(), consent: true },
-    "Couldn't connect Splitwise, please try again",
+    "Couldn't connect Splitwise. Try again later.",
   );
 
 export const disconnectSplitwise = (deleteData: boolean) =>
   call<{ disconnected: boolean; deleted: number }>(
     "splitwise-connect",
     { disconnect: true, deleteData },
-    "Couldn't disconnect Splitwise, please try again",
+    "Couldn't disconnect Splitwise. Try again later.",
   );
 
 export const previewSync = () =>

@@ -193,8 +193,24 @@ describe("Edge Function calls", () => {
   it("falls back to its own message when the reply has none", async () => {
     invoke.mockResolvedValue({ data: null, error: { message: "Failed to fetch" } });
     const err = (await connectSplitwise("abcdefghijkl").catch((e: unknown) => e)) as SyncError;
-    expect(err.message).toBe("Couldn't connect Splitwise, please try again");
+    expect(err.message).toBe("Couldn't connect Splitwise. Try again later.");
     expect(err.status).toBeNull();
+  });
+
+  // polish-3 #10: one copy style for every fallback
+  it("words every fallback the same way", async () => {
+    invoke.mockResolvedValue({ data: null, error: { message: "Failed to fetch" } });
+    const messages = await Promise.all(
+      [connectSplitwise("abcdefghijkl"), disconnectSplitwise(true), previewSync(), syncNow()].map(
+        (p) => p.catch((e: unknown) => (e as Error).message),
+      ),
+    );
+    expect(messages).toEqual([
+      "Couldn't connect Splitwise. Try again later.",
+      "Couldn't disconnect Splitwise. Try again later.",
+      "Couldn't check Splitwise. Try again later.",
+      "Couldn't sync with Splitwise. Try again later.",
+    ]);
   });
 });
 
