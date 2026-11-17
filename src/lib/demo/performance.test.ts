@@ -67,4 +67,18 @@ describe("demoHoldingPerformance", () => {
     const r = demoHoldingPerformance({ ...db, portfolio_snapshots: [] });
     expect(get(r, "AAA")).toMatchObject({ status: "no_price", end_price_eur: null });
   });
+
+  // protects=the demo's range chip and Return line price each day; fails_when=every day reads
+  // as the trade price, so the Return line is flat until today
+  it("prices the start on the asked day: the last price on or before it, else the first", () => {
+    const r = demoHoldingPerformance(db, "2026-10-29");
+    expect(get(r, "AAA")).toMatchObject({ start_date: "2026-09-17", start_price_eur: 25 });
+    expect(get(r, "BTC").start_price_eur).toBeCloseTo(81);
+    const early = demoHoldingPerformance(db, "2026-01-01");
+    expect(get(early, "AAA")).toMatchObject({
+      start_date: "2026-09-17",
+      start_price_eur: 25,
+      status: "since",
+    });
+  });
 });
