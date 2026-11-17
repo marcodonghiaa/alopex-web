@@ -684,3 +684,16 @@ it("tells what brings the older ones in without saying settle", async () => {
     "Showing the newest 1 of 742. Link or ignore these and older ones appear.",
   );
 });
+
+// polish-4 #8 follow-up: at 375 px the 44 px buttons still left Ignore alone on a line; compact
+// side padding fits Find in bank, Count my share and Ignore on one line
+it("gives the row actions compact side padding", async () => {
+  tables.splitwise_review = { data: [item()], error: null };
+  renderList();
+  const row = await screen.findByRole("listitem", { name: "Groceries" });
+  for (const b of within(row).getAllByRole("button")) {
+    // Ignore has no fill, so it goes tighter still.
+    expect(b.className.split(" ")).toContain(b.textContent === "Ignore" ? "px-2" : "px-3");
+    expect(b.className.split(" ")).toContain("min-h-11");
+  }
+});

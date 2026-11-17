@@ -7,6 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isDemoMode } from "@/lib/demo/mode";
+import { cn } from "@/lib/utils";
 import { PENDING } from "./pending";
 import { moneyAmount, money, shortDate } from "@/lib/import/splitwise-format";
 import { fetchBankWindow } from "@/lib/import/splitwise-bank";
@@ -254,7 +255,11 @@ function ReviewRow({
 }) {
   const tx = suggestion?.tx;
   const out = directionOf(item.kind) === "DBIT";
-  const off = { disabled: demo, "aria-disabled": busy || undefined, className: PENDING };
+  const off = {
+    disabled: demo,
+    "aria-disabled": busy || undefined,
+    className: cn("px-3", PENDING),
+  };
   return (
     <li
       id={rowId(item.id)}
@@ -308,7 +313,7 @@ function ReviewRow({
           </span>
         </div>
       )}
-      <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-2 flex flex-wrap gap-x-1.5 gap-y-2">
         {tx ? (
           <>
             <Button {...off} onClick={() => busy || onAct({ action: "link", id: item.id, tx })}>
@@ -347,6 +352,8 @@ function ReviewRow({
         <Button
           variant="ghost"
           {...off}
+          // No fill, so tighter padding: Find in bank, Count my share and Ignore fit 375 px.
+          className={cn(off.className, "px-2")}
           onClick={() => busy || onAct({ action: "dismiss", id: item.id })}
         >
           Ignore
