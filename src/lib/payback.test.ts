@@ -188,6 +188,25 @@ describe("suggestPaybacks", () => {
     ).toEqual([]);
   });
 
+  // protects=one question per person (U6); fails_when=two payments both ask "Is this Anna?" for
+  // more than she owes, or the older one is asked first
+  it("asks about one payment per person at a time, the newest first", () => {
+    const older = pay({ entry_reference: "old", booking_date: "2026-11-01", payer: "Anna Rossi" });
+    const newer = pay({ entry_reference: "new", booking_date: "2026-11-10", payer: "ANNA ROSSI" });
+    const other = pay({ entry_reference: "bea", booking_date: "2026-11-05", payer: "Bea Neri" });
+    const debtors = [debtor("Anna", 60), debtor("Bea", 20)];
+    const out = suggestPaybacks([older, other, newer], debtors);
+    expect(out.map((s) => [s.payment.entry_reference, s.debtor.name])).toEqual([
+      ["new", "Anna"],
+      ["bea", "Bea"],
+    ]);
+    // Once the newest is answered (it leaves the list), the older one is asked.
+    expect(suggestPaybacks([older, other], debtors).map((s) => s.payment.entry_reference)).toEqual([
+      "bea",
+      "old",
+    ]);
+  });
+
   it("payments with no guess are left out", () => {
     expect(
       suggestPaybacks([pay({ payer: "Employer Srl", amount_eur: 2000 })], [debtor("Anna", 60)]),

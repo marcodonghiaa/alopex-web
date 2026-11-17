@@ -197,10 +197,19 @@ export function suggestPaybacks(
   const find = (name: string) =>
     debtors.find((d) => d.name.toLowerCase() === name.trim().toLowerCase());
   const out: Array<PaybackSuggestion> = [];
-  for (const payment of payments) {
+  // One question per person at a time, about their newest payment: two at once could ask about
+  // more than they owe. The next shows once that one is answered.
+  const asked = new Set<string>();
+  const add = (s: PaybackSuggestion) => {
+    if (asked.has(s.debtor.name)) return;
+    asked.add(s.debtor.name);
+    out.push(s);
+  };
+  const newestFirst = [...payments].sort((a, b) => b.booking_date.localeCompare(a.booking_date));
+  for (const payment of newestFirst) {
     if (payment.linked_contact) {
       const debtor = find(payment.linked_contact);
-      if (debtor) out.push({ payment, debtor, reason: "linked" });
+      if (debtor) add({ payment, debtor, reason: "linked" });
       continue;
     }
     const byName = debtors.filter((d) => namesLookAlike(payment.payer, d.name));
@@ -210,13 +219,13 @@ export function suggestPaybacks(
       const [best] = [...byName].sort(
         (a, b) => Math.abs(a.open - amount) - Math.abs(b.open - amount),
       );
-      if (best) out.push({ payment, debtor: best, reason: "name" });
+      if (best) add({ payment, debtor: best, reason: "name" });
       continue;
     }
     if (payment.amount_eur === null) continue;
     const byAmount = debtors.filter((d) => sameCents(d.open, payment.amount_eur as number));
     const [only] = byAmount;
-    if (only && byAmount.length === 1) out.push({ payment, debtor: only, reason: "amount" });
+    if (only && byAmount.length === 1) add({ payment, debtor: only, reason: "amount" });
   }
   return out;
 }
