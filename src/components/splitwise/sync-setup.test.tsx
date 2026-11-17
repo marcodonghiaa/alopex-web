@@ -517,7 +517,7 @@ describe("Disconnect", () => {
 
     functions({
       "splitwise-connect": [
-        httpError(500, { error: "Couldn't disconnect Splitwise, please try again" }),
+        httpError(500, { error: "Couldn't disconnect Splitwise. Try again later." }),
       ],
     });
     await userEvent.click(screen.getByRole("button", { name: "Disconnect" }));
@@ -525,7 +525,7 @@ describe("Disconnect", () => {
       within(screen.getByRole("dialog")).getByRole("button", { name: "Disconnect" }),
     );
     await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith("Couldn't disconnect Splitwise, please try again"),
+      expect(toast.error).toHaveBeenCalledWith("Couldn't disconnect Splitwise. Try again later."),
     );
   });
 });
@@ -576,7 +576,7 @@ describe("Delete synced data after a disconnect", () => {
     expect(invoke).not.toHaveBeenCalled();
     functions({
       "splitwise-connect": [
-        httpError(500, { error: "Couldn't disconnect Splitwise, please try again" }),
+        httpError(500, { error: "Couldn't disconnect Splitwise. Try again later." }),
       ],
     });
     await userEvent.click(screen.getByRole("button", { name: DELETE }));
@@ -584,7 +584,7 @@ describe("Delete synced data after a disconnect", () => {
       within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }),
     );
     await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith("Couldn't disconnect Splitwise, please try again"),
+      expect(toast.error).toHaveBeenCalledWith("Couldn't disconnect Splitwise. Try again later."),
     );
   });
 
