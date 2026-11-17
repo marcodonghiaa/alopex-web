@@ -892,7 +892,9 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                     .filter(Boolean)
                     .join(" and ")}`
                 : updates.length > 0
-                  ? "Save share counts"
+                  ? kind === "crypto"
+                    ? "Save holdings"
+                    : "Save share counts"
                   : "Save trades"}
             </Button>
           </div>

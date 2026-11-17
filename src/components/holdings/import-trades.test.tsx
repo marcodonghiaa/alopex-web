@@ -1596,6 +1596,20 @@ describe("ImportTrades", () => {
     expect(toast.success).toHaveBeenLastCalledWith("Updated 2 share counts");
   });
 
+  it("on Crypto, a file that only corrects holdings offers Save holdings", async () => {
+    db.extraCoins.push({ asset_symbol: "LTC", amount: 0.5, name: "Litecoin", source: "Manual" });
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    cleanup();
+    // Every trade saved, the coin counts still off: only the holdings are left.
+    open("crypto", db.inserted as unknown as Array<Trade>);
+    pick(/Ledger Live/, "ledger_live.csv");
+    expect(await screen.findByRole("button", { name: "Save holdings" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Save share counts" })).toBeNull();
+  });
+
   describe("a coin sold to zero with no holding", () => {
     const byHolding = () => screen.getByText("By holding").nextElementSibling!.textContent;
 
