@@ -34,6 +34,15 @@ export function parseTradesCsv(text: string, ctx: ParseContext, from?: BrokerPar
 
   const { separator, header } = readHeader(lines[0]!);
   if (from && !from.detect(header)) {
+    // Another broker Alopex knows: say which, and where it's imported.
+    const other = BROKERS.find((b) => b !== from && b.detect(header));
+    if (other) {
+      const where =
+        other.kind === kind
+          ? `pick ${other.name} instead`
+          : `import it on the ${other.kind === "crypto" ? "Crypto" : "Portfolio"} page`;
+      return { trades: [], errors: [`This is a ${other.name} export: ${where}.`], notes: [] };
+    }
     return {
       trades: [],
       errors: [
