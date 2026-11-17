@@ -93,8 +93,10 @@ export function PaymentsToCheck({
       <SectionTitle id={title}>Did someone pay you back?</SectionTitle>
       <GroupedList>
         <ul ref={list} className="divide-y divide-hairline">
-          {suggestions.map((s) => {
+          {suggestions.map((s, i) => {
             const p = s.payment;
+            // Each row's buttons are described by its payment line, so they differ out of context.
+            const line = `${title}-${i}`;
             const id = txId(p);
             const amount = money(p.amount, p.currency);
             const from = p.payer ?? "an unnamed payer";
@@ -107,7 +109,7 @@ export function PaymentsToCheck({
                   <Initial name={s.debtor.name} />
                   <div className="min-w-0 flex-1">
                     <p className="text-[0.9375rem] font-medium">Is this {s.debtor.name}?</p>
-                    <p className="truncate text-[0.8125rem] text-muted-foreground">
+                    <p id={line} className="truncate text-[0.8125rem] text-muted-foreground">
                       <span className="font-figure text-foreground">{amount}</span> from {from} ·{" "}
                       {day(p.booking_date)}
                     </p>
@@ -169,6 +171,7 @@ export function PaymentsToCheck({
                     <Button
                       // A long name shortens with "…" rather than leaving the card on a phone.
                       className="max-w-full shrink"
+                      aria-describedby={line}
                       disabled={saving}
                       onClick={() => {
                         setFocusAfter({ to: "next", id });
@@ -181,6 +184,7 @@ export function PaymentsToCheck({
                       <Button
                         variant="secondary"
                         data-someone-else
+                        aria-describedby={line}
                         disabled={saving}
                         onClick={() => {
                           setPick(others[0]?.name ?? "");
@@ -194,6 +198,7 @@ export function PaymentsToCheck({
                       variant="ghost"
                       // A text button: no side inset, so on its own line it lines up with Yes.
                       className="px-0 hover:bg-transparent hover:underline"
+                      aria-describedby={line}
                       disabled={saving}
                       onClick={() => {
                         setFocusAfter({ to: "next", id });

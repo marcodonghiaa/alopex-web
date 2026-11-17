@@ -60,6 +60,25 @@ describe("PaymentsToCheck", () => {
     expect(region.getAttribute("aria-labelledby")).toBe(heading.id);
   });
 
+  // protects=screen readers (U9); fails_when=every row's buttons sound the same out of context
+  it("each row's buttons are described by that row's payment", () => {
+    const other = { ...payment, entry_reference: "p2", payer: "ANNA NERI", amount: 60 };
+    view([suggestion(), suggestion({ payment: other, debtor: anna })]);
+    const [first, second] = screen.getAllByRole("button", { name: "Not a payback" });
+    const describe = (el: HTMLElement | undefined) =>
+      (el?.getAttribute("aria-describedby") ?? "")
+        .split(" ")
+        .map((id) => document.getElementById(id)?.textContent)
+        .join(" ");
+    expect(describe(first)).toMatch(/from MARIO VERDI/);
+    expect(describe(second)).toMatch(/from ANNA NERI/);
+    for (const name of [/^Yes, it's/, "Someone else"]) {
+      const [a, b] = screen.getAllByRole("button", { name });
+      expect(describe(a)).toMatch(/MARIO VERDI/);
+      expect(describe(b)).toMatch(/ANNA NERI/);
+    }
+  });
+
   it("shows nothing when there is nothing to ask", () => {
     view([]);
     expect(screen.queryByRole("region", { name: "Did someone pay you back?" })).toBeNull();
