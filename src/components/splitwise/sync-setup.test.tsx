@@ -116,6 +116,15 @@ describe("Connect dialog", () => {
     ).not.toBeChecked();
   });
 
+  // polish-2 #5: browsers ignore "off" on a password field, so a password manager could save the key
+  it("asks password managers not to save the key", async () => {
+    const dialog = await open();
+    expect(within(dialog).getByLabelText("API key")).toHaveAttribute(
+      "autocomplete",
+      "new-password",
+    );
+  });
+
   // protects=consent is asked before any key leaves the page; fails_when=it is sent without
   it("asks for the key, then consent, before sending anything", async () => {
     const dialog = await open();

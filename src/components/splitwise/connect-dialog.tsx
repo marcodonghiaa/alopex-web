@@ -130,7 +130,7 @@ export function ConnectDialog({
             <Input
               id={keyId}
               type="password"
-              autoComplete="off"
+              autoComplete="new-password"
               spellCheck={false}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
