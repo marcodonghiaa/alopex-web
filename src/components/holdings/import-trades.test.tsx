@@ -643,4 +643,20 @@ describe("ImportTrades", () => {
     expect((again as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getByRole("status").textContent).toBe("Waiting for exchange rates");
   });
+
+  it.each([
+    ["Try again", () => (db.ratesDown = true), () => pick(/Ledger Live/, "ledger_live.csv")],
+    [
+      "Use a spreadsheet",
+      () => {},
+      () => fireEvent.click(screen.getByRole("button", { name: /Another broker/ })),
+    ],
+  ])("%s has a border on the dialog's background", async (name, setup, go) => {
+    setup();
+    open("crypto");
+    go();
+    const button = await screen.findByRole("button", { name });
+    expect(button.classList).toContain("border");
+    expect(button.classList).toContain("border-rule");
+  });
 });

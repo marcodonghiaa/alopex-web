@@ -336,7 +336,11 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               with a sample of its export, personal details removed. Until then, put your trades in
               a spreadsheet with our columns.
             </p>
-            <Button variant="quiet" onClick={() => setFrom("spreadsheet")}>
+            <Button
+              variant="quiet"
+              className="border border-rule"
+              onClick={() => setFrom("spreadsheet")}
+            >
               Use a spreadsheet
             </Button>
           </div>
@@ -461,6 +465,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             )}
             <Button
               variant="quiet"
+              className="border border-rule"
               disabled={retrying}
               onClick={() => {
                 setRetrying(true);
