@@ -195,6 +195,32 @@ describe("nearbyPayments", () => {
     );
     expect(list.map((t) => t.entryReference)).toEqual(["ok"]);
   });
+
+  // protects=Find in bank for a settle-up I received lists money in; fails_when=it lists payments out
+  it("lists money in when asked for CRDT", () => {
+    const list = nearbyPayments(
+      uber!,
+      [tx({ entryReference: "out" }), tx({ entryReference: "in", direction: "CRDT" })],
+      new Set(),
+      "CRDT",
+    );
+    expect(list.map((t) => t.entryReference)).toEqual(["in"]);
+  });
+});
+
+describe("matchBank with skip", () => {
+  // protects=a payment the user said "Not this one" to never comes back; fails_when=it is
+  // suggested again, or the next best one is not offered instead
+  it("leaves out the pairs skip names and suggests the next one", () => {
+    const rows = classify([row()]);
+    const bank = [
+      tx({ entryReference: "best" }),
+      tx({ entryReference: "next", bookingDate: "2026-08-20" }),
+    ];
+    expect(matchBank(rows, bank, rate).map((m) => m.entryReference)).toEqual(["best"]);
+    const skipped = matchBank(rows, bank, rate, (_r, t) => t.entryReference === "best");
+    expect(skipped.map((m) => m.entryReference)).toEqual(["next"]);
+  });
 });
 
 describe("manualSplit", () => {

@@ -73,6 +73,7 @@ function candidateFor(
   rowIndex: number,
   bank: Array<BankTx>,
   rate: RateToEur,
+  skip?: (r: ClassifiedRow, tx: BankTx) => boolean,
 ): Array<Candidate> {
   const direction = wantedDirection(r);
   const rowRate = rate(r.currency, r.date);
@@ -83,7 +84,8 @@ function candidateFor(
     if (
       tx.direction !== direction ||
       tx.personalAmountCents !== null ||
-      tx.flowType === "transfer"
+      tx.flowType === "transfer" ||
+      skip?.(r, tx)
     ) {
       return [];
     }
@@ -107,13 +109,17 @@ function candidateFor(
 const countBy = (keys: Array<number>): Map<number, number> =>
   keys.reduce((counts, k) => counts.set(k, (counts.get(k) ?? 0) + 1), new Map<number, number>());
 
-/** Suggests, for each row of mine that has a bank counterpart, which transaction it is. */
+/**
+ * Suggests, for each row of mine that has a bank counterpart, which transaction it is. `skip`
+ * leaves out a pair the user already said is not a match.
+ */
 export function matchBank(
   rows: Array<ClassifiedRow>,
   bank: Array<BankTx>,
   rate: RateToEur,
+  skip?: (r: ClassifiedRow, tx: BankTx) => boolean,
 ): Array<BankMatch> {
-  const all = rows.flatMap((r, i) => candidateFor(r, i, bank, rate));
+  const all = rows.flatMap((r, i) => candidateFor(r, i, bank, rate, skip));
   const perRow = countBy(all.map((c) => c.rowIndex));
   const perTx = countBy(all.map((c) => c.txIndex));
 
@@ -161,19 +167,20 @@ const txKey = (t: { accountUid: string; entryReference: string }) =>
 /**
  * Payments out of my accounts around an expense I paid, closest date first, leaving out the ones
  * already split, marked as transfers, or taken by another row of this import (`taken` keys are
- * "accountUid|entryReference").
+ * "accountUid|entryReference"). `direction` CRDT lists money in instead (a settle-up I received).
  */
 export function nearbyPayments(
   r: ClassifiedRow,
   bank: Array<BankTx>,
   taken: Set<string>,
+  direction: BankTx["direction"] = "DBIT",
 ): Array<BankTx> {
   const day = dayNumber(r.date);
   return bank
     .filter((tx) => {
       const days = dayNumber(tx.bookingDate) - day;
       return (
-        tx.direction === "DBIT" &&
+        tx.direction === direction &&
         tx.personalAmountCents === null &&
         tx.flowType !== "transfer" &&
         !taken.has(txKey(tx)) &&
