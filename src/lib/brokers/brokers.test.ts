@@ -66,6 +66,18 @@ describe("Trade Republic sample", () => {
     today: "2026-10-31",
   };
 
+  it("has the real export's shape: a trade's amount is shares × price, before its fee", () => {
+    const [head, ...rows] = fixture("trade_republic")
+      .trim()
+      .split("\n")
+      .map((l) => l.slice(1, -1).split('","'));
+    const col = (r: Array<string>, name: string) => Number(r[head!.indexOf(name)]);
+    const trades = rows.filter((r) => r[head!.indexOf("category")] === "TRADING");
+    expect(trades.length).toBeGreaterThan(0);
+    for (const r of trades)
+      expect(col(r, "amount")).toBeCloseTo(-col(r, "shares") * col(r, "price"), 2);
+  });
+
   it("reads every trade with Trade Republic's own id, and counts what it skipped", () => {
     const { trades, errors, notes } = parseTradesCsv(fixture("trade_republic"), ctx);
     expect(errors).toEqual([]);
