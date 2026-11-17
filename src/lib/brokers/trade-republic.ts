@@ -87,13 +87,14 @@ export const tradeRepublic: BrokerParser = {
       const type = get("type");
       const rowKind: "stock" | "crypto" = get("asset_class") === "CRYPTO" ? "crypto" : "stock";
       const key = get("symbol").toUpperCase() || null;
-      const date = get("date");
+      // As ISO: a day-first 02/01/2026 is saved and compared as 2026-01-02.
+      const date = parseDate(get("date")) ?? "";
       const id = get("transaction_id").trim() || null;
       const at = get("datetime").trim() || null;
       const line_ = `Line ${i + 2}`;
 
       if (IGNORED.has(type)) return;
-      if (parseDate(date) == null) return void errors.push(`${line_}: the date isn't valid.`);
+      if (!date) return void errors.push(`${line_}: the date isn't valid.`);
       if (date > today) return void errors.push(`${line_}: the date is in the future.`);
       const shares = num(get("shares"));
       const amount = num(get("amount"));

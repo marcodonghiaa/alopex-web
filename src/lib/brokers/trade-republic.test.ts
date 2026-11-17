@@ -200,6 +200,21 @@ describe("Trade Republic, trades", () => {
     expect(errors).toEqual(["Line 2: the date isn't valid."]);
   });
 
+  it("a day-first date is saved as the ISO date it means, and checked against today", () => {
+    const { trades, events, errors } = parseTradesCsv(
+      file(
+        { date: "02/01/2026", shares: "1", price: "10" },
+        { date: "02/01/2026", category: "CASH", type: "DIVIDEND", amount: "1" },
+      ),
+      stock,
+    );
+    expect(errors).toEqual([]);
+    expect(trades[0]!.trade_date).toBe("2026-01-02");
+    expect(events![0]!.event_date).toBe("2026-01-02");
+    const future = parseTradesCsv(file({ date: "01/01/2027", shares: "1", price: "10" }), stock);
+    expect(future.errors).toEqual(["Line 2: the date is in the future."]);
+  });
+
   it("a description with a line break inside quotes stays one row", () => {
     const text = file({ shares: "1", price: "10", description: "Savings\nplan" });
     const { trades, errors } = parseTradesCsv(text, stock);
