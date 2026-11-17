@@ -508,8 +508,9 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             )}
             <Button
               variant="quiet"
-              className="border border-rule"
-              disabled={retrying}
+              // aria-disabled, not disabled: a disabled button drops keyboard focus to the page body.
+              aria-disabled={retrying || undefined}
+              className="border border-rule aria-disabled:pointer-events-none aria-disabled:opacity-50"
               onClick={() => {
                 setRetrying(true);
                 void rates.refetch().finally(() => setRetrying(false));

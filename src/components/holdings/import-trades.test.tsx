@@ -21,6 +21,8 @@ const db = vi.hoisted(() => ({
   insertGate: null as null | Promise<void>,
   /** Set, the exchange rates wait for it. */
   ratesGate: null as null | Promise<void>,
+  /** How many times the exchange rates were read. */
+  ratesReads: 0,
   updated: [] as Array<[string, Record<string, unknown>, Array<[string, unknown]>]>,
 }));
 vi.mock("@/integrations/supabase/client", () => {
@@ -59,12 +61,16 @@ vi.mock("@/integrations/supabase/client", () => {
       lte: () => query(rows),
       order: () => query(rows),
       limit: () => query(rows),
-      range: () =>
-        (rows === tables["fx_rates"] && db.ratesGate ? db.ratesGate : Promise.resolve()).then(() =>
+      range: () => {
+        if (rows === tables["fx_rates"]) db.ratesReads++;
+        return (
+          rows === tables["fx_rates"] && db.ratesGate ? db.ratesGate : Promise.resolve()
+        ).then(() =>
           down
             ? { data: null, error: { message: "offline" }, count: null }
             : { data: rows, error: null, count: rows.length },
-        ),
+        );
+      },
     });
   };
   return {
@@ -163,6 +169,7 @@ describe("ImportTrades", () => {
     db.signedOut = false;
     db.insertGate = null;
     db.ratesGate = null;
+    db.ratesReads = 0;
     db.holdingsDown = false;
   });
 
@@ -643,12 +650,38 @@ describe("ImportTrades", () => {
     db.ratesGate = new Promise((r) => (release = r));
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     const trying = await screen.findByRole("button", { name: "Trying…" });
-    expect((trying as HTMLButtonElement).disabled).toBe(true);
+    expect(trying.getAttribute("aria-disabled")).toBe("true");
     expect(trying.querySelector(".animate-spin")).toBeTruthy();
     expect(screen.getByRole("status").textContent).toBe("Reading…");
     release();
     expect(await screen.findByRole("button", { name: "Save 7 trades" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Trying|Try again/ })).toBeNull();
+  });
+
+  it("Try again keeps keyboard focus while it tries, and ignores another press", async () => {
+    db.ratesDown = true;
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    const button = await screen.findByRole("button", { name: "Try again" });
+    let release!: () => void;
+    db.ratesDown = false;
+    db.ratesGate = new Promise((r) => (release = r));
+    const before = db.ratesReads;
+    button.focus();
+    fireEvent.click(button);
+    const trying = await screen.findByRole("button", { name: "Trying…" });
+    // aria-disabled, not disabled: a disabled button drops keyboard focus to the page body.
+    expect(trying.hasAttribute("disabled")).toBe(false);
+    expect(document.activeElement).toBe(trying);
+    await waitFor(() => expect(db.ratesReads).toBeGreaterThan(before));
+    const reads = db.ratesReads;
+    fireEvent.click(trying);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(db.ratesReads).toBe(reads);
+    expect(screen.getByRole("button", { name: "Trying…" })).toBe(trying);
+    expect(document.activeElement).toBe(trying);
+    release();
+    expect(await screen.findByRole("button", { name: "Save 7 trades" })).toBeTruthy();
   });
 
   it("a retry that fails again offers Try again once more", async () => {
@@ -658,6 +691,7 @@ describe("ImportTrades", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
     const again = await screen.findByRole("button", { name: "Try again" });
     expect((again as HTMLButtonElement).disabled).toBe(false);
+    expect(again.hasAttribute("aria-disabled")).toBe(false);
     expect(screen.getByRole("status").textContent).toBe("Waiting for exchange rates");
   });
 
