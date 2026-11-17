@@ -66,7 +66,7 @@ async function load(rows: Array<ClassifiedRow>, group: string): Promise<Loaded> 
     supabase
       .from("splitwise_expenses")
       .select(
-        "id, fingerprint, booking_date, description, amount, currency, linked_entry_reference",
+        "id, fingerprint, booking_date, description, amount, currency, linked_entry_reference, splitwise_id",
       )
       .eq("group_name", group)
       .limit(PAGE_LIMIT),

@@ -18,6 +18,8 @@ export interface StoredShare {
   amount: number;
   currency: string;
   linked_entry_reference: string | null;
+  /** Set when the Splitwise sync wrote or adopted the row (backend 20261213000000 on). */
+  splitwise_id?: number | null;
 }
 
 export interface FileRow {
@@ -77,11 +79,11 @@ export function diffStored(
   const inFile = new Set(fingerprints);
   const known = new Set(stored.map((s) => s.fingerprint));
 
-  // A share the Splitwise sync wrote ("sw:<id>") is never in the file, and only the sync may
-  // remove it (the backend refuses).
+  // A share the Splitwise sync wrote or adopted (splitwise_id set) belongs to the sync: only it
+  // may remove or change it (the backend refuses), so it is never offered here.
   const gone = stored.filter(
     (s) =>
-      !s.fingerprint.startsWith("sw:") &&
+      s.splitwise_id == null &&
       !inFile.has(s.fingerprint) &&
       s.booking_date >= first &&
       s.booking_date <= last,
