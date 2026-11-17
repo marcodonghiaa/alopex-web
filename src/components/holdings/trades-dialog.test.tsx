@@ -265,4 +265,40 @@ describe("TradesDialog", () => {
     expect(line.textContent).toMatch(/2026 · Moved in or out$/);
     expect(screen.getAllByText(/Moved in or out/)).toHaveLength(1);
   });
+
+  it("polish-4 F11 lists same-day trades newest first by their imported time", async () => {
+    const buy = { kind: "stock", key: "K", side: "buy", fee_eur: 0, price_eur: 10 };
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TradesDialog
+          kind="stock"
+          holdingKey="K"
+          name="Example ETF"
+          quantity={3}
+          label="Trades"
+          trades={[
+            {
+              ...buy,
+              id: "t1",
+              shares: 1,
+              trade_date: "2026-03-01",
+              traded_at: "2026-03-01T09:00:00Z",
+            },
+            {
+              ...buy,
+              id: "t2",
+              shares: 2,
+              trade_date: "2026-03-01",
+              traded_at: "2026-03-01T15:00:00Z",
+            },
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Trades" }));
+    await screen.findByText("Bought 2");
+    const lines = [...document.querySelectorAll("li")].map((li) => li.textContent);
+    expect(lines[0]).toMatch(/^Bought 2/);
+    expect(lines[1]).toMatch(/^Bought 1/);
+  });
 });

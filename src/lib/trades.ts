@@ -46,7 +46,7 @@ export const netShares = (trades: Array<Trade>) => trades.reduce((s, t) => s + s
 
 // Oldest first; on one day by the broker's time when both have one, else buys first, so a
 // same-day sale has shares to sell.
-const inOrder = (trades: Array<Trade>) =>
+export const inOrder = <T extends Trade>(trades: Array<T>) =>
   [...trades].sort(
     (a, b) =>
       a.trade_date.localeCompare(b.trade_date) ||

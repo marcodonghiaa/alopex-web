@@ -15,7 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/field";
 import { formatDay } from "@/lib/date";
-import { localToday, netShares, parseTypedAmount } from "@/lib/trades";
+import { inOrder, localToday, netShares, parseTypedAmount } from "@/lib/trades";
 import { parseQuantity } from "@/lib/holdings";
 import { formatEur } from "@/lib/transactions";
 import { cn } from "@/lib/utils";
@@ -144,7 +144,8 @@ export function TradesDialog({
 
   const set = (field: keyof Form) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
-  const sorted = [...trades].sort((a, b) => b.trade_date.localeCompare(a.trade_date));
+  // Newest first: the order returns are worked out in, backwards (same day by the broker's time).
+  const sorted = inOrder(trades).reverse();
   const net = netShares(trades);
 
   return (
