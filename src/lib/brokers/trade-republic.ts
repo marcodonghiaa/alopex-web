@@ -19,6 +19,8 @@ const TRADES = new Set(["BUY", "SELL", "PRIVATE_MARKET_BUY", "PRIVATE_MARKET_SEL
 const FREE = new Set(["FREE_RECEIPT", "GIFT", "STOCKPERK", "STOCK_PERK"]);
 const PAID_BACK = new Set(["FINAL_MATURITY", "REDEMPTION", "TILG", "LIQUIDATION"]);
 const MOVED = new Set(["MERGER", "SPIN_OFF", "SECURITY_TRANSFER", "TRANSFER", "DELIVERY"]);
+// Kept as corporate actions even when filed under DELIVERY: they aren't moves between brokers.
+const CORPORATE = new Set(["MERGER", "SPIN_OFF", "SPLIT"]);
 // A MIGRATION row moves shares in and straight out again: nothing changes.
 const IGNORED = new Set(["MIGRATION"]);
 // Spending on the card and transfers from your own bank are your bank account's, not your
@@ -165,8 +167,15 @@ export const tradeRepublic: BrokerParser = {
           external_id: id,
         });
         // A corporate action is also kept as an event, so its cash (if any) and type aren't lost.
+        // Shares moved from or to another broker are a transfer in or out instead, by their sign.
         if (!TRADES.has(type) && !FREE.has(type)) {
-          const action = event("corporate_action");
+          const transfer =
+            type === "SECURITY_TRANSFER" ||
+            type === "TRANSFER" ||
+            (category === "DELIVERY" && !PAID_BACK.has(type) && !CORPORATE.has(type));
+          const action = event(
+            transfer ? (shares > 0 ? "transfer_in" : "transfer_out") : "corporate_action",
+          );
           events.push(PAID_BACK.has(type) ? { ...action, tax_eur: 0 } : action);
         }
         // Tax given back on a trade is money in: a refund of its own.

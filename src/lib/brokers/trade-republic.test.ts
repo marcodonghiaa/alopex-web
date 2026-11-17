@@ -169,6 +169,48 @@ describe("Trade Republic, trades", () => {
     );
   });
 
+  it("polish-5 A-P3-5 shares moved between brokers are transfers in or out by their sign", () => {
+    const { events } = parseTradesCsv(
+      file(
+        { category: "DELIVERY", type: "SECURITY_TRANSFER", shares: "5", fee: "-1.5" },
+        { category: "DELIVERY", type: "SECURITY_TRANSFER", shares: "-2" },
+        { category: "CORPORATE_ACTION", type: "TRANSFER", shares: "-1" },
+        { category: "DELIVERY", type: "INBOUND_DELIVERY", shares: "4" },
+      ),
+      stock,
+    );
+    expect(events?.map((e) => e.kind)).toEqual([
+      "transfer_in",
+      "transfer_out",
+      "transfer_out",
+      "transfer_in",
+    ]);
+    // Read like any other move: only the fee counts, and nothing goes into a return.
+    expect(summarizeIncome(events!)).toMatchObject({
+      dividends: 0,
+      interest: 0,
+      rewards: 0,
+      taxes: 0,
+      fees: 1.5,
+    });
+    expect(incomeByKey(events!).size).toBe(0);
+  });
+
+  it("polish-5 A-P3-5 a merger, spin-off, split or bond paid back stays a corporate action", () => {
+    const { events } = parseTradesCsv(
+      file(
+        { category: "CORPORATE_ACTION", type: "MERGER", shares: "3" },
+        { category: "CORPORATE_ACTION", type: "SPIN_OFF", shares: "1" },
+        { category: "CORPORATE_ACTION", type: "SPLIT", shares: "2" },
+        { category: "CORPORATE_ACTION", type: "FINAL_MATURITY", shares: "-1", amount: "1" },
+        // Filed under DELIVERY, still not a move between brokers.
+        { category: "DELIVERY", type: "SPIN_OFF", shares: "1" },
+      ),
+      stock,
+    );
+    expect(events?.map((e) => e.kind)).toEqual(Array(5).fill("corporate_action"));
+  });
+
   it("a reverse split isn't guessed: you're asked to add it", () => {
     const { trades, notes } = parseTradesCsv(
       file({ category: "CORPORATE_ACTION", type: "SPLIT", shares: "-4" }),
