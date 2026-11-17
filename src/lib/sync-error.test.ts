@@ -119,4 +119,12 @@ describe("syncAlerts", () => {
       "N26 no longer shares N26 USD. Connect N26 again and pick it.",
     ]);
   });
+
+  it("keeps two different problems of the same bank", () => {
+    expect(syncAlerts([acc("N26", "ASPSP_TIMEOUT"), acc("N26", "SAVE_FAILED")])).toHaveLength(2);
+  });
+
+  it("names a 4xx it does not know instead of calling it a bank outage", () => {
+    expect(syncErrorMessage("HTTP_400", "N26")).toMatch(/failed \(HTTP_400\)/);
+  });
 });
