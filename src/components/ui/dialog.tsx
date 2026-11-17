@@ -56,7 +56,7 @@ function RememberOpener({ opener }: { opener: React.RefObject<Element | null> })
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, onCloseAutoFocus, ...props }, ref) => {
+>(({ className, children, onCloseAutoFocus, onPointerDownOutside, ...props }, ref) => {
   const opener = React.useRef<Element | null>(null);
   return (
     <DialogPortal>
@@ -67,6 +67,12 @@ const DialogContent = React.forwardRef<
           "fixed left-[50%] top-[50%] z-50 grid grid-cols-[minmax(0,1fr)] max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto overscroll-contain rounded-3xl bg-background p-6 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
           className,
         )}
+        onPointerDownOutside={(e) => {
+          // A toast shown over the dialog isn't a click outside: touching it must not close the dialog.
+          if (e.target instanceof Element && e.target.closest("[data-sonner-toaster]"))
+            e.preventDefault();
+          onPointerDownOutside?.(e);
+        }}
         // A dialog opened from state has no Trigger for Radix to refocus (U1).
         onCloseAutoFocus={returnFocus(opener, onCloseAutoFocus)}
         {...props}

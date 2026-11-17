@@ -187,3 +187,43 @@ describe("Dialog with a sheet over it", () => {
     expect(screen.getByText("Import")).toBeInTheDocument();
   });
 });
+
+// polish-4 UB2: a toast left from the last save sits over the reopened dialog.
+// fails_when=touching the toast counts as a click outside and closes the dialog
+describe("Dialog and a toast", () => {
+  const renderDialog = (onOpenChange = vi.fn()) => {
+    render(
+      <>
+        <ol data-sonner-toaster="">
+          <li>3 trades imported</li>
+        </ol>
+        <div>elsewhere</div>
+        <Dialog open onOpenChange={onOpenChange}>
+          <DialogContent aria-describedby={undefined}>
+            <DialogTitle>Import trades</DialogTitle>
+          </DialogContent>
+        </Dialog>
+      </>,
+    );
+    return onOpenChange;
+  };
+  const tick = () => act(() => new Promise((r) => setTimeout(r, 0)));
+  const tap = (el: HTMLElement) => {
+    fireEvent.pointerDown(el);
+    fireEvent.click(el);
+  };
+
+  it("stays open when a toast is touched", async () => {
+    const onOpenChange = renderDialog();
+    await tick();
+    tap(screen.getByText("3 trades imported"));
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("still closes on a click elsewhere outside", async () => {
+    const onOpenChange = renderDialog();
+    await tick();
+    tap(screen.getByText("elsewhere"));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
