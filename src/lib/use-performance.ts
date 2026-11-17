@@ -67,12 +67,8 @@ export async function fetchTrades(client: SupabaseClient<Database>): Promise<Tra
 
 export type SavedEvent = EventRow & Pick<InvestmentEvent, "source" | "external_id">;
 
-/**
- * Every dividend, fee, tax and transfer, paged. A database without the table yet (dashboard
- * deployed before the migration) has none: returns count only trades then.
- */
+/** Every dividend, fee, tax and transfer, paged. */
 export async function fetchEvents(client: SupabaseClient<Database>): Promise<Array<SavedEvent>> {
-  let missing = false;
   const rows = await fetchAllRows("investment_events", async (from, to) => {
     const { data, error, count } = await client
       .from("investment_events")
@@ -81,13 +77,9 @@ export async function fetchEvents(client: SupabaseClient<Database>): Promise<Arr
       })
       .order("id")
       .range(from, to);
-    if (error && isMissingTable(error)) {
-      missing = true;
-      return { data: [], error: null, count: 0 };
-    }
     return { data: data as Array<ExportRow> | null, error, count };
   });
-  return missing ? [] : (rows as unknown as Array<SavedEvent>);
+  return rows as unknown as Array<SavedEvent>;
 }
 
 // Every holding's latest price: total return has no range, so any early date will do.

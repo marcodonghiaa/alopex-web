@@ -73,6 +73,23 @@ describe("fetchTrades", () => {
   });
 });
 
+describe("fetchEvents", () => {
+  const client = (page: unknown) =>
+    ({
+      from: () => ({ select: () => ({ order: () => ({ range: async () => page }) }) }),
+    }) as unknown as Parameters<typeof fetchEvents>[0];
+
+  it("pages events like trades", async () => {
+    const rows = [{ kind: "dividend" }, { kind: "fee" }];
+    expect(await fetchEvents(client({ data: rows, error: null, count: 2 }))).toEqual(rows);
+  });
+
+  it("throws on an error: the table comes with trades' columns, so no fallback of its own", async () => {
+    const missing = { data: null, error: { code: "PGRST205", message: "no table" }, count: null };
+    await expect(fetchEvents(client(missing))).rejects.toThrow("no table");
+  });
+});
+
 describe("fetchTrades and fetchEvents columns", () => {
   const columnsOf = async (fetch: typeof fetchTrades | typeof fetchEvents) => {
     const select = vi.fn(() => ({
