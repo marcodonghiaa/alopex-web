@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { dateLocale } from "@/lib/locale";
 import { money } from "@/lib/splits";
 import { txId } from "@/lib/transactions";
@@ -53,6 +53,7 @@ export function PaymentsToCheck({
   // row once an answered one leaves the list.
   const [focusAfter, setFocusAfter] = useState<{ to: "other" | "next"; id: string } | null>(null);
   const list = useRef<HTMLUListElement>(null);
+  const title = useId();
   // Whether the answer we're waiting on has started saving: once it has and ends with its row
   // still here, the save failed and focus stays where it is.
   const started = useRef(false);
@@ -88,8 +89,8 @@ export function PaymentsToCheck({
   };
 
   return (
-    <section aria-label="Payments to check" className="mt-8">
-      <SectionTitle>Did someone pay you back?</SectionTitle>
+    <section aria-labelledby={title} className="mt-8">
+      <SectionTitle id={title}>Did someone pay you back?</SectionTitle>
       <GroupedList>
         <ul ref={list} className="divide-y divide-hairline">
           {suggestions.map((s) => {

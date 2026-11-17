@@ -67,7 +67,7 @@ describe("Who owes you", () => {
         <Page />
       </QueryClientProvider>,
     );
-    const section = await screen.findByRole("region", { name: "Payments to check" });
+    const section = await screen.findByRole("region", { name: "Did someone pay you back?" });
     await userEvent.click(within(section).getByRole("button", { name: "Not a payback" }));
     await waitFor(() =>
       expect(success).toHaveBeenCalledWith(
@@ -78,7 +78,7 @@ describe("Who owes you", () => {
     // Its Undo brings the question back.
     const opts = success.mock.calls.at(-1)?.[1] as unknown as { action: { onClick: () => void } };
     opts.action.onClick();
-    expect(await screen.findByRole("region", { name: "Payments to check" })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "Did someone pay you back?" })).toBeTruthy();
     success.mockRestore();
   });
 
@@ -90,7 +90,7 @@ describe("Who owes you", () => {
         <Page />
       </QueryClientProvider>,
     );
-    const section = await screen.findByRole("region", { name: "Payments to check" });
+    const section = await screen.findByRole("region", { name: "Did someone pay you back?" });
     expect(within(section).getByText("Is this Giulia?")).toBeTruthy();
     expect(within(section).getByText(/from GIULIA BIANCHI/)).toBeTruthy();
     const giulia = () =>
@@ -99,7 +99,7 @@ describe("Who owes you", () => {
 
     await userEvent.click(within(section).getByRole("button", { name: "Yes, it's Giulia" }));
     await waitFor(() =>
-      expect(screen.queryByRole("region", { name: "Payments to check" })).toBeNull(),
+      expect(screen.queryByRole("region", { name: "Did someone pay you back?" })).toBeNull(),
     );
     await waitFor(() =>
       expect(Number(/(\d+) open bills?/.exec(giulia().textContent ?? "")?.[1])).toBe(
@@ -127,7 +127,7 @@ describe("Who owes you", () => {
     );
     expect(await screen.findByText("Net owed to you")).toBeTruthy();
     expect(await screen.findByRole("button", { name: "Import from Splitwise" })).toBeTruthy();
-    expect(screen.queryByRole("region", { name: "Payments to check" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Did someone pay you back?" })).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -149,7 +149,7 @@ describe("Who owes you", () => {
     expect(screen.getByRole("status", { name: "Loading split bills" })).toBeTruthy();
     expect(screen.getByRole("status", { name: "Loading Splitwise groups" })).toBeTruthy();
     release();
-    expect(await screen.findByRole("region", { name: "Payments to check" })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "Did someone pay you back?" })).toBeTruthy();
     expect(screen.queryByRole("status", { name: "Loading split bills" })).toBeNull();
   });
 
@@ -162,7 +162,7 @@ describe("Who owes you", () => {
         <Page />
       </QueryClientProvider>,
     );
-    const section = await screen.findByRole("region", { name: "Payments to check" });
+    const section = await screen.findByRole("region", { name: "Did someone pay you back?" });
     const giulia = () =>
       screen.getByText("Giulia", { selector: "summary span span" }).closest("summary")!;
     const bills = () => Number(/(\d+) open bills?/.exec(giulia().textContent ?? "")?.[1]);
@@ -178,7 +178,7 @@ describe("Who owes you", () => {
     const opts = success.mock.calls.at(-1)?.[1] as unknown as { action: { onClick: () => void } };
     opts.action.onClick();
     await waitFor(() => expect(bills()).toBe(before));
-    expect(await screen.findByRole("region", { name: "Payments to check" })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "Did someone pay you back?" })).toBeTruthy();
     success.mockRestore();
   });
 });

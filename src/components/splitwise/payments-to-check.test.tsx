@@ -52,9 +52,17 @@ function view(
 }
 
 describe("PaymentsToCheck", () => {
+  // protects=screen readers (U8); fails_when=the region's name differs from its visible heading
+  it("the section is named by its visible heading", () => {
+    view([suggestion()]);
+    const heading = screen.getByRole("heading", { name: "Did someone pay you back?" });
+    const region = screen.getByRole("region", { name: "Did someone pay you back?" });
+    expect(region.getAttribute("aria-labelledby")).toBe(heading.id);
+  });
+
   it("shows nothing when there is nothing to ask", () => {
     view([]);
-    expect(screen.queryByRole("region", { name: "Payments to check" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Did someone pay you back?" })).toBeNull();
   });
 
   // protects=the "Is this X?" question; fails_when=it hides the amount, payer, date or the reason

@@ -34,12 +34,12 @@ describe("Who owes you: payment questions wait for the Splitwise rates", () => {
     ratesLoaded.value = false;
     show();
     await screen.findByText("Net owed to you");
-    expect(screen.queryByRole("region", { name: "Payments to check" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Did someone pay you back?" })).toBeNull();
   });
 
   it("asks once they are in", async () => {
     ratesLoaded.value = true;
     show();
-    expect(await screen.findByRole("region", { name: "Payments to check" })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "Did someone pay you back?" })).toBeTruthy();
   });
 });
