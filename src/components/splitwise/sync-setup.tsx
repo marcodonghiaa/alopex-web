@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link2, RefreshCw, Trash2, TriangleAlert, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -18,6 +18,13 @@ import {
 } from "@/lib/splitwise-sync";
 import { ConnectDialog } from "./connect-dialog";
 
+/** Focuses the setup's main control (Sync now, Reconnect, Connect or Retry) if focus was lost. */
+const focusPrimary = () =>
+  requestAnimationFrame(() => {
+    if (document.activeElement && document.activeElement !== document.body) return;
+    document.querySelector<HTMLElement>("[data-splitwise-primary]")?.focus();
+  });
+
 const ROW =
   "flex min-h-11 w-full items-center gap-2 px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/40 sm:px-5";
 
@@ -34,6 +41,17 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
   const [deleting, setDeleting] = useState(false);
   const c = connection.data;
   const connected = c?.connected === true;
+  // When the row that had focus is replaced (connected, disconnected, data deleted, Retry worked),
+  // focus goes to the setup's new main control, not to <body>. Loading the page moves nothing.
+  const stateKey = connection.isPending
+    ? null
+    : `${connected}|${connection.isError}|${c?.syncedData}`;
+  const lastKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (stateKey === null) return;
+    if (lastKey.current !== null && lastKey.current !== stateKey) focusPrimary();
+    lastKey.current = stateKey;
+  }, [stateKey]);
 
   return (
     <>
@@ -45,6 +63,7 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
               size="sm"
               variant="secondary"
               className="mt-2"
+              data-splitwise-primary
               onClick={() => void connection.refetch()}
               disabled={connection.isFetching}
             >
@@ -59,7 +78,12 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
           />
         ) : (
           !connection.isPending && (
-            <button type="button" onClick={() => setConnecting("connect")} className={ROW}>
+            <button
+              type="button"
+              data-splitwise-primary
+              onClick={() => setConnecting("connect")}
+              className={ROW}
+            >
               <Link2 aria-hidden className="size-4" />
               Connect Splitwise
             </button>
@@ -99,10 +123,20 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
       <ConnectDialog
         open={connecting !== null}
         onOpenChange={(open) => open || setConnecting(null)}
+        onCloseAutoFocus={focusPrimary}
         reconnect={connecting === "reconnect"}
       />
-      <DisconnectDialog open={disconnecting} onOpenChange={setDisconnecting} />
-      <DisconnectDialog open={deleting} onOpenChange={setDeleting} mode="delete" />
+      <DisconnectDialog
+        open={disconnecting}
+        onOpenChange={setDisconnecting}
+        onCloseAutoFocus={focusPrimary}
+      />
+      <DisconnectDialog
+        open={deleting}
+        onOpenChange={setDeleting}
+        onCloseAutoFocus={focusPrimary}
+        mode="delete"
+      />
     </>
   );
 }
@@ -136,13 +170,14 @@ function StatusRow({
           <p className="text-[0.8125rem] text-muted-foreground">{syncedAgo(c.lastSyncedAt)}</p>
         </div>
         {reconnect ? (
-          <Button size="sm" onClick={onReconnect} disabled={demo}>
+          <Button size="sm" data-splitwise-primary onClick={onReconnect} disabled={demo}>
             Reconnect
           </Button>
         ) : (
           <Button
             size="sm"
             variant="secondary"
+            data-splitwise-primary
             onClick={() => sync.mutate()}
             disabled={demo || syncing}
           >
@@ -190,10 +225,12 @@ const DELETE_DETAIL =
 function DisconnectDialog({
   open,
   onOpenChange,
+  onCloseAutoFocus,
   mode = "disconnect",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCloseAutoFocus?: () => void;
   mode?: "disconnect" | "delete";
 }) {
   const queryClient = useQueryClient();
@@ -225,7 +262,7 @@ function DisconnectDialog({
   ];
   return (
     <Dialog open={open} onOpenChange={(next) => disconnect.isPending || onOpenChange(next)}>
-      <DialogContent className="gap-0 rounded-xl p-5 sm:p-6">
+      <DialogContent className="gap-0 rounded-xl p-5 sm:p-6" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogTitle className="text-xl font-semibold tracking-tight">
           {onlyDelete ? "Delete synced Splitwise data?" : "Disconnect Splitwise?"}
         </DialogTitle>

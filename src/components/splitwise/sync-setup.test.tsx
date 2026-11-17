@@ -711,3 +711,77 @@ describe("Surfaces inside the dialogs", () => {
     expect(within(dialog).getByRole("button", { name: "Cancel" }).className).toContain("bg-card");
   });
 });
+
+// polish-4 #3: when the control that opened a dialog is replaced, focus goes to the new one
+describe("Focus after the setup changes", () => {
+  it("lands on Connect Splitwise after a disconnect", async () => {
+    functions({ "splitwise-connect": [ok({ disconnected: true, deleted: 0 })] });
+    rpc.mockResolvedValueOnce(connection());
+    rpc.mockResolvedValue(notConnected(true));
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
+    const dialog = screen.getByRole("dialog", { name: "Disconnect Splitwise?" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Disconnect" }));
+    const connect = await screen.findByRole("button", { name: "Connect Splitwise" });
+    await waitFor(() => expect(document.activeElement).toBe(connect));
+  });
+
+  it("lands on Connect Splitwise after deleting synced data", async () => {
+    functions({ "splitwise-connect": [ok({ disconnected: true, deleted: 2 })] });
+    rpc.mockResolvedValueOnce(notConnected(true));
+    rpc.mockResolvedValue(notConnected(false));
+    renderSetup();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Delete synced Splitwise data" }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "Delete synced Splitwise data?" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Delete synced Splitwise data" })).toBeNull(),
+    );
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: "Connect Splitwise" }),
+      ),
+    );
+  });
+
+  it("lands on Sync now when the connect dialog closes after connecting", async () => {
+    functions({
+      "splitwise-connect": [ok({ displayName: "Sam" })],
+      "sync-splitwise": [ok({ new: 0, adopted: 0, review: 0, deleted: 0 })],
+    });
+    rpc.mockResolvedValueOnce(notConnected());
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: "Connect Splitwise" }));
+    const dialog = screen.getByRole("dialog", { name: "Connect Splitwise" });
+    await userEvent.type(within(dialog).getByLabelText("API key"), "abcdefghijkl");
+    await userEvent.click(within(dialog).getByRole("checkbox"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    await screen.findByText("Splitwise · Sam");
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Sync now" })),
+    );
+  });
+
+  it("lands on Sync now after a successful Retry", async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { message: "timeout", code: "57014" } });
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Sync now" })),
+    );
+  });
+
+  // The opposite state: loading the page moves no focus.
+  it("leaves focus alone when the page loads", async () => {
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    await screen.findByRole("button", { name: "Sync now" });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(document.activeElement).toBe(document.body);
+  });
+});
