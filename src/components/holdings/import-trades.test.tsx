@@ -691,4 +691,35 @@ describe("ImportTrades", () => {
     await screen.findByRole("button", { name: "Save 2 trades" });
     expect(screen.getByText(/buys? · /).textContent).toBe("2 buys · 0 sells · 2 Jan 2026");
   });
+
+  it("during a save the file and paste box can't be changed, so the save can't wipe new input", async () => {
+    const release = slowInsert();
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    const box = screen.getByLabelText("CSV text");
+    fireEvent.change(box, {
+      target: { value: "date,side,isin,shares,price,fee\n2026-01-15,buy,XX0000000001,1,10,0" },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 1 trade" }));
+    await waitFor(() => expect(box).toBeDisabled());
+    expect(screen.getByLabelText("CSV file")).toBeDisabled();
+    // A file dropped meanwhile is not read.
+    fireEvent.drop(screen.getByText("or drop it here"), {
+      dataTransfer: { files: [new File(["x"], "late.csv", { type: "text/csv" })] },
+    });
+    expect(screen.queryByText("late.csv")).toBeNull();
+    release();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("when nothing is saving the file and paste box can be used", () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    expect(screen.getByLabelText("CSV text")).toBeEnabled();
+    expect(screen.getByLabelText("CSV file")).toBeEnabled();
+    fireEvent.drop(screen.getByText("or drop it here"), {
+      dataTransfer: { files: [new File(["x"], "mine.csv", { type: "text/csv" })] },
+    });
+    expect(screen.getByText("mine.csv")).toBeTruthy();
+  });
 });

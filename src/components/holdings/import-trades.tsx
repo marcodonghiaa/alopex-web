@@ -268,7 +268,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     save.reset();
   }
   function onFile(file: File | undefined) {
-    if (!file) return;
+    // A save in flight ends by clearing the dialog: a file picked or dropped now would be lost.
+    if (!file || save.isPending) return;
     setFileName(file.name);
     void file.text().then(setText);
   }
@@ -280,6 +281,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       accept=".csv,.tsv,.txt,text/csv"
       aria-label="CSV file"
       className="sr-only"
+      disabled={save.isPending}
       onChange={(e) => {
         onFile(e.target.files?.[0]);
         // The same file can be chosen again after Change.
@@ -411,7 +413,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                           : "Can't be imported"}
                   </span>
                 </span>
-                <label className="cursor-pointer text-xs text-primary underline-offset-2 hover:underline">
+                <label className="cursor-pointer text-xs text-primary underline-offset-2 hover:underline has-[:disabled]:pointer-events-none has-[:disabled]:opacity-50">
                   Change
                   {fileInput}
                 </label>
@@ -476,6 +478,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               <textarea
                 aria-label="CSV text"
                 value={text}
+                disabled={save.isPending}
                 onChange={(e) => {
                   setText(e.target.value);
                   setFileName(null);
