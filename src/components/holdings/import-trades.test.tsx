@@ -12,6 +12,7 @@ const db = vi.hoisted(() => ({
   upsertError: null as string | null,
   eventsDown: false,
   holdingsDown: false,
+  getUserCalls: 0,
   // How many upserted rows the database says it saved (the rest were already there).
   upsertSaved: null as number | null,
   updated: [] as Array<[string, Record<string, unknown>, Array<[string, unknown]>]>,
@@ -98,7 +99,12 @@ vi.mock("@/integrations/supabase/client", () => {
             : { data: 1, error: null },
         );
       },
-      auth: { getUser: () => Promise.resolve({ data: { user: { id: "u1" } } }) },
+      auth: {
+        getUser: () => {
+          db.getUserCalls++;
+          return Promise.resolve({ data: { user: { id: "u1" } } });
+        },
+      },
     },
   };
 });
@@ -146,6 +152,7 @@ describe("ImportTrades", () => {
     db.upsertSaved = null;
     db.eventsDown = false;
     db.holdingsDown = false;
+    db.getUserCalls = 0;
     db.insertGate = null;
     vi.mocked(toast.success).mockClear();
   });
@@ -518,5 +525,12 @@ describe("ImportTrades", () => {
       target: { files: [new File(["x"], "export.csv", { type: "text/csv" })] },
     });
     expect(screen.getByText("Reading…")).toBeTruthy();
+  });
+
+  it("a save with trades and other rows asks who you are once", async () => {
+    open("stock");
+    fireEvent.click(await pickTradeRepublic());
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(db.getUserCalls).toBe(1);
   });
 });

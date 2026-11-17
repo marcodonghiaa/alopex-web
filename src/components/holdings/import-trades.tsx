@@ -186,11 +186,15 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
 
   const save = useMutation({
     mutationFn: async () => {
-      // One insert is one statement: all the rows land, or none do.
-      if (fresh.length > 0) {
+      // Only new rows carry your id; share counts alone don't need it.
+      let userId = "";
+      if (fresh.length > 0 || freshEvents.length > 0) {
         const { data } = await supabase.auth.getUser();
         if (!data.user) throw new Error("You're signed out. Sign in and try again.");
-        const userId = data.user.id;
+        userId = data.user.id;
+      }
+      // One insert is one statement: all the rows land, or none do.
+      if (fresh.length > 0) {
         const { error } = await supabase
           .from("holding_trades")
           .insert(fresh.map((t) => ({ ...t, user_id: userId })));
@@ -211,9 +215,6 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
         );
       // A re-import is skipped by the database too: the same broker id is saved once.
       if (freshEvents.length > 0) {
-        const { data } = await supabase.auth.getUser();
-        if (!data.user) throw new Error("You're signed out. Sign in and try again.");
-        const userId = data.user.id;
         // Only rows the database saved come back: one already there (another tab) isn't counted.
         const { data: savedRows, error } = await supabase
           .from("investment_events")
