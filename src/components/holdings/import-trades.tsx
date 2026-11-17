@@ -341,7 +341,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                 ? "Upload the export as it comes. Alopex reads it on your device and shows you what it found first."
                 : from === "spreadsheet" && detected && detected.kind === kind
                   ? // A broker's own file pasted here is read as that broker's, not by our columns.
-                    `A ${detected.name} export: read as it comes${need ? `, its ${need.currency} values turned into euro with each day's rate` : ""}.`
+                    `This file comes from ${detected.name}: read as it comes${need ? `, its ${need.currency} values turned into euro with each day's rate` : ""}.`
                   : from === "spreadsheet"
                     ? `A header row with date, side, ${keyColumn}, shares, price and optionally fee. Side is buy or sell; price is per share in EUR.`
                     : "Alopex doesn't read this broker's export yet."}

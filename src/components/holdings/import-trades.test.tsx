@@ -915,7 +915,7 @@ describe("ImportTrades", () => {
       fireEvent.change(screen.getByLabelText("CSV text"), { target: { value: csv } });
       await screen.findByRole("button", { name: "Save 7 trades" });
       expect(description()).toBe(
-        "A Ledger Live export: read as it comes, its USD values turned into euro with each day's rate.",
+        "This file comes from Ledger Live: read as it comes, its USD values turned into euro with each day's rate.",
       );
     });
 
