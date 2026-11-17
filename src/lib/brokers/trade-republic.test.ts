@@ -288,14 +288,14 @@ describe("Trade Republic, income, fees, taxes and cash", () => {
     };
     const { events } = parseTradesCsv(
       file(
-        { ...cash, tax: "-20.34", description: "Stamp Duty Tax (Portfolio)" },
-        { ...cash, tax: "20.34", description: "Cancellation Stamp Duty Tax (Portfolio)" },
+        { ...cash, tax: "-12.67", description: "Stamp Duty Tax (Portfolio)" },
+        { ...cash, tax: "12.67", description: "Cancellation Stamp Duty Tax (Portfolio)" },
       ),
       stock,
     );
     expect(events?.map((e) => [e.kind, e.amount_eur, e.tax_eur])).toEqual([
-      ["tax", -20.34, 0],
-      ["tax_refund", 20.34, 0],
+      ["tax", -12.67, 0],
+      ["tax_refund", 12.67, 0],
     ]);
   });
 
@@ -305,12 +305,12 @@ describe("Trade Republic, income, fees, taxes and cash", () => {
         category: "CASH",
         type: "INTEREST_PAYMENT",
         symbol: "",
-        amount: "19.250000",
-        tax: "-5.01",
+        amount: "31.500000",
+        tax: "-7.88",
       }),
       stock,
     );
-    expect(events?.[0]).toMatchObject({ kind: "interest", amount_eur: 14.24, tax_eur: 5.01 });
+    expect(events?.[0]).toMatchObject({ kind: "interest", amount_eur: 23.62, tax_eur: 7.88 });
   });
 
   it("tax given back on a trade is a refund, not a cost", () => {
