@@ -121,8 +121,8 @@ export function ToLink({ connected }: { connected: boolean }) {
           )}
           {bank.data?.completeFrom && (
             <p className="mb-2 px-1 text-xs text-muted-foreground">
-              Suggestions only cover bank payments from {shortDate(bank.data.completeFrom)} on. Use
-              Find in bank for older ones.
+              Suggestions and Find in bank only cover bank payments from{" "}
+              {shortDate(bank.data.completeFrom)} on.
             </p>
           )}
           {count > items.length && (
