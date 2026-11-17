@@ -492,6 +492,16 @@ describe("ImportTrades", () => {
     });
   });
 
+  it("polish-4 F5 the summary leaves out a side with no trades", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    fireEvent.change(screen.getByLabelText("CSV text"), {
+      target: { value: "date,side,isin,shares,price,fee\n2026-01-15,buy,XX0000000001,1,10,0" },
+    });
+    await screen.findByRole("button", { name: "Save 1 trade" });
+    expect(screen.getByText(/^1 buy · /).textContent).toBe("1 buy · 15 Jan 2026");
+  });
+
   it("if saved dividends and fees can't load, it says so and won't save", async () => {
     db.eventsDown = true;
     open("stock");
@@ -825,7 +835,7 @@ describe("ImportTrades", () => {
       target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
     });
     await screen.findByRole("button", { name: "Save 2 trades and 1 row" });
-    expect(screen.getByText(/buys? · /).textContent).toBe("2 buys · 0 sells · 2 Jan 2026");
+    expect(screen.getByText(/buys? · /).textContent).toBe("2 buys · 2 Jan 2026");
   });
 
   it("during a save the file and paste box can't be changed, so the save can't wipe new input", async () => {

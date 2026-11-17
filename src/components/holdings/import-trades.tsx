@@ -582,10 +582,15 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               )}
               {summary && (
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  {plural(summary.buys, "buy")} · {plural(summary.sells, "sell")} ·{" "}
-                  {summary.from === summary.to
-                    ? shortDate(summary.from)
-                    : `${shortDate(summary.from)} – ${shortDate(summary.to)}`}
+                  {[
+                    summary.buys > 0 && plural(summary.buys, "buy"),
+                    summary.sells > 0 && plural(summary.sells, "sell"),
+                    summary.from === summary.to
+                      ? shortDate(summary.from)
+                      : `${shortDate(summary.from)} – ${shortDate(summary.to)}`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </p>
               )}
             </div>
