@@ -108,11 +108,20 @@ function GroupCard({
 }
 
 /** One card per Splitwise group: the group's net up top, open it to see who owes whom. */
-export function BalancesView({ groups }: { groups: Array<GroupSummary> }) {
+export function BalancesView({
+  groups,
+  connected = false,
+}: {
+  groups: Array<GroupSummary>;
+  /** Splitwise sync is on: the groups come with it, so no import is suggested. */
+  connected?: boolean;
+}) {
   if (groups.length === 0) {
     return (
       <p className="rounded-lg bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-        Import a Splitwise export to see your group balances.
+        {connected
+          ? "No open group balances. They come in with each sync."
+          : "Connect Splitwise or import a file to see your group balances."}
       </p>
     );
   }

@@ -68,9 +68,18 @@ describe("BalancesView", () => {
     expect(screen.queryByRole("button", { name: /berkeley/ })).toBeNull();
   });
 
+  // polish-4 #6: connected, the sync brings the groups; not connected, both ways in are named
   it("says what to do when nothing has been imported", () => {
-    render(<BalancesView groups={[]} />);
-    expect(screen.getByText(/Import a Splitwise export/)).toBeTruthy();
+    render(<BalancesView groups={[]} connected={false} />);
+    expect(
+      screen.getByText("Connect Splitwise or import a file to see your group balances."),
+    ).toBeTruthy();
+  });
+
+  it("says the groups come in with each sync when connected and none is open", () => {
+    render(<BalancesView groups={[]} connected />);
+    expect(screen.getByText("No open group balances. They come in with each sync.")).toBeTruthy();
+    expect(screen.queryByText(/import a file/)).toBeNull();
   });
 
   // protects=nobody expects the Splitwise app's simplified numbers; fails_when=the caveat is removed

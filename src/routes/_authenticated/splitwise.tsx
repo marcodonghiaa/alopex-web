@@ -61,7 +61,7 @@ function SplitwisePage() {
   const settle = useSettleSplitMutation(queryClient);
   const connection = useSplitwiseConnection().data;
   const connected = connection?.connected === true;
-  const source = balancesSource(connection);
+  const source = balancesSource(connection, groups.length > 0);
 
   // The last Splitwise import, kept in this browser so it can be undone after looking at the page.
   const [userId, setUserId] = useState<string | null>(null);
@@ -213,7 +213,7 @@ function SplitwisePage() {
       ) : balances.isPending ? (
         loading("Loading Splitwise groups")
       ) : (
-        <BalancesView groups={groups} />
+        <BalancesView groups={groups} connected={connected} />
       )}
       {/* Setup after the balances: quiet rows, like Connect a bank on Accounts. */}
       <SyncSetup onImportFile={() => setImporting(true)} />

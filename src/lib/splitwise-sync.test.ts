@@ -406,4 +406,13 @@ describe("balancesSource", () => {
     expect(balancesSource(c({ syncedData: true }))).toBeNull();
     expect(balancesSource(undefined)).toBeNull(); // loading or failed
   });
+
+  // polish-4 #6: no "from your last import" over an empty list
+  it("claims no import when there are no groups", () => {
+    expect(balancesSource(c({}), false)).toBeNull();
+    expect(balancesSource(c({}), true)).toBe("from your last import");
+    expect(balancesSource(c({ connected: true, status: "ok" }), false)).toBe(
+      "synced from Splitwise",
+    );
+  });
 });
