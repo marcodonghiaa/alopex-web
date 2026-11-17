@@ -697,3 +697,41 @@ it("gives the row actions compact side padding", async () => {
     expect(b.className.split(" ")).toContain("min-h-11");
   }
 });
+
+// re-audit N2: with a suggestion a settle-up row has Link, Not this one, Find in bank and Ignore,
+// too wide for 375 px; the suggestion's two actions take their own line on phones
+describe("Row actions with a suggestion", () => {
+  it("puts Link and Not this one on their own line on phones, the rest together", async () => {
+    tables.splitwise_review = {
+      data: [
+        item({ kind: "settle_out", description: "Paid Ana", cost: 60, my_paid: 60, my_share: 0 }),
+      ],
+      error: null,
+    };
+    tables.transactions = { data: [bankRow()], error: null };
+    renderList();
+    const row = await screen.findByRole("listitem", { name: "Paid Ana" });
+    const link = await within(row).findByRole("button", { name: "Link" });
+    const line = link.parentElement!;
+    expect(line.className.split(" ")).toEqual(
+      expect.arrayContaining(["basis-full", "sm:basis-auto"]),
+    );
+    expect(
+      within(line)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["Link", "Not this one"]);
+    const ignore = within(row).getByRole("button", { name: "Ignore" });
+    expect(ignore.parentElement).toBe(
+      within(row).getByRole("button", { name: "Find in bank" }).parentElement,
+    );
+    expect(ignore.parentElement).not.toBe(line);
+  });
+
+  it("has no such line without a suggestion", async () => {
+    tables.splitwise_review = { data: [item()], error: null };
+    renderList();
+    const row = await screen.findByRole("listitem", { name: "Groceries" });
+    expect(row.querySelector(".basis-full")).toBeNull();
+  });
+});

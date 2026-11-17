@@ -315,7 +315,8 @@ function ReviewRow({
       )}
       <div className="mt-2 flex flex-wrap gap-x-1.5 gap-y-2">
         {tx ? (
-          <>
+          // The suggestion's own actions: a line of their own on phones, so the rest fit one line.
+          <div className="flex basis-full gap-x-1.5 sm:basis-auto">
             <Button {...off} onClick={() => busy || onAct({ action: "link", id: item.id, tx })}>
               Link
             </Button>
@@ -328,7 +329,7 @@ function ReviewRow({
             >
               Not this one
             </Button>
-          </>
+          </div>
         ) : null}
         <Button
           id={`${rowId(item.id)}-find`}
