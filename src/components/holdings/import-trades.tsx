@@ -655,13 +655,16 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             onClick={() => save.mutate()}
           >
             {save.isPending && <Loader2 className="size-4 animate-spin" />}
-            {fresh.length > 0
-              ? `Save ${plural(fresh.length, "trade")}`
-              : freshEvents.length > 0
-                ? `Save ${plural(freshEvents.length, "row")}`
-                : updates.length > 0
-                  ? "Save share counts"
-                  : "Save trades"}
+            {fresh.length > 0 || freshEvents.length > 0
+              ? `Save ${[
+                  fresh.length > 0 && plural(fresh.length, "trade"),
+                  freshEvents.length > 0 && plural(freshEvents.length, "row"),
+                ]
+                  .filter(Boolean)
+                  .join(" and ")}`
+              : updates.length > 0
+                ? "Save share counts"
+                : "Save trades"}
           </Button>
         )}
       </DialogContent>

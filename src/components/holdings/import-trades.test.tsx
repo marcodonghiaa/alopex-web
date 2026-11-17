@@ -134,7 +134,8 @@ async function pickTradeRepublic() {
   fireEvent.change(screen.getByLabelText("CSV file"), {
     target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
   });
-  return screen.findByRole("button", { name: "Save 4 trades" });
+  // "and 1 row" once your saved dividends have loaded.
+  return screen.findByRole("button", { name: /^Save 4 trades/ });
 }
 
 function open(kind: "stock" | "crypto", saved: Array<Trade> = []) {
@@ -231,7 +232,7 @@ describe("ImportTrades", () => {
     expect(screen.getByText("By holding")).toBeTruthy();
     expect(screen.getByText("Example World ETF")).toBeTruthy();
     expect(screen.getByText("Left out")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Save 4 trades" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save 4 trades and 1 row" })).toBeTruthy();
     // The dividend in the file is shown and saved with the trades.
     expect(screen.getByText("Also saved: income, fees and cash")).toBeTruthy();
     expect(screen.getByText("Dividends")).toBeTruthy();
@@ -339,7 +340,7 @@ describe("ImportTrades", () => {
     fireEvent.change(screen.getByLabelText("CSV file"), {
       target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
     });
-    fireEvent.click(await screen.findByRole("button", { name: "Save 4 trades" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save 4 trades and 1 row" }));
     expect((await screen.findByRole("alert")).textContent).toBe(
       "4 trades saved, but the income, fee and cash rows weren't (boom). Import the file again to save them.",
     );
@@ -399,6 +400,23 @@ describe("ImportTrades", () => {
     ).toBe("Rows saved in all (deposits and withdrawals too)1");
   });
 
+  it("polish-4 UB7 Save names the trades and the rows it saves; trades alone name only trades", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    expect(await screen.findByRole("button", { name: "Save 4 trades and 1 row" })).toBeTruthy();
+    cleanup();
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    fireEvent.change(screen.getByLabelText("CSV text"), {
+      target: { value: "date,side,isin,shares,price,fee\n2026-01-15,buy,XX0000000001,1,10,0" },
+    });
+    expect(await screen.findByRole("button", { name: "Save 1 trade" })).toBeTruthy();
+  });
+
   it("if saved dividends and fees can't load, it says so and won't save", async () => {
     db.eventsDown = true;
     open("stock");
@@ -441,7 +459,7 @@ describe("ImportTrades", () => {
     fireEvent.change(screen.getByLabelText("CSV file"), {
       target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
     });
-    fireEvent.click(await screen.findByRole("button", { name: "Save 4 trades" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save 4 trades and 1 row" }));
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
     expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe("4 trades imported");
   });
@@ -453,7 +471,7 @@ describe("ImportTrades", () => {
     fireEvent.change(screen.getByLabelText("CSV file"), {
       target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
     });
-    fireEvent.click(await screen.findByRole("button", { name: "Save 4 trades" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save 4 trades and 1 row" }));
     await waitFor(() => expect(db.upserted).toHaveLength(1));
     const [table, rows, options] = db.upserted[0]!;
     expect(table).toBe("investment_events");
@@ -497,7 +515,7 @@ describe("ImportTrades", () => {
     open("stock");
     fireEvent.click(await pickTradeRepublic());
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Save 4 trades" })).toBeDisabled(),
+      expect(screen.getByRole("button", { name: "Save 4 trades and 1 row" })).toBeDisabled(),
     );
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     fireEvent.click(screen.getByRole("button", { name: /All sources/ }));
@@ -612,7 +630,7 @@ describe("ImportTrades", () => {
     fireEvent.change(screen.getByLabelText("CSV file"), {
       target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
     });
-    expect(await screen.findByRole("button", { name: "Save 1 trade" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Save 1 trade and 1 row" })).toBeTruthy();
     expect(screen.getByText("new trade to save")).toBeTruthy();
   });
 
@@ -727,7 +745,7 @@ describe("ImportTrades", () => {
     fireEvent.change(screen.getByLabelText("CSV file"), {
       target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
     });
-    await screen.findByRole("button", { name: "Save 2 trades" });
+    await screen.findByRole("button", { name: "Save 2 trades and 1 row" });
     expect(screen.getByText(/buys? · /).textContent).toBe("2 buys · 0 sells · 2 Jan 2026");
   });
 
