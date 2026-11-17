@@ -338,7 +338,7 @@ function AccountsPage() {
           <div
             key={issue.message}
             role="status"
-            className="mb-4 rounded-lg bg-warning/10 px-4 py-3 text-sm text-foreground"
+            className="mb-4 break-words rounded-lg bg-warning/10 px-4 py-3 text-sm text-foreground"
           >
             {issue.message}
           </div>
