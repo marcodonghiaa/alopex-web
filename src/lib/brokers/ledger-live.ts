@@ -113,13 +113,9 @@ export const ledgerLive: BrokerParser = {
 
     // Every day priced in a currency other than euro, so the screen can load its rates first.
     if (!rateToEur) {
-      const dates = rows
-        .filter((get) => get("countervalue ticker") && get("countervalue ticker") !== "EUR")
-        .map((get) => get("operation date").slice(0, 10))
-        .sort();
-      const currency = rows.find((get) => get("countervalue ticker") !== "EUR")?.(
-        "countervalue ticker",
-      );
+      const priced = rows.filter((get) => !["", "EUR"].includes(get("countervalue ticker")));
+      const dates = priced.map((get) => get("operation date").slice(0, 10)).sort();
+      const currency = priced[0]?.("countervalue ticker");
       if (currency && dates.length > 0) {
         return {
           trades: [],

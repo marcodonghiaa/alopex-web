@@ -129,6 +129,14 @@ describe("Ledger Live operations export", () => {
     expect(trades[0]?.key).toBe("ETHX");
   });
 
+  it("a row with no countervalue first doesn't stop the dollar rates from loading", () => {
+    const blank = "2026-01-03T08:00:00.000Z,Confirmed,ETH,NFT_IN,0,,n,Ethereum 1,a,,,";
+    const usdRow = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0.01,,h,Bitcoin 1,a,USD,300,300";
+    const result = parseTradesCsv(row(`${blank}\n${usdRow}`), noRates);
+    expect(result.errors).toEqual([]);
+    expect(result.needsRates).toEqual({ currency: "USD", from: "2026-01-05", to: "2026-01-05" });
+  });
+
   it("values already in euro need no rate", () => {
     const line = "2026-01-05T08:00:00.000Z,Confirmed,BTC,IN,0.01,,h,Bitcoin 1,a,EUR,250,250";
     const result = parseTradesCsv(row(line), noRates);
