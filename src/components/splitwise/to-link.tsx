@@ -262,15 +262,10 @@ function ReviewRow({
       <div className="mt-2 flex flex-wrap gap-2">
         {tx ? (
           <>
-            <Button
-              size="sm"
-              disabled={busy}
-              onClick={() => onAct({ action: "link", id: item.id, tx })}
-            >
+            <Button disabled={busy} onClick={() => onAct({ action: "link", id: item.id, tx })}>
               Link
             </Button>
             <Button
-              size="sm"
               variant="secondary"
               disabled={busy}
               onClick={() =>
@@ -281,27 +276,19 @@ function ReviewRow({
             </Button>
           </>
         ) : null}
-        <Button
-          id={`${rowId(item.id)}-find`}
-          size="sm"
-          variant="secondary"
-          disabled={busy}
-          onClick={onFind}
-        >
+        <Button id={`${rowId(item.id)}-find`} variant="secondary" disabled={busy} onClick={onFind}>
           Find in bank
         </Button>
         {canCount(item.kind) && (
           <Button
-            size="sm"
             variant="secondary"
             disabled={busy}
             onClick={() => onAct({ action: "count", id: item.id })}
           >
-            Count my share without linking
+            Count my share
           </Button>
         )}
         <Button
-          size="sm"
           variant="ghost"
           disabled={busy}
           onClick={() => onAct({ action: "dismiss", id: item.id })}

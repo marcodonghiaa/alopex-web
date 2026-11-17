@@ -60,7 +60,6 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
           <div className="px-4 py-3 sm:px-5">
             <Alert>Couldn't load the Splitwise connection: {connection.error.message}</Alert>
             <Button
-              size="sm"
               variant="secondary"
               className="mt-2"
               data-splitwise-primary
@@ -170,12 +169,11 @@ function StatusRow({
           <p className="text-[0.8125rem] text-muted-foreground">{syncedAgo(c.lastSyncedAt)}</p>
         </div>
         {reconnect ? (
-          <Button size="sm" data-splitwise-primary onClick={onReconnect} disabled={demo}>
+          <Button data-splitwise-primary onClick={onReconnect} disabled={demo}>
             Reconnect
           </Button>
         ) : (
           <Button
-            size="sm"
             variant="secondary"
             data-splitwise-primary
             onClick={() => sync.mutate()}
@@ -202,13 +200,7 @@ function StatusRow({
           Splitwise sync is off in the demo.
         </p>
       )}
-      <Button
-        variant="destructive"
-        size="sm"
-        className="-ml-3 mt-1"
-        onClick={onDisconnect}
-        disabled={demo}
-      >
+      <Button variant="destructive" className="-ml-4 mt-1" onClick={onDisconnect} disabled={demo}>
         Disconnect
       </Button>
     </div>

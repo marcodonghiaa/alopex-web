@@ -806,3 +806,27 @@ describe("Contrast in the dialogs", () => {
     expect(within(dialog).getByLabelText("API key").className).toContain("bg-card");
   });
 });
+
+// polish-4 #8: DESIGN.md's 44 px minimum for every action in the setup row
+describe("Setup tap targets", () => {
+  const tall = (b: HTMLElement) => expect(b.className.split(" ")).toContain("min-h-11");
+
+  it("makes Sync now and Disconnect 44 px tall", async () => {
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    tall(await screen.findByRole("button", { name: "Sync now" }));
+    tall(screen.getByRole("button", { name: "Disconnect" }));
+  });
+
+  it("makes Reconnect 44 px tall", async () => {
+    rpc.mockResolvedValue(connection({ status: "needs_reconnect" }));
+    renderSetup();
+    tall(await screen.findByRole("button", { name: "Reconnect" }));
+  });
+
+  it("makes Retry 44 px tall", async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: "timeout", code: "57014" } });
+    renderSetup();
+    tall(await screen.findByRole("button", { name: "Retry" }));
+  });
+});

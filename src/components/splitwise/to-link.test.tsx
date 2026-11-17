@@ -240,9 +240,7 @@ describe("ToLink", () => {
     tables.splitwise_review = { data: [item()], error: null };
     renderList();
     const row = await screen.findByRole("listitem", { name: "Groceries" });
-    await userEvent.click(
-      within(row).getByRole("button", { name: "Count my share without linking" }),
-    );
+    await userEvent.click(within(row).getByRole("button", { name: "Count my share" }));
     await waitFor(() => expect(rpc).toHaveBeenCalledWith("count_splitwise_review", { p_id: "r1" }));
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith("Your share counts as spending"),
@@ -501,4 +499,22 @@ it("draws the To link count in a text colour that reads at 12 px", async () => {
   const badge = screen.getByText("1", { selector: "span" });
   expect(badge.className).not.toContain("text-ember");
   expect(badge.className).toContain("text-muted-foreground");
+});
+
+// polish-4 #8: 44 px row actions (DESIGN.md), and a label short enough that Ignore doesn't wrap alone
+it("makes every row action 44 px tall", async () => {
+  tables.splitwise_review = { data: [item()], error: null };
+  tables.transactions = { data: [bankRow()], error: null };
+  renderList();
+  const row = await screen.findByRole("listitem", { name: "Groceries" });
+  await within(row).findByRole("button", { name: "Link" });
+  const buttons = within(row).getAllByRole("button");
+  expect(buttons.map((b) => b.textContent)).toEqual([
+    "Link",
+    "Not this one",
+    "Find in bank",
+    "Count my share",
+    "Ignore",
+  ]);
+  for (const b of buttons) expect(b.className.split(" ")).toContain("min-h-11");
 });
