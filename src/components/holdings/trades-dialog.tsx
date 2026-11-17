@@ -282,8 +282,19 @@ export function TradesDialog({
                   <span className="block text-xs text-muted-foreground">
                     {formatDay(t.trade_date)}
                     {t.note && ` · ${t.note}`}
-                    {t.fee_eur > 0 && ` · fee ${formatEur(t.fee_eur)}`}
-                    {(t.tax_eur ?? 0) > 0 && ` · tax ${formatEur(t.tax_eur!)}`}
+                    {/* Each part stays on one line: "tax" never wraps away from its amount. */}
+                    {t.fee_eur > 0 && (
+                      <>
+                        {" "}
+                        <span className="whitespace-nowrap">· fee {formatEur(t.fee_eur)}</span>
+                      </>
+                    )}
+                    {(t.tax_eur ?? 0) > 0 && (
+                      <>
+                        {" "}
+                        <span className="whitespace-nowrap">· tax {formatEur(t.tax_eur!)}</span>
+                      </>
+                    )}
                   </span>
                 </span>
                 <Button

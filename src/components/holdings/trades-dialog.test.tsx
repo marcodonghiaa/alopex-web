@@ -361,4 +361,34 @@ describe("TradesDialog", () => {
     expect(screen.getByRole("button", { name: "Add trade" })).toBeInTheDocument();
     expect(screen.getByLabelText(/Shares/)).toHaveValue("");
   });
+
+  it("polish-4 N13 a fee or tax never wraps away from its amount", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TradesDialog
+          kind="stock"
+          holdingKey="K"
+          name="Example ETF"
+          quantity={1}
+          label="Trades"
+          trades={[
+            {
+              id: "t1",
+              kind: "stock",
+              key: "K",
+              side: "buy",
+              shares: 1,
+              price_eur: 10,
+              fee_eur: 1,
+              tax_eur: 2.1,
+              trade_date: "2026-03-01",
+            },
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Trades" }));
+    expect(await screen.findByText("· tax €2.10")).toHaveClass("whitespace-nowrap");
+    expect(screen.getByText("· fee €1.00")).toHaveClass("whitespace-nowrap");
+  });
 });
