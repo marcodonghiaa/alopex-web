@@ -91,4 +91,13 @@ describe("syncAlerts", () => {
   it("skips ended consents", () => {
     expect(syncAlerts([acc("Fineco", "REVOKED_SESSION")])).toEqual([]);
   });
+
+  // The cron stops syncing an ended consent, so its last error never clears: the Renew banner
+  // already covers it, and "tries again" would not be true.
+  it("hides the error of a consent that has run out, keeps one still valid", () => {
+    const now = Date.parse("2026-11-17T12:00:00Z");
+    const ended = { ...acc("Fineco", "ASPSP_TIMEOUT"), consent_valid_until: "2026-11-17T00:00:00+00:00" };
+    const valid = { ...acc("N26", "ASPSP_TIMEOUT"), consent_valid_until: "2026-11-18T00:00:00+00:00" };
+    expect(syncAlerts([ended, valid], now).map((a) => a.bank)).toEqual(["N26"]);
+  });
 });

@@ -179,6 +179,16 @@ describe("sync errors", () => {
     expect(await screen.findByRole("status")).toHaveClass("break-words");
   });
 
+  // protects=an ended consent shows only Renew; fails_when=a stale sync error promises a retry that never comes
+  it("shows no sync error for a consent that has run out", async () => {
+    rows.v_bank_accounts_latest = [
+      account({ sync_error: "ASPSP_TIMEOUT", consent_valid_until: "2020-01-01T00:00:00+00:00" }),
+    ];
+    renderPage();
+    await screen.findByRole("button", { name: "Add a debt" });
+    expect(screen.queryByText(/didn't answer the last sync/)).not.toBeInTheDocument();
+  });
+
   it("shows nothing when the last sync went through", async () => {
     rows.v_bank_accounts_latest = [account({ sync_error: null })];
     renderPage();

@@ -9,6 +9,7 @@ export interface SyncErrorAccount {
   bank_name?: string | null;
   // Absent on a database without the bank-sync-health migration.
   sync_error?: string | null;
+  consent_valid_until?: string | null;
 }
 
 export interface SyncAlert {
@@ -56,10 +57,13 @@ export function syncErrorMessage(code: string, bank: string): string | null {
 
 // One alert per bank and message, in the order the accounts come. No date: the account row
 // already shows its last real update.
-export function syncAlerts(accounts: Array<SyncErrorAccount>): Array<SyncAlert> {
+// A consent that has run out is skipped: the cron no longer syncs it, so its last error never
+// clears, and the Renew banner already says what to do.
+export function syncAlerts(accounts: Array<SyncErrorAccount>, now = Date.now()): Array<SyncAlert> {
   const seen = new Map<string, SyncAlert>();
   for (const a of accounts) {
     if (!a.sync_error) continue;
+    if (a.consent_valid_until && Date.parse(a.consent_valid_until) <= now) continue;
     const bank = bankOf(a);
     const text = syncErrorMessage(a.sync_error, bank);
     if (!text) continue;
