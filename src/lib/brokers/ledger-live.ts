@@ -103,7 +103,7 @@ const num = (text: string) => {
 export const ledgerLive: BrokerParser = {
   id: "ledger_live",
   name: "Ledger Live",
-  country: "Any country",
+  country: "Desktop app export",
   kind: "crypto",
   holdingSource: "Ledger",
   howToExport: [
