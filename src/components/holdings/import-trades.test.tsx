@@ -313,7 +313,7 @@ describe("ImportTrades", () => {
     // USDT sits only on Coinbase, which syncs itself: its Ledger moves are left out, and it says so.
     const save = await screen.findByRole("button", { name: "Save 7 trades" });
     expect(screen.getByText(/USDT has no Ledger or manual holding/)).toBeTruthy();
-    expect(screen.getByText("Holdings corrected")).toBeTruthy();
+    expect(screen.getByText("Holdings to correct")).toBeTruthy();
     expect(screen.queryByText("Share counts corrected")).toBeNull();
     fireEvent.click(save);
     await waitFor(() => expect(db.inserted).toHaveLength(7));
@@ -838,6 +838,23 @@ describe("ImportTrades", () => {
     expect(within(region).getAllByRole("listitem")).toHaveLength(2);
     expect(screen.queryByText("Share counts corrected")).toBeNull();
   });
+
+  it.each([
+    ["stock", "Share counts to correct"],
+    ["crypto", "Holdings to correct"],
+  ] as const)(
+    "polish-5 B2 before Save a %s preview says what's still to correct",
+    async (kind, heading) => {
+      open(kind);
+      if (kind === "stock") await pickTradeRepublic();
+      else {
+        pick(/Ledger Live/, "ledger_live.csv");
+        await screen.findByRole("button", { name: "Save 7 trades" });
+      }
+      expect(screen.getByRole("region", { name: heading })).toBeInTheDocument();
+      expect(screen.queryByText(/corrected$/)).toBeNull();
+    },
+  );
 
   it("polish-4 N11 a source's name never wraps; its hint gives way", () => {
     open("stock");
@@ -1600,7 +1617,7 @@ describe("ImportTrades", () => {
   });
 
   describe("corrected holdings", () => {
-    const corrected = () => screen.getByRole("region", { name: "Holdings corrected" });
+    const corrected = () => screen.getByRole("region", { name: "Holdings to correct" });
 
     it("lists each one: name, source, old → new, with its decimals", async () => {
       db.extraCoins.push({ asset_symbol: "LTC", amount: 0.5, name: "Litecoin", source: "Manual" });

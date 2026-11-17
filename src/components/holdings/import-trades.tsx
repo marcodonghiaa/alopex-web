@@ -789,7 +789,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                   className="px-1 pb-1.5 text-xs font-medium text-muted-foreground"
                 >
                   {/* Before Save, a share count is still to correct. */}
-                  {kind === "crypto" ? "Holdings corrected" : "Share counts to correct"}
+                  {kind === "crypto" ? "Holdings to correct" : "Share counts to correct"}
                 </p>
                 <GroupedList className="border border-hairline">
                   <ul>
