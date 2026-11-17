@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const db = vi.hoisted(() => ({
@@ -14,6 +14,9 @@ const db = vi.hoisted(() => ({
   holdingsDown: false,
   // The saved investment_events never arrive (still loading).
   eventsHang: false,
+  signedOut: false,
+  // portfolio_holdings, reset before each test.
+  stocks: [] as Array<Record<string, unknown>>,
   getUserCalls: 0,
   // The saved investment_events rows (the file's own, once imported).
   events: [] as Array<Record<string, unknown>>,
@@ -25,10 +28,7 @@ const db = vi.hoisted(() => ({
 }));
 vi.mock("@/integrations/supabase/client", () => {
   const tables: Record<string, Array<Record<string, unknown>>> = {
-    portfolio_holdings: [
-      { isin: "XX0000000001", shares: 1, name: "Example World ETF" },
-      { isin: "XX0000000002", shares: 1, name: "Example Bond ETF" },
-    ],
+    portfolio_holdings: db.stocks,
     crypto_holdings: [
       { asset_symbol: "BTC", amount: 0.008, name: "Bitcoin", source: "Ledger" },
       // Typed in lowercase by hand: the count goes to that row as stored.
@@ -108,7 +108,7 @@ vi.mock("@/integrations/supabase/client", () => {
       auth: {
         getUser: () => {
           db.getUserCalls++;
-          return Promise.resolve({ data: { user: { id: "u1" } } });
+          return Promise.resolve({ data: { user: db.signedOut ? null : { id: "u1" } } });
         },
       },
     },
@@ -151,6 +151,15 @@ function open(kind: "stock" | "crypto", saved: Array<Trade> = []) {
 describe("ImportTrades", () => {
   beforeEach(() => {
     db.inserted.length = 0;
+    db.stocks.splice(
+      0,
+      Infinity,
+      { isin: "XX0000000001", shares: 1, name: "Example World ETF" },
+      { isin: "XX0000000002", shares: 1, name: "Example Bond ETF" },
+    );
+    db.upserted.length = 0;
+    db.ratesDown = false;
+    db.signedOut = false;
     db.rpc.length = 0;
     db.updated.length = 0;
     db.rpcMissing = false;
@@ -320,7 +329,6 @@ describe("ImportTrades", () => {
     // The file card stops reading: it can't be, until the rates load.
     expect(screen.getByText("Can't be read")).toBeTruthy();
     expect(screen.queryByText("Reading…")).toBeNull();
-    db.ratesDown = false;
   });
 
   it("if the income rows fail after the trades saved, it says so and still updates share counts", async () => {
@@ -384,7 +392,6 @@ describe("ImportTrades", () => {
       knownKeys: new Set(["XX0000000001", "XX0000000002"]),
       today: "2026-11-17",
     });
-    db.upserted.length = 0;
     open("stock", trades);
     fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
     fireEvent.change(screen.getByLabelText("CSV file"), {
@@ -412,7 +419,6 @@ describe("ImportTrades", () => {
   });
 
   it("a Trade Republic file saves its dividends too, skipping ones already saved by id", async () => {
-    db.upserted.length = 0;
     open("stock");
     fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
     const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
@@ -583,5 +589,93 @@ describe("ImportTrades", () => {
     open("stock");
     expect(await pickTradeRepublic()).toBeDisabled();
     expect(screen.queryByText("Also saved: income, fees and cash")).toBeNull();
+  });
+
+  it("on a backend without set_holding_quantity a stock's count is set on the holding itself", async () => {
+    db.rpcMissing = true;
+    open("stock");
+    fireEvent.click(await pickTradeRepublic());
+    await waitFor(() => expect(db.updated).toHaveLength(2));
+    expect(db.updated).toEqual([
+      ["portfolio_holdings", { shares: 4 }, [["isin", "XX0000000001"]]],
+      ["portfolio_holdings", { shares: 0 }, [["isin", "XX0000000002"]]],
+    ]);
+  });
+
+  it("signed out, nothing is saved and it says to sign in", async () => {
+    db.signedOut = true;
+    open("stock");
+    fireEvent.click(await pickTradeRepublic());
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "You're signed out. Sign in and try again.",
+    );
+    expect(db.inserted).toEqual([]);
+    expect(db.upserted).toEqual([]);
+  });
+
+  it("if only other rows are saved and they fail, it shows the database's error", async () => {
+    db.upsertError = "boom";
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const { trades } = parseTradesCsv(csv, {
+      kind: "stock",
+      knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+      today: "2026-11-17",
+    });
+    open("stock", trades);
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 1 row" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("boom");
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("with no counts to fix, other rows the database already had are nothing new", async () => {
+    db.upsertSaved = 0;
+    // The holdings already match the file.
+    db.stocks[0]!["shares"] = 4;
+    db.stocks[1]!["shares"] = 0;
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const { trades } = parseTradesCsv(csv, {
+      kind: "stock",
+      knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+      today: "2026-11-17",
+    });
+    open("stock", trades);
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 1 row" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe("Nothing new imported");
+    expect(db.rpc).toEqual([]);
+  });
+
+  it("the summary counts buys and sells and gives the dates, one date for one day", async () => {
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const { trades } = parseTradesCsv(csv, {
+      kind: "stock",
+      knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+      today: "2026-11-17",
+    });
+    open("stock");
+    await pickTradeRepublic();
+    expect(screen.getByText(/buys? · /).textContent).toBe(
+      "3 buys · 1 sell · 2 Jan 2026 – 3 Feb 2026",
+    );
+    cleanup();
+    // Only the two buys of 2 January are new.
+    open(
+      "stock",
+      trades.filter((t) => t.trade_date !== "2026-01-02"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    await screen.findByRole("button", { name: "Save 2 trades" });
+    expect(screen.getByText(/buys? · /).textContent).toBe("2 buys · 0 sells · 2 Jan 2026");
   });
 });
