@@ -981,7 +981,21 @@ describe("ImportTrades", () => {
         /LTC|Litecoin/,
       );
       expect(
-        screen.getByText("LTC: sold to zero and not held here, so its 2 trades were left out."),
+        screen.getByText(
+          "LTC: sold to zero and not held on Ledger or by hand, so its 2 trades were left out.",
+        ),
+      ).toBeTruthy();
+    });
+
+    it("held only on another source, the note doesn't say it isn't held", async () => {
+      db.extraCoins.push({ asset_symbol: "LTC", amount: 1, name: "Litecoin", source: "Coinbase" });
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Save 5 trades" });
+      expect(
+        screen.getByText(
+          "LTC: sold to zero and not held on Ledger or by hand, so its 2 trades were left out.",
+        ),
       ).toBeTruthy();
     });
 

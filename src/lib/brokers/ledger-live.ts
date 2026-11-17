@@ -243,11 +243,14 @@ export const ledgerLive: BrokerParser = {
         `${key} has no Ledger or manual holding, so it was left out. Add it as a coin, then import again.`,
       );
     // Sold to zero with no holding here: no screen would show its trades, and none could delete them.
+    // It may still be held elsewhere (Coinbase): this wallet's export doesn't set that holding.
     for (const key of new Set(trades.map((t) => t.key)))
-      if (!knownKeys.has(key) && !open.includes(key))
+      if (!knownKeys.has(key) && !open.includes(key)) {
+        const n = trades.filter((t) => t.key === key).length;
         notes.push(
-          `${key}: sold to zero and not held here, so its ${plural(trades.filter((t) => t.key === key).length, "trade")} were left out.`,
+          `${key}: sold to zero and not held on Ledger or by hand, so its ${plural(n, "trade")} ${n === 1 ? "was" : "were"} left out.`,
         );
+      }
     const ops = (n: number, one: string, many: string) =>
       `${plural(n, "operation")} ${n === 1 ? one : many}`;
     if (skipped > 0)

@@ -123,7 +123,9 @@ describe("Ledger Live operations export", () => {
     // Its trades would have no holding to show them on, and nothing could delete them.
     const { trades, notes } = parseTradesCsv(sample, ctx);
     expect(trades.some((t) => t.key === "LTC")).toBe(false);
-    expect(notes).toContain("LTC: sold to zero and not held here, so its 2 trades were left out.");
+    expect(notes).toContain(
+      "LTC: sold to zero and not held on Ledger or by hand, so its 2 trades were left out.",
+    );
     // Held here (a hand-added Litecoin), its trades are kept and set it to zero.
     const held = parseTradesCsv(sample, { ...ctx, knownKeys: new Set([...ctx.knownKeys, "LTC"]) });
     expect(held.trades.filter((t) => t.key === "LTC")).toHaveLength(2);
@@ -132,6 +134,14 @@ describe("Ledger Live operations export", () => {
     expect(noEth.trades.some((t) => t.key === "ETH")).toBe(false);
     expect(noEth.notes).toContain(
       "ETH has no Ledger or manual holding, so it was left out. Add it as a coin, then import again.",
+    );
+  });
+
+  it("one trade left out is said in the singular", () => {
+    // Dust: it nets to zero, so it counts as sold to zero.
+    const line = "2026-01-05T08:00:00.000Z,Confirmed,DOGE,IN,0.0000001,,h,Doge 1,a,USD,0,0";
+    expect(parseTradesCsv(row(line), ctx).notes).toContain(
+      "DOGE: sold to zero and not held on Ledger or by hand, so its 1 trade was left out.",
     );
   });
 
