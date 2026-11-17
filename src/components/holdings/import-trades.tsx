@@ -434,7 +434,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                         : "bg-positive/15 text-positive",
                   )}
                 >
-                  {unreadable ? (
+                  {unreadable || (parsed && !ok) ? (
                     <X className="size-4" strokeWidth={2.5} />
                   ) : nothing ? (
                     <Info className="size-4" strokeWidth={2.5} />

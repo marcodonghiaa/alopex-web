@@ -558,6 +558,18 @@ describe("ImportTrades", () => {
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
   });
 
+  it("polish-4 N1 a file that can't be imported shows an X, not a check", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File(["a,b\n1,2"], "wrong.csv", { type: "text/csv" })] },
+    });
+    expect(await screen.findByText("Can't be imported")).toBeInTheDocument();
+    const card = screen.getByText("wrong.csv").closest("[tabindex]")!;
+    expect(card.querySelector(".lucide-check")).toBeNull();
+    expect(card.querySelector(".lucide-x")).not.toBeNull();
+  });
+
   it("if saved dividends and fees can't load, it says so and won't save", async () => {
     db.eventsDown = true;
     open("stock");
