@@ -144,6 +144,45 @@ describe("Who owes you", () => {
     expect(within(list).getByRole("listitem", { name: "Settle up" })).toBeTruthy();
   });
 
+  // protects=polish-1 P1-2: once To link links a settle-up, its payment is not asked about next;
+  // fails_when=the cached payback candidates still hold it ("Is this Giulia? €22.00" after Link)
+  it("doesn't ask about a settle-up's payment after linking it on To link", async () => {
+    // The demo has no link RPC (linking is off there): this one does what the server's does.
+    const client = db.client as {
+      rpc: (name: string, args?: Record<string, unknown>) => unknown;
+      from: (t: string) => { update: (p: object) => { eq: (c: string, v: unknown) => unknown } };
+    };
+    const rpc = client.rpc.bind(client);
+    client.rpc = async (name, args) => {
+      if (name !== "link_splitwise_review") return rpc(name, args);
+      await client
+        .from("transactions")
+        .update({ flow_type: "transfer" })
+        .eq("entry_reference", args!["p_entry_reference"]);
+      await client.from("splitwise_review").update({ status: "linked" }).eq("id", args!["p_id"]);
+      return { data: { status: "linked" }, error: null };
+    };
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    const section = await screen.findByRole("region", { name: "Did someone pay you back?" });
+    await userEvent.click(within(section).getByRole("button", { name: "Yes, it's Giulia" }));
+    await waitFor(() => expect(screen.queryByText(/from GIULIA BIANCHI/)).toBeNull());
+    const list = screen.getByRole("region", { name: "To link" });
+    const settleUp = within(list).getByRole("listitem", { name: "Settle up" });
+    await waitFor(() =>
+      expect(within(settleUp).getByRole("button", { name: /^Link/ })).toBeEnabled(),
+    );
+    await userEvent.click(within(settleUp).getByRole("button", { name: /^Link/ }));
+    await waitFor(() =>
+      expect(within(list).queryByRole("listitem", { name: "Settle up" })).toBeNull(),
+    );
+    await new Promise((r) => setTimeout(r, 300));
+    expect(screen.queryByText("Is this Giulia?")).toBeNull();
+  });
+
   // A query on `table` that waits for `held`, then answers as the demo would (or with `answer`).
   const holdTable = (table: string, held: Promise<void>, answer?: unknown) => {
     const client = db.client as { from: (t: string) => unknown };

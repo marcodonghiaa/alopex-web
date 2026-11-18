@@ -12,11 +12,15 @@ import { numberFormat } from "@/lib/locale";
 export const CONNECTION_KEY = ["splitwise-connection"];
 export const REVIEW_KEY = ["splitwise-review"];
 
-/** What to refetch after a sync, a disconnect or a review action: shares, spending, bank rows. */
+/**
+ * What to refetch after a sync, a disconnect or a review action: shares, spending, bank rows, and
+ * the payback questions (a payment just linked is no longer one to ask about).
+ */
 export const syncRefreshKeys = (): Array<Array<string>> => [
   ...refreshKeys("splitwise"),
   CONNECTION_KEY,
   REVIEW_KEY,
+  ["payback-candidates"],
 ];
 
 export type ConnectionStatus = "ok" | "needs_reconnect" | "error";
