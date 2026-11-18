@@ -5,7 +5,8 @@ import { classifyRows } from "@/lib/import/splitwise-classify";
 import { balancesFromFile } from "@/lib/import/splitwise-balances";
 import { parseSplitwiseCsv } from "@/lib/import/splitwise-parse";
 
-type Answer = { data: unknown[]; error: { message: string } | null };
+// paged: the answer is the whole table and each .range(a, b) gets its slice, as Supabase pages.
+type Answer = { data: unknown[]; error: { message: string } | null; paged?: boolean };
 const tables: {
   transactions: Answer;
   fx_rates: Answer;
@@ -28,14 +29,23 @@ vi.mock("@/integrations/supabase/client", () => ({
     rpc: (...args: unknown[]) => rpc(...args),
     from: (table: string) => {
       const chain: { [method: string]: unknown } = {};
-      for (const m of ["select", "gte", "lte", "in", "is", "range", "limit", "eq", "order"])
+      let slice: [number, number] | null = null;
+      for (const m of ["select", "gte", "lte", "in", "is", "limit", "eq", "order"])
         chain[m] = () => chain;
+      chain["range"] = (a: number, b: number) => {
+        slice = [a, b + 1];
+        return chain;
+      };
       chain["insert"] = (row: unknown) => {
         insertRule(row);
         return Promise.resolve({ error: null });
       };
-      chain["then"] = (resolve: (v: unknown) => unknown) =>
-        resolve(tables[table as keyof typeof tables]);
+      chain["then"] = (resolve: (v: unknown) => unknown) => {
+        const answer = tables[table as keyof typeof tables];
+        return resolve(
+          answer.paged && slice ? { ...answer, data: answer.data.slice(...slice) } : answer,
+        );
+      };
       return chain;
     },
   },
@@ -318,8 +328,17 @@ describe("SplitwiseReview", () => {
     expect((await screen.findByRole("alert")).textContent).toBe("boom");
   });
 
-  it("refuses a result that may have been cut at the page limit", async () => {
-    tables.transactions = { data: Array.from({ length: 1000 }, () => bankRow), error: null };
+  // polish-5 #8: the bank is read page by page up to 10 000 rows (splitwise-bank.ts); the mock
+  // pages like Supabase, so this checks the real limit, not a mock that never runs out
+  it("refuses bank rows past the 10 000-row read limit, and reads 1000 in full", async () => {
+    const many = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({ ...bankRow, entry_reference: `e${i}`, amount: 500 }));
+    tables.transactions = { data: many(1000), error: null, paged: true };
+    const first = show();
+    expect(await screen.findByText(/isn.t in your bank yet/)).toBeTruthy();
+    expect(screen.queryByText(/Too many bank transactions/)).toBeNull();
+    first.unmount();
+    tables.transactions = { data: many(10_001), error: null, paged: true };
     show();
     expect((await screen.findByRole("alert")).textContent).toMatch(/Too many bank transactions/);
   });
