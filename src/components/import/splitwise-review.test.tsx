@@ -5,7 +5,8 @@ import { classifyRows } from "@/lib/import/splitwise-classify";
 import { balancesFromFile } from "@/lib/import/splitwise-balances";
 import { parseSplitwiseCsv } from "@/lib/import/splitwise-parse";
 
-type Answer = { data: unknown[]; error: { message: string } | null };
+// paged: the answer is the whole table and each .range(a, b) gets its slice, as Supabase pages.
+type Answer = { data: unknown[]; error: { message: string } | null; paged?: boolean };
 const tables: {
   transactions: Answer;
   fx_rates: Answer;
@@ -28,14 +29,23 @@ vi.mock("@/integrations/supabase/client", () => ({
     rpc: (...args: unknown[]) => rpc(...args),
     from: (table: string) => {
       const chain: { [method: string]: unknown } = {};
-      for (const m of ["select", "gte", "lte", "in", "limit", "eq", "order"])
+      let slice: [number, number] | null = null;
+      for (const m of ["select", "gte", "lte", "in", "is", "limit", "eq", "order"])
         chain[m] = () => chain;
+      chain["range"] = (a: number, b: number) => {
+        slice = [a, b + 1];
+        return chain;
+      };
       chain["insert"] = (row: unknown) => {
         insertRule(row);
         return Promise.resolve({ error: null });
       };
-      chain["then"] = (resolve: (v: unknown) => unknown) =>
-        resolve(tables[table as keyof typeof tables]);
+      chain["then"] = (resolve: (v: unknown) => unknown) => {
+        const answer = tables[table as keyof typeof tables];
+        return resolve(
+          answer.paged && slice ? { ...answer, data: answer.data.slice(...slice) } : answer,
+        );
+      };
       return chain;
     },
   },
@@ -318,8 +328,17 @@ describe("SplitwiseReview", () => {
     expect((await screen.findByRole("alert")).textContent).toBe("boom");
   });
 
-  it("refuses a result that may have been cut at the page limit", async () => {
-    tables.transactions = { data: Array.from({ length: 1000 }, () => bankRow), error: null };
+  // polish-5 #8: the bank is read page by page up to 10 000 rows (splitwise-bank.ts); the mock
+  // pages like Supabase, so this checks the real limit, not a mock that never runs out
+  it("refuses bank rows past the 10 000-row read limit, and reads 1000 in full", async () => {
+    const many = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({ ...bankRow, entry_reference: `e${i}`, amount: 500 }));
+    tables.transactions = { data: many(1000), error: null, paged: true };
+    const first = show();
+    expect(await screen.findByText(/isn.t in your bank yet/)).toBeTruthy();
+    expect(screen.queryByText(/Too many bank transactions/)).toBeNull();
+    first.unmount();
+    tables.transactions = { data: many(10_001), error: null, paged: true };
     show();
     expect((await screen.findByRole("alert")).textContent).toMatch(/Too many bank transactions/);
   });
@@ -380,12 +399,27 @@ describe("SplitwiseReview", () => {
   // promises is unreachable
   it("can update the balances alone when there is nothing new", async () => {
     tables.splitwise_expenses = { data: [TAXI, DINNER], error: null };
-    rpc.mockResolvedValue({ data: null, error: null });
+    rpc.mockResolvedValue({ data: { balances: 2 }, error: null });
     showWithBalances();
     fireEvent.click(await screen.findByRole("button", { name: /Update balances/ }));
     await waitFor(() => expect(rpc).toHaveBeenCalledTimes(1));
     expect(rpc.mock.calls[0]?.[0]).toBe("save_splitwise_balances");
     expect(await screen.findByText("Balances updated.")).toBeInTheDocument();
+  });
+
+  // polish-5 #3: while Splitwise is connected the backend keeps the synced balances and saves
+  // none from the file ({ balances: 0 }); the screen must not say they were updated
+  it("says the synced balances stay when the backend saved none from the file", async () => {
+    tables.splitwise_expenses = { data: [TAXI, DINNER], error: null };
+    rpc.mockResolvedValue({ data: { balances: 0 }, error: null });
+    showWithBalances();
+    fireEvent.click(await screen.findByRole("button", { name: /Update balances/ }));
+    expect(
+      await screen.findByText(
+        "Splitwise sync keeps this group's balances up to date, so the file's were not used.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Balances updated.")).toBeNull();
   });
 
   it("says when rows in another currency are left out of who owes you", async () => {
@@ -481,6 +515,27 @@ describe("SplitwiseReview", () => {
 
     beforeEach(() => {
       rpc.mockResolvedValue({ data: { added: 1, edited: 0, removed: 0 }, error: null });
+    });
+
+    // polish-1 #4: a share the Splitwise sync wrote is never in the file; the backend refuses to
+    // remove it, so it must not be offered as "removed in Splitwise"
+    // round 2 N3: nor a CSV row the sync adopted (its CSV fingerprint kept, splitwise_id set)
+    it("never offers a share the Splitwise sync wrote or adopted for removal", async () => {
+      const SYNCED = {
+        ...share("sw:77", "Brunch", 12),
+        booking_date: "2026-08-16",
+        splitwise_id: 77,
+      };
+      const ADOPTED = {
+        ...share("2026-08-16|Picnic|2400|USD|-800#1", "Picnic", 8),
+        splitwise_id: 78,
+      };
+      tables.splitwise_expenses = { data: [TAXI, GONE, SYNCED, ADOPTED], error: null };
+      show();
+      await openChanges();
+      expect(await screen.findByRole("checkbox", { name: /Lunch/ })).toBeInTheDocument();
+      expect(screen.queryByRole("checkbox", { name: /Brunch/ })).toBeNull();
+      expect(screen.queryByRole("checkbox", { name: /Picnic/ })).toBeNull();
     });
 
     // protects=nothing old changes without a tick; fails_when=a category starts ticked

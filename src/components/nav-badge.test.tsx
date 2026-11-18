@@ -11,7 +11,9 @@ describe("NavBadge", () => {
   it("renders as mono Ember text, not a filled pill", () => {
     render(<NavBadge count={3} />);
     const badge = screen.getByText("to review").parentElement!;
-    expect(badge).toHaveClass("ml-auto", "font-figure", "text-ember");
+    // re-audit N1: the darker light-theme ember for 12 px text, not the global ember (2.92:1)
+    expect(badge).toHaveClass("ml-auto", "font-figure", "text-ember-text");
+    expect(badge).not.toHaveClass("text-ember");
     expect(badge.className).not.toMatch(/rounded-full|bg-/);
   });
   it("is hidden at 0 and when undefined", () => {

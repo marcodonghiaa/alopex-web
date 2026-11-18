@@ -188,6 +188,46 @@ describe("Dialog with a sheet over it", () => {
   });
 });
 
+// polish-4 #21: while a request runs the dialog can't close, and its X says so
+describe("Dialog close button", () => {
+  const Open = ({ closeDisabled }: { closeDisabled?: boolean }) => (
+    <Dialog open>
+      <DialogContent aria-describedby={undefined} {...(closeDisabled ? { closeDisabled } : {})}>
+        <DialogTitle>Busy</DialogTitle>
+      </DialogContent>
+    </Dialog>
+  );
+
+  it("is off with closeDisabled", () => {
+    render(<Open closeDisabled />);
+    expect(screen.getByRole("button", { name: "Close" }).getAttribute("aria-disabled")).toBe(
+      "true",
+    );
+  });
+
+  it("is on by default", () => {
+    render(<Open />);
+    expect(screen.getByRole("button", { name: "Close" })).toBeEnabled();
+  });
+});
+
+// polish-4 #29: the sheet's X was a 16x16 target; match the dialog's 44 px one
+describe("Sheet close button", () => {
+  it("is a 44 px target like the dialog's", () => {
+    render(
+      <Sheet open>
+        <SheetContent aria-describedby={undefined}>
+          <SheetTitle>Find</SheetTitle>
+        </SheetContent>
+      </Sheet>,
+    );
+    const close = screen.getByRole("button", { name: "Close" }).className.split(" ");
+    expect(close).toContain("size-11");
+    expect(close).toContain("right-1");
+    expect(close).toContain("top-1");
+  });
+});
+
 // polish-4 #15 / UB2: a toast shown over an open dialog (say, one left from the last save) sits
 // outside it. fails_when=touching the toast counts as a click outside, closes the dialog and drops
 // what was picked in it

@@ -23,14 +23,10 @@ import { isShareRow, type StoredShare } from "@/lib/import/splitwise-corrections
 import { planWrite, splitAtCheckpoint } from "@/lib/import/splitwise-plan";
 import { categorizeRow, ruleTextFor, type UserRule } from "@/lib/import/splitwise-categorize";
 import { makeRate, type FxRow } from "@/lib/fx";
-import { defaultSelection, toBankTx } from "@/lib/import/splitwise-review";
-import { addDays } from "@/lib/date";
+import { defaultSelection } from "@/lib/import/splitwise-review";
+import { fetchBankWindow } from "@/lib/import/splitwise-bank";
 
-// Bank rows are read from 30 days before the first expense (late-entered ones) to a week after
-// the last one. The database returns at most 1000 rows per call, so more than that is refused.
-const DAYS_BEFORE = 30;
-const DAYS_AFTER = 7;
-const FX_DAYS_BEFORE = 14;
+// Stored shares: the database returns at most 1000 rows per call, so more than that is refused.
 const PAGE_LIMIT = 1000;
 
 const expenses = (n: number) => (n === 1 ? "1 expense" : `${n} expenses`);
@@ -50,22 +46,15 @@ interface Loaded {
 }
 
 async function load(rows: Array<ClassifiedRow>, group: string): Promise<Loaded> {
-  const dates = rows.map((r) => r.date).sort();
-  const first = dates[0] ?? "";
-  const last = dates[dates.length - 1] ?? "";
-  const [bank, stored, rules] = await Promise.all([
-    supabase
-      .from("transactions")
-      .select(
-        "account_uid, entry_reference, booking_date, amount, currency, credit_debit_indicator, personal_amount, flow_type, deleted_at, creditor_name",
-      )
-      .gte("booking_date", addDays(first, -DAYS_BEFORE))
-      .lte("booking_date", addDays(last, DAYS_AFTER))
-      .limit(PAGE_LIMIT),
+  const [window, stored, rules] = await Promise.all([
+    fetchBankWindow(
+      rows.map((r) => r.date),
+      rows.map((r) => r.currency),
+    ),
     supabase
       .from("splitwise_expenses")
       .select(
-        "id, fingerprint, booking_date, description, amount, currency, linked_entry_reference",
+        "id, fingerprint, booking_date, description, amount, currency, linked_entry_reference, splitwise_id",
       )
       .eq("group_name", group)
       .limit(PAGE_LIMIT),
@@ -75,24 +64,9 @@ async function load(rows: Array<ClassifiedRow>, group: string): Promise<Loaded> 
       .order("priority", { ascending: true }),
   ]);
 
-  // Rates for the file's currencies and the bank's: a payment picked by hand may be in another one.
-  const currencies = [
-    ...new Set([...rows.map((r) => r.currency), ...(bank.data ?? []).map((t) => t.currency)]),
-  ].filter((c) => c !== "EUR");
-  const fx =
-    currencies.length === 0
-      ? { data: [] as Array<FxRow>, error: null }
-      : await supabase
-          .from("fx_rates")
-          .select("currency, date, rate_to_eur")
-          .in("currency", currencies)
-          .gte("date", addDays(first, -FX_DAYS_BEFORE))
-          .lte("date", addDays(last, DAYS_AFTER))
-          .limit(PAGE_LIMIT);
-
-  const failed = bank.error ?? fx.error ?? stored.error ?? rules.error;
+  const failed = stored.error ?? rules.error;
   if (failed) throw new Error(failed.message);
-  if ((bank.data ?? []).length >= PAGE_LIMIT || (fx.data ?? []).length >= PAGE_LIMIT) {
+  if (window.capped) {
     throw new Error("Too many bank transactions in these dates to review safely.");
   }
   // A cut list could hide the newest date, and the checkpoint is what protects older rows.
@@ -100,8 +74,8 @@ async function load(rows: Array<ClassifiedRow>, group: string): Promise<Loaded> 
     throw new Error("Too many stored expenses in this group to review safely.");
   }
   return {
-    bank: (bank.data ?? []).flatMap((r) => toBankTx(r) ?? []),
-    fx: fx.data ?? [],
+    bank: window.bank,
+    fx: window.fx,
     rules: rules.data ?? [],
     stored: stored.data ?? [],
   };
@@ -260,7 +234,7 @@ export function SplitwiseReview({
   // Balances move without new expenses (a settle-up), and a first attempt can fail.
   const saveOnlyBalances = useMutation({
     mutationFn: async () => {
-      if (balances) await saveBalances(supabase as unknown as RpcClient, group, balances);
+      return balances ? saveBalances(supabase as unknown as RpcClient, group, balances) : 0;
     },
     onSuccess: () => void refresh(),
   });
@@ -618,7 +592,9 @@ export function SplitwiseReview({
           </button>
           {saveOnlyBalances.isSuccess && (
             <p role="status" className="px-4 text-sm">
-              Balances updated.
+              {saveOnlyBalances.data === 0 && balances.entries.length > 0
+                ? "Splitwise sync keeps this group's balances up to date, so the file's were not used."
+                : "Balances updated."}
             </p>
           )}
           {saveOnlyBalances.error && (

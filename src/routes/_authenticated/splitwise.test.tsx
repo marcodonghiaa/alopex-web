@@ -1,10 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // The demo client mirrors the real tables: split bills plus Splitwise groups on both sides. A
-// fresh one per test, so answers given in one test never leak into the next.
+// fresh one per test, so answers given in one test never leak into the next. A test can swap the
+// demo's connection row to see the page in other states.
+const connectionRow = vi.hoisted(() => ({ value: null as null | Record<string, unknown> }));
 const db = vi.hoisted(() => ({ client: null as unknown }));
 vi.mock("@/integrations/supabase/client", () => ({
   get supabase() {
@@ -13,8 +15,22 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 beforeEach(async () => {
   const { createFakeClient } = await import("@/lib/demo/fake-client");
-  db.client = createFakeClient(new Date("2026-11-08T12:00:00Z"));
+  const client = createFakeClient(new Date("2026-11-08T12:00:00Z"));
+  const rpc = client.rpc.bind(client);
+  db.client = Object.assign(client, {
+    rpc: (fn: string, args?: unknown) =>
+      fn === "get_splitwise_connection" && connectionRow.value
+        ? Promise.resolve({ data: [connectionRow.value], error: null })
+        : (rpc as (f: string, a?: unknown) => unknown)(fn, args),
+  });
 });
+
+// The Splitwise sync tests run the page in demo mode, as the demo's own client would.
+const demo = vi.hoisted(() => ({ on: false }));
+vi.mock("@/lib/demo/mode", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/demo/mode")>()),
+  isDemoMode: () => demo.on,
+}));
 
 import { toast } from "sonner";
 import { Route } from "./splitwise";
@@ -51,7 +67,7 @@ describe("Who owes you", () => {
         <Page />
       </QueryClientProvider>,
     );
-    const importButton = await screen.findByRole("button", { name: "Import from Splitwise" });
+    const importButton = await screen.findByRole("button", { name: "Import a Splitwise file" });
     const groups = screen.getByText(/Splitwise groups/);
     expect(
       groups.compareDocumentPosition(importButton) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -98,9 +114,8 @@ describe("Who owes you", () => {
     const billsBefore = Number(/(\d+) open bills?/.exec(giulia().textContent ?? "")?.[1]);
 
     await userEvent.click(within(section).getByRole("button", { name: "Yes, it's Giulia" }));
-    await waitFor(() =>
-      expect(screen.queryByRole("region", { name: "Did someone pay you back?" })).toBeNull(),
-    );
+    // The demo's other payment from Giulia (her Splitwise settle-up) may still ask; this one is gone.
+    await waitFor(() => expect(screen.queryByText(/from GIULIA BIANCHI/)).toBeNull());
     await waitFor(() =>
       expect(Number(/(\d+) open bills?/.exec(giulia().textContent ?? "")?.[1])).toBe(
         billsBefore - 1,
@@ -126,7 +141,7 @@ describe("Who owes you", () => {
       </QueryClientProvider>,
     );
     expect(await screen.findByText("Net owed to you")).toBeTruthy();
-    expect(await screen.findByRole("button", { name: "Import from Splitwise" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Import a Splitwise file" })).toBeTruthy();
     expect(screen.queryByRole("region", { name: "Did someone pay you back?" })).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
   });
@@ -191,9 +206,9 @@ describe("Who owes you", () => {
       </QueryClientProvider>,
     );
     expect(await screen.findByText("Net owed to you")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Import from Splitwise" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Import a Splitwise file" })).toBeNull();
     release();
-    expect(await screen.findByRole("button", { name: "Import from Splitwise" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Import a Splitwise file" })).toBeTruthy();
   });
 
   // protects=the Yes toast and its Undo; fails_when=it doesn't say what was settled, or Undo
@@ -223,5 +238,86 @@ describe("Who owes you", () => {
     await waitFor(() => expect(bills()).toBe(before));
     expect(await screen.findByRole("region", { name: "Did someone pay you back?" })).toBeTruthy();
     success.mockRestore();
+  });
+});
+
+// protects=the demo shows the sync as it looks connected, under a made-up name, with its To link
+// list, and nothing can be sent; fails_when=a real name shows or an action is enabled in the demo
+describe("Splitwise sync in the demo", () => {
+  beforeEach(() => {
+    demo.on = true;
+  });
+  afterEach(() => {
+    demo.on = false;
+  });
+  it("shows the demo connection, the To link list with its count and disabled actions", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText("Splitwise · Alex")).toBeTruthy();
+    expect(screen.getByText(/^Synced \d+ (h|days?) ago$/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sync now" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Disconnect" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Connect Splitwise" })).toBeNull();
+
+    const list = await screen.findByRole("region", { name: "To link" });
+    expect(list).toHaveTextContent("2 to link");
+    const dinner = await screen.findByRole("listitem", { name: "Dinner out" });
+    expect(dinner).toHaveTextContent("You paid");
+    expect(dinner).toHaveTextContent("your share €28.00");
+    expect(screen.getByRole("listitem", { name: "Settle up" })).toHaveTextContent(
+      "Settle-up you received",
+    );
+    for (const b of screen.getAllByRole("button", { name: "Ignore" })) expect(b).toBeDisabled();
+    expect(screen.getByText("Linking is off in the demo.")).toBeTruthy();
+    expect(screen.getByText(/synced from Splitwise/)).toBeTruthy();
+  });
+});
+
+// polish-3 #17: the balances' title says where they came from only when that is sure
+describe("Splitwise groups title", () => {
+  beforeEach(() => {
+    demo.on = true;
+  });
+  afterEach(() => {
+    demo.on = false;
+    connectionRow.value = null;
+  });
+  const row = (over: Record<string, unknown>) => ({
+    connected: false,
+    status: null,
+    display_name: null,
+    last_synced_at: null,
+    last_error: null,
+    synced_data: false,
+    ...over,
+  });
+  const title = async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    // The connection has loaded once its row shows (Connect, or the status with Sync now).
+    await screen.findByRole("button", { name: /^(Connect Splitwise|Sync now|Reconnect)$/ });
+    return screen.getByText(/^Splitwise groups/).textContent;
+  };
+
+  it.each([
+    [
+      { connected: true, status: "ok", synced_data: true },
+      "Splitwise groups · synced from Splitwise",
+    ],
+    [
+      { connected: true, status: "needs_reconnect", synced_data: true },
+      "Splitwise groups · from your last sync",
+    ],
+    [{}, "Splitwise groups · from your last import"],
+    [{ synced_data: true }, "Splitwise groups"],
+  ])("%o → %s", async (over, expected) => {
+    connectionRow.value = row(over);
+    expect(await title()).toBe(expected);
   });
 });

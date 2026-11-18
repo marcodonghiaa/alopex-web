@@ -10,15 +10,11 @@ export interface FileBalances {
 
 /**
  * How stored balances read. 'group': each member's net toward the group (rows saved before
- * per-person amounts; only my own row can be trusted). 'pairwise': what I owe each member.
+ * per-person amounts; only my own row can be trusted). 'pairwise': what I owe each member, from a
+ * CSV import. 'api': the same, as the Splitwise sync reads it from Splitwise, one row per currency.
  */
-export type BalanceBasis = "group" | "pairwise";
+export type BalanceBasis = "group" | "pairwise" | "api";
 
-/**
- * One stored balance. My row: what the group owes me overall. Anyone else's row: what I owe that
- * person (negative: they owe me), worked out expense by expense, without Splitwise's debt
- * simplification.
- */
 export interface BalanceRow {
   group_name: string;
   person: string;
@@ -110,13 +106,16 @@ export function balancesFromFile(file: SplitwiseFile, me: number): FileBalances 
   };
 }
 
-/** Replaces the stored balances of one group with the ones in this file. */
+/**
+ * Replaces the stored balances of one group with the ones in this file. Returns how many the
+ * database saved: 0 while Splitwise sync owns the group's balances (they are left as they are).
+ */
 export async function saveBalances(
   client: Pick<RpcClient, "rpc">,
   group: string,
   balances: FileBalances,
-): Promise<void> {
-  const { error } = await client.rpc("save_splitwise_balances", {
+): Promise<number> {
+  const { data, error } = await client.rpc("save_splitwise_balances", {
     p_group: group,
     p_balances: balances.entries.map((e) => ({
       person: e.person,
@@ -127,6 +126,7 @@ export async function saveBalances(
     })),
   });
   if (error) throw new Error(error.message);
+  return (data as { balances?: number } | null)?.balances ?? 0;
 }
 
 type RateToEur = (currency: string) => number | null;
@@ -144,23 +144,36 @@ export interface GroupSummary {
 }
 
 export function summarizeBalances(rows: Array<BalanceRow>, rate: RateToEur): Array<GroupSummary> {
-  const groups = [...new Set(rows.map((r) => r.group_name))].sort();
-  return groups.flatMap((group) => {
-    const inGroup = rows.filter((r) => r.group_name === group);
+  // One summary per group and currency: a synced group can hold debts in several.
+  const key = (r: BalanceRow) => `${r.group_name}\u0000${r.currency}`;
+  const keys = [...new Set(rows.map(key))].sort();
+  return keys.flatMap((k) => {
+    const inGroup = rows.filter((r) => key(r) === k);
+    const first = inGroup[0]!;
     const me = inGroup.find((r) => r.is_me);
-    if (!me) return [];
-    const r2e = rate(me.currency);
-    const stale = inGroup.some((r) => r.basis !== "pairwise");
+    const others = inGroup.filter((r) => !r.is_me);
+    // The sync leaves out my row when I'm even overall; the others still say who owes whom.
+    if (!me && !inGroup.some((r) => r.basis === "api")) return [];
+    const myBalance = me
+      ? me.balance
+      : -Math.round(others.reduce((sum, r) => sum + r.balance, 0) * 100) / 100 || 0;
+    const r2e = rate(first.currency);
+    const stale = inGroup.some((r) => r.basis === "group");
     return [
       {
-        group,
-        myBalance: me.balance,
-        myBalanceEur: r2e === null ? null : me.balance * r2e,
-        currency: me.currency,
-        updatedAt: me.updated_at,
+        group: first.group_name,
+        myBalance,
+        myBalanceEur: r2e === null ? null : myBalance * r2e,
+        currency: first.currency,
+        updatedAt:
+          me?.updated_at ??
+          inGroup
+            .map((r) => r.updated_at)
+            .sort()
+            .at(-1)!,
         stale,
-        people: inGroup
-          .filter((r) => !stale && !r.is_me && r.balance !== 0)
+        people: others
+          .filter((r) => !stale && r.balance !== 0)
           .sort((a, b) => a.balance - b.balance)
           .map((r) => ({ person: r.person, balance: r.balance, owesYou: r.balance < 0 })),
       },

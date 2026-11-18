@@ -54,6 +54,14 @@ describe("buildZip", () => {
     expect(json.exported_at).toBe("2026-10-30T10:00:00.000Z");
   });
 
+  // polish-5 #9: splitwise_connections is server-only (it points at the user's Splitwise API key
+  // in Vault); the export must never list it, nor the attempts log beside it
+  it("never exports the Splitwise connection or its attempts", () => {
+    const names: Array<string> = EXPORT_TABLES.map((t) => t.name);
+    expect(names).not.toContain("splitwise_connections");
+    expect(names).not.toContain("splitwise_attempts");
+  });
+
   it("includes the payer names you linked to contacts", () => {
     expect(EXPORT_TABLES.map((t) => t.name)).toContain("payer_links");
   });

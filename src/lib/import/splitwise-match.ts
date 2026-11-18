@@ -38,6 +38,8 @@ const DAY_PENALTY = 0.002;
 // only proposed when the amount is practically identical, and always left for the user to confirm.
 const EARLY_DAYS = 30;
 const EARLY_TOLERANCE = 0.005;
+// A payment that names the expense's other person beats any amount or date difference allowed.
+const NAME_BONUS = 1;
 
 /**
  * One id per row, the same on every import of the same file. It uses only my own column, so a
@@ -73,6 +75,8 @@ function candidateFor(
   rowIndex: number,
   bank: Array<BankTx>,
   rate: RateToEur,
+  skip?: (r: ClassifiedRow, tx: BankTx) => boolean,
+  named?: (r: ClassifiedRow, tx: BankTx) => boolean,
 ): Array<Candidate> {
   const direction = wantedDirection(r);
   const rowRate = rate(r.currency, r.date);
@@ -83,37 +87,41 @@ function candidateFor(
     if (
       tx.direction !== direction ||
       tx.personalAmountCents !== null ||
-      tx.flowType === "transfer"
+      tx.flowType === "transfer" ||
+      skip?.(r, tx)
     ) {
       return [];
     }
     const days = dayNumber(tx.bookingDate) - dayNumber(r.date);
-    const txRate = rate(tx.currency, tx.bookingDate);
-    if (
-      !Number.isFinite(days) ||
-      days < -EARLY_DAYS ||
-      days > DAYS_AFTER ||
-      txRate === null ||
-      rowEur === 0
-    )
+    if (!Number.isFinite(days) || days < -EARLY_DAYS || days > DAYS_AFTER || rowEur === 0) {
       return [];
+    }
+    const txRate = rate(tx.currency, tx.bookingDate); // only inside the window: lookups add up
+    if (txRate === null) return [];
     const early = days < -DAYS_BEFORE;
     const gap = Math.abs(rowEur - tx.amountCents * txRate) / rowEur;
     if (gap > (early ? EARLY_TOLERANCE : AMOUNT_TOLERANCE)) return [];
-    return [{ rowIndex, txIndex, score: gap + DAY_PENALTY * Math.abs(days), early }];
+    const bonus = named?.(r, tx) ? NAME_BONUS : 0;
+    return [{ rowIndex, txIndex, score: gap + DAY_PENALTY * Math.abs(days) - bonus, early }];
   });
 }
 
 const countBy = (keys: Array<number>): Map<number, number> =>
   keys.reduce((counts, k) => counts.set(k, (counts.get(k) ?? 0) + 1), new Map<number, number>());
 
-/** Suggests, for each row of mine that has a bank counterpart, which transaction it is. */
+/**
+ * Suggests, for each row of mine that has a bank counterpart, which transaction it is. `skip`
+ * leaves out a pair the user already said is not a match; `named` marks a pair whose bank name
+ * is the expense's other person, which then goes first.
+ */
 export function matchBank(
   rows: Array<ClassifiedRow>,
   bank: Array<BankTx>,
   rate: RateToEur,
+  skip?: (r: ClassifiedRow, tx: BankTx) => boolean,
+  named?: (r: ClassifiedRow, tx: BankTx) => boolean,
 ): Array<BankMatch> {
-  const all = rows.flatMap((r, i) => candidateFor(r, i, bank, rate));
+  const all = rows.flatMap((r, i) => candidateFor(r, i, bank, rate, skip, named));
   const perRow = countBy(all.map((c) => c.rowIndex));
   const perTx = countBy(all.map((c) => c.txIndex));
 
@@ -161,19 +169,20 @@ const txKey = (t: { accountUid: string; entryReference: string }) =>
 /**
  * Payments out of my accounts around an expense I paid, closest date first, leaving out the ones
  * already split, marked as transfers, or taken by another row of this import (`taken` keys are
- * "accountUid|entryReference").
+ * "accountUid|entryReference"). `direction` CRDT lists money in instead (a settle-up I received).
  */
 export function nearbyPayments(
   r: ClassifiedRow,
   bank: Array<BankTx>,
   taken: Set<string>,
+  direction: BankTx["direction"] = "DBIT",
 ): Array<BankTx> {
   const day = dayNumber(r.date);
   return bank
     .filter((tx) => {
       const days = dayNumber(tx.bookingDate) - day;
       return (
-        tx.direction === "DBIT" &&
+        tx.direction === direction &&
         tx.personalAmountCents === null &&
         tx.flowType !== "transfer" &&
         !taken.has(txKey(tx)) &&

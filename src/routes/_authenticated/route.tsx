@@ -42,6 +42,8 @@ import { DemoBadge } from "@/components/demo-badge";
 import { NavBadge } from "@/components/nav-badge";
 import { groupStreams, romeToday } from "@/lib/recurring";
 import { useRecurringStreams } from "@/lib/use-recurring-streams";
+import { useQuery } from "@tanstack/react-query";
+import { fetchReviewCount, REVIEW_COUNT_KEY } from "@/lib/splitwise-sync";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -189,9 +191,19 @@ function AuthenticatedLayout() {
     setMenuOpen(false);
   };
   const streams = useRecurringStreams().data;
+  // A head-only count under the To link list's key, so a link or a sync refreshes the badge too.
+  // A failure leaves the badge off and doesn't retry: it's only a hint.
+  const review = useQuery({
+    queryKey: REVIEW_COUNT_KEY,
+    queryFn: fetchReviewCount,
+    retry: false,
+  });
   const badges: Record<string, number> = {
     Subscriptions: streams ? groupStreams(streams, romeToday()).toReview.length : 0,
+    "Who owes you": review.data ?? 0,
   };
+  // The More tab sums what waits on the pages it holds that carry a badge.
+  const inMore = (badges["Subscriptions"] ?? 0) + (badges["Who owes you"] ?? 0);
 
   // Once per page load: tells the backend this address is the dashboard (setup no longer asks for it).
   useEffect(() => {
@@ -316,15 +328,13 @@ function AuthenticatedLayout() {
           type="button"
           onClick={() => setMenuOpen(true)}
           aria-haspopup="dialog"
-          aria-label={
-            badges["Subscriptions"] ? `More, ${badges["Subscriptions"]} to review` : "More"
-          }
+          aria-label={inMore ? `More, ${inMore} to review` : "More"}
           className={TAB_PATHS.has(pathname) ? TAB_LINK : TAB_LINK_ACTIVE}
         >
           <span className="relative">
             <MoreHorizontal className="size-6" />
             <span aria-hidden="true" className="absolute -top-1 left-full flex">
-              <NavBadge count={badges["Subscriptions"]} />
+              <NavBadge count={inMore} />
             </span>
           </span>
           <span className={TAB_LABEL}>More</span>

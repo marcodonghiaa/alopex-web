@@ -67,7 +67,7 @@ export function FilterSheet(p: FilterSheetProps) {
         <ListFilter />
         Filter
         {p.count > 0 && (
-          <span aria-hidden className="font-figure text-xs text-ember">
+          <span aria-hidden className="font-figure text-xs text-ember-text">
             {p.count}
           </span>
         )}

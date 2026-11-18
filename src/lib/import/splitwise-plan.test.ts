@@ -198,6 +198,21 @@ describe("planWrite", () => {
     expect(plan.problems).toEqual([]);
   });
 
+  // polish-1 #17: the database counts characters (char_length); a cut by UTF-16 units splits an
+  // emoji on the boundary (a lone surrogate jsonb refuses) and never matches the sync's cut
+  it("cuts by characters, keeping an emoji on the boundary whole", () => {
+    const long = rowsOf(row({ row: 1, description: `${"y".repeat(299)}😀tail` }));
+    const plan = planWrite({ ...base(long), fingerprints: ["short-id"] });
+    expect(plan.shares[0]?.description).toBe(`${"y".repeat(299)}😀`);
+  });
+
+  it("takes a 100-character group name that ends in an emoji", () => {
+    expect(planWrite({ ...base(), group: `${"g".repeat(99)}😀` }).problems).toEqual([]);
+    expect(planWrite({ ...base(), group: `${"g".repeat(100)}😀` }).problems).toEqual([
+      expect.stringMatching(/group/i),
+    ]);
+  });
+
   it("writes nothing for a file with nothing of mine in it", () => {
     const plan = planWrite(base(rowsOf(NOT_MINE)));
     expect(plan.shares).toEqual([]);
@@ -290,6 +305,22 @@ describe("the last import is a checkpoint", () => {
     expect(split.older.map((o) => o.row.description)).toEqual(["Old uber"]);
     expect(split.rows.map((r) => r.description)).toEqual(["Same day taxi", "New dinner"]);
     expect(split.fingerprints).toEqual([fingerprints[3], fingerprints[4]]);
+  });
+
+  // polish-5 #4: a share the Splitwise sync wrote ('sw:<id>' fingerprint) is the same expense as
+  // the file's row (the backend's rule: date within a day, description, amount, currency); the
+  // backend skips adding it, so offering it as "Added late" would never go away
+  it("does not list an old row the Splitwise sync already has", () => {
+    const synced = (amount: number): StoredShare => ({
+      ...share("sw:77", "2026-08-12"),
+      description: " old UBER ",
+      amount,
+      splitwise_id: 77,
+    });
+    const covered = splitAtCheckpoint(rows, fingerprints, [...storedOf(0, 2), synced(21)]);
+    expect(covered.older).toEqual([]);
+    const other = splitAtCheckpoint(rows, fingerprints, [...storedOf(0, 2), synced(22)]);
+    expect(other.older.map((o) => o.row.description)).toEqual(["Old uber"]);
   });
 
   it("does not list an old row that would never be a share", () => {

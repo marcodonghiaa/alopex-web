@@ -1,3 +1,4 @@
+import { cutChars } from "@/lib/transactions";
 import type { ClassifiedRow } from "./splitwise-classify";
 import type { RateToEur } from "./splitwise-match";
 import type { RpcClient } from "./splitwise-commit";
@@ -17,6 +18,8 @@ export interface StoredShare {
   amount: number;
   currency: string;
   linked_entry_reference: string | null;
+  /** Set when the Splitwise sync wrote or adopted the row (backend 20261213000000 on). */
+  splitwise_id?: number | null;
 }
 
 export interface FileRow {
@@ -76,8 +79,14 @@ export function diffStored(
   const inFile = new Set(fingerprints);
   const known = new Set(stored.map((s) => s.fingerprint));
 
+  // A share the Splitwise sync wrote or adopted (splitwise_id set) belongs to the sync: only it
+  // may remove or change it (the backend refuses), so it is never offered here.
   const gone = stored.filter(
-    (s) => !inFile.has(s.fingerprint) && s.booking_date >= first && s.booking_date <= last,
+    (s) =>
+      s.splitwise_id == null &&
+      !inFile.has(s.fingerprint) &&
+      s.booking_date >= first &&
+      s.booking_date <= last,
   );
   const unstored: Array<FileRow> = rows.flatMap((row, i) => {
     const fingerprint = fingerprints[i] ?? "";
@@ -159,7 +168,7 @@ export function planCorrections(input: CorrectionInput): CorrectionPlan {
       return {
         fingerprint,
         booking_date: row.date,
-        description: row.description.slice(0, MAX_DESCRIPTION),
+        description: cutChars(row.description, MAX_DESCRIPTION),
         category: input.categoryFor(row),
         amount: euros(row.shareCents ?? 0),
         currency: row.currency,
@@ -177,7 +186,7 @@ export function planCorrections(input: CorrectionInput): CorrectionPlan {
         old_fingerprint: stored.fingerprint,
         fingerprint,
         booking_date: row.date,
-        description: renamed ? row.description.slice(0, MAX_DESCRIPTION) : stored.description,
+        description: renamed ? cutChars(row.description, MAX_DESCRIPTION) : stored.description,
         amount: euros(row.shareCents ?? 0),
         currency: row.currency,
         cost: euros(Math.abs(row.costCents)),

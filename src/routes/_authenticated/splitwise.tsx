@@ -39,10 +39,13 @@ import { txId } from "@/lib/transactions";
 import { toast } from "sonner";
 import { fetchSplits, money, netOwed, peopleFrom, type SplitRow } from "@/lib/splits";
 import { HeadlineFigure } from "@/components/headline-figure";
-import { Upload } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SyncSetup } from "@/components/splitwise/sync-setup";
+import { balancesSource } from "@/lib/splitwise-sync";
+import { useSplitwiseConnection } from "@/lib/use-splitwise-sync";
+import { ToLink } from "@/components/splitwise/to-link";
 
 export const Route = createFileRoute("/_authenticated/splitwise")({
   head: () => ({
@@ -72,6 +75,9 @@ function SplitwisePage() {
   const queryClient = useQueryClient();
   const splits = useQuery({ queryKey: ["splits"], queryFn: fetchSplits, staleTime: 60_000 });
   const settle = useSettleSplitMutation(queryClient);
+  const connection = useSplitwiseConnection().data;
+  const connected = connection?.connected === true;
+  const source = balancesSource(connection, groups.length > 0);
   // Recent incoming payments to match to who owes you. On a database without the payback
   // functions yet this fails: the page works as before, only without the questions.
   const candidates = useQuery({
@@ -263,6 +269,7 @@ function SplitwisePage() {
         </p>
       )}
 
+      <ToLink connected={connected} />
       <PaymentsToCheck
         suggestions={suggestions}
         debtors={debtors}
@@ -284,27 +291,16 @@ function SplitwisePage() {
         />
       )}
 
-      <SectionTitle className="mt-8">Splitwise groups · from your last import</SectionTitle>
+      <SectionTitle className="mt-8">Splitwise groups{source ? ` · ${source}` : ""}</SectionTitle>
       {balances.isError ? (
         <Alert>Couldn't load Splitwise balances: {balances.error.message}</Alert>
       ) : balances.isPending || asking ? (
         loading("Loading Splitwise groups")
       ) : (
-        <BalancesView groups={groups} />
+        <BalancesView groups={groups} connected={connected} />
       )}
-      {/* Setup after the balances: a quiet row, like Connect a bank on Accounts. */}
-      {!asking && (
-        <GroupedList className="mt-3">
-          <button
-            type="button"
-            onClick={() => setImporting(true)}
-            className="flex min-h-11 w-full items-center gap-2 px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/40 sm:px-5"
-          >
-            <Upload aria-hidden className="size-4" />
-            Import from Splitwise
-          </button>
-        </GroupedList>
-      )}
+      {/* Setup after the balances: quiet rows, like Connect a bank on Accounts. */}
+      {!asking && <SyncSetup onImportFile={() => setImporting(true)} />}
       {last && (
         <LastImportRow
           count={last.count}

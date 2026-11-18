@@ -68,14 +68,68 @@ describe("BalancesView", () => {
     expect(screen.queryByRole("button", { name: /berkeley/ })).toBeNull();
   });
 
+  // polish-4 #6: connected, the sync brings the groups; not connected, both ways in are named
   it("says what to do when nothing has been imported", () => {
-    render(<BalancesView groups={[]} />);
-    expect(screen.getByText(/Import a Splitwise export/)).toBeTruthy();
+    render(<BalancesView groups={[]} connected={false} />);
+    expect(
+      screen.getByText("Connect Splitwise or import a file to see your group balances."),
+    ).toBeTruthy();
+  });
+
+  it("says the groups come in with each sync when connected and none is open", () => {
+    render(<BalancesView groups={[]} connected />);
+    expect(screen.getByText("No open group balances. They come in with each sync.")).toBeTruthy();
+    expect(screen.queryByText(/import a file/)).toBeNull();
   });
 
   // protects=nobody expects the Splitwise app's simplified numbers; fails_when=the caveat is removed
   it("explains the amounts are not simplified like in Splitwise", () => {
     render(<BalancesView groups={[group]} />);
     expect(screen.getByText(/simplifies debts/)).toBeTruthy();
+  });
+});
+
+// protects=a synced group with debts in two currencies shows both, each named by its currency;
+// fails_when=the cards share a key and one disappears, or the reader can't tell them apart
+describe("BalancesView with several currencies in a group", () => {
+  it("shows one card per currency, labelled with it", () => {
+    const eur = { ...group, group: "trip", currency: "EUR", myBalance: 8 };
+    render(<BalancesView groups={[trip, eur, group]} />);
+    expect(screen.getByRole("heading", { name: /^trip\s*· EUR/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /^trip\s*· USD/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /^berkeley\d/ })).toBeTruthy();
+  });
+
+  // polish-4 #4: a long name must not truncate away the currency that tells the cards apart
+  it("keeps the currency outside the name's ellipsis", () => {
+    const long = "Summer road trip across the whole of the west coast";
+    render(
+      <BalancesView
+        groups={[
+          { ...trip, group: long },
+          { ...group, group: long, currency: "EUR" },
+        ]}
+      />,
+    );
+    for (const cur of ["USD", "EUR"]) {
+      const label = screen.getByText(`· ${cur}`, { exact: false });
+      expect(label.closest(".truncate")).toBeNull();
+      expect(label.className).toContain("shrink-0");
+      expect(screen.getAllByText(long)[0]!.className).toContain("truncate");
+    }
+  });
+});
+
+// polish-4 #19: open debts that net to zero aren't an empty figure slot
+describe("A group that nets to zero", () => {
+  it("says even overall when people still owe each other", () => {
+    render(<BalancesView groups={[{ ...group, myBalance: 0, myBalanceEur: 0 }]} />);
+    expect(screen.getByRole("heading")).toHaveTextContent("even overall");
+  });
+
+  it("says nothing of the kind for an all-square group", () => {
+    render(<BalancesView groups={[{ ...group, myBalance: 0, myBalanceEur: 0, people: [] }]} />);
+    expect(screen.getByRole("heading")).toHaveTextContent("All square");
+    expect(screen.getByRole("heading")).not.toHaveTextContent("even overall");
   });
 });

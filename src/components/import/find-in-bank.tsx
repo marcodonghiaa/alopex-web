@@ -23,6 +23,12 @@ export function FindInBank({
   rate,
   onPick,
   onClose,
+  direction = "DBIT",
+  showSplit = true,
+  otherwise = "If you paid it some other way, choose Paid in cash.",
+  title,
+  detail,
+  disabledNote,
 }: {
   /** The expense being linked; null keeps the sheet closed. */
   row: ClassifiedRow | null;
@@ -31,13 +37,26 @@ export function FindInBank({
   rate: RateToEur;
   onPick: (tx: BankTx) => void;
   onClose: () => void;
+  /** CRDT lists money in (a settle-up received) instead of payments out. */
+  direction?: BankTx["direction"];
+  /** Show what counts as spending for the picked payment (the CSV import works it out here). */
+  showSplit?: boolean;
+  /** What to do when no payment fits, after "No payments … around that date." */
+  otherwise?: string;
+  /** Replaces "Which payment was <description>?" (a settle-up's description is just "Settle up"). */
+  title?: string;
+  /** Goes before "Payments around <date>, any amount.", e.g. the amount to look for. */
+  detail?: string;
+  /** Linking is off (the demo): the list still reads, Link payment stays disabled and says why. */
+  disabledNote?: string;
 }) {
   const [chosen, setChosen] = useState<string | null>(null);
   useEffect(() => setChosen(null), [row]);
 
-  const options = row ? nearbyPayments(row, bank, taken) : [];
+  const options = row ? nearbyPayments(row, bank, taken, direction) : [];
   const tx = options.find((t) => key(t) === chosen) ?? null;
-  const split = row && tx ? manualSplit(row, tx, rate) : null;
+  const split = showSplit && row && tx ? manualSplit(row, tx, rate) : null;
+  const out = direction === "DBIT";
 
   return (
     <Sheet open={row !== null} onOpenChange={(open) => open || onClose()}>
@@ -49,17 +68,18 @@ export function FindInBank({
       >
         <div aria-hidden className="mx-auto mb-4 h-1.5 w-9 rounded-full bg-foreground/20" />
         <SheetTitle className="text-xl font-semibold">
-          Which payment was {row?.description.trim() ?? "it"}?
+          {title ?? `Which payment was ${row?.description.trim() ?? "it"}?`}
         </SheetTitle>
         <SheetDescription className="mt-1 text-sm text-muted-foreground">
-          {row ? `Payments around ${shortDate(row.date)}, any amount.` : ""}
+          {row
+            ? `${detail ? `${detail} ` : ""}Payments around ${shortDate(row.date)}, any amount.`
+            : ""}
         </SheetDescription>
 
         <div className="mt-5 space-y-4">
           {options.length === 0 ? (
             <p role="status" className="rounded-2xl bg-background/60 px-4 py-6 text-center text-sm">
-              No payments out of your accounts around that date. If you paid it some other way,
-              choose Paid in cash.
+              No payments {out ? "out of" : "into"} your accounts around that date. {otherwise}
             </p>
           ) : (
             <Group>
@@ -90,7 +110,8 @@ export function FindInBank({
                         </span>
                       </span>
                       <span className="shrink-0 font-figure text-[0.9375rem]">
-                        −{money(t.amountCents, t.currency)}
+                        {out ? "−" : "+"}
+                        {money(t.amountCents, t.currency)}
                       </span>
                       <span
                         aria-hidden
@@ -107,7 +128,7 @@ export function FindInBank({
         </div>
         {/* Kept in view while the list scrolls: the choice and its result sit next to the button. */}
         <div className="sticky -bottom-8 -mx-5 mt-4 space-y-3 bg-background px-5 pt-3 pb-8">
-          {tx && !split && (
+          {showSplit && tx && !split && (
             <p role="alert" className="px-4 text-sm text-negative">
               No exchange rate for this payment yet, so your part cannot be worked out.
             </p>
@@ -131,10 +152,15 @@ export function FindInBank({
             </Group>
           )}
 
+          {disabledNote && (
+            <p role="note" className="px-4 text-sm text-muted-foreground">
+              {disabledNote}
+            </p>
+          )}
           <button
             type="button"
             className={CTA}
-            disabled={!tx || !split}
+            disabled={!tx || (showSplit && !split) || !!disabledNote}
             onClick={() => tx && onPick(tx)}
           >
             Link payment

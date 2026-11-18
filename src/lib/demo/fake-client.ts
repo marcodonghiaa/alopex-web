@@ -1044,6 +1044,19 @@ function demoAddHolding(store: Store, now: Date, body: Record<string, unknown>) 
   return { data: { added: true, priced: true }, error: null };
 }
 
+// The demo looks connected to Splitwise, as a made-up "Alex", last synced two hours ago. Sync,
+// disconnect and the review actions stay off (functions and other database calls are refused).
+function demoSplitwiseConnection(now: Date) {
+  return {
+    connected: true,
+    status: "ok",
+    display_name: "Alex",
+    last_synced_at: new Date(now.getTime() - 2 * 3_600_000).toISOString(),
+    last_error: null,
+    synced_data: true,
+  };
+}
+
 export function createFakeClient(now: Date = new Date()): SupabaseClient<Database> {
   const store = new Store(now);
   const user = {
@@ -1125,7 +1138,9 @@ export function createFakeClient(now: Date = new Date()): SupabaseClient<Databas
                                         data: demoTagCounts(store.db["transactions"] ?? []),
                                         error: null,
                                       }
-                                    : { data: null, error: DISABLED },
+                                    : fn === "get_splitwise_connection"
+                                      ? { data: [demoSplitwiseConnection(now)], error: null }
+                                      : { data: null, error: DISABLED },
     functions: {
       invoke: async (name: string, opts?: { body?: Record<string, unknown> }) =>
         name === "add-holding"

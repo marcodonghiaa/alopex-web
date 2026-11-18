@@ -67,6 +67,23 @@ describe("fingerprintRows", () => {
   });
 });
 
+// polish-3 #1: a rate is looked up only for bank rows inside the date window
+describe("matchBank rate lookups", () => {
+  it("skips the rate for bank rows outside the date window", () => {
+    const lookups: Array<string> = [];
+    const counting = (currency: string, date: string) => {
+      lookups.push(`${currency} ${date}`);
+      return rate(currency);
+    };
+    const far = Array.from({ length: 50 }, (_, i) =>
+      tx({ entryReference: `old${i}`, bookingDate: "2025-01-10", currency: "CHF" }),
+    );
+    const result = matchBank(classify([row()]), [...far, tx()], counting);
+    expect(result.map((m) => m.entryReference)).toEqual(["e1"]);
+    expect(lookups.filter((l) => l.startsWith("CHF"))).toEqual([]);
+  });
+});
+
 describe("matchBank", () => {
   // protects=suggestions shown to the user; fails_when=a wrong bank transaction is proposed or a
   // handled one is touched again; no_claim=anything is written (these are only suggestions)
@@ -194,6 +211,32 @@ describe("nearbyPayments", () => {
       new Set([key(taken)]),
     );
     expect(list.map((t) => t.entryReference)).toEqual(["ok"]);
+  });
+
+  // protects=Find in bank for a settle-up I received lists money in; fails_when=it lists payments out
+  it("lists money in when asked for CRDT", () => {
+    const list = nearbyPayments(
+      uber!,
+      [tx({ entryReference: "out" }), tx({ entryReference: "in", direction: "CRDT" })],
+      new Set(),
+      "CRDT",
+    );
+    expect(list.map((t) => t.entryReference)).toEqual(["in"]);
+  });
+});
+
+describe("matchBank with skip", () => {
+  // protects=a payment the user said "Not this one" to never comes back; fails_when=it is
+  // suggested again, or the next best one is not offered instead
+  it("leaves out the pairs skip names and suggests the next one", () => {
+    const rows = classify([row()]);
+    const bank = [
+      tx({ entryReference: "best" }),
+      tx({ entryReference: "next", bookingDate: "2026-08-20" }),
+    ];
+    expect(matchBank(rows, bank, rate).map((m) => m.entryReference)).toEqual(["best"]);
+    const skipped = matchBank(rows, bank, rate, (_r, t) => t.entryReference === "best");
+    expect(skipped.map((m) => m.entryReference)).toEqual(["next"]);
   });
 });
 

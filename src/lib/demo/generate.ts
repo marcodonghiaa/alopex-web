@@ -473,30 +473,85 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
         id: `sw-${iso(n)}`,
         linked_account_uid: null,
         linked_entry_reference: null,
+        source: "api",
+        splitwise_id: 90_000 + i,
+        splitwise_updated_at: stamp(iso(n)),
         user_id,
       };
     });
-  const balanceRows = (group: string, people: Array<[string, number, boolean]>) =>
+  // The demo is connected to Splitwise (as "Alex"): two expenses wait on the To link list.
+  const reviewItem = (
+    id: number,
+    daysAgo: number,
+    over: Partial<DemoDb["splitwise_review"][number]>,
+  ): DemoDb["splitwise_review"][number] => ({
+    booking_date: iso(todayNum - daysAgo),
+    cost: 0,
+    counterparty: null,
+    created_at: stamp(iso(todayNum - daysAgo)),
+    currency: "EUR",
+    description: "",
+    group_name: "Casa",
+    id: `demo-review-${id}`,
+    kind: "paid_by_me",
+    linked_account_uid: null,
+    linked_entry_reference: null,
+    my_paid: 0,
+    my_share: 0,
+    rejected_entry_references: [],
+    splitwise_id: 80_000 + id,
+    splitwise_updated_at: stamp(iso(todayNum - daysAgo)),
+    status: "pending",
+    user_id,
+    ...over,
+  });
+  const splitwise_review: DemoDb["splitwise_review"] = [
+    reviewItem(1, 3, {
+      description: "Dinner out",
+      cost: 84,
+      my_paid: 84,
+      my_share: 28,
+    }),
+    reviewItem(2, 6, {
+      description: "Settle up",
+      // Casa, where you are owed: in Viaggio Lisbona you owe Giulia.
+      group_name: "Casa",
+      kind: "settle_in",
+      counterparty: "Giulia",
+      cost: 22,
+      my_share: 0,
+    }),
+  ];
+  // As the Splitwise sync stores them: one row per person and currency.
+  const balanceRows = (group: string, people: Array<[string, number, boolean]>, currency = "EUR") =>
     people.map(([person, balance, is_me]) => ({
       balance,
-      currency: "EUR",
+      currency,
       group_name: group,
       is_me,
       person,
       updated_at: stamp(today),
       user_id,
-      basis: "pairwise",
+      basis: "api",
     }));
   const splitwise_balances: DemoDb["splitwise_balances"] = [
     ...balanceRows("Casa", [
-      ["Demo User", 45.5, true],
+      ["Alex", 45.5, true],
       ["Giulia", -30.5, false],
       ["Luca", -15, false],
     ]),
     ...balanceRows("Viaggio Lisbona", [
-      ["Demo User", -22, true],
+      ["Alex", -22, true],
       ["Giulia", 22, false],
     ]),
+    ...balanceRows(
+      "Viaggio Lisbona",
+      [
+        ["Alex", 18, true],
+        ["Luca", -18, false],
+      ],
+      "USD",
+    ),
   ];
 
   const category_rules: DemoDb["category_rules"] = [
@@ -573,6 +628,7 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
     splitwise_balances,
     payer_links: [],
     splitwise_expenses,
+    splitwise_review,
     category_budgets: [],
     // One category of the demo user's own, so Settings → Categories shows how it looks.
     user_categories: [{ user_id, name: "Pets", hidden: false, created_at: stamp(today) }],

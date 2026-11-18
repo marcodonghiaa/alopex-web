@@ -15,7 +15,16 @@ const day = (iso: string) =>
 
 const people = (n: number) => `${n} ${n === 1 ? "person" : "people"}`;
 
-function GroupCard({ g, defaultOpen }: { g: GroupSummary; defaultOpen: boolean }) {
+function GroupCard({
+  g,
+  defaultOpen,
+  showCurrency,
+}: {
+  g: GroupSummary;
+  defaultOpen: boolean;
+  /** The group has balances in more than one currency: each card names its own. */
+  showCurrency: boolean;
+}) {
   const [open, setOpen] = useState(defaultOpen);
   const id = useId();
   const square = g.people.length === 0;
@@ -31,11 +40,23 @@ function GroupCard({ g, defaultOpen }: { g: GroupSummary; defaultOpen: boolean }
         <Users className="size-[18px]" />
       </span>
       <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-[0.9375rem] font-medium">{g.group}</span>
+        {/* The currency stays visible: on a phone the name's ellipsis would eat it first. */}
+        <span className="flex min-w-0 text-[0.9375rem] font-medium">
+          <span className="truncate">{g.group}</span>
+          {showCurrency && (
+            <span className="shrink-0 whitespace-pre text-muted-foreground"> · {g.currency}</span>
+          )}
+        </span>
         <span className="block truncate text-[0.8125rem] font-normal text-muted-foreground">
           {meta}
         </span>
       </span>
+      {g.myBalance === 0 && !square && (
+        // People still owe each other here; only your net is zero.
+        <span className="shrink-0 text-right text-xs font-normal text-muted-foreground">
+          even overall
+        </span>
+      )}
       {g.myBalance !== 0 && (
         <span className="shrink-0 text-right">
           <span className="block font-figure text-[0.9375rem]">
@@ -93,21 +114,37 @@ function GroupCard({ g, defaultOpen }: { g: GroupSummary; defaultOpen: boolean }
 }
 
 /** One card per Splitwise group: the group's net up top, open it to see who owes whom. */
-export function BalancesView({ groups }: { groups: Array<GroupSummary> }) {
+export function BalancesView({
+  groups,
+  connected = false,
+}: {
+  groups: Array<GroupSummary>;
+  /** Splitwise sync is on: the groups come with it, so no import is suggested. */
+  connected?: boolean;
+}) {
   if (groups.length === 0) {
     return (
       <p className="rounded-lg bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-        Import a Splitwise export to see your group balances.
+        {connected
+          ? "No open group balances. They come in with each sync."
+          : "Connect Splitwise or import a file to see your group balances."}
       </p>
     );
   }
   // Groups with money still open first; a lone group opens by itself.
   const done = (g: GroupSummary) => Number(g.people.length === 0 && !g.stale);
   const sorted = [...groups].sort((a, b) => done(a) - done(b));
+  const names = groups.map((g) => g.group);
+  const several = (name: string) => names.indexOf(name) !== names.lastIndexOf(name);
   return (
     <div className="space-y-3">
       {sorted.map((g) => (
-        <GroupCard key={g.group} g={g} defaultOpen={groups.length === 1} />
+        <GroupCard
+          key={`${g.group}|${g.currency}`}
+          g={g}
+          defaultOpen={groups.length === 1}
+          showCurrency={several(g.group)}
+        />
       ))}
       <p className="px-1 text-xs text-muted-foreground">
         Per person this can differ from the Splitwise app, which simplifies debts. Your total is the
