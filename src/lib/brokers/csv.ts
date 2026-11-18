@@ -1,4 +1,15 @@
 // The small CSV helpers every broker parser shares.
+import { isDay } from "@/lib/date";
+import { netShares } from "@/lib/trades";
+import type { Trade } from "@/lib/trades";
+
+/** Not in your holdings and not fully sold: there's no price to value what's left, so leave it out. */
+export function unheldKeys(trades: Array<Trade>, knownKeys: Set<string>): Array<string> {
+  return [...new Set(trades.map((t) => t.key))].filter(
+    (key) =>
+      !knownKeys.has(key) && Math.abs(netShares(trades.filter((t) => t.key === key))) > 0.000001,
+  );
+}
 
 export function splitLine(line: string, separator: string): Array<string> {
   const cells: Array<string> = [];
@@ -20,8 +31,6 @@ export function parseDate(text: string): string | null {
   const iso = dayFirst
     ? `${dayFirst[3]}-${dayFirst[2]!.padStart(2, "0")}-${dayFirst[1]!.padStart(2, "0")}`
     : text;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
-  const parsed = new Date(`${iso}T00:00:00Z`);
   // Rejects 31/02/2026, which Date would roll into March.
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === iso ? iso : null;
+  return isDay(iso) ? iso : null;
 }

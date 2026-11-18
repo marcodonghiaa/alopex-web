@@ -1,5 +1,6 @@
 import { Toaster as Sonner } from "sonner";
 import { useOpenSheetSide } from "./sheet";
+import { useDialogOpen } from "./dialog";
 import { useIsMobile } from "@/lib/use-is-mobile";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
@@ -21,6 +22,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
   const sheetSide = useOpenSheetSide();
   // sonner's mobileOffset stops at 600px, but the tab bar shows below md (768px).
   const isMobile = useIsMobile();
+  // A phone's dialog fills the screen down to its sticky Save: a bottom toast would cover it.
+  const dialogOnPhone = useDialogOpen() && isMobile;
   return (
     <Sonner
       // An open sheet or dialog turns pointer events off on the page; a toast over it still takes
@@ -32,9 +35,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
       // Bottom centre: top-right toasts covered the month arrows (#166). On a phone, clear of the
       // bottom tab bar (52px + safe area) and the home indicator. While a bottom sheet is open, top
       // centre, so a toast never covers a bottom sheet's fields; beside a right-hand panel, bottom
-      // left, so it never covers the panel's title.
+      // left, so it never covers the panel's title. A dialog on a phone: top centre too.
       position={
-        sheetSide === "bottom"
+        sheetSide === "bottom" || dialogOnPhone
           ? "top-center"
           : sheetSide === "right"
             ? "bottom-left"

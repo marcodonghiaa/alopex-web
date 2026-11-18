@@ -47,16 +47,38 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+// How many dialogs are on screen, so the toaster can keep out of their way on a phone.
+let openDialogs = 0;
+const dialogListeners = new Set<() => void>();
+const countDialogs = (by: number) => {
+  openDialogs += by;
+  dialogListeners.forEach((l) => l());
+};
+export function useDialogOpen() {
+  return React.useSyncExternalStore(
+    (l) => {
+      dialogListeners.add(l);
+      return () => dialogListeners.delete(l);
+    },
+    () => openDialogs > 0,
+    () => false,
+  );
+}
+
 // Mounted only while the dialog is on screen.
 function RememberOpener({ opener }: { opener: React.RefObject<Element | null> }) {
   React.useLayoutEffect(() => rememberOpener(opener), [opener]);
+  React.useEffect(() => {
+    countDialogs(1);
+    return () => countDialogs(-1);
+  }, []);
   return null;
 }
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, onCloseAutoFocus, ...props }, ref) => {
+>(({ className, children, onCloseAutoFocus, onPointerDownOutside, ...props }, ref) => {
   const opener = React.useRef<Element | null>(null);
   return (
     <DialogPortal>
@@ -68,6 +90,12 @@ const DialogContent = React.forwardRef<
           className,
         )}
         // A dialog opened from state has no Trigger for Radix to refocus (U1).
+        onPointerDownOutside={(e) => {
+          // A toast shown over the dialog isn't a click outside: touching it must not close it.
+          if (e.target instanceof Element && e.target.closest("[data-sonner-toaster]"))
+            e.preventDefault();
+          onPointerDownOutside?.(e);
+        }}
         onCloseAutoFocus={returnFocus(opener, onCloseAutoFocus)}
         {...props}
       >

@@ -728,7 +728,8 @@ function demoAddHolding(store: Store, now: Date, body: Record<string, unknown>) 
   const sec = list.find((s) => s.id === body["id"]);
   const quantity = Number(body["quantity"]);
   if (!sec || !(quantity > 0)) return functionError(400, "Invalid request");
-  const today = now.toISOString().slice(0, 10);
+  // The local day, as the generated net worth uses: the UTC one is yesterday after local midnight.
+  const today = formatISODate(now);
   const user_id = DEMO_USER_ID;
   const db = store.db;
   if (kind === "stock") {
@@ -786,6 +787,18 @@ function demoAddHolding(store: Store, now: Date, body: Record<string, unknown>) 
       value_eur: usd * DEMO_USD_TO_EUR,
       value_usd: usd,
     });
+  }
+  // The demo's net worth is generated once, so add the new holding's value to it by hand.
+  const added = db[kind === "stock" ? "portfolio_snapshots" : "crypto_snapshots"]!.at(-1)!;
+  const latest = (db["v_net_worth_daily"] ?? []).reduce<Row | undefined>(
+    (a, r) => (!a || String(r["snapshot_date"]) > String(a["snapshot_date"]) ? r : a),
+    undefined,
+  );
+  if (latest) {
+    const field = kind === "stock" ? "portfolio_total_eur" : "crypto_total_eur";
+    const value = Number(added["value_eur"]);
+    latest[field] = Number(latest[field]) + value;
+    latest["total_eur"] = Number(latest["total_eur"]) + value;
   }
   store.refresh();
   return { data: { added: true, priced: true }, error: null };

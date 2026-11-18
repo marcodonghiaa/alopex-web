@@ -1,8 +1,18 @@
-import { dateLocale } from "@/lib/locale";
-import { useMemo, useState } from "react";
+import { dateLocale, numberFormat } from "@/lib/locale";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronLeft, ChevronRight, FileUp, Info, Lock, Loader2 } from "lucide-react";
+import {
+  Check,
+  ChevronLeft,
+  CircleAlert,
+  ChevronRight,
+  FileUp,
+  Info,
+  Lock,
+  Loader2,
+} from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "@tanstack/react-router";
 import {
   Dialog,
   DialogContent,
@@ -20,16 +30,33 @@ import { GroupedList } from "@/components/ui/grouped-list";
 import { localToday } from "@/lib/trades";
 import type { Trade } from "@/lib/trades";
 import { BROKERS, NEW_BROKER_URL } from "@/lib/brokers";
-import { newTrades, parseTradesCsv, shareUpdates, summarizeImport } from "@/lib/trades-csv";
+import { saveQuantity } from "@/lib/holding-quantity";
+import { loadRates, rateLookup } from "@/lib/brokers/rates";
+import {
+  detectBroker,
+  newTrades,
+  parseTradesCsv,
+  shareUpdates,
+  summarizeImport,
+} from "@/lib/trades-csv";
+
+/** A coin holding as stored: its count and its symbol written as saved (the key is in capitals). */
+interface Held {
+  shares: number;
+  symbol: string;
+}
 
 interface Holdings {
   shares: Map<string, number>;
   names: Map<string, string>;
+  /** Coins only: each source's own amounts (a coin can sit on Ledger and on Coinbase). */
+  bySource: Map<string, Map<string, Held>>;
 }
 
 // Every holding, its count and name, sold ones too: the old trades of something you sold are still yours.
 async function fetchHoldings(kind: "stock" | "crypto"): Promise<Holdings> {
   let list: Array<{ key: string; shares: number; name: string }>;
+  const bySource = new Map<string, Map<string, Held>>();
   if (kind === "stock") {
     const { data, error } = await supabase.from("portfolio_holdings").select("isin,shares,name");
     if (error) throw error;
@@ -37,14 +64,34 @@ async function fetchHoldings(kind: "stock" | "crypto"): Promise<Holdings> {
   } else {
     const { data, error } = await supabase
       .from("crypto_holdings")
-      .select("asset_symbol,amount,name");
+      .select("asset_symbol,amount,name,source");
     if (error) throw error;
     list = data.map((r) => ({ key: r.asset_symbol.toUpperCase(), shares: r.amount, name: r.name }));
+    for (const r of data) {
+      if (!r.source || !r.asset_symbol) continue;
+      if (!bySource.has(r.source)) bySource.set(r.source, new Map());
+      bySource.get(r.source)!.set(r.asset_symbol.toUpperCase(), {
+        shares: r.amount,
+        symbol: r.asset_symbol,
+      });
+    }
   }
   return {
     shares: new Map(list.map((r) => [r.key, r.shares])),
     names: new Map(list.map((r) => [r.key, r.name || r.key])),
+    bySource,
   };
+}
+
+/** Per coin, the holding a wallet export sets: the wallet's own row, else the one added by hand. */
+function walletHoldings(
+  bySource: Map<string, Map<string, Held>>,
+  source: string,
+): Map<string, Held & { source: string }> {
+  const out = new Map<string, Held & { source: string }>();
+  for (const from of ["Manual", source])
+    for (const [key, held] of bySource.get(from) ?? []) out.set(key, { ...held, source: from });
+  return out;
 }
 
 const dateFormat = new Intl.DateTimeFormat(dateLocale(), {
@@ -63,6 +110,26 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   const [dragging, setDragging] = useState(false);
   // Where the file comes from: a broker's id, "spreadsheet" for your own columns, or "other".
   const [from, setFrom] = useState<string | null>(null);
+  // A step you change takes focus to its title, not the dialog: the old control is gone.
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const stepChanged = useRef(false);
+  function go(next: string | null) {
+    stepChanged.current = true;
+    setFrom(next);
+  }
+  useEffect(() => {
+    if (!stepChanged.current) return;
+    stepChanged.current = false;
+    titleRef.current?.focus();
+  }, [from]);
+  // The drop zone becomes the file's row with Change: a picker that had focus keeps it there.
+  const fileRef = useRef<HTMLInputElement>(null);
+  const refocusFile = useRef(false);
+  useEffect(() => {
+    if (!refocusFile.current) return;
+    refocusFile.current = false;
+    fileRef.current?.focus();
+  }, [fileName]);
   const brokers = BROKERS.filter((b) => b.kind === kind);
   const broker = brokers.find((b) => b.id === from);
   const keyColumn = kind === "stock" ? "isin" : "symbol";
@@ -73,25 +140,84 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     enabled: open,
   });
 
-  const parsed = useMemo(
-    () =>
-      text.trim() && keys.data
-        ? parseTradesCsv(
-            text,
-            { kind, knownKeys: new Set(keys.data.shares.keys()), today: localToday() },
-            broker,
-          )
-        : null,
-    [text, keys.data, kind, broker],
+  // A wallet's export (Ledger) is the record of that wallet: it sets the coin's Ledger holding, or
+  // the one you added by hand, never one an exchange sync keeps (Coinbase). Coins with neither are
+  // left out by the parser, with a note.
+  // Read once per file, not on every render: detecting splits the whole file.
+  const detected = useMemo(() => (text.trim() ? detectBroker(text) : undefined), [text]);
+  const fileBroker = broker ?? detected;
+  const holdingSource = kind === "crypto" ? fileBroker?.holdingSource : undefined;
+  const wallet = useMemo(
+    () => (holdingSource && keys.data ? walletHoldings(keys.data.bySource, holdingSource) : null),
+    [holdingSource, keys.data],
   );
+  const ctx = useMemo(
+    () =>
+      keys.data
+        ? {
+            kind,
+            knownKeys: new Set(wallet ? wallet.keys() : keys.data.shares.keys()),
+            today: localToday(),
+          }
+        : null,
+    [keys.data, kind, wallet],
+  );
+  // Prices in dollars (a Ledger file): load that currency's daily rates, then read it again.
+  const firstPass = useMemo(
+    () => (text.trim() && ctx ? parseTradesCsv(text, ctx, broker) : null),
+    [text, ctx, broker],
+  );
+  const need = firstPass?.needsRates;
+  const rates = useQuery({
+    queryKey: ["fx-history", need],
+    queryFn: () => loadRates(need!.currency, need!.from, need!.to),
+    enabled: need != null,
+    staleTime: Infinity,
+    retry: 1,
+  });
+  // A retry with no rates yet clears the error while it runs: keep the button there, as Trying….
+  const [retrying, setRetrying] = useState(false);
+  const parsed = useMemo(() => {
+    if (!firstPass || !ctx || !need) return firstPass;
+    if (!rates.data) return null;
+    return parseTradesCsv(
+      text,
+      { ...ctx, rateToEur: rateLookup(need.currency, rates.data) },
+      broker,
+    );
+  }, [firstPass, ctx, need, rates.data, text, broker]);
   const fresh = useMemo(() => (parsed ? newTrades(parsed.trades, saved) : []), [parsed, saved]);
   const summary = useMemo(() => summarizeImport(fresh), [fresh]);
-  const updates = useMemo(
-    () =>
-      parsed?.setsShares && keys.data ? shareUpdates(parsed.trades, saved, keys.data.shares) : [],
-    [parsed, saved, keys.data],
-  );
+  // Count only the wallet's own trades for its holding.
+  const updates = useMemo(() => {
+    if (!parsed?.setsShares || !keys.data) return [];
+    if (kind === "stock") return shareUpdates(parsed.trades, saved, keys.data.shares);
+    if (!wallet || !fileBroker) return [];
+    return shareUpdates(
+      parsed.trades,
+      saved.filter((t) => t.source === fileBroker.id),
+      new Map([...wallet].map(([key, h]) => [key, h.shares])),
+    );
+  }, [parsed, saved, keys.data, kind, wallet, fileBroker]);
+  // Per coin the file sets, your saved trades from elsewhere: the holding is set to the file's
+  // amount, so its return won't match them, whether or not the amount changes.
+  const otherTrades = useMemo(() => {
+    const out = new Map<string, number>();
+    if (!parsed?.setsShares || !wallet || !fileBroker) return out;
+    const set = new Set(parsed.trades.map((t) => t.key));
+    for (const t of saved) {
+      const key = t.key.toUpperCase();
+      if (t.source !== fileBroker.id && set.has(key) && wallet.has(key))
+        out.set(key, (out.get(key) ?? 0) + 1);
+    }
+    return out;
+  }, [parsed, saved, wallet, fileBroker]);
+  const otherWarning = (n: number) =>
+    `Has ${plural(n, "trade")} not from ${fileBroker?.name}: its return will show as not matching until you remove ${n === 1 ? "it" : "them"}`;
+  const toCheck = [...otherTrades.keys()].filter((key) => !updates.some((u) => u.key === key));
 
+  // Two clicks before a re-render would both start a save: only the first one counts.
+  const saving = useRef(false);
   const save = useMutation({
     mutationFn: async () => {
       // One insert is one statement: all the rows land, or none do.
@@ -105,39 +231,72 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
         if (error) throw error;
       }
       // If this fails the trades are safe: importing again skips them and retries the counts.
+      // set_holding_quantity also writes today's value, so net worth moves at once.
       for (const { key, shares } of updates) {
-        const { error } = await supabase
-          .from("portfolio_holdings")
-          .update({ shares })
-          .eq("isin", key);
-        if (error) throw error;
+        const held = wallet?.get(key);
+        await saveQuantity(
+          kind === "stock"
+            ? { kind: "stock", isin: key }
+            : { kind: "crypto", symbol: held!.symbol, source: held!.source },
+          shares,
+        );
       }
     },
     onSuccess: () => {
-      toast.success(`${fresh.length} trade${fresh.length === 1 ? "" : "s"} imported`);
+      // Worded as the sibling CSV import's "Imported 3 rows".
+      const imported = `Imported ${plural(fresh.length, "trade")}`;
+      const updated = plural(updates.length, "holding");
+      toast.success(
+        updates.length === 0
+          ? imported
+          : fresh.length === 0
+            ? `Updated ${updated}`
+            : `${imported}, updated ${updated}`,
+      );
       reset();
       setOpen(false);
     },
     onSettled: () => {
+      saving.current = false;
       void queryClient.invalidateQueries({ queryKey: ["holding-trades"] });
       void queryClient.invalidateQueries({ queryKey: ["holding-keys", kind] });
       void queryClient.invalidateQueries({ queryKey: ["holding-performance"] });
-      void queryClient.invalidateQueries({ queryKey: ["portfolio-latest"] });
+      void queryClient.invalidateQueries({
+        queryKey: [kind === "stock" ? "portfolio-latest" : "crypto-latest"],
+      });
       void queryClient.invalidateQueries({ queryKey: ["net-worth-daily"] });
     },
   });
+
+  // Closing the tab mid-save leaves holdings half-updated: the browser asks first.
+  useEffect(() => {
+    if (!save.isPending) return;
+    const ask = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Older browsers ask only when this is set too.
+      e.returnValue = true;
+    };
+    window.addEventListener("beforeunload", ask);
+    return () => window.removeEventListener("beforeunload", ask);
+  }, [save.isPending]);
 
   function reset() {
     setText("");
     setFileName(null);
     setFrom(null);
+    save.reset();
   }
   function onFile(file: File | undefined) {
-    if (!file) return;
+    // Dropped or picked, a file can't replace the one being saved.
+    if (!file || save.isPending) return;
     setFileName(file.name);
     void file.text().then(setText);
   }
 
+  const correctedId = useId();
+  const toCheckId = useId();
+  // Coin amounts keep their decimals (0.4988), share counts too.
+  const amount = numberFormat({ maximumFractionDigits: 8 });
   const row = "flex min-h-12 items-center gap-3 px-4 py-2.5 text-[0.9375rem]";
   const fileInput = (
     <input
@@ -145,7 +304,11 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       accept=".csv,.tsv,.txt,text/csv"
       aria-label="CSV file"
       className="sr-only"
+      // A file can't be swapped while the last one saves.
+      disabled={save.isPending}
+      ref={fileRef}
       onChange={(e) => {
+        refocusFile.current = !fileName && document.activeElement === e.target;
         onFile(e.target.files?.[0]);
         // The same file can be chosen again after Change.
         e.target.value = "";
@@ -153,6 +316,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     />
   );
   const ok = parsed != null && parsed.errors.length === 0;
+  // Without the holdings or the rates the file can't be read: no spinner next to the error.
+  const stuck = !parsed && (keys.isError || (rates.isError && !retrying));
   const title =
     from === null
       ? "Import trades"
@@ -171,6 +336,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     <Dialog
       open={open}
       onOpenChange={(next) => {
+        // A save finishing later would close and clear whatever is open then: wait for it.
+        if (!next && saving.current) return;
         setOpen(next);
         if (!next) reset();
       }}
@@ -182,22 +349,31 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
         {from !== null && (
           <button
             type="button"
-            onClick={reset}
+            onClick={() => {
+              reset();
+              go(null);
+            }}
+            disabled={save.isPending}
             className="-my-2 inline-flex min-h-11 items-center gap-1 self-start text-xs text-muted-foreground hover:text-foreground"
           >
             <ChevronLeft className="size-3.5" /> All sources
           </button>
         )}
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle ref={titleRef} tabIndex={-1} className="outline-none">
+            {title}
+          </DialogTitle>
           <DialogDescription>
             {from === null
               ? "Where are these trades from?"
               : broker
                 ? "Upload the export as it comes. Alopex reads it on your device and shows you what it found first."
-                : from === "spreadsheet"
-                  ? `A header row with date, side, ${keyColumn}, shares, price and optionally fee. Side is buy or sell; price is per share in EUR.`
-                  : "Alopex doesn't read this broker's export yet."}
+                : from === "spreadsheet" && detected && detected.kind === kind
+                  ? // A broker's own file pasted here is read as that broker's, not by our columns.
+                    `This file comes from ${detected.name}: read as it comes${need ? `, its ${need.currency} values turned into euro with each day's rate` : ""}.`
+                  : from === "spreadsheet"
+                    ? `A header row with date, side, ${keyColumn}, shares, price and optionally fee. Side is buy or sell; price is per share in EUR.`
+                    : "Alopex doesn't read this broker's export yet."}
           </DialogDescription>
         </DialogHeader>
 
@@ -207,7 +383,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               <button
                 key={o.id}
                 type="button"
-                onClick={() => setFrom(o.id)}
+                onClick={() => go(o.id)}
                 className={cn(row, "w-full text-left hover:bg-muted")}
               >
                 <span className="flex-1 font-medium">{o.label}</span>
@@ -225,14 +401,18 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                 href={NEW_BROKER_URL}
                 target="_blank"
                 rel="noreferrer"
-                className="text-primary underline-offset-2 hover:underline"
+                className="text-primary underline underline-offset-2"
               >
                 Ask for your broker
               </a>{" "}
               with a sample of its export, personal details removed. Until then, put your trades in
               a spreadsheet with our columns.
             </p>
-            <Button variant="quiet" onClick={() => setFrom("spreadsheet")}>
+            <Button
+              variant="quiet"
+              className="border border-rule"
+              onClick={() => go("spreadsheet")}
+            >
               Use a spreadsheet
             </Button>
           </div>
@@ -246,10 +426,14 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                   aria-hidden
                   className={cn(
                     "inline-flex size-9 shrink-0 items-center justify-center rounded-full",
-                    parsed && !ok ? "bg-negative/15 text-negative" : "bg-positive/15 text-positive",
+                    (parsed && !ok) || stuck
+                      ? "bg-negative/15 text-negative"
+                      : "bg-positive/15 text-positive",
                   )}
                 >
-                  {parsed ? (
+                  {(parsed && !ok) || stuck ? (
+                    <CircleAlert className="size-4" strokeWidth={2.5} />
+                  ) : parsed ? (
                     <Check className="size-4" strokeWidth={2.5} />
                   ) : (
                     <Loader2 className="size-4 animate-spin" />
@@ -257,15 +441,17 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{fileName}</span>
-                  <span className="block text-xs text-muted-foreground">
-                    {!parsed
+                  <span role="status" className="block text-xs text-muted-foreground">
+                    {!parsed && !stuck
                       ? "Reading…"
                       : ok
                         ? "Read, check what it found below"
-                        : "Can't be imported"}
+                        : !parsed && !keys.isError
+                          ? "Waiting for exchange rates"
+                          : "Can't be imported"}
                   </span>
                 </span>
-                <label className="cursor-pointer text-xs text-primary underline-offset-2 hover:underline">
+                <label className="-my-2 inline-flex min-h-11 cursor-pointer items-center rounded-sm px-2 text-xs text-primary underline underline-offset-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
                   Change
                   {fileInput}
                 </label>
@@ -330,6 +516,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               <textarea
                 aria-label="CSV text"
                 value={text}
+                disabled={save.isPending}
                 onChange={(e) => {
                   setText(e.target.value);
                   setFileName(null);
@@ -340,6 +527,33 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               />
             )}
           </>
+        )}
+        {(rates.isError || retrying) && (
+          <div className="flex flex-wrap items-center gap-3">
+            {rates.error && (
+              <p role="alert" className="text-sm text-negative">
+                {rates.error.message}
+              </p>
+            )}
+            <Button
+              variant="quiet"
+              // aria-disabled, not disabled: a disabled button drops keyboard focus to the page body.
+              aria-disabled={retrying || undefined}
+              className="border border-rule aria-disabled:pointer-events-none aria-disabled:opacity-50"
+              onClick={() => {
+                setRetrying(true);
+                void rates.refetch().finally(() => setRetrying(false));
+              }}
+            >
+              {retrying ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" /> Trying…
+                </>
+              ) : (
+                "Try again"
+              )}
+            </Button>
+          </div>
         )}
         {keys.isError && (
           <p role="alert" className="text-sm text-negative">
@@ -355,6 +569,17 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               ))}
             </ul>
             {parsed.errors.length > 20 && <p>…and {parsed.errors.length - 20} more.</p>}
+            {/* A file for the other page (a Ledger export on Portfolio): take you there. */}
+            {detected && detected.kind !== kind && (
+              <p className="mt-1">
+                <Link
+                  to={detected.kind === "crypto" ? "/crypto" : "/portfolio"}
+                  className="text-primary underline underline-offset-2"
+                >
+                  Open the {detected.kind === "crypto" ? "Crypto" : "Portfolio"} page
+                </Link>
+              </p>
+            )}
             {parsed.unknownFormat && (
               <p className="mt-1 text-muted-foreground">
                 Want your broker supported?{" "}
@@ -376,7 +601,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             <div className="px-1">
               <p className="flex items-baseline gap-2">
                 <span className="text-3xl leading-none font-semibold tabular-nums">
-                  {fresh.length}
+                  {numberFormat().format(fresh.length)}
                 </span>
                 <span className="text-[0.9375rem] font-medium">
                   new trade{fresh.length === 1 ? "" : "s"} to save
@@ -392,21 +617,76 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               )}
             </div>
 
-            {(parsed.trades.length > fresh.length || updates.length > 0) && (
+            {parsed.trades.length > fresh.length && (
               <GroupedList className="border border-hairline">
-                {parsed.trades.length > fresh.length && (
-                  <div className={row}>
-                    <span className="flex-1">Already saved, skipped</span>
-                    <span className="tabular-nums">{parsed.trades.length - fresh.length}</span>
-                  </div>
-                )}
-                {updates.length > 0 && (
-                  <div className={row}>
-                    <span className="flex-1">Share counts corrected</span>
-                    <span className="tabular-nums">{updates.length}</span>
-                  </div>
-                )}
+                <div className={row}>
+                  <span className="flex-1">Already saved, skipped</span>
+                  <span className="tabular-nums">
+                    {numberFormat().format(parsed.trades.length - fresh.length)}
+                  </span>
+                </div>
               </GroupedList>
+            )}
+
+            {updates.length > 0 && (
+              <section aria-labelledby={correctedId}>
+                <p
+                  id={correctedId}
+                  className="px-1 pb-1.5 text-xs font-medium text-muted-foreground"
+                >
+                  {kind === "crypto" ? "Holdings corrected" : "Share counts corrected"}
+                </p>
+                <GroupedList className="border border-hairline">
+                  <ul>
+                    {updates.map(({ key, shares }) => {
+                      const held = wallet?.get(key);
+                      const old = held ? held.shares : keys.data?.shares.get(key);
+                      const byHand = otherTrades.get(key) ?? 0;
+                      return (
+                        <li key={key} className={cn(row, "border-hairline not-first:border-t")}>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate">
+                              {keys.data?.names.get(key) ?? key}
+                            </span>
+                            {held && (
+                              <span className="block text-xs text-muted-foreground">
+                                {held.source}
+                                {byHand > 0 && ` · ${otherWarning(byHand)}`}
+                              </span>
+                            )}
+                          </span>
+                          <span className="shrink-0 text-sm tabular-nums">
+                            {old !== undefined && `${amount.format(old)} → `}
+                            {amount.format(shares)}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </GroupedList>
+              </section>
+            )}
+
+            {toCheck.length > 0 && (
+              <section aria-labelledby={toCheckId}>
+                <p id={toCheckId} className="px-1 pb-1.5 text-xs font-medium text-muted-foreground">
+                  Trades to check
+                </p>
+                <GroupedList className="border border-hairline">
+                  <ul>
+                    {toCheck.map((key) => (
+                      <li key={key} className={cn(row, "border-hairline not-first:border-t")}>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate">{keys.data?.names.get(key) ?? key}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {wallet?.get(key)?.source} · {otherWarning(otherTrades.get(key)!)}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </GroupedList>
+              </section>
             )}
 
             {summary && (
@@ -417,6 +697,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                     <div key={h.key} className={row}>
                       <span className="min-w-0 flex-1 truncate">
                         {keys.data?.names.get(h.key) ?? parsed.names?.get(h.key) ?? h.key}
+                        {/* A stock with no holding, kept because it nets to zero (a coin is left out, with a note). */}
+                        {ctx && !ctx.knownKeys.has(h.key) && " · fully sold"}
                       </span>
                       <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
                         {[
@@ -434,7 +716,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
 
             {parsed.notes.length > 0 && (
               <div>
-                <p className="px-1 pb-1.5 text-xs font-medium text-muted-foreground">Left out</p>
+                <p className="px-1 pb-1.5 text-xs font-medium text-muted-foreground">Notes</p>
                 <GroupedList className="border border-hairline">
                   {parsed.notes.map((note) => (
                     <div key={note} className={cn(row, "items-start text-sm")}>
@@ -452,21 +734,22 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             {save.error.message}
           </p>
         )}
-        {parsed && (
-          <Button
-            disabled={
-              !parsed ||
-              parsed.errors.length > 0 ||
-              (fresh.length === 0 && updates.length === 0) ||
-              save.isPending
-            }
-            onClick={() => save.mutate()}
-          >
-            {save.isPending && <Loader2 className="size-4 animate-spin" />}
-            {fresh.length > 0
-              ? `Save ${fresh.length} trade${fresh.length === 1 ? "" : "s"}`
-              : "Save trades"}
-          </Button>
+        {ok && (
+          // Pinned to the dialog's bottom: a long result (a phone, a pasted file) can't push it out of view.
+          <div className="sticky -bottom-6 -mx-6 -mb-6 bg-background px-6 pt-2 pb-6">
+            <Button
+              className="w-full"
+              disabled={(fresh.length === 0 && updates.length === 0) || save.isPending}
+              onClick={() => {
+                if (saving.current) return;
+                saving.current = true;
+                save.mutate();
+              }}
+            >
+              {save.isPending && <Loader2 className="size-4 animate-spin" />}
+              {fresh.length > 0 ? `Save ${plural(fresh.length, "trade")}` : "Save trades"}
+            </Button>
+          </div>
         )}
       </DialogContent>
     </Dialog>

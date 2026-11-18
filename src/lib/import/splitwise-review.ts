@@ -1,4 +1,4 @@
-import type { BankMatch, BankTx, RateToEur } from "./splitwise-match";
+import type { BankMatch, BankTx } from "./splitwise-match";
 
 // Small pure helpers for the Splitwise review screen: they turn database rows into what the
 // matcher and the planner expect.
@@ -14,12 +14,6 @@ export interface BankRowFromDb {
   flow_type: string | null;
   deleted_at: string | null;
   creditor_name?: string | null;
-}
-
-export interface FxRow {
-  currency: string;
-  date: string;
-  rate_to_eur: number;
 }
 
 const cents = (euros: number) => Math.round(euros * 100);
@@ -39,20 +33,6 @@ export function toBankTx(r: BankRowFromDb): BankTx | null {
     personalAmountCents: r.personal_amount === null ? null : cents(r.personal_amount),
     flowType: r.flow_type,
     name: r.creditor_name ?? null,
-  };
-}
-
-/** Rate for a currency on a date: the latest one on or before it. Euros are 1. */
-export function makeRate(rows: Array<FxRow>): RateToEur {
-  const byCurrency = new Map<string, Array<FxRow>>();
-  for (const r of [...rows].sort((a, b) => a.date.localeCompare(b.date))) {
-    byCurrency.set(r.currency, [...(byCurrency.get(r.currency) ?? []), r]);
-  }
-  return (currency, date) => {
-    if (currency === "EUR") return 1;
-    const list = byCurrency.get(currency) ?? [];
-    const before = list.filter((r) => r.date <= date);
-    return before[before.length - 1]?.rate_to_eur ?? null;
   };
 }
 

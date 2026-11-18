@@ -235,7 +235,8 @@ function CryptoPage() {
         <>
           {/* Desktop table */}
           <section className="hidden overflow-hidden rounded-lg bg-card md:block">
-            <div className="overflow-x-auto">
+            {/* relative: the sr-only header label is absolute; without it the page scrolls sideways. */}
+            <div className="relative overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="border-b text-left text-xs font-medium text-muted-foreground">
                   <tr>
