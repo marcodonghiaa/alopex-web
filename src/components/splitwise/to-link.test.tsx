@@ -29,6 +29,12 @@ vi.mock("@/integrations/supabase/client", () => {
 });
 
 import { ToLink } from "./to-link";
+import { useToLinkMatches } from "@/lib/use-splitwise-sync";
+
+// As the page uses it: the matches read once and handed down.
+function ToLinkOnPage({ connected }: { connected: boolean }) {
+  return <ToLink connected={connected} matches={useToLinkMatches()} />;
+}
 
 const item = (over: Partial<ReviewItem> = {}): ReviewItem => ({
   id: "r1",
@@ -63,7 +69,7 @@ const renderList = (connected = true) => {
   const invalidate = vi.spyOn(client, "invalidateQueries");
   render(
     <QueryClientProvider client={client}>
-      <ToLink connected={connected} />
+      <ToLinkOnPage connected={connected} />
     </QueryClientProvider>,
   );
   return invalidate;

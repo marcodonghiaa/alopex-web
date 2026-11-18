@@ -22,7 +22,7 @@ import {
   type ReviewItem,
   type Suggestion,
 } from "@/lib/splitwise-sync";
-import { useToLinkMatches } from "@/lib/use-splitwise-sync";
+import type { ToLinkMatches } from "@/lib/use-splitwise-sync";
 
 // The sheet hands focus back to the expense it was opened from, not to <body> (as the CSV review).
 const rowId = (id: string) => `to-link-${id}`;
@@ -52,9 +52,16 @@ const DONE: Record<ReviewAction["action"], string> = {
  * to its bank payment, count your share without one, or ignore it. Shown once Splitwise is
  * connected, or while items are still waiting after a disconnect.
  */
-export function ToLink({ connected }: { connected: boolean }) {
+export function ToLink({
+  connected,
+  matches,
+}: {
+  connected: boolean;
+  /** From the page's useToLinkMatches: read once there, shared with the payback questions. */
+  matches: ToLinkMatches;
+}) {
   const queryClient = useQueryClient();
-  const { review, items, bank, rate, suggestions } = useToLinkMatches();
+  const { review, items, bank, rate, suggestions } = matches;
   const [finding, setFinding] = useState<ReviewItem | null>(null);
   // Stable between renders: Find in bank clears the picked payment when its row changes.
   const findRow = useMemo(() => (finding ? reviewRow(finding, 0) : null), [finding]);

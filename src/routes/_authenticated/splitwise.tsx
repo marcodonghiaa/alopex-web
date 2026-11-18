@@ -286,7 +286,7 @@ function SplitwisePage() {
         </p>
       )}
 
-      <ToLink connected={connected} />
+      <ToLink connected={connected} matches={toLink} />
       <PaymentsToCheck
         suggestions={suggestions}
         debtors={debtors}

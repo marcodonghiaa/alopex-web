@@ -58,9 +58,9 @@ export function useSyncNow(onSettled?: () => void) {
 }
 
 /**
- * The Splitwise expenses waiting on To link and the bank payment suggested for each. Shared by the
- * To link list and the payback questions (same cache), so both always agree on which payment To
- * link is asking about.
+ * The Splitwise expenses waiting on To link and the bank payment suggested for each. The page reads
+ * it once and hands it to the To link list and the payback questions, so both always agree on
+ * which payment To link is asking about.
  */
 export function useToLinkMatches() {
   const review = useQuery({ queryKey: REVIEW_KEY, queryFn: fetchReview });
@@ -97,3 +97,5 @@ export function useToLinkMatches() {
   const settled = once.current;
   return { review, items, bank, rate, suggestions, settled };
 }
+
+export type ToLinkMatches = ReturnType<typeof useToLinkMatches>;
