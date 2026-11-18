@@ -355,6 +355,54 @@ describe("suggestMatches", () => {
   it("suggests nothing without a close payment", () => {
     expect(suggestMatches([item()], [tx({ amountCents: 100 })], eur).size).toBe(0);
   });
+
+  // polish-5 #11: a settle-up is "Payment" in Splitwise; the person it names tells two same-day,
+  // same-amount payments apart. fails_when=the café paid that day is suggested over the person
+  describe("a settle-up prefers the payment that names its other person", () => {
+    const settle = (counterparty: string | null) =>
+      item({
+        kind: "settle_out",
+        description: "Payment",
+        cost: 20,
+        my_paid: 20,
+        my_share: 20,
+        counterparty,
+      });
+    const cafe = tx({
+      entryReference: "cafe",
+      amountCents: 2000,
+      bookingDate: "2026-11-10",
+      name: "B Cafe",
+    });
+    const person = (name: string, bookingDate = "2026-11-10") =>
+      tx({ entryReference: "person", amountCents: 2000, bookingDate, name });
+
+    it("picks the named person over another payment of the same amount and day", () => {
+      for (const bank of [
+        [cafe, person("DANA OTHER")],
+        [person("Bonifico a Dàna Other"), cafe],
+      ])
+        expect(suggestMatches([settle("Dana Other")], bank, eur).get("r1")?.tx.entryReference).toBe(
+          "person",
+        );
+    });
+
+    it("still prefers the person when their payment is a day later", () => {
+      const s = suggestMatches(
+        [settle("Dana Other")],
+        [cafe, person("Dana Other", "2026-11-11")],
+        eur,
+      );
+      expect(s.get("r1")?.tx.entryReference).toBe("person");
+    });
+
+    it("matches as before when nothing names them, or no name is known", () => {
+      expect(suggestMatches([settle("Dana Other")], [cafe], eur).get("r1")?.tx.entryReference).toBe(
+        "cafe",
+      );
+      expect(suggestMatches([settle(null)], [cafe], eur).get("r1")?.tx.entryReference).toBe("cafe");
+    });
+  });
 });
 
 describe("runReviewAction", () => {

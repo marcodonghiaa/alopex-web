@@ -681,6 +681,7 @@ export type Database = {
         Row: {
           booking_date: string;
           cost: number;
+          counterparty: string | null;
           created_at: string;
           currency: string;
           description: string;
@@ -700,6 +701,7 @@ export type Database = {
         Insert: {
           booking_date: string;
           cost: number;
+          counterparty: string | null;
           created_at?: string;
           currency: string;
           description: string;
@@ -719,6 +721,7 @@ export type Database = {
         Update: {
           booking_date?: string;
           cost?: number;
+          counterparty?: string | null;
           created_at?: string;
           currency?: string;
           description?: string;

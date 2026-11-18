@@ -429,6 +429,7 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
   ): DemoDb["splitwise_review"][number] => ({
     booking_date: iso(todayNum - daysAgo),
     cost: 0,
+    counterparty: null,
     created_at: stamp(iso(todayNum - daysAgo)),
     currency: "EUR",
     description: "",
@@ -458,6 +459,7 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
       // Casa, where you are owed: in Viaggio Lisbona you owe Giulia.
       group_name: "Casa",
       kind: "settle_in",
+      counterparty: "Giulia",
       cost: 22,
       my_share: 0,
     }),

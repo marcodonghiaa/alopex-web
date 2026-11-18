@@ -38,6 +38,8 @@ const DAY_PENALTY = 0.002;
 // only proposed when the amount is practically identical, and always left for the user to confirm.
 const EARLY_DAYS = 30;
 const EARLY_TOLERANCE = 0.005;
+// A payment that names the expense's other person beats any amount or date difference allowed.
+const NAME_BONUS = 1;
 
 /**
  * One id per row, the same on every import of the same file. It uses only my own column, so a
@@ -74,6 +76,7 @@ function candidateFor(
   bank: Array<BankTx>,
   rate: RateToEur,
   skip?: (r: ClassifiedRow, tx: BankTx) => boolean,
+  named?: (r: ClassifiedRow, tx: BankTx) => boolean,
 ): Array<Candidate> {
   const direction = wantedDirection(r);
   const rowRate = rate(r.currency, r.date);
@@ -98,7 +101,8 @@ function candidateFor(
     const early = days < -DAYS_BEFORE;
     const gap = Math.abs(rowEur - tx.amountCents * txRate) / rowEur;
     if (gap > (early ? EARLY_TOLERANCE : AMOUNT_TOLERANCE)) return [];
-    return [{ rowIndex, txIndex, score: gap + DAY_PENALTY * Math.abs(days), early }];
+    const bonus = named?.(r, tx) ? NAME_BONUS : 0;
+    return [{ rowIndex, txIndex, score: gap + DAY_PENALTY * Math.abs(days) - bonus, early }];
   });
 }
 
@@ -107,15 +111,17 @@ const countBy = (keys: Array<number>): Map<number, number> =>
 
 /**
  * Suggests, for each row of mine that has a bank counterpart, which transaction it is. `skip`
- * leaves out a pair the user already said is not a match.
+ * leaves out a pair the user already said is not a match; `named` marks a pair whose bank name
+ * is the expense's other person, which then goes first.
  */
 export function matchBank(
   rows: Array<ClassifiedRow>,
   bank: Array<BankTx>,
   rate: RateToEur,
   skip?: (r: ClassifiedRow, tx: BankTx) => boolean,
+  named?: (r: ClassifiedRow, tx: BankTx) => boolean,
 ): Array<BankMatch> {
-  const all = rows.flatMap((r, i) => candidateFor(r, i, bank, rate, skip));
+  const all = rows.flatMap((r, i) => candidateFor(r, i, bank, rate, skip, named));
   const perRow = countBy(all.map((c) => c.rowIndex));
   const perTx = countBy(all.map((c) => c.txIndex));
 

@@ -171,6 +171,8 @@ export interface ReviewItem {
   my_paid: number;
   currency: string;
   rejected_entry_references: Array<string>;
+  /** A settle-up's other person, as Splitwise names them (backend sends null for expenses). */
+  counterparty?: string | null;
 }
 
 export const KIND_LABEL: Record<ReviewKind, string> = {
@@ -209,7 +211,7 @@ export async function fetchReview(): Promise<{ items: Array<ReviewItem>; total: 
   const { data, error, count } = await supabase
     .from("splitwise_review")
     .select(
-      "id,kind,group_name,booking_date,description,cost,my_share,my_paid,currency,rejected_entry_references",
+      "id,kind,group_name,booking_date,description,cost,my_share,my_paid,currency,rejected_entry_references,counterparty",
       { count: "exact" },
     )
     .eq("status", "pending")
@@ -244,6 +246,15 @@ export function reviewRow(item: ReviewItem, index: number): ClassifiedRow {
   };
 }
 
+// Lower case, accents off, split on anything not a letter or digit.
+const words = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((w) => w.length >= 2);
+
 export interface Suggestion {
   tx: BankTx;
   /** "likely": one clear match. "ambiguous": the user should look twice. */
@@ -263,8 +274,15 @@ export function suggestMatches(
   const byKey = new Map(bank.map((t) => [`${t.accountUid}|${t.entryReference}`, t]));
   const rejected = (r: ClassifiedRow, tx: BankTx) =>
     items[r.row - 1]!.rejected_entry_references.includes(tx.entryReference);
+  const names = items.map((i) => words(i.counterparty ?? ""));
+  // Every word of the other person's name (two letters or more) is in the bank's name for it.
+  const named = (r: ClassifiedRow, tx: BankTx) => {
+    const want = names[r.row - 1] ?? [];
+    const have = new Set(words(tx.name ?? ""));
+    return want.length > 0 && want.every((w) => have.has(w));
+  };
   const out = new Map<string, Suggestion>();
-  for (const m of matchBank(rows, bank, rate, rejected)) {
+  for (const m of matchBank(rows, bank, rate, rejected, named)) {
     const tx = byKey.get(`${m.accountUid}|${m.entryReference}`);
     if (tx) out.set(items[m.row - 1]!.id, { tx, confidence: m.confidence });
   }
