@@ -140,6 +140,18 @@ describe("saveBalances", () => {
     });
   });
 
+  // polish-5 #3: the reply is { balances: n }, 0 while the sync owns the group's balances
+  it("returns how many balances the database saved", async () => {
+    const entries = [{ person: "Marco", cents: 100, isMe: true }];
+    const saved = (n: number) => vi.fn().mockResolvedValue({ data: { balances: n }, error: null });
+    await expect(
+      saveBalances({ rpc: saved(1) }, "g", { currency: "USD", entries, skippedRows: 0 }),
+    ).resolves.toBe(1);
+    await expect(
+      saveBalances({ rpc: saved(0) }, "g", { currency: "USD", entries, skippedRows: 0 }),
+    ).resolves.toBe(0);
+  });
+
   it("throws the database message on failure", async () => {
     const rpc = vi.fn().mockResolvedValue({ data: null, error: { message: "nope" } });
     await expect(

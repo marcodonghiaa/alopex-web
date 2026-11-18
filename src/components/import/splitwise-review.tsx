@@ -233,7 +233,7 @@ export function SplitwiseReview({
   // Balances move without new expenses (a settle-up), and a first attempt can fail.
   const saveOnlyBalances = useMutation({
     mutationFn: async () => {
-      if (balances) await saveBalances(supabase as unknown as RpcClient, group, balances);
+      return balances ? saveBalances(supabase as unknown as RpcClient, group, balances) : 0;
     },
     onSuccess: () => void refresh(),
   });
@@ -591,7 +591,9 @@ export function SplitwiseReview({
           </button>
           {saveOnlyBalances.isSuccess && (
             <p role="status" className="px-4 text-sm">
-              Balances updated.
+              {saveOnlyBalances.data === 0 && balances.entries.length > 0
+                ? "Splitwise sync keeps this group's balances up to date, so the file's were not used."
+                : "Balances updated."}
             </p>
           )}
           {saveOnlyBalances.error && (

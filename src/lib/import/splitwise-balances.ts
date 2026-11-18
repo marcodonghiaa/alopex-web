@@ -106,13 +106,16 @@ export function balancesFromFile(file: SplitwiseFile, me: number): FileBalances 
   };
 }
 
-/** Replaces the stored balances of one group with the ones in this file. */
+/**
+ * Replaces the stored balances of one group with the ones in this file. Returns how many the
+ * database saved: 0 while Splitwise sync owns the group's balances (they are left as they are).
+ */
 export async function saveBalances(
   client: Pick<RpcClient, "rpc">,
   group: string,
   balances: FileBalances,
-): Promise<void> {
-  const { error } = await client.rpc("save_splitwise_balances", {
+): Promise<number> {
+  const { data, error } = await client.rpc("save_splitwise_balances", {
     p_group: group,
     p_balances: balances.entries.map((e) => ({
       person: e.person,
@@ -123,6 +126,7 @@ export async function saveBalances(
     })),
   });
   if (error) throw new Error(error.message);
+  return (data as { balances?: number } | null)?.balances ?? 0;
 }
 
 type RateToEur = (currency: string) => number | null;

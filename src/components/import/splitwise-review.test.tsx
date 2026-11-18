@@ -380,12 +380,27 @@ describe("SplitwiseReview", () => {
   // promises is unreachable
   it("can update the balances alone when there is nothing new", async () => {
     tables.splitwise_expenses = { data: [TAXI, DINNER], error: null };
-    rpc.mockResolvedValue({ data: null, error: null });
+    rpc.mockResolvedValue({ data: { balances: 2 }, error: null });
     showWithBalances();
     fireEvent.click(await screen.findByRole("button", { name: /Update balances/ }));
     await waitFor(() => expect(rpc).toHaveBeenCalledTimes(1));
     expect(rpc.mock.calls[0]?.[0]).toBe("save_splitwise_balances");
     expect(await screen.findByText("Balances updated.")).toBeInTheDocument();
+  });
+
+  // polish-5 #3: while Splitwise is connected the backend keeps the synced balances and saves
+  // none from the file ({ balances: 0 }); the screen must not say they were updated
+  it("says the synced balances stay when the backend saved none from the file", async () => {
+    tables.splitwise_expenses = { data: [TAXI, DINNER], error: null };
+    rpc.mockResolvedValue({ data: { balances: 0 }, error: null });
+    showWithBalances();
+    fireEvent.click(await screen.findByRole("button", { name: /Update balances/ }));
+    expect(
+      await screen.findByText(
+        "Splitwise sync keeps this group's balances up to date, so the file's were not used.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Balances updated.")).toBeNull();
   });
 
   it("says when rows in another currency are left out of who owes you", async () => {
