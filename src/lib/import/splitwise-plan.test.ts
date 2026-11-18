@@ -307,6 +307,22 @@ describe("the last import is a checkpoint", () => {
     expect(split.fingerprints).toEqual([fingerprints[3], fingerprints[4]]);
   });
 
+  // polish-5 #4: a share the Splitwise sync wrote ('sw:<id>' fingerprint) is the same expense as
+  // the file's row (the backend's rule: date within a day, description, amount, currency); the
+  // backend skips adding it, so offering it as "Added late" would never go away
+  it("does not list an old row the Splitwise sync already has", () => {
+    const synced = (amount: number): StoredShare => ({
+      ...share("sw:77", "2026-08-12"),
+      description: " old UBER ",
+      amount,
+      splitwise_id: 77,
+    });
+    const covered = splitAtCheckpoint(rows, fingerprints, [...storedOf(0, 2), synced(21)]);
+    expect(covered.older).toEqual([]);
+    const other = splitAtCheckpoint(rows, fingerprints, [...storedOf(0, 2), synced(22)]);
+    expect(other.older.map((o) => o.row.description)).toEqual(["Old uber"]);
+  });
+
   it("does not list an old row that would never be a share", () => {
     const old = rowsOf(NOT_MINE, SETTLE, NEXT);
     const fp = fingerprintRows(old);

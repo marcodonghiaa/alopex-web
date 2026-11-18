@@ -58,6 +58,20 @@ export interface CheckpointSplit {
   removed: Array<StoredShare>;
 }
 
+const dayDiff = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(b)) / 86_400_000;
+const sameText = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+// A share the Splitwise sync has is the file's row when they agree as the backend decides
+// (splitwise_csv_match): date within a day, description, amount and currency.
+function sameExpense(s: StoredShare, r: ClassifiedRow): boolean {
+  return (
+    dayDiff(s.booking_date, r.date) <= 1 &&
+    sameText(s.description, r.description) &&
+    Math.round(s.amount * 100) === r.shareCents &&
+    s.currency === r.currency
+  );
+}
+
 /**
  * The last import is a checkpoint: nothing before it, and nothing already stored on its day, is
  * reviewed or written. Takes the whole file's ids, since the #counter depends on every row.
@@ -73,6 +87,7 @@ export function splitAtCheckpoint(
       .sort()
       .at(-1) ?? null;
   const known = new Set(stored.map((s) => s.fingerprint));
+  const synced = stored.filter((s) => s.splitwise_id != null);
   const { edited, removed } = diffStored(rows, fingerprints, stored);
   const isEdit = new Set(edited.map((e) => e.fingerprint));
   const split: CheckpointSplit = {
@@ -88,7 +103,9 @@ export function splitAtCheckpoint(
     const fingerprint = fingerprints[i] ?? "";
     if (known.has(fingerprint) || isEdit.has(fingerprint)) return;
     if (checkpoint !== null && r.date < checkpoint) {
-      if (isShareRow(r)) split.older.push({ row: r, fingerprint });
+      if (isShareRow(r) && !synced.some((s) => sameExpense(s, r))) {
+        split.older.push({ row: r, fingerprint });
+      }
       return;
     }
     // Only shares are stored, so anything else on that day may already have been handled.
