@@ -21,6 +21,8 @@ export type Database = {
           identification_hash: string | null;
           label: string | null;
           manual: boolean;
+          sync_error: string | null;
+          sync_error_at: string | null;
           uid: string;
           user_id: string;
         };
@@ -36,6 +38,8 @@ export type Database = {
           identification_hash?: string | null;
           label?: string | null;
           manual?: boolean;
+          sync_error?: string | null;
+          sync_error_at?: string | null;
           uid: string;
           user_id: string;
         };
@@ -51,6 +55,8 @@ export type Database = {
           identification_hash?: string | null;
           label?: string | null;
           manual?: boolean;
+          sync_error?: string | null;
+          sync_error_at?: string | null;
           uid?: string;
           user_id?: string;
         };
@@ -983,6 +989,8 @@ export type Database = {
           user_id: string | null;
           account_type: string | null;
           manual: boolean | null;
+          sync_error: string | null;
+          sync_error_at: string | null;
         };
         Relationships: [];
       };
