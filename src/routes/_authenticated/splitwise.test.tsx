@@ -187,6 +187,20 @@ describe("Who owes you", () => {
     expect(screen.queryByText("Is this Giulia?")).toBeNull();
   });
 
+  // protects=polish-3 P2-2: with nothing on To link (its bank read never runs) the questions still
+  // come; fails_when=the gate waits on a query that is never enabled and the page loads forever
+  it("asks when To link has nothing waiting", async () => {
+    holdTable("splitwise_review", Promise.resolve(), { data: [], error: null, count: 0 });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    const section = await screen.findByRole("region", { name: "Did someone pay you back?" });
+    expect(within(section).getByText("Is this Giulia?")).toBeTruthy();
+    expect(screen.queryByRole("status", { name: "Loading split bills" })).toBeNull();
+  });
+
   // A query on `table` that waits for `held`, then answers as the demo would (or with `answer`).
   const holdTable = (
     table: string,
