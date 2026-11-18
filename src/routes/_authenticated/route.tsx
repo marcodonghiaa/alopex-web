@@ -20,12 +20,10 @@ import {
   Download,
   MoreHorizontal,
   FileText,
-  Waves,
   ArrowDownLeft,
   Users,
   Settings,
   Upload,
-  ListFilter,
   ChevronRight,
   type LucideIcon,
 } from "lucide-react";
@@ -91,7 +89,6 @@ const NAV_GROUPS: Array<NavGroup> = [
     items: [
       { label: "Net Worth", icon: TrendingUp, to: "/" },
       { label: "Reports", icon: FileText, to: "/reports" },
-      { label: "Cash flow", icon: Waves, to: "/cash-flow" },
     ],
   },
   {
@@ -115,10 +112,7 @@ const NAV_GROUPS: Array<NavGroup> = [
   },
   {
     label: "Tools",
-    items: [
-      { label: "Import", icon: Upload, to: "/import" },
-      { label: "Rules", icon: ListFilter, to: "/rules" },
-    ],
+    items: [{ label: "Import", icon: Upload, to: "/import" }],
   },
 ];
 
