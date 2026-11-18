@@ -203,6 +203,8 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
     created_at: stamp(iso(days[0]!)),
     identification_hash: null,
     manual: false,
+    sync_error: null, // demo banks always sync
+    sync_error_at: null,
     user_id,
   }));
 
@@ -213,6 +215,8 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
     bank_country: a.bank_country,
     bank_logo: a.bank_logo,
     bank_name: a.bank_name,
+    sync_error: a.sync_error,
+    sync_error_at: a.sync_error_at,
     consent_valid_until: a.consent_valid_until,
     currency: "EUR",
     iban: a.iban,
