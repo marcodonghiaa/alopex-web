@@ -186,6 +186,36 @@ describe("ToLink", () => {
     );
   });
 
+  // protects=polish-3 P2-1 cold start: a Link with no payback questions cached creates none;
+  // fails_when=the cache drop seeds an empty list that hides the questions until a refetch
+  it("links without seeding the payback questions' cache", async () => {
+    tables.splitwise_review = { data: [item()], error: null };
+    tables.transactions = { data: [bankRow()], error: null };
+    renderList();
+    const row = await screen.findByRole("listitem", { name: "Groceries" });
+    await within(row).findByText("Market");
+    await userEvent.click(within(row).getByRole("button", { name: "Link" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Linked to the bank payment"));
+    expect(client.getQueryData(["payback-candidates"])).toBeUndefined();
+  });
+
+  // protects=polish-3 P2-1: Link drops that payment from the cached payback questions at once
+  it("drops the linked payment from the cached payback questions", async () => {
+    tables.splitwise_review = { data: [item()], error: null };
+    tables.transactions = { data: [bankRow()], error: null };
+    renderList();
+    const other = { account_uid: "a1", entry_reference: "other" };
+    client.setQueryData(
+      ["payback-candidates"],
+      [{ account_uid: "a1", entry_reference: "e1" }, other],
+    );
+    const row = await screen.findByRole("listitem", { name: "Groceries" });
+    await within(row).findByText("Market");
+    await userEvent.click(within(row).getByRole("button", { name: "Link" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Linked to the bank payment"));
+    expect(client.getQueryData(["payback-candidates"])).toEqual([other]);
+  });
+
   it("rejects a suggestion with Not this one", async () => {
     tables.splitwise_review = { data: [item()], error: null };
     tables.transactions = { data: [bankRow()], error: null };

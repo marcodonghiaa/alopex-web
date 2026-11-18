@@ -187,6 +187,43 @@ describe("Who owes you", () => {
     expect(screen.queryByText("Is this Giulia?")).toBeNull();
   });
 
+  // protects=polish-3 P2-1: the linked settle-up's question doesn't flash back while the payback
+  // questions refetch; fails_when=To link drops the item before the stale candidates are refreshed
+  it("never shows a settle-up's question while the questions refetch after Link", async () => {
+    stubLinkRpc();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    const section = await screen.findByRole("region", { name: "Did someone pay you back?" });
+    await userEvent.click(within(section).getByRole("button", { name: "Yes, it's Giulia" }));
+    await waitFor(() => expect(screen.queryByText(/from GIULIA BIANCHI/)).toBeNull());
+    const list = screen.getByRole("region", { name: "To link" });
+    const settleUp = within(list).getByRole("listitem", { name: "Settle up" });
+    await waitFor(() =>
+      expect(within(settleUp).getByRole("button", { name: /^Link/ })).toBeEnabled(),
+    );
+    // From here the payment questions come back slower than To link.
+    const client = db.client as { rpc: (name: string, args?: Record<string, unknown>) => unknown };
+    const rpc = client.rpc.bind(client);
+    client.rpc = async (name, args) => {
+      if (name === "payback_candidates") await new Promise((r) => setTimeout(r, 200));
+      return rpc(name, args);
+    };
+    let asked = false;
+    const watch = setInterval(() => {
+      if (screen.queryByText("Is this Giulia?")) asked = true;
+    }, 5);
+    await userEvent.click(within(settleUp).getByRole("button", { name: /^Link/ }));
+    await waitFor(() =>
+      expect(within(list).queryByRole("listitem", { name: "Settle up" })).toBeNull(),
+    );
+    await new Promise((r) => setTimeout(r, 400));
+    clearInterval(watch);
+    expect(asked).toBe(false);
+  });
+
   // protects=polish-3 P2-2: with nothing on To link (its bank read never runs) the questions still
   // come; fails_when=the gate waits on a query that is never enabled and the page loads forever
   it("asks when To link has nothing waiting", async () => {

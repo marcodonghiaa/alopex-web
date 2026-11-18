@@ -8,6 +8,7 @@ import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isDemoMode } from "@/lib/demo/mode";
 import { cn } from "@/lib/utils";
+import { txId, type TxKey } from "@/lib/transactions";
 import { PENDING } from "./pending";
 import { moneyAmount, money, shortDate } from "@/lib/import/splitwise-format";
 import {
@@ -73,7 +74,19 @@ export function ToLink({
     mutationFn: runReviewAction,
     // Where the row sits, so focus can go to the one that takes its place once it's gone.
     onMutate: (a) => rowIds().indexOf(rowId(a.id)),
-    onSuccess: (_d, a) => toast.success(DONE[a.action]),
+    onSuccess: (_d, a) => {
+      // The linked payment leaves the payback questions now, not when their refetch lands: else
+      // it shows there once the item leaves this list (no longer suggested, so no longer hidden).
+      if (a.action === "link")
+        queryClient.setQueryData<Array<TxKey>>(["payback-candidates"], (list) =>
+          list?.filter(
+            (c) =>
+              txId(c) !==
+              txId({ account_uid: a.tx.accountUid, entry_reference: a.tx.entryReference }),
+          ),
+        );
+      toast.success(DONE[a.action]);
+    },
     onError: (err) => toast.error(err.message),
     // Awaited: the action stays pending (rows off) until the list shows its result.
     onSettled: async (_d, _e, a, at) => {
