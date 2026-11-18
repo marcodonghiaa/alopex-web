@@ -192,12 +192,16 @@ describe("Who owes you", () => {
     table: string,
     held: Promise<void> | (() => Promise<void>),
     answer?: unknown,
+    // Only reads whose select() columns pass (all reads when left out).
+    when?: (cols: string) => boolean,
   ) => {
     const client = db.client as { from: (t: string) => unknown };
     const from = client.from.bind(client);
-    const wrap = (q: object): unknown =>
+    const wrap = (q: object, cols = ""): unknown =>
       new Proxy(q, {
         get(target, key) {
+          if (key === "then" && when && !when(cols))
+            return (target as PromiseLike<unknown>).then.bind(target);
           if (key === "then")
             return (ok: (v: unknown) => unknown, ko: (e: unknown) => unknown) =>
               (typeof held === "function" ? held() : held).then(() => {
@@ -207,7 +211,10 @@ describe("Who owes you", () => {
           const v = (target as Record<PropertyKey, unknown>)[key];
           return typeof v === "function"
             ? (...a: Array<unknown>) =>
-                wrap((v as (...x: Array<unknown>) => object).apply(target, a))
+                wrap(
+                  (v as (...x: Array<unknown>) => object).apply(target, a),
+                  key === "select" ? String(a[0] ?? "") : cols,
+                )
             : v;
         },
       });
@@ -225,6 +232,29 @@ describe("Who owes you", () => {
       </QueryClientProvider>,
     );
     expect(await screen.findByText("Net owed to you")).toBeTruthy();
+    // Long enough for everything else (debts, rates, payments) to be in: only To link is held.
+    await new Promise((r) => setTimeout(r, 300));
+    expect(screen.getByRole("status", { name: "Loading split bills" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Did someone pay you back?" })).toBeNull();
+    release();
+    const section = await screen.findByRole("region", { name: "Did someone pay you back?" });
+    expect(within(section).queryByText(/€22\.00/)).toBeNull();
+  });
+
+  // protects=polish-1 P2-2: the questions also wait for To link's bank payments (what it
+  // suggests); fails_when=they show while To link's suggestions are still loading
+  it("asks nothing until To link's bank payments are in", async () => {
+    let release = () => {};
+    holdTable("transactions", new Promise<void>((r) => (release = r)), undefined, (cols) =>
+      cols.includes("creditor_name"),
+    );
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByRole("listitem", { name: "Settle up" })).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 300));
     expect(screen.getByRole("status", { name: "Loading split bills" })).toBeTruthy();
     expect(screen.queryByRole("region", { name: "Did someone pay you back?" })).toBeNull();
     release();
