@@ -19,6 +19,7 @@ export const EXPORT_TABLES = [
   { name: "splitwise_expenses", order: ["id"] },
   { name: "recurring_streams", order: ["stream_key"] },
   { name: "subscription_billing_overrides", order: ["creditor_name"] },
+  { name: "payer_links", order: ["payer_key"] },
 ] as const;
 
 export type ExportTableName = (typeof EXPORT_TABLES)[number]["name"];
