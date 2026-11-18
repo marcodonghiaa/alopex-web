@@ -11,6 +11,24 @@ export function unheldKeys(trades: Array<Trade>, knownKeys: Set<string>): Array<
   );
 }
 
+/** The file's rows, without blank ones. A line break inside quotes stays in its cell. */
+export function csvLines(text: string): Array<string> {
+  const lines: Array<string> = [];
+  let line = "";
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (ch === '"') quoted = !quoted;
+    if (!quoted && (ch === "\n" || ch === "\r")) {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      if (line.trim() !== "") lines.push(line);
+      line = "";
+    } else line += ch;
+  }
+  if (line.trim() !== "") lines.push(line);
+  return lines;
+}
+
 export function splitLine(line: string, separator: string): Array<string> {
   const cells: Array<string> = [];
   let cell = "";

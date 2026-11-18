@@ -66,6 +66,18 @@ describe("Trade Republic sample", () => {
     today: "2026-10-31",
   };
 
+  it("has the real export's shape: a trade's amount is shares × price, before its fee", () => {
+    const [head, ...rows] = fixture("trade_republic")
+      .trim()
+      .split("\n")
+      .map((l) => l.slice(1, -1).split('","'));
+    const col = (r: Array<string>, name: string) => Number(r[head!.indexOf(name)]);
+    const trades = rows.filter((r) => r[head!.indexOf("category")] === "TRADING");
+    expect(trades.length).toBeGreaterThan(0);
+    for (const r of trades)
+      expect(col(r, "amount")).toBeCloseTo(-col(r, "shares") * col(r, "price"), 2);
+  });
+
   it("reads every trade with Trade Republic's own id, and counts what it skipped", () => {
     const { trades, errors, notes } = parseTradesCsv(fixture("trade_republic"), ctx);
     expect(errors).toEqual([]);
@@ -76,8 +88,11 @@ describe("Trade Republic sample", () => {
       "Example World ETF",
     );
     expect(notes).toContain(
-      "2 rows that aren't trades were skipped (dividends, interest, card payments, transfers).",
+      "1 card payment was skipped: it's your bank account's. Connect Trade Republic as a bank to see it.",
     );
+    expect(parseTradesCsv(fixture("trade_republic"), ctx).events?.map((e) => e.kind)).toEqual([
+      "dividend",
+    ]);
   });
 
   it("a file missing one of its columns isn't read as Trade Republic", () => {
@@ -108,10 +123,11 @@ describe("Trade Republic sample", () => {
     expect(result.errors).toEqual([
       "This file comes from Ledger Live: import it on the Crypto page.",
     ]);
+    // Trade Republic's files are read on the Crypto page too: there it's the broker to pick.
     const crypto = { ...ctx, kind: "crypto" as const };
     const ledger = BROKERS.find((b) => b.id === "ledger_live")!;
     expect(parseTradesCsv(fixture("trade_republic"), crypto, ledger).errors).toEqual([
-      "This file comes from Trade Republic: import it on the Portfolio page.",
+      "This file comes from Trade Republic: pick Trade Republic instead.",
     ]);
   });
 

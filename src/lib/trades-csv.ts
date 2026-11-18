@@ -1,6 +1,6 @@
 import { BROKERS } from "@/lib/brokers";
 import type { BrokerParser, CsvResult, ParseContext } from "@/lib/brokers";
-import { parseDate, splitLine } from "@/lib/brokers/csv";
+import { csvLines, parseDate, splitLine } from "@/lib/brokers/csv";
 import { netShares, parseAmount } from "@/lib/trades";
 import type { Trade } from "@/lib/trades";
 
@@ -29,7 +29,7 @@ export function detectBroker(text: string): BrokerParser | undefined {
  */
 export function parseTradesCsv(text: string, ctx: ParseContext, from?: BrokerParser): CsvResult {
   const { kind, knownKeys, today } = ctx;
-  const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
+  const lines = csvLines(text);
   if (lines.length === 0) return { trades: [], errors: ["The file is empty."], notes: [] };
 
   const { separator, header } = readHeader(lines[0]!);
@@ -38,7 +38,7 @@ export function parseTradesCsv(text: string, ctx: ParseContext, from?: BrokerPar
     const other = BROKERS.find((b) => b !== from && b.detect(header));
     if (other) {
       const where =
-        other.kind === kind
+        other.kind === kind || other.kind === "both"
           ? `pick ${other.name} instead`
           : `import it on the ${other.kind === "crypto" ? "Crypto" : "Portfolio"} page`;
       return { trades: [], errors: [`This file comes from ${other.name}: ${where}.`], notes: [] };

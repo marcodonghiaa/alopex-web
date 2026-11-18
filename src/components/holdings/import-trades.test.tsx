@@ -1,36 +1,44 @@
 import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { toast } from "sonner";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const db = vi.hoisted(() => ({
   inserted: [] as Array<Record<string, unknown>>,
+  upserted: [] as Array<[string, Array<Record<string, unknown>>, unknown]>,
   rpc: [] as Array<[string, Record<string, unknown>]>,
   ratesDown: false,
   holdingsDown: false,
   /** Coin rows added for one test. */
   extraCoins: [] as Array<Record<string, unknown>>,
   rpcMissing: false,
-  /** Set, a write answers with this error. */
+  /** Set, a write answers with this error (set_holding_quantity for rpcError). */
   insertError: null as null | Record<string, unknown>,
   rpcError: null as null | Record<string, unknown>,
   updateError: null as null | Record<string, unknown>,
+  upsertError: null as string | null,
+  eventsDown: false,
+  // The saved investment_events never arrive (still loading).
+  eventsHang: false,
   signedOut: false,
-  /** Set, the insert waits for it. */
-  insertGate: null as null | Promise<void>,
+  // portfolio_holdings, reset before each test.
+  stocks: [] as Array<Record<string, unknown>>,
+  getUserCalls: 0,
+  // The saved investment_events rows (the file's own, once imported).
+  events: [] as Array<Record<string, unknown>>,
+  // How many upserted rows the database says it saved (the rest were already there).
+  upsertSaved: null as number | null,
   /** Set, the exchange rates wait for it. */
   ratesGate: null as null | Promise<void>,
   /** How many times the exchange rates were read. */
   ratesReads: 0,
   updated: [] as Array<[string, Record<string, unknown>, Array<[string, unknown]>]>,
+  // While set, the trades insert waits for it: a slow save whose pending state really renders.
+  insertGate: null as Promise<void> | null,
 }));
 vi.mock("@/integrations/supabase/client", () => {
   const tables: Record<string, Array<Record<string, unknown>>> = {
-    portfolio_holdings: [
-      { isin: "XX0000000001", shares: 1, name: "Example World ETF" },
-      { isin: "XX0000000002", shares: 1, name: "Example Bond ETF" },
-    ],
+    portfolio_holdings: db.stocks,
     crypto_holdings: [
       { asset_symbol: "BTC", amount: 0.008, name: "Bitcoin", source: "Ledger" },
       // Typed in lowercase by hand: the count goes to that row as stored.
@@ -38,6 +46,7 @@ vi.mock("@/integrations/supabase/client", () => {
       { asset_symbol: "USDT", amount: 50, name: "Tether", source: "Coinbase" },
     ],
     // A dollar is 0.9 euro on every day the sample needs.
+    investment_events: db.events,
     fx_rates: [
       "2026-01-01",
       "2026-01-10",
@@ -51,7 +60,11 @@ vi.mock("@/integrations/supabase/client", () => {
   };
   // Every filter is ignored: each table answers with all its rows.
   const query = (rows: Array<Record<string, unknown>>) => {
-    const down = rows === tables["fx_rates"] ? db.ratesDown : db.holdingsDown;
+    const down =
+      (rows === tables["fx_rates"] && db.ratesDown) ||
+      (rows === tables["investment_events"] && db.eventsDown) ||
+      ((rows === tables["portfolio_holdings"] || rows === tables["crypto_holdings"]) &&
+        db.holdingsDown);
     const result = Promise.resolve(
       down ? { data: null, error: { message: "offline" } } : { data: rows, error: null },
     );
@@ -62,6 +75,7 @@ vi.mock("@/integrations/supabase/client", () => {
       order: () => query(rows),
       limit: () => query(rows),
       range: () => {
+        if (rows === tables["investment_events"] && db.eventsHang) return new Promise(() => {});
         if (rows === tables["fx_rates"]) db.ratesReads++;
         return (
           rows === tables["fx_rates"] && db.ratesGate ? db.ratesGate : Promise.resolve()
@@ -96,6 +110,14 @@ vi.mock("@/integrations/supabase/client", () => {
           db.inserted.push(...rows);
           return (db.insertGate ?? Promise.resolve()).then(() => ({ error: null }));
         },
+        upsert: (rows: Array<Record<string, unknown>>, options: unknown) => {
+          db.upserted.push([table, rows, options]);
+          const error = db.upsertError ? { message: db.upsertError } : null;
+          const saved = rows.slice(0, db.upsertSaved ?? rows.length);
+          return Object.assign(Promise.resolve({ error }), {
+            select: () => Promise.resolve({ data: error ? null : saved, error }),
+          });
+        },
       }),
       rpc: (name: string, args: Record<string, unknown>) => {
         db.rpc.push([name, args]);
@@ -108,7 +130,10 @@ vi.mock("@/integrations/supabase/client", () => {
         );
       },
       auth: {
-        getUser: () => Promise.resolve({ data: { user: db.signedOut ? null : { id: "u1" } } }),
+        getUser: () => {
+          db.getUserCalls++;
+          return Promise.resolve({ data: { user: db.signedOut ? null : { id: "u1" } } });
+        },
       },
     },
   };
@@ -121,10 +146,28 @@ vi.mock("@tanstack/react-router", () => ({
   ),
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from "sonner";
 
 import { ImportTrades } from "./import-trades";
 import { parseTradesCsv } from "@/lib/trades-csv";
 import type { Trade } from "@/lib/trades";
+
+/** A slow save: the insert waits until the returned function is called. */
+function slowInsert() {
+  let release!: () => void;
+  db.insertGate = new Promise<void>((r) => (release = r));
+  return release;
+}
+
+async function pickTradeRepublic() {
+  fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+  const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+  fireEvent.change(screen.getByLabelText("CSV file"), {
+    target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+  });
+  // "and 1 row" once your saved dividends have loaded.
+  return screen.findByRole("button", { name: /^Save 4 trades/ });
+}
 
 function pick(name: RegExp, fixture: string) {
   fireEvent.click(screen.getByRole("button", { name }));
@@ -158,19 +201,35 @@ function open(kind: "stock" | "crypto", saved: Array<Trade> = []) {
 describe("ImportTrades", () => {
   beforeEach(() => {
     db.inserted.length = 0;
+    db.stocks.splice(
+      0,
+      Infinity,
+      { isin: "XX0000000001", shares: 1, name: "Example World ETF" },
+      { isin: "XX0000000002", shares: 1, name: "Example Bond ETF" },
+    );
+    db.upserted.length = 0;
+    db.ratesDown = false;
+    db.signedOut = false;
     db.rpc.length = 0;
     db.updated.length = 0;
     db.rpcMissing = false;
+    db.rpcError = null;
+    db.upsertError = null;
+    db.upsertSaved = null;
+    db.eventsDown = false;
+    db.holdingsDown = false;
+    db.eventsHang = false;
+    db.getUserCalls = 0;
+    db.events.length = 0;
+    db.insertGate = null;
+    vi.mocked(toast.success).mockClear();
     db.ratesDown = false;
     db.extraCoins.length = 0;
     db.insertError = null;
-    db.rpcError = null;
     db.updateError = null;
     db.signedOut = false;
-    db.insertGate = null;
     db.ratesGate = null;
     db.ratesReads = 0;
-    db.holdingsDown = false;
   });
 
   it("asks where the trades are from before asking for a file", () => {
@@ -212,9 +271,9 @@ describe("ImportTrades", () => {
     expect(screen.getByText("Where are these trades from?")).toBeTruthy();
   });
 
-  it("the crypto page lists no stock brokers, and lists Ledger Live", () => {
+  it("the crypto page lists crypto sources and Trade Republic (it sells coins too)", () => {
     open("crypto");
-    expect(screen.queryByRole("button", { name: /Trade Republic/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Trade Republic/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Ledger Live/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /My own spreadsheet/ })).toBeTruthy();
   });
@@ -235,10 +294,13 @@ describe("ImportTrades", () => {
     expect(await screen.findByText("Transaction export.csv")).toBeTruthy();
     await waitFor(() => expect(screen.getByText("new trades to save")).toBeTruthy());
     expect(screen.getByText("By holding")).toBeTruthy();
-    // Listed under By holding, and under Share counts corrected too.
+    // Listed under By holding, and under Share counts to correct too.
     expect(screen.getAllByText("Example World ETF")).toHaveLength(2);
     expect(screen.getByText("Notes")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Save 4 trades" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save 4 trades and 1 row" })).toBeTruthy();
+    // The dividend in the file is shown and saved with the trades.
+    expect(screen.getByText("Also saved: income, fees and cash")).toBeTruthy();
+    expect(screen.getByText("Dividends")).toBeTruthy();
     expect(screen.queryByText("How to get the file")).toBeNull();
   });
 
@@ -267,7 +329,7 @@ describe("ImportTrades", () => {
     // USDT sits only on Coinbase, which syncs itself: its Ledger moves are left out, and it says so.
     const save = await screen.findByRole("button", { name: "Save 5 trades" });
     expect(screen.getByText(/USDT has no Ledger or manual holding/)).toBeTruthy();
-    expect(screen.getByText("Holdings corrected")).toBeTruthy();
+    expect(screen.getByText("Holdings to correct")).toBeTruthy();
     expect(screen.queryByText("Share counts corrected")).toBeNull();
     fireEvent.click(save);
     await waitFor(() => expect(db.inserted).toHaveLength(5));
@@ -285,8 +347,9 @@ describe("ImportTrades", () => {
   it("a stock import corrects the share counts through set_holding_quantity", async () => {
     open("stock");
     pick(/Trade Republic/, "trade_republic.csv");
-    const save = await screen.findByRole("button", { name: "Save 4 trades" });
-    expect(screen.getByText("Share counts corrected")).toBeTruthy();
+    // "and 1 row": the file's dividend is saved too.
+    const save = await screen.findByRole("button", { name: /^Save 4 trades/ });
+    expect(screen.getByText("Share counts to correct")).toBeTruthy();
     fireEvent.click(save);
     await waitFor(() => expect(db.rpc.length).toBeGreaterThan(0));
     expect(db.rpc[0]![0]).toBe("set_holding_quantity");
@@ -359,6 +422,81 @@ describe("ImportTrades", () => {
     expect(screen.getByText(/USDT has no Ledger or manual holding/)).toBeTruthy();
   });
 
+  describe("polish-5 B1 Trade Republic coins go only to manual coins or ones you don't hold", () => {
+    // Holdings: BTC on Ledger, eth added by hand (0.4), USDT on Coinbase.
+    const tr = (...rows: Array<string>) =>
+      [
+        "datetime,date,category,type,asset_class,name,symbol,shares,price,amount,fee,tax,currency,transaction_id",
+        ...rows.map((r, i) => `2026-03-02T09:30:00Z,2026-03-02,${r},EUR,tr-${i}`),
+      ].join("\n");
+    const ethBuy = "TRADING,BUY,CRYPTO,Ethereum,ETH,0.1,2000,-200,,";
+
+    it("a coin held only on Coinbase is left out, with a note", async () => {
+      open("crypto");
+      pickText(/Trade Republic/, tr("TRADING,BUY,CRYPTO,Tether,USDT,10,0.9,-9,,", ethBuy));
+      fireEvent.click(await screen.findByRole("button", { name: "Save 1 trade" }));
+      expect(
+        screen.getByText(
+          "Tether has no manual holding, so it was left out. Add it as a manual coin, then import again.",
+        ),
+      ).toBeInTheDocument();
+      await waitFor(() => expect(db.inserted).toHaveLength(1));
+      expect(db.inserted[0]).toMatchObject({ key: "ETH", source: "trade_republic" });
+    });
+
+    it("a coin held on Ledger is left out, with a note", async () => {
+      open("crypto");
+      pickText(/Trade Republic/, tr("TRADING,BUY,CRYPTO,Bitcoin,BTC,0.001,60000,-60,,", ethBuy));
+      await screen.findByRole("button", { name: "Save 1 trade" });
+      expect(screen.getByText(/^Bitcoin has no manual holding, so it was left out/)).toBeTruthy();
+    });
+
+    it("a manual coin whose count differs gets its trades, and its count is left alone", async () => {
+      open("crypto");
+      pickText(/Trade Republic/, tr(ethBuy));
+      fireEvent.click(await screen.findByRole("button", { name: "Save 1 trade" }));
+      expect(screen.queryByRole("region", { name: "Holdings to correct" })).toBeNull();
+      expect(screen.queryByText(/has no manual holding/)).toBeNull();
+      await waitFor(() => expect(db.inserted).toHaveLength(1));
+      expect(db.inserted[0]).toMatchObject({ key: "ETH", shares: 0.1 });
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(db.rpc).toEqual([]);
+    });
+
+    it("a coin you don't hold: bought, it's left out with a note; sold off, its trades are kept", async () => {
+      open("crypto");
+      pickText(
+        /Trade Republic/,
+        tr(
+          "TRADING,BUY,CRYPTO,Solana,SOL,2,100,-200,,",
+          "TRADING,BUY,CRYPTO,Cardano,ADA,10,1,-10,,",
+          "TRADING,SELL,CRYPTO,Cardano,ADA,-10,1.2,12,,",
+        ),
+      );
+      await screen.findByRole("button", { name: "Save 2 trades" });
+      expect(
+        screen.getByText(
+          "Solana has no manual holding, so it was left out. Add it as a manual coin, then import again.",
+        ),
+      ).toBeTruthy();
+      expect(screen.getByText(/Cardano · fully sold/)).toBeTruthy();
+    });
+
+    it("a saveback row is saved as a reward and leaves the coin's count alone", async () => {
+      open("crypto");
+      pickText(
+        /Trade Republic/,
+        tr(ethBuy, "BENEFITS,BENEFITS_SAVEBACK,CRYPTO,Ethereum,ETH,0.0015,,3,,"),
+      );
+      fireEvent.click(await screen.findByRole("button", { name: "Save 1 trade and 1 row" }));
+      expect(screen.queryByRole("region", { name: "Holdings to correct" })).toBeNull();
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(db.inserted).toHaveLength(1);
+      expect(db.upserted[0]![1]).toMatchObject([{ kind: "reward", key: "ETH", shares: 0.0015 }]);
+      expect(db.rpc).toEqual([]);
+    });
+  });
+
   it("when the exchange rates can't be loaded it says so and offers no save", async () => {
     db.ratesDown = true;
     open("crypto");
@@ -372,6 +510,633 @@ describe("ImportTrades", () => {
       /Try again/,
     );
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+    // The file card stops reading: it says the rates failed.
+    expect(screen.getByRole("status").textContent).toBe("Couldn't load exchange rates");
+    expect(screen.queryByText("Reading…")).toBeNull();
+  });
+
+  it("if the income rows fail after the trades saved, it says so and still updates share counts", async () => {
+    db.upsertError = "boom";
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 4 trades and 1 row" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "4 trades saved, but the income, fee and cash rows weren't (boom). Import the file again to save them.",
+    );
+    expect(db.inserted).toHaveLength(4);
+    // Through set_holding_quantity, which also writes today's value for net worth.
+    expect(db.rpc).toEqual([
+      [
+        "set_holding_quantity",
+        { p_kind: "stock", p_key: "XX0000000001", p_quantity: 4, p_source: null },
+      ],
+      [
+        "set_holding_quantity",
+        { p_kind: "stock", p_key: "XX0000000002", p_quantity: 0, p_source: null },
+      ],
+    ]);
+    expect(db.updated).toEqual([]);
+  });
+
+  it("the preview names income and costs as the Income and costs section does", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const saveback =
+      '"2026-03-02T09:00:00Z","2026-03-02","DEFAULT","CASH","BENEFITS_SAVEBACK","","","","","","1.50","","","EUR","00000000-0000-4000-8000-000000000007"';
+    const csv = `${readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8").trim()}\n${saveback}`;
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    expect((await screen.findByText("Rewards")).parentElement?.textContent).toBe("Rewards€1.50");
+    expect(screen.getByText("Dividends").parentElement?.textContent).toBe("Dividends€1.20");
+  });
+
+  it("polish-4 UB4 the preview says dividends are after tax; not when the file has none", async () => {
+    open("stock");
+    await pickTradeRepublic();
+    expect(screen.getByText("Dividends and interest are after tax.")).toBeInTheDocument();
+    cleanup();
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const [header] = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8").split(
+      "\n",
+    );
+    const saveback =
+      '"2026-03-02T09:00:00Z","2026-03-02","DEFAULT","CASH","BENEFITS_SAVEBACK","","","","","","1.50","","","EUR","00000000-0000-4000-8000-000000000007"';
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([`${header}\n${saveback}`], "export.csv", { type: "text/csv" })] },
+    });
+    expect(await screen.findByText("Rewards")).toBeInTheDocument();
+    expect(screen.queryByText("Dividends and interest are after tax.")).toBeNull();
+  });
+
+  it("polish-4 R4 the after-tax line sits right under the dividends and interest", async () => {
+    open("stock");
+    await pickTradeRepublic();
+    const note = screen.getByText("Dividends and interest are after tax.");
+    // Right after the Dividends row, not below the whole list and its row count.
+    expect(note.previousElementSibling?.textContent).toMatch(/^(Dividends|Interest)€[\d.,]+$/);
+  });
+
+  it("polish-4 UB6 the row count says it counts every row saved", async () => {
+    open("stock");
+    await pickTradeRepublic();
+    expect(
+      screen.getByText("Rows saved in all (deposits and withdrawals too)").parentElement
+        ?.textContent,
+    ).toBe("Rows saved in all (deposits and withdrawals too)1");
+  });
+
+  it("polish-4 UB7 Save names the trades and the rows it saves; trades alone name only trades", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    expect(await screen.findByRole("button", { name: "Save 4 trades and 1 row" })).toBeTruthy();
+    cleanup();
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    fireEvent.change(screen.getByLabelText("CSV text"), {
+      target: { value: "date,side,isin,shares,price,fee\n2026-01-15,buy,XX0000000001,1,10,0" },
+    });
+    expect(await screen.findByRole("button", { name: "Save 1 trade" })).toBeTruthy();
+  });
+
+  it("polish-4 F7b the preview's fees and taxes count those on the trades, as the page does", async () => {
+    open("stock");
+    await pickTradeRepublic();
+    // The sale's €1 fee: the page's Fees row adds it too.
+    expect(screen.getByText("Fees").parentElement?.textContent).toBe("Fees−€1.00");
+  });
+
+  it("polish-4 R3 fees only on the trades don't claim extra rows are saved", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    fireEvent.change(screen.getByLabelText("CSV text"), {
+      target: { value: "date,side,isin,shares,price,fee\n2026-01-15,buy,XX0000000001,1,10,1" },
+    });
+    expect(await screen.findByRole("button", { name: "Save 1 trade" })).toBeTruthy();
+    expect((await screen.findByText("Fees")).parentElement?.textContent).toBe("Fees−€1.00");
+    expect(screen.getByText("Costs on these trades")).toBeInTheDocument();
+    expect(screen.queryByText("Also saved: income, fees and cash")).toBeNull();
+  });
+
+  it("polish-4 UB8 the toast calls the other rows income and cash rows", async () => {
+    open("stock");
+    fireEvent.click(await pickTradeRepublic());
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenLastCalledWith(
+        "Imported 4 trades and 1 income and cash row, updated 2 share counts",
+      ),
+    );
+  });
+
+  it("polish-4 UB9 the file's notes sit under Notes, as some were saved", async () => {
+    open("stock");
+    await pickTradeRepublic();
+    expect(screen.getByText("Notes")).toBeInTheDocument();
+    expect(screen.queryByText("Left out")).toBeNull();
+  });
+
+  describe("polish-4 UB10 a file with nothing new says what it found", () => {
+    const fixture = () => readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const pick = (csv: string) => {
+      fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+      fireEvent.change(screen.getByLabelText("CSV file"), {
+        target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+      });
+    };
+
+    it("a file with only its header says there's nothing to import, with no check and no Save", async () => {
+      open("stock");
+      pick(fixture().split("\n")[0]!);
+      expect(await screen.findByText("Nothing in this file to import here.")).toBeInTheDocument();
+      expect(screen.getByText("Nothing new to import")).toBeInTheDocument();
+      expect(document.querySelector(".lucide-check")).toBeNull();
+      expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+      expect(screen.queryByText(/new trades? to save/)).toBeNull();
+    });
+
+    it("a file saved before says everything is already saved, trades and rows counted", async () => {
+      const { trades, events } = parseTradesCsv(fixture(), {
+        kind: "stock",
+        knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+        today: "2026-11-17",
+      });
+      db.events.push(...events!.map((e) => ({ ...e })));
+      db.stocks[0]!["shares"] = 4;
+      db.stocks[1]!["shares"] = 0;
+      open("stock", trades);
+      pick(fixture());
+      expect(
+        await screen.findByText("Everything in this file is already saved."),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Already saved, skipped").parentElement?.textContent).toBe(
+        "Already saved, skipped4 trades, 1 row",
+      );
+      expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+    });
+
+    it("a file of income only counts its rows, not 0 trades", async () => {
+      const [header] = fixture().split("\n");
+      const saveback =
+        '"2026-03-02T09:00:00Z","2026-03-02","DEFAULT","CASH","BENEFITS_SAVEBACK","","","","","","1.50","","","EUR","00000000-0000-4000-8000-000000000007"';
+      open("stock");
+      pick(`${header}\n${saveback}`);
+      expect(await screen.findByText("new income and cash row to save")).toBeInTheDocument();
+      expect(screen.queryByText(/new trades? to save/)).toBeNull();
+      expect(screen.getByText("Read, check what it found below")).toBeInTheDocument();
+      expect(document.querySelector(".lucide-check")).not.toBeNull();
+      expect(screen.getByRole("button", { name: "Save 1 row" })).toBeEnabled();
+    });
+  });
+
+  it("polish-4 F5 the summary leaves out a side with no trades", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    fireEvent.change(screen.getByLabelText("CSV text"), {
+      target: { value: "date,side,isin,shares,price,fee\n2026-01-15,buy,XX0000000001,1,10,0" },
+    });
+    await screen.findByRole("button", { name: "Save 1 trade" });
+    expect(screen.getByText(/^1 buy · /).textContent).toBe("1 buy · 15 Jan 2026");
+  });
+
+  it("polish-4 UB13 Change is named, 44px tall and shows keyboard focus; before a file, the picker is the CSV file", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    await screen.findByText("export.csv");
+    const input = screen.getByLabelText("Change file");
+    expect(input.closest("label")).toHaveClass("min-h-11", "has-[:focus-visible]:ring-2");
+    expect(screen.queryByLabelText("CSV file")).toBeNull();
+  });
+
+  it("polish-4 UB14 focus moves to the step's title, then to the file's status", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    // The new step's title (grnc06 #14a), from which the steps and the picker follow.
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { name: "Import from Trade Republic" }),
+    );
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    const status = await screen.findByRole("status");
+    expect(document.activeElement?.contains(screen.getByText("export.csv"))).toBe(true);
+    await waitFor(() => expect(status.textContent).toBe("Read, check what it found below"));
+  });
+
+  it("polish-4 UB14 another broker puts focus on the way to ask for it", () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Another broker/ }));
+    expect(document.activeElement).toBe(screen.getByRole("link", { name: "Ask for your broker" }));
+  });
+
+  it("polish-4 UB15 the X looks disabled during a save, and not before", async () => {
+    const release = slowInsert();
+    open("stock");
+    const save = await pickTradeRepublic();
+    const close = screen.getByRole("button", { name: "Close" });
+    expect(close).not.toHaveAttribute("aria-disabled");
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+    await waitFor(() => expect(close).toHaveAttribute("aria-disabled", "true"));
+    expect(close).toHaveClass("opacity-30");
+    release();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("polish-4 UB16 a file that can't be imported offers no Save", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    fireEvent.change(screen.getByLabelText("CSV text"), {
+      target: { value: "date,side,isin,shares,price,fee\n2999-01-15,buy,XX0000000001,1,10,0" },
+    });
+    expect(await screen.findByText("Nothing saved. Fix these first:")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+  });
+
+  it("polish-4 N1 a file that can't be imported shows an alert, not a check", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File(["a,b\n1,2"], "wrong.csv", { type: "text/csv" })] },
+    });
+    expect(await screen.findByText("Can't be imported")).toBeInTheDocument();
+    const card = screen.getByText("wrong.csv").closest("[tabindex]")!;
+    expect(card.querySelector(".lucide-check")).toBeNull();
+    // An alert icon (grnc06 #5), not an X beside the dialog's own close X.
+    expect(card.querySelector(".lucide-circle-alert")).not.toBeNull();
+  });
+
+  it("polish-4 N5 if the share counts fail after the trades saved, it says the trades are saved", async () => {
+    db.rpcError = { code: "XX000", message: "boom" };
+    open("stock");
+    fireEvent.click(await pickTradeRepublic());
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "4 trades saved, but the share counts and the income, fee and cash rows weren't (boom). Import the file again to save them.",
+    );
+    expect(db.upserted).toEqual([]);
+  });
+
+  it("polish-4 N5 with no trades saved, a share count failure shows the database's error", async () => {
+    db.rpcError = { code: "XX000", message: "boom" };
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const { trades, events } = parseTradesCsv(csv, {
+      kind: "stock",
+      knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+      today: "2026-11-17",
+    });
+    db.events.push(...events!.map((e) => ({ ...e })));
+    open("stock", trades);
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save share counts" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("boom");
+  });
+
+  describe("polish-4 N6 a file read that ends late is ignored", () => {
+    const csv = () => readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    /** A file whose text arrives only when the returned function is called. */
+    const slowFile = (text: string, name: string) => {
+      let finish!: () => void;
+      const ready = new Promise<string>((r) => (finish = () => r(text)));
+      return { file: Object.assign(new File([text], name), { text: () => ready }), finish };
+    };
+
+    it("a file chosen after it wins", async () => {
+      open("stock");
+      fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+      const a = slowFile(csv(), "a.csv");
+      fireEvent.change(screen.getByLabelText("CSV file"), { target: { files: [a.file] } });
+      fireEvent.change(screen.getByLabelText("Change file"), {
+        target: { files: [new File([csv().split("\n")[0]!], "b.csv")] },
+      });
+      expect(await screen.findByText("Nothing in this file to import here.")).toBeInTheDocument();
+      a.finish();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(screen.getByText("b.csv")).toBeInTheDocument();
+      expect(screen.getByText("Nothing in this file to import here.")).toBeInTheDocument();
+    });
+
+    it("after going back to all sources, it doesn't come back", async () => {
+      open("stock");
+      fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+      const a = slowFile(csv(), "a.csv");
+      fireEvent.change(screen.getByLabelText("CSV file"), { target: { files: [a.file] } });
+      fireEvent.click(screen.getByRole("button", { name: /All sources/ }));
+      a.finish();
+      await new Promise((r) => setTimeout(r, 20));
+      fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+      await new Promise((r) => setTimeout(r, 20));
+      expect(screen.getByLabelText("CSV text")).toHaveValue("");
+      expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+    });
+  });
+
+  describe("polish-5 B4 the stale file read guard", () => {
+    const csv = () => readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    /** A file whose text is a deferred promise: it arrives when finish() is called. */
+    const deferredFile = (text: string, name: string) => {
+      let finish!: () => void;
+      const ready = new Promise<string>((r) => (finish = () => r(text)));
+      return { file: Object.assign(new File([text], name), { text: () => ready }), finish };
+    };
+    const settle = () => new Promise((r) => setTimeout(r, 20));
+
+    it("file A read late, after file B: B's content wins, A's result is ignored", async () => {
+      open("stock");
+      fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+      const a = deferredFile(csv(), "a.csv");
+      const b = deferredFile(csv().split("\n")[0]!, "b.csv");
+      fireEvent.change(screen.getByLabelText("CSV file"), { target: { files: [a.file] } });
+      fireEvent.change(screen.getByLabelText("Change file"), { target: { files: [b.file] } });
+      b.finish();
+      expect(await screen.findByText("Nothing in this file to import here.")).toBeInTheDocument();
+      a.finish();
+      await settle();
+      expect(screen.getByText("b.csv")).toBeInTheDocument();
+      expect(screen.getByText("Nothing in this file to import here.")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+    });
+
+    it("a read that ends after the dialog closed doesn't come back on reopening", async () => {
+      open("stock");
+      fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+      const a = deferredFile(csv(), "a.csv");
+      fireEvent.change(screen.getByLabelText("CSV file"), { target: { files: [a.file] } });
+      fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      a.finish();
+      await settle();
+      fireEvent.click(screen.getByText("Import trades from CSV"));
+      fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+      await settle();
+      expect(screen.getByLabelText("CSV text")).toHaveValue("");
+      expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
+    });
+  });
+
+  it("polish-4 N10 before Save the share counts are still to correct", async () => {
+    open("stock");
+    await pickTradeRepublic();
+    // Each one listed under that heading: 2 of them.
+    const region = screen.getByRole("region", { name: "Share counts to correct" });
+    expect(within(region).getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.queryByText("Share counts corrected")).toBeNull();
+  });
+
+  it.each([
+    ["stock", "Share counts to correct"],
+    ["crypto", "Holdings to correct"],
+  ] as const)(
+    "polish-5 B2 before Save a %s preview says what's still to correct",
+    async (kind, heading) => {
+      open(kind);
+      if (kind === "stock") await pickTradeRepublic();
+      else {
+        pick(/Ledger Live/, "ledger_live.csv");
+        await screen.findByRole("button", { name: "Save 5 trades" });
+      }
+      expect(screen.getByRole("region", { name: heading })).toBeInTheDocument();
+      expect(screen.queryByText(/corrected$/)).toBeNull();
+    },
+  );
+
+  describe("polish-5 B3 the file card says what the exchange rates are doing", () => {
+    it("while they load: Loading exchange rates…, a spinner, no error icon", async () => {
+      let release!: () => void;
+      db.ratesGate = new Promise((r) => (release = r));
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      await waitFor(() =>
+        expect(screen.getByRole("status").textContent).toBe("Loading exchange rates…"),
+      );
+      expect(document.querySelector(".animate-spin")).toBeTruthy();
+      expect(statusIcon()).toBeNull();
+      release();
+      await screen.findByRole("button", { name: "Save 5 trades" });
+    });
+
+    it("once they fail: the error icon, Couldn't load exchange rates, and Try again", async () => {
+      db.ratesDown = true;
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      await screen.findByRole("button", { name: "Try again" });
+      expect(screen.getByRole("status").textContent).toBe("Couldn't load exchange rates");
+      expect(statusIcon()?.classList.contains("lucide-circle-alert")).toBe(true);
+    });
+  });
+
+  it("polish-4 N11 a source's name never wraps; its hint gives way", () => {
+    open("stock");
+    const name = screen.getByText("My own spreadsheet");
+    expect(name).toHaveClass("shrink-0");
+    expect(screen.getByText("Any CSV with our columns")).toHaveClass("min-w-0", "truncate");
+  });
+
+  it("polish-4 N12 the preview sets its figures as the page does", async () => {
+    open("stock");
+    await pickTradeRepublic();
+    expect(screen.getByText("€1.20")).toHaveClass("font-figure");
+    const region = screen.getByRole("region", { name: "Share counts to correct" });
+    expect(within(region).getByText("1 → 4")).toHaveClass("font-figure");
+  });
+
+  it("if saved dividends and fees can't load, it says so and won't save", async () => {
+    db.eventsDown = true;
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    expect(
+      await screen.findByText("Couldn't load your saved dividends and fees: offline"),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save 4 trades" })).toBeDisabled();
+  });
+
+  it("importing again after the income rows failed saves just them: the trades are skipped", async () => {
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const { trades } = parseTradesCsv(csv, {
+      kind: "stock",
+      knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+      today: "2026-11-17",
+    });
+    open("stock", trades);
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 1 row" }));
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenLastCalledWith(
+        "Imported 1 income and cash row, updated 2 share counts",
+      ),
+    );
+    expect(db.inserted).toEqual([]);
+    expect(db.upserted.map(([table, rows]) => [table, rows.length])).toEqual([
+      ["investment_events", 1],
+    ]);
+  });
+
+  it("the toast counts only the rows the database saved, not ones it already had", async () => {
+    db.upsertSaved = 0;
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 4 trades and 1 row" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe(
+      "Imported 4 trades, updated 2 share counts",
+    );
+  });
+
+  it("a Trade Republic file saves its dividends too, skipping ones already saved by id", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 4 trades and 1 row" }));
+    await waitFor(() => expect(db.upserted).toHaveLength(1));
+    const [table, rows, options] = db.upserted[0]!;
+    expect(table).toBe("investment_events");
+    expect(options).toEqual({ onConflict: "user_id,source,external_id", ignoreDuplicates: true });
+    expect(rows).toEqual([
+      expect.objectContaining({ kind: "dividend", amount_eur: 1.2, user_id: "u1" }),
+    ]);
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenLastCalledWith(
+        "Imported 4 trades and 1 income and cash row, updated 2 share counts",
+      ),
+    );
+  });
+
+  it("the toast counts what the save saved, even if the trades list changes meanwhile", async () => {
+    // During the save the trades list refreshes (another tab saved them): the dialog's new
+    // trades drop to none, but this save still inserted 4.
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const { trades } = parseTradesCsv(csv, {
+      kind: "stock",
+      knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+      today: "2026-11-17",
+    });
+    const release = slowInsert();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = (saved: Array<Trade>) => (
+      <QueryClientProvider client={client}>
+        <ImportTrades kind="stock" saved={saved} />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(view([]));
+    fireEvent.click(screen.getByText("Import trades from CSV"));
+    fireEvent.click(await pickTradeRepublic());
+    await waitFor(() => expect(db.inserted).toHaveLength(4));
+    rerender(view(trades));
+    release();
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe(
+      "Imported 4 trades and 1 income and cash row, updated 2 share counts",
+    );
+  });
+
+  it("Esc and All sources do nothing during a save, so an old save can't close a new session", async () => {
+    const release = slowInsert();
+    open("stock");
+    fireEvent.click(await pickTradeRepublic());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Save 4 trades and 1 row" })).toBeDisabled(),
+    );
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    fireEvent.click(screen.getByRole("button", { name: /All sources/ }));
+    expect(screen.getByText("export.csv")).toBeTruthy();
+    release();
+    // The save that finished closes the dialog it belongs to.
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("when nothing is saving, Esc closes the dialog and All sources goes back", async () => {
+    open("stock");
+    await pickTradeRepublic();
+    fireEvent.click(screen.getByRole("button", { name: /All sources/ }));
+    expect(screen.getByText("Where are these trades from?")).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("after a save it refreshes trades, income and costs, holdings, returns and net worth", async () => {
+    const client = open("stock");
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    fireEvent.click(await pickTradeRepublic());
+    await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(6));
+    expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
+      ["holding-trades"],
+      ["investment-events"],
+      ["holding-keys", "stock"],
+      ["holding-performance"],
+      ["portfolio-latest"],
+      ["net-worth-daily"],
+    ]);
+  });
+
+  it("a slow save shows a spinner, disables Save, and a double click saves once", async () => {
+    const release = slowInsert();
+    open("stock");
+    const save = await pickTradeRepublic();
+    expect(save.querySelector(".animate-spin")).toBeNull();
+    fireEvent.click(save);
+    // A real double click: the second press lands a moment after the first.
+    await new Promise((r) => setTimeout(r, 5));
+    fireEvent.click(save);
+    expect(save).toBeDisabled();
+    expect(save.querySelector(".animate-spin")).not.toBeNull();
+    release();
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(db.inserted).toHaveLength(4);
+  });
+
+  it("a failed save's error is gone when you open the dialog again", async () => {
+    db.upsertError = "boom";
+    open("stock");
+    fireEvent.click(await pickTradeRepublic());
+    expect((await screen.findByRole("alert")).textContent).toMatch(/boom/);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    fireEvent.click(screen.getByText("Import trades from CSV"));
+    expect(screen.getByText("Where are these trades from?")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("when your holdings can't be loaded the file card says it can't be read, not Reading…", async () => {
+    db.holdingsDown = true;
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    expect(await screen.findByText("Couldn't load your holdings: offline")).toBeTruthy();
+    expect(screen.getByText("Can't be read")).toBeTruthy();
+    expect(screen.queryByText("Reading…")).toBeNull();
+    expect(document.querySelector(".animate-spin")).toBeNull();
   });
 
   it.each([
@@ -383,7 +1148,7 @@ describe("ImportTrades", () => {
       const client = open(kind);
       const invalidate = vi.spyOn(client, "invalidateQueries");
       pick(from, file);
-      fireEvent.click(await screen.findByRole("button", { name: /^Save \d+ trades$/ }));
+      fireEvent.click(await screen.findByRole("button", { name: /^Save \d+ trades/ }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
       const keys = invalidate.mock.calls.map(([f]) => f?.queryKey);
       expect(keys).toContainEqual([key]);
@@ -422,9 +1187,7 @@ describe("ImportTrades", () => {
       });
       await screen.findByText("new trades to save");
       expect(screen.getByText(n)).toBeTruthy();
-      expect(
-        screen.getByText(new RegExp(`^${n.replace(".", "\\.")} buys · 0 sells ·`)),
-      ).toBeTruthy();
+      expect(screen.getByText(new RegExp(`^${n.replace(".", "\\.")} buys · `))).toBeTruthy();
       fireEvent.click(screen.getByRole("button", { name: `Save ${n} trades` }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
       expect(toast.success).toHaveBeenLastCalledWith(`Imported ${n} trades`);
@@ -445,25 +1208,216 @@ describe("ImportTrades", () => {
     open("crypto");
     pick(/Ledger Live/, "ledger_live.csv");
     await screen.findByText(message);
-    // Only the rates failed: the file is fine, it waits for them.
+    // Only the rates failed: the file is fine, the card says the rates failed.
     expect(screen.getByRole("status").textContent).toBe(
-      what === "the exchange rates" ? "Waiting for exchange rates" : "Can't be imported",
+      what === "the exchange rates" ? "Couldn't load exchange rates" : "Can't be read",
     );
     expect(screen.queryByText("Reading…")).toBeNull();
     expect(document.querySelector(".animate-spin")).toBeNull();
   });
 
-  it("while the exchange rates load it says Reading… and offers no save yet", async () => {
+  it("an empty file says it's empty instead of reading forever", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File(["  \n"], "empty.csv", { type: "text/csv" })] },
+    });
+    expect(await screen.findByText("The file is empty.")).toBeTruthy();
+    expect(screen.getByText("Can't be imported")).toBeTruthy();
+    expect(screen.queryByText("Reading…")).toBeNull();
+  });
+
+  it("while the file is being read it says Reading…", () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File(["x"], "export.csv", { type: "text/csv" })] },
+    });
+    expect(screen.getByText("Reading…")).toBeTruthy();
+  });
+
+  it("a save with trades and other rows asks who you are once", async () => {
+    open("stock");
+    fireEvent.click(await pickTradeRepublic());
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(db.getUserCalls).toBe(1);
+  });
+
+  it("one new trade is counted in the singular", async () => {
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const { trades } = parseTradesCsv(csv, {
+      kind: "stock",
+      knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+      today: "2026-11-17",
+    });
+    open("stock", trades.slice(1));
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    expect(await screen.findByRole("button", { name: "Save 1 trade and 1 row" })).toBeTruthy();
+    expect(screen.getByText("new trade to save")).toBeTruthy();
+  });
+
+  it("with only share counts to fix, Save and the toast say share counts", async () => {
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const { trades, events } = parseTradesCsv(csv, {
+      kind: "stock",
+      knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+      today: "2026-11-17",
+    });
+    db.events.push(...events!.map((e) => ({ ...e })));
+    open("stock", trades);
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save share counts" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe("Updated 2 share counts");
+    expect(db.inserted).toEqual([]);
+    expect(db.rpc).toHaveLength(2);
+  });
+
+  it("Save waits for your saved dividends and fees, so a re-import can't save them twice", async () => {
+    db.eventsHang = true;
+    open("stock");
+    expect(await pickTradeRepublic()).toBeDisabled();
+    expect(screen.queryByText("Also saved: income, fees and cash")).toBeNull();
+  });
+
+  it("on a backend without set_holding_quantity a stock's count is set on the holding itself", async () => {
+    db.rpcMissing = true;
+    open("stock");
+    fireEvent.click(await pickTradeRepublic());
+    await waitFor(() => expect(db.updated).toHaveLength(2));
+    expect(db.updated).toEqual([
+      ["portfolio_holdings", { shares: 4 }, [["isin", "XX0000000001"]]],
+      ["portfolio_holdings", { shares: 0 }, [["isin", "XX0000000002"]]],
+    ]);
+  });
+
+  it("signed out, nothing is saved and it says to sign in", async () => {
+    db.signedOut = true;
+    open("stock");
+    fireEvent.click(await pickTradeRepublic());
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "You're signed out. Sign in and try again.",
+    );
+    expect(db.inserted).toEqual([]);
+    expect(db.upserted).toEqual([]);
+  });
+
+  it("if only other rows are saved and they fail, it shows the database's error", async () => {
+    db.upsertError = "boom";
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const { trades } = parseTradesCsv(csv, {
+      kind: "stock",
+      knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+      today: "2026-11-17",
+    });
+    open("stock", trades);
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 1 row" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("boom");
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("with no counts to fix, other rows the database already had are nothing new", async () => {
+    db.upsertSaved = 0;
+    // The holdings already match the file.
+    db.stocks[0]!["shares"] = 4;
+    db.stocks[1]!["shares"] = 0;
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const { trades } = parseTradesCsv(csv, {
+      kind: "stock",
+      knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+      today: "2026-11-17",
+    });
+    open("stock", trades);
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 1 row" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe("Nothing new imported");
+    expect(db.rpc).toEqual([]);
+  });
+
+  it("the summary counts buys and sells and gives the dates, one date for one day", async () => {
+    const csv = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const { trades } = parseTradesCsv(csv, {
+      kind: "stock",
+      knownKeys: new Set(["XX0000000001", "XX0000000002"]),
+      today: "2026-11-17",
+    });
+    open("stock");
+    await pickTradeRepublic();
+    expect(screen.getByText(/buys? · /).textContent).toBe(
+      "3 buys · 1 sell · 2 Jan 2026 – 3 Feb 2026",
+    );
+    cleanup();
+    // Only the two buys of 2 January are new.
+    open(
+      "stock",
+      trades.filter((t) => t.trade_date !== "2026-01-02"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    fireEvent.change(screen.getByLabelText("CSV file"), {
+      target: { files: [new File([csv], "export.csv", { type: "text/csv" })] },
+    });
+    await screen.findByRole("button", { name: "Save 2 trades and 1 row" });
+    expect(screen.getByText(/buys? · /).textContent).toBe("2 buys · 2 Jan 2026");
+  });
+
+  it("during a save the file and paste box can't be changed, so the save can't wipe new input", async () => {
+    const release = slowInsert();
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    const box = screen.getByLabelText("CSV text");
+    fireEvent.change(box, {
+      target: { value: "date,side,isin,shares,price,fee\n2026-01-15,buy,XX0000000001,1,10,0" },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save 1 trade" }));
+    await waitFor(() => expect(box).toBeDisabled());
+    expect(screen.getByLabelText("CSV file")).toBeDisabled();
+    // A file dropped meanwhile is not read.
+    fireEvent.drop(screen.getByText("or drop it here"), {
+      dataTransfer: { files: [new File(["x"], "late.csv", { type: "text/csv" })] },
+    });
+    expect(screen.queryByText("late.csv")).toBeNull();
+    release();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("when nothing is saving the file and paste box can be used", () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /My own spreadsheet/ }));
+    expect(screen.getByLabelText("CSV text")).toBeEnabled();
+    expect(screen.getByLabelText("CSV file")).toBeEnabled();
+    fireEvent.drop(screen.getByText("or drop it here"), {
+      dataTransfer: { files: [new File(["x"], "mine.csv", { type: "text/csv" })] },
+    });
+    expect(screen.getByText("mine.csv")).toBeTruthy();
+  });
+
+  it("while the exchange rates load it says so and offers no save yet", async () => {
     let release!: () => void;
     db.ratesGate = new Promise((r) => (release = r));
     open("crypto");
     pick(/Ledger Live/, "ledger_live.csv");
-    expect(await screen.findByText("Reading…")).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toBe("Loading exchange rates…"),
+    );
     expect(document.querySelector(".animate-spin")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
     release();
     expect(await screen.findByRole("button", { name: "Save 5 trades" })).toBeTruthy();
-    expect(screen.queryByText("Reading…")).toBeNull();
+    expect(screen.queryByText("Loading exchange rates…")).toBeNull();
   });
 
   it("the dialog can't be closed while saving, and closes once saved", async () => {
@@ -489,7 +1443,8 @@ describe("ImportTrades", () => {
     const back = screen.getByRole("button", { name: /All sources/ });
     await waitFor(() => expect((back as HTMLButtonElement).disabled).toBe(true));
     fireEvent.click(back);
-    expect((screen.getByLabelText("CSV file") as HTMLInputElement).disabled).toBe(true);
+    // Named Change file once a file is chosen (polish-4 UB13).
+    expect((screen.getByLabelText("Change file") as HTMLInputElement).disabled).toBe(true);
     expect(screen.getByText("ops.csv")).toBeTruthy();
     release();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -604,7 +1559,7 @@ describe("ImportTrades", () => {
       open(kind);
       if (kind === "crypto") pick(/Ledger Live/, "ledger_live.csv");
       else pick(/Trade Republic/, "trade_republic.csv");
-      fireEvent.click(await screen.findByRole("button", { name: /^Save \d+ trades$/ }));
+      fireEvent.click(await screen.findByRole("button", { name: /^Save \d+ trades/ }));
       expect((await screen.findByRole("alert")).textContent).toMatch(message);
       expect(screen.getByRole("dialog")).toBeTruthy();
     }
@@ -677,7 +1632,7 @@ describe("ImportTrades", () => {
     open("crypto");
     pick(/Ledger Live/, "ledger_live.csv");
     await screen.findByRole("button", { name: "Save 5 trades" });
-    const change = screen.getByLabelText("CSV file").closest("label")!;
+    const change = screen.getByLabelText("Change file").closest("label")!;
     expect(change.textContent).toBe("Change");
     for (const c of ["underline", "min-h-11", "has-[:focus-visible]:ring-2"])
       expect(change.classList.contains(c), c).toBe(true);
@@ -714,7 +1669,7 @@ describe("ImportTrades", () => {
     const trying = await screen.findByRole("button", { name: "Trying…" });
     expect(trying.getAttribute("aria-disabled")).toBe("true");
     expect(trying.querySelector(".animate-spin")).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toBe("Reading…");
+    expect(screen.getByRole("status").textContent).toBe("Loading exchange rates…");
     release();
     expect(await screen.findByRole("button", { name: "Save 5 trades" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Trying|Try again/ })).toBeNull();
@@ -754,7 +1709,7 @@ describe("ImportTrades", () => {
     const again = await screen.findByRole("button", { name: "Try again" });
     expect((again as HTMLButtonElement).disabled).toBe(false);
     expect(again.hasAttribute("aria-disabled")).toBe(false);
-    expect(screen.getByRole("status").textContent).toBe("Waiting for exchange rates");
+    expect(screen.getByRole("status").textContent).toBe("Couldn't load exchange rates");
   });
 
   it.each([
@@ -781,7 +1736,7 @@ describe("ImportTrades", () => {
     );
     await screen.findByText(/Fix these first/);
     expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
-    fireEvent.change(screen.getByLabelText("CSV file"), {
+    fireEvent.change(screen.getByLabelText("Change file"), {
       target: {
         files: [
           new File(["date,side,isin,shares,price\n2026-01-02,buy,XX0000000001,1,10"], "ok.csv"),
@@ -792,7 +1747,7 @@ describe("ImportTrades", () => {
   });
 
   describe("corrected holdings", () => {
-    const corrected = () => screen.getByRole("region", { name: "Holdings corrected" });
+    const corrected = () => screen.getByRole("region", { name: "Holdings to correct" });
 
     it("lists each one: name, source, old → new, with its decimals", async () => {
       db.extraCoins.push({ asset_symbol: "LTC", amount: 0.5, name: "Litecoin", source: "Manual" });
@@ -949,9 +1904,9 @@ describe("ImportTrades", () => {
     it("a stock's count shows old → new, with no source", async () => {
       open("stock");
       pick(/Trade Republic/, "trade_republic.csv");
-      await screen.findByRole("button", { name: "Save 4 trades" });
+      await screen.findByRole("button", { name: /^Save 4 trades/ });
       const rows = within(
-        screen.getByRole("region", { name: "Share counts corrected" }),
+        screen.getByRole("region", { name: "Share counts to correct" }),
       ).getAllByRole("listitem");
       expect(rows[0]!.textContent).toBe("Example World ETF1 → 4");
     });
@@ -964,12 +1919,28 @@ describe("ImportTrades", () => {
       knownKeys: new Set(["XX0000000001", "XX0000000002"]),
       today: "2099-01-01",
     };
-    // Every trade already saved: only the share count is left to set.
-    open("stock", parseTradesCsv(csv, ctx).trades);
+    // Every trade and income row already saved: only the share count is left to set.
+    const { trades, events } = parseTradesCsv(csv, ctx);
+    db.events.push(...events!.map((e) => ({ ...e })));
+    open("stock", trades);
     pick(/Trade Republic/, "trade_republic.csv");
-    fireEvent.click(await screen.findByRole("button", { name: "Save trades" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save share counts" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(toast.success).toHaveBeenLastCalledWith("Updated 2 holdings");
+    expect(toast.success).toHaveBeenLastCalledWith("Updated 2 share counts");
+  });
+
+  it("on Crypto, a file that only corrects holdings offers Save holdings", async () => {
+    db.extraCoins.push({ asset_symbol: "LTC", amount: 0.5, name: "Litecoin", source: "Manual" });
+    open("crypto");
+    pick(/Ledger Live/, "ledger_live.csv");
+    fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    cleanup();
+    // Every trade saved, the coin counts still off: only the holdings are left.
+    open("crypto", db.inserted as unknown as Array<Trade>);
+    pick(/Ledger Live/, "ledger_live.csv");
+    expect(await screen.findByRole("button", { name: "Save holdings" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Save share counts" })).toBeNull();
   });
 
   describe("a coin sold to zero with no holding", () => {
@@ -1068,7 +2039,7 @@ describe("ImportTrades", () => {
       target: { files: [new File([csv], "ops.csv", { type: "text/csv" })] },
     });
     await screen.findByText("ops.csv");
-    const picker = screen.getByLabelText("CSV file");
+    const picker = screen.getByLabelText("Change file");
     expect(picker.closest("label")!.textContent).toBe("Change");
     expect(document.activeElement).toBe(picker);
   });
@@ -1140,10 +2111,7 @@ describe("ImportTrades", () => {
       expect(description()).toMatch(/price is per share in EUR/);
     });
 
-    it.each([
-      ["stock", "ledger_live.csv", "Crypto"],
-      ["crypto", "trade_republic.csv", "Portfolio"],
-    ] as const)(
+    it.each([["stock", "ledger_live.csv", "Crypto"]] as const)(
       "on the %s page, the other page's file (%s) keeps the columns' description",
       async (kind, fixture, page) => {
         open(kind);
@@ -1152,5 +2120,13 @@ describe("ImportTrades", () => {
         expect(description()).toMatch(/^A header row with date, side/);
       },
     );
+
+    it("a Trade Republic file belongs on the Crypto page too: described as its own, no link away", async () => {
+      open("crypto");
+      pick(/My own spreadsheet/, "trade_republic.csv");
+      await screen.findByText("Nothing in this file to import here.");
+      expect(description()).toBe("This file comes from Trade Republic: read as it comes.");
+      expect(screen.queryByRole("link", { name: /Open the/ })).toBeNull();
+    });
   });
 });

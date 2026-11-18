@@ -7,7 +7,8 @@ import { normalizeNumber } from "@/lib/locale";
 //   return = gain / the most money you ever had in it at once (peak invested)
 // Dividing by everything ever paid would let money moved in and out of a fund inflate the base;
 // dividing by the cost of what's left would make a mostly sold holding show +980% on pennies.
-// Fees count against you. Dividends are not counted.
+// Fees and taxes count against you. What a holding paid you (dividends, interest, after tax) counts
+// for it.
 
 export interface Trade {
   kind: string;
@@ -17,6 +18,12 @@ export interface Trade {
   shares: number;
   price_eur: number;
   fee_eur: number;
+  /** Tax charged on the trade (e.g. a financial transaction tax): it counts like a fee. */
+  tax_eur?: number;
+  /** The exact time, when the broker gives it. */
+  traded_at?: string | null;
+  /** What kind of buy it was (savings plan, saveback...), from the broker. */
+  note?: string | null;
   /** The broker parser that imported it (src/lib/brokers), and the broker's own id for the trade. */
   source?: string | null;
   external_id?: string | null;
@@ -37,10 +44,14 @@ export type Measured =
 const signed = (t: Trade) => (t.side === "buy" ? t.shares : -t.shares);
 export const netShares = (trades: Array<Trade>) => trades.reduce((s, t) => s + signed(t), 0);
 
-// Oldest first; on one day buys go first, so a same-day sale has shares to sell.
-const inOrder = (trades: Array<Trade>) =>
+// Oldest first; on one day by the broker's time when both have one, else buys first, so a
+// same-day sale has shares to sell.
+export const inOrder = <T extends Trade>(trades: Array<T>) =>
   [...trades].sort(
-    (a, b) => a.trade_date.localeCompare(b.trade_date) || a.side.localeCompare(b.side),
+    (a, b) =>
+      a.trade_date.localeCompare(b.trade_date) ||
+      (a.traded_at && b.traded_at ? a.traded_at.localeCompare(b.traded_at) : 0) ||
+      a.side.localeCompare(b.side),
   );
 
 /** Cash in, cash out, and the most that was ever in at once. */
@@ -49,15 +60,19 @@ function replay(trades: Array<Trade>) {
   let sold = 0;
   let peak = 0;
   for (const t of inOrder(trades)) {
-    if (t.side === "buy") bought += t.shares * t.price_eur + t.fee_eur;
-    else sold += t.shares * t.price_eur - t.fee_eur;
+    const costs = t.fee_eur + (t.tax_eur ?? 0);
+    if (t.side === "buy") bought += t.shares * t.price_eur + costs;
+    else sold += t.shares * t.price_eur - costs;
     peak = Math.max(peak, bought - sold);
   }
   return { bought, sold, peak };
 }
 
-/** One holding's total return. Sold to zero: its profit counts, and it needs no current price. */
-export function measure(row: PerformanceRow, trades: Array<Trade>): Measured {
+/**
+ * One holding's total return. Sold to zero: its profit counts, and it needs no current price.
+ * `income` is what it paid you (dividends, interest, after tax), from investment_events.
+ */
+export function measure(row: PerformanceRow, trades: Array<Trade>, income = 0): Measured {
   const held = row.quantity ?? 0;
   const value = held > 0 && row.end_price_eur != null ? held * row.end_price_eur : null;
   const isDust = value != null && value < DUST_EUR;
@@ -69,7 +84,7 @@ export function measure(row: PerformanceRow, trades: Array<Trade>): Measured {
   if (held > 0 && value == null) return { state: "no_price" };
 
   const { bought, sold, peak } = replay(trades);
-  const gain = (value ?? 0) + sold - bought;
+  const gain = (value ?? 0) + sold - bought + income;
   return { state: "ok", gain, base: peak, change: peak > 0 ? gain / peak : null };
 }
 

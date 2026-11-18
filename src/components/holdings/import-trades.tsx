@@ -39,6 +39,9 @@ import {
   shareUpdates,
   summarizeImport,
 } from "@/lib/trades-csv";
+import { newEvents } from "@/lib/investment-events";
+import { fetchEvents } from "@/lib/use-performance";
+import { formatIncome, incomeAndCosts, incomeRows } from "@/components/holdings/investment-income";
 
 /** A coin holding as stored: its count and its symbol written as saved (the key is in capitals). */
 interface Held {
@@ -107,6 +110,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
+  // A chosen file's text is on its way: until then the card says Reading….
+  const [reading, setReading] = useState(false);
   const [dragging, setDragging] = useState(false);
   // Where the file comes from: a broker's id, "spreadsheet" for your own columns, or "other".
   const [from, setFrom] = useState<string | null>(null);
@@ -117,20 +122,9 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     stepChanged.current = true;
     setFrom(next);
   }
-  useEffect(() => {
-    if (!stepChanged.current) return;
-    stepChanged.current = false;
-    titleRef.current?.focus();
-  }, [from]);
-  // The drop zone becomes the file's row with Change: a picker that had focus keeps it there.
-  const fileRef = useRef<HTMLInputElement>(null);
-  const refocusFile = useRef(false);
-  useEffect(() => {
-    if (!refocusFile.current) return;
-    refocusFile.current = false;
-    fileRef.current?.focus();
-  }, [fileName]);
-  const brokers = BROKERS.filter((b) => b.kind === kind);
+  // Brokers whose files this page reads (Trade Republic's on both pages).
+  const belongsHere = (b: { kind: string }) => b.kind === kind || b.kind === "both";
+  const brokers = BROKERS.filter(belongsHere);
   const broker = brokers.find((b) => b.id === from);
   const keyColumn = kind === "stock" ? "isin" : "symbol";
 
@@ -164,8 +158,10 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   );
   // Prices in dollars (a Ledger file): load that currency's daily rates, then read it again.
   const firstPass = useMemo(
-    () => (text.trim() && ctx ? parseTradesCsv(text, ctx, broker) : null),
-    [text, ctx, broker],
+    // A chosen file that turns out blank is read too: the parser says it's empty.
+    () =>
+      (text.trim() || (fileName && !reading)) && ctx ? parseTradesCsv(text, ctx, broker) : null,
+    [text, ctx, broker, fileName, reading],
   );
   const need = firstPass?.needsRates;
   const rates = useQuery({
@@ -187,6 +183,22 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     );
   }, [firstPass, ctx, need, rates.data, text, broker]);
   const fresh = useMemo(() => (parsed ? newTrades(parsed.trades, saved) : []), [parsed, saved]);
+  // Dividends, interest, fees, taxes and transfers in the file that aren't saved yet.
+  const savedEvents = useQuery({
+    queryKey: ["investment-events"],
+    queryFn: () => fetchEvents(supabase),
+    enabled: open,
+  });
+  const freshEvents = useMemo(
+    () => (parsed?.events && savedEvents.data ? newEvents(parsed.events, savedEvents.data) : []),
+    [parsed, savedEvents.data],
+  );
+  // With the new trades' fees and taxes, the same sum as the Income and costs section.
+  const income = useMemo(() => incomeAndCosts(freshEvents, fresh), [freshEvents, fresh]);
+  const incomeList = incomeRows(income);
+  // Dividends and Interest come first: the index of the last of them, -1 with neither.
+  const afterTax =
+    incomeList.filter((r) => r.label === "Dividends" || r.label === "Interest").length - 1;
   const summary = useMemo(() => summarizeImport(fresh), [fresh]);
   // Count only the wallet's own trades for its holding.
   const updates = useMemo(() => {
@@ -220,11 +232,15 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   const saving = useRef(false);
   const save = useMutation({
     mutationFn: async () => {
-      // One insert is one statement: all the rows land, or none do.
-      if (fresh.length > 0) {
+      // Only new rows carry your id; share counts alone don't need it.
+      let userId = "";
+      if (fresh.length > 0 || freshEvents.length > 0) {
         const { data } = await supabase.auth.getUser();
         if (!data.user) throw new Error("You're signed out. Sign in and try again.");
-        const userId = data.user.id;
+        userId = data.user.id;
+      }
+      // One insert is one statement: all the rows land, or none do.
+      if (fresh.length > 0) {
         const { error } = await supabase
           .from("holding_trades")
           .insert(fresh.map((t) => ({ ...t, user_id: userId })));
@@ -232,26 +248,65 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       }
       // If this fails the trades are safe: importing again skips them and retries the counts.
       // set_holding_quantity also writes today's value, so net worth moves at once.
-      for (const { key, shares } of updates) {
-        const held = wallet?.get(key);
-        await saveQuantity(
-          kind === "stock"
-            ? { kind: "stock", isin: key }
-            : { kind: "crypto", symbol: held!.symbol, source: held!.source },
-          shares,
+      try {
+        for (const { key, shares } of updates) {
+          const held = wallet?.get(key);
+          await saveQuantity(
+            kind === "stock"
+              ? { kind: "stock", isin: key }
+              : { kind: "crypto", symbol: held!.symbol, source: held!.source },
+            shares,
+          );
+        }
+      } catch (e) {
+        // The trades are saved by now: say so, as for the income rows below.
+        if (fresh.length === 0) throw e;
+        const unsaved =
+          freshEvents.length > 0
+            ? "the share counts and the income, fee and cash rows weren't"
+            : "the share counts weren't";
+        throw new Error(
+          `${plural(fresh.length, "trade")} saved, but ${unsaved} (${(e as Error).message}). Import the file again to save them.`,
         );
       }
+      // A re-import is skipped by the database too: the same broker id is saved once.
+      if (freshEvents.length > 0) {
+        // Only rows the database saved come back: one already there (another tab) isn't counted.
+        const { data: savedRows, error } = await supabase
+          .from("investment_events")
+          .upsert(
+            freshEvents.map((e) => ({ ...e, user_id: userId })),
+            { onConflict: "user_id,source,external_id", ignoreDuplicates: true },
+          )
+          .select("id");
+        // The trades and counts are saved by now: say so, or a retry looks like it starts over.
+        if (error && fresh.length > 0)
+          throw new Error(
+            `${plural(fresh.length, "trade")} saved, but the income, fee and cash rows weren't (${error.message}). Import the file again to save them.`,
+          );
+        if (error) throw error;
+        return { trades: fresh.length, events: savedRows?.length ?? 0, counts: updates.length };
+      }
+      return { trades: fresh.length, events: 0, counts: updates.length };
     },
-    onSuccess: () => {
-      // Worded as the sibling CSV import's "Imported 3 rows".
-      const imported = `Imported ${plural(fresh.length, "trade")}`;
-      const updated = plural(updates.length, "holding");
+    // Counts come from the save itself: the dialog may have been cleared while it ran.
+    // Worded as the sibling CSV import's "Imported 3 rows".
+    onSuccess: ({ trades, events, counts }) => {
+      const imported = [
+        trades > 0 && plural(trades, "trade"),
+        events > 0 && plural(events, "income and cash row"),
+      ]
+        .filter(Boolean)
+        .join(" and ");
+      const updated = plural(counts, kind === "crypto" ? "holding" : "share count");
       toast.success(
-        updates.length === 0
-          ? imported
-          : fresh.length === 0
-            ? `Updated ${updated}`
-            : `${imported}, updated ${updated}`,
+        imported && counts > 0
+          ? `Imported ${imported}, updated ${updated}`
+          : imported
+            ? `Imported ${imported}`
+            : counts > 0
+              ? `Updated ${updated}`
+              : "Nothing new imported",
       );
       reset();
       setOpen(false);
@@ -259,6 +314,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     onSettled: () => {
       saving.current = false;
       void queryClient.invalidateQueries({ queryKey: ["holding-trades"] });
+      void queryClient.invalidateQueries({ queryKey: ["investment-events"] });
       void queryClient.invalidateQueries({ queryKey: ["holding-keys", kind] });
       void queryClient.invalidateQueries({ queryKey: ["holding-performance"] });
       void queryClient.invalidateQueries({
@@ -268,6 +324,29 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     },
   });
 
+  // Choosing a source or a file removes the control you used: focus goes on to the next step.
+  // A new step focuses its title; Another broker focuses the way to ask for it.
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const askRef = useRef<HTMLAnchorElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!stepChanged.current) return;
+    stepChanged.current = false;
+    if (from === "other") askRef.current?.focus();
+    else titleRef.current?.focus();
+  }, [from]);
+  // The drop zone becomes the file's row with Change: a picker that had focus keeps it there;
+  // otherwise focus goes to the file's row and its status.
+  const refocusFile = useRef(false);
+  useEffect(() => {
+    if (!fileName) return;
+    if (refocusFile.current) fileInputRef.current?.focus();
+    else cardRef.current?.focus();
+    refocusFile.current = false;
+  }, [fileName]);
+
+  // Each file read gets a number: one that ends after another file, or after a reset, is dropped.
+  const readId = useRef(0);
   // Closing the tab mid-save leaves holdings half-updated: the browser asks first.
   useEffect(() => {
     if (!save.isPending) return;
@@ -281,16 +360,24 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   }, [save.isPending]);
 
   function reset() {
+    readId.current++;
     setText("");
     setFileName(null);
+    setReading(false);
     setFrom(null);
     save.reset();
   }
   function onFile(file: File | undefined) {
-    // Dropped or picked, a file can't replace the one being saved.
+    // Dropped or picked, a file can't replace the one being saved: the save ends by clearing the dialog.
     if (!file || save.isPending) return;
     setFileName(file.name);
-    void file.text().then(setText);
+    setReading(true);
+    const id = ++readId.current;
+    void file.text().then((t) => {
+      if (id !== readId.current) return;
+      setText(t);
+      setReading(false);
+    });
   }
 
   const correctedId = useId();
@@ -300,13 +387,13 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   const row = "flex min-h-12 items-center gap-3 px-4 py-2.5 text-[0.9375rem]";
   const fileInput = (
     <input
+      ref={fileInputRef}
       type="file"
       accept=".csv,.tsv,.txt,text/csv"
-      aria-label="CSV file"
+      aria-label={fileName ? "Change file" : "CSV file"}
       className="sr-only"
       // A file can't be swapped while the last one saves.
       disabled={save.isPending}
-      ref={fileRef}
       onChange={(e) => {
         refocusFile.current = !fileName && document.activeElement === e.target;
         onFile(e.target.files?.[0]);
@@ -316,8 +403,22 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     />
   );
   const ok = parsed != null && parsed.errors.length === 0;
+  // Rows of the file saved before; known once your saved rows have loaded.
+  const skippedTrades = parsed ? parsed.trades.length - fresh.length : 0;
+  const skippedEvents =
+    parsed?.events && savedEvents.data ? parsed.events.length - freshEvents.length : 0;
+  // A read file with nothing to save: no check mark, no Save, and a line saying why.
+  const nothing =
+    ok &&
+    (parsed.events == null || savedEvents.data != null) &&
+    fresh.length === 0 &&
+    freshEvents.length === 0 &&
+    updates.length === 0;
   // Without the holdings or the rates the file can't be read: no spinner next to the error.
   const stuck = !parsed && (keys.isError || (rates.isError && !retrying));
+  // Counts in the reader's locale (1,234).
+  const counted = (n: number, word: string) =>
+    `${numberFormat().format(n)} ${word}${n === 1 ? "" : "s"}`;
   const title =
     from === null
       ? "Import trades"
@@ -337,7 +438,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       open={open}
       onOpenChange={(next) => {
         // A save finishing later would close and clear whatever is open then: wait for it.
-        if (!next && saving.current) return;
+        if (!next && (saving.current || save.isPending)) return;
         setOpen(next);
         if (!next) reset();
       }}
@@ -345,7 +446,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       <DialogTrigger className="-my-2.5 inline-flex min-h-11 items-center text-xs text-primary underline-offset-2 hover:underline">
         Import trades from CSV
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent closeDisabled={save.isPending}>
         {from !== null && (
           <button
             type="button"
@@ -354,7 +455,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               go(null);
             }}
             disabled={save.isPending}
-            className="-my-2 inline-flex min-h-11 items-center gap-1 self-start text-xs text-muted-foreground hover:text-foreground"
+            className="-my-2 inline-flex min-h-11 items-center gap-1 self-start text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
           >
             <ChevronLeft className="size-3.5" /> All sources
           </button>
@@ -368,7 +469,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               ? "Where are these trades from?"
               : broker
                 ? "Upload the export as it comes. Alopex reads it on your device and shows you what it found first."
-                : from === "spreadsheet" && detected && detected.kind === kind
+                : from === "spreadsheet" && detected && belongsHere(detected)
                   ? // A broker's own file pasted here is read as that broker's, not by our columns.
                     `This file comes from ${detected.name}: read as it comes${need ? `, its ${need.currency} values turned into euro with each day's rate` : ""}.`
                   : from === "spreadsheet"
@@ -386,8 +487,11 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                 onClick={() => go(o.id)}
                 className={cn(row, "w-full text-left hover:bg-muted")}
               >
-                <span className="flex-1 font-medium">{o.label}</span>
-                <span className="text-xs text-muted-foreground">{o.hint}</span>
+                {/* The name is the choice: it keeps its line, the hint gives way. */}
+                <span className="shrink-0 font-medium">{o.label}</span>
+                <span className="min-w-0 flex-1 truncate text-right text-xs text-muted-foreground">
+                  {o.hint}
+                </span>
                 <ChevronRight aria-hidden className="size-4 text-muted-foreground" />
               </button>
             ))}
@@ -398,6 +502,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
           <div className="flex flex-col gap-3 text-sm">
             <p>
               <a
+                ref={askRef}
                 href={NEW_BROKER_URL}
                 target="_blank"
                 rel="noreferrer"
@@ -421,18 +526,26 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
         {from !== null && from !== "other" && (
           <>
             {fileName ? (
-              <div className="flex items-center gap-3 rounded-lg border border-hairline bg-card px-4 py-3">
+              <div
+                ref={cardRef}
+                tabIndex={-1}
+                className="flex items-center gap-3 rounded-lg border border-hairline bg-card px-4 py-3 outline-none"
+              >
                 <span
                   aria-hidden
                   className={cn(
                     "inline-flex size-9 shrink-0 items-center justify-center rounded-full",
                     (parsed && !ok) || stuck
                       ? "bg-negative/15 text-negative"
-                      : "bg-positive/15 text-positive",
+                      : nothing
+                        ? "bg-foreground/[0.07] text-muted-foreground"
+                        : "bg-positive/15 text-positive",
                   )}
                 >
                   {(parsed && !ok) || stuck ? (
                     <CircleAlert className="size-4" strokeWidth={2.5} />
+                  ) : nothing ? (
+                    <Info className="size-4" strokeWidth={2.5} />
                   ) : parsed ? (
                     <Check className="size-4" strokeWidth={2.5} />
                   ) : (
@@ -442,16 +555,22 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{fileName}</span>
                   <span role="status" className="block text-xs text-muted-foreground">
-                    {!parsed && !stuck
-                      ? "Reading…"
-                      : ok
-                        ? "Read, check what it found below"
-                        : !parsed && !keys.isError
-                          ? "Waiting for exchange rates"
-                          : "Can't be imported"}
+                    {!parsed && keys.isError
+                      ? "Can't be read"
+                      : stuck
+                        ? "Couldn't load exchange rates"
+                        : !parsed
+                          ? need
+                            ? "Loading exchange rates…"
+                            : "Reading…"
+                          : nothing
+                            ? "Nothing new to import"
+                            : ok
+                              ? "Read, check what it found below"
+                              : "Can't be imported"}
                   </span>
                 </span>
-                <label className="-my-2 inline-flex min-h-11 cursor-pointer items-center rounded-sm px-2 text-xs text-primary underline underline-offset-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
+                <label className="-my-2 inline-flex min-h-11 cursor-pointer items-center rounded-sm px-2 text-xs text-primary underline underline-offset-2 has-[:disabled]:pointer-events-none has-[:disabled]:opacity-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
                   Change
                   {fileInput}
                 </label>
@@ -555,6 +674,11 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             </Button>
           </div>
         )}
+        {savedEvents.isError && (
+          <p role="alert" className="text-sm text-negative">
+            Couldn't load your saved dividends and fees: {savedEvents.error.message}
+          </p>
+        )}
         {keys.isError && (
           <p role="alert" className="text-sm text-negative">
             Couldn't load your holdings: {keys.error.message}
@@ -570,7 +694,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             </ul>
             {parsed.errors.length > 20 && <p>…and {parsed.errors.length - 20} more.</p>}
             {/* A file for the other page (a Ledger export on Portfolio): take you there. */}
-            {detected && detected.kind !== kind && (
+            {detected && !belongsHere(detected) && (
               <p className="mt-1">
                 <Link
                   to={detected.kind === "crypto" ? "/crypto" : "/portfolio"}
@@ -599,30 +723,90 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
         {ok && (
           <div className="flex flex-col gap-4">
             <div className="px-1">
-              <p className="flex items-baseline gap-2">
-                <span className="text-3xl leading-none font-semibold tabular-nums">
-                  {numberFormat().format(fresh.length)}
-                </span>
-                <span className="text-[0.9375rem] font-medium">
-                  new trade{fresh.length === 1 ? "" : "s"} to save
-                </span>
-              </p>
+              {nothing ? (
+                <p className="text-[0.9375rem] font-medium">
+                  {skippedTrades > 0 || skippedEvents > 0
+                    ? "Everything in this file is already saved."
+                    : "Nothing in this file to import here."}
+                </p>
+              ) : (
+                (fresh.length > 0 || freshEvents.length > 0) && (
+                  <p className="flex items-baseline gap-2">
+                    <span className="text-3xl leading-none font-semibold tabular-nums">
+                      {numberFormat().format(fresh.length > 0 ? fresh.length : freshEvents.length)}
+                    </span>
+                    <span className="text-[0.9375rem] font-medium">
+                      {fresh.length > 0
+                        ? `new trade${fresh.length === 1 ? "" : "s"} to save`
+                        : `new income and cash row${freshEvents.length === 1 ? "" : "s"} to save`}
+                    </span>
+                  </p>
+                )
+              )}
               {summary && (
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  {plural(summary.buys, "buy")} · {plural(summary.sells, "sell")} ·{" "}
-                  {summary.from === summary.to
-                    ? shortDate(summary.from)
-                    : `${shortDate(summary.from)} – ${shortDate(summary.to)}`}
+                  {[
+                    summary.buys > 0 && plural(summary.buys, "buy"),
+                    summary.sells > 0 && plural(summary.sells, "sell"),
+                    summary.from === summary.to
+                      ? shortDate(summary.from)
+                      : `${shortDate(summary.from)} – ${shortDate(summary.to)}`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </p>
               )}
             </div>
 
-            {parsed.trades.length > fresh.length && (
+            {/* Shown once the saved rows are known: until then the file's could all be saved already. */}
+            {savedEvents.data && (freshEvents.length > 0 || incomeList.length > 0) && (
+              <div>
+                <p className="px-1 pb-1.5 text-xs font-medium text-muted-foreground">
+                  {/* Fees and taxes on the trades alone are no extra rows: don't say "Also saved". */}
+                  {freshEvents.length > 0
+                    ? "Also saved: income, fees and cash"
+                    : "Costs on these trades"}
+                </p>
+                <GroupedList className="border border-hairline">
+                  {incomeList.map((r, i) => (
+                    <div key={r.label}>
+                      <div className={row}>
+                        <span className="flex-1">{r.label}</span>
+                        <span className="font-figure">{formatIncome(r.value)}</span>
+                      </div>
+                      {/* Right under the last of Dividends and Interest, which it's about. */}
+                      {i === afterTax && (
+                        <p className="-mt-1 px-4 pb-2 text-xs text-muted-foreground">
+                          Dividends and interest are after tax.
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  {freshEvents.length > 0 && (
+                    <div className={row}>
+                      <span className="flex-1">
+                        Rows saved in all (deposits and withdrawals too)
+                      </span>
+                      <span className="font-figure">
+                        {numberFormat().format(freshEvents.length)}
+                      </span>
+                    </div>
+                  )}
+                </GroupedList>
+              </div>
+            )}
+
+            {(skippedTrades > 0 || skippedEvents > 0) && (
               <GroupedList className="border border-hairline">
                 <div className={row}>
                   <span className="flex-1">Already saved, skipped</span>
-                  <span className="tabular-nums">
-                    {numberFormat().format(parsed.trades.length - fresh.length)}
+                  <span className="font-figure">
+                    {[
+                      skippedTrades > 0 && counted(skippedTrades, "trade"),
+                      skippedEvents > 0 && counted(skippedEvents, "row"),
+                    ]
+                      .filter(Boolean)
+                      .join(", ")}
                   </span>
                 </div>
               </GroupedList>
@@ -634,7 +818,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                   id={correctedId}
                   className="px-1 pb-1.5 text-xs font-medium text-muted-foreground"
                 >
-                  {kind === "crypto" ? "Holdings corrected" : "Share counts corrected"}
+                  {/* Before Save, a share count is still to correct. */}
+                  {kind === "crypto" ? "Holdings to correct" : "Share counts to correct"}
                 </p>
                 <GroupedList className="border border-hairline">
                   <ul>
@@ -655,7 +840,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                               </span>
                             )}
                           </span>
-                          <span className="shrink-0 text-sm tabular-nums">
+                          <span className="shrink-0 text-sm font-figure">
                             {old !== undefined && `${amount.format(old)} → `}
                             {amount.format(shares)}
                           </span>
@@ -734,20 +919,37 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             {save.error.message}
           </p>
         )}
-        {ok && (
+        {/* A file with errors saves nothing: no Save next to "Can't be imported". */}
+        {ok && !nothing && (
           // Pinned to the dialog's bottom: a long result (a phone, a pasted file) can't push it out of view.
           <div className="sticky -bottom-6 -mx-6 -mb-6 bg-background px-6 pt-2 pb-6">
             <Button
               className="w-full"
-              disabled={(fresh.length === 0 && updates.length === 0) || save.isPending}
+              disabled={
+                (fresh.length === 0 && updates.length === 0 && freshEvents.length === 0) ||
+                (parsed.events != null && !savedEvents.data) ||
+                save.isPending
+              }
               onClick={() => {
+                // Two clicks before a re-render would both start a save: only the first one counts.
                 if (saving.current) return;
                 saving.current = true;
                 save.mutate();
               }}
             >
               {save.isPending && <Loader2 className="size-4 animate-spin" />}
-              {fresh.length > 0 ? `Save ${plural(fresh.length, "trade")}` : "Save trades"}
+              {fresh.length > 0 || freshEvents.length > 0
+                ? `Save ${[
+                    fresh.length > 0 && plural(fresh.length, "trade"),
+                    freshEvents.length > 0 && plural(freshEvents.length, "row"),
+                  ]
+                    .filter(Boolean)
+                    .join(" and ")}`
+                : updates.length > 0
+                  ? kind === "crypto"
+                    ? "Save holdings"
+                    : "Save share counts"
+                  : "Save trades"}
             </Button>
           </div>
         )}

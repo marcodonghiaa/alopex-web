@@ -31,6 +31,7 @@ import { InvestingSwitch } from "@/components/investing-switch";
 import { useValueHistory } from "@/lib/use-value-history";
 import { tradesMatchHeld } from "@/lib/trades";
 import { usePerformance, useStartPrices } from "@/lib/use-performance";
+import { InvestmentIncome } from "@/components/holdings/investment-income";
 import {
   PerformanceNotice,
   ReturnCell,
@@ -420,6 +421,15 @@ function PortfolioPage() {
       )}
 
       {!query.isPending && <TradesImport perf={perf} />}
+
+      {/* Under the holdings and the import that fills it: the holdings are the everyday task. */}
+      {!query.isPending && (
+        <InvestmentIncome
+          events={perf.events}
+          trades={[...perf.tradesByKey.values()].flat()}
+          page="stock"
+        />
+      )}
 
       <SoldHoldings
         items={(query.data ?? []).flatMap((row) =>
