@@ -114,13 +114,86 @@ describe("Who owes you", () => {
     const billsBefore = Number(/(\d+) open bills?/.exec(giulia().textContent ?? "")?.[1]);
 
     await userEvent.click(within(section).getByRole("button", { name: "Yes, it's Giulia" }));
-    // The demo's other payment from Giulia (her Splitwise settle-up) may still ask; this one is gone.
     await waitFor(() => expect(screen.queryByText(/from GIULIA BIANCHI/)).toBeNull());
     await waitFor(() =>
       expect(Number(/(\d+) open bills?/.exec(giulia().textContent ?? "")?.[1])).toBe(
         billsBefore - 1,
       ),
     );
+  });
+
+  // protects=one payment, one question: a settle-up's bank payment that To link suggests is never
+  // also asked about as a payback; fails_when=Giulia's €22 settle-up shows on To link and as
+  // "Is this Giulia?" too (double count if both are answered)
+  it("doesn't ask whether a payment To link suggests for a settle-up is a payback", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    const list = await screen.findByRole("region", { name: "To link" });
+    const settleUp = await within(list).findByRole("listitem", { name: "Settle up" });
+    await waitFor(() => expect(settleUp).toHaveTextContent("€22.00"));
+    const section = await screen.findByRole("region", { name: "Did someone pay you back?" });
+    // Her newer transfer is asked about; answered, nothing else about Giulia is.
+    expect(within(section).getByText(/€32\.00/)).toBeTruthy();
+    expect(within(section).queryByText(/€22\.00/)).toBeNull();
+    await userEvent.click(within(section).getByRole("button", { name: "Yes, it's Giulia" }));
+    await waitFor(() => expect(screen.queryByText(/from GIULIA BIANCHI/)).toBeNull());
+    expect(screen.queryByText("Is this Giulia?")).toBeNull();
+    expect(within(list).getByRole("listitem", { name: "Settle up" })).toBeTruthy();
+  });
+
+  // A query on `table` that waits for `held`, then answers as the demo would (or with `answer`).
+  const holdTable = (table: string, held: Promise<void>, answer?: unknown) => {
+    const client = db.client as { from: (t: string) => unknown };
+    const from = client.from.bind(client);
+    const wrap = (q: object): unknown =>
+      new Proxy(q, {
+        get(target, key) {
+          if (key === "then")
+            return (ok: (v: unknown) => unknown, ko: (e: unknown) => unknown) =>
+              held.then(() =>
+                answer ? ok(answer) : (target as PromiseLike<unknown>).then(ok, ko),
+              );
+          const v = (target as Record<PropertyKey, unknown>)[key];
+          return typeof v === "function"
+            ? (...a: Array<unknown>) =>
+                wrap((v as (...x: Array<unknown>) => object).apply(target, a))
+            : v;
+        },
+      });
+    client.from = (t: string) => (t === table ? wrap(from(t) as object) : from(t));
+  };
+
+  // protects=no flash: a question To link will take over never shows first;
+  // fails_when=the questions show before To link's payments are in, then one disappears
+  it("asks nothing until To link's expenses are in", async () => {
+    let release = () => {};
+    holdTable("splitwise_review", new Promise<void>((r) => (release = r)));
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText("Net owed to you")).toBeTruthy();
+    expect(screen.getByRole("status", { name: "Loading split bills" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Did someone pay you back?" })).toBeNull();
+    release();
+    const section = await screen.findByRole("region", { name: "Did someone pay you back?" });
+    expect(within(section).queryByText(/€22\.00/)).toBeNull();
+  });
+
+  // protects=the questions when To link can't load; fails_when=they wait forever for it
+  it("still asks when To link fails to load", async () => {
+    holdTable("splitwise_review", Promise.resolve(), { data: null, error: { message: "boom" } });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    const section = await screen.findByRole("region", { name: "Did someone pay you back?" });
+    expect(within(section).getByText("Is this Giulia?")).toBeTruthy();
   });
 
   // protects=self-hosters on a database without the payback functions; fails_when=the page breaks

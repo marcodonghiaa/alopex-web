@@ -31,6 +31,7 @@ import {
   dismissMessage,
   paybackMessage,
   suggestPaybacks,
+  withoutToLink,
   type Debtor,
   type PaybackCandidate,
   type PaybackSuggestion,
@@ -44,7 +45,7 @@ import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SyncSetup } from "@/components/splitwise/sync-setup";
 import { balancesSource } from "@/lib/splitwise-sync";
-import { useSplitwiseConnection } from "@/lib/use-splitwise-sync";
+import { useSplitwiseConnection, useToLinkMatches } from "@/lib/use-splitwise-sync";
 import { ToLink } from "@/components/splitwise/to-link";
 
 export const Route = createFileRoute("/_authenticated/splitwise")({
@@ -86,6 +87,8 @@ function SplitwisePage() {
     staleTime: 60_000,
     retry: false,
   });
+  // The payments To link asks about are left out of the questions: one payment, one question.
+  const toLink = useToLinkMatches();
   const record = useRecordPaybackMutation(queryClient);
   const undoPayback = useUndoPaybackMutation(queryClient);
 
@@ -170,14 +173,28 @@ function SplitwisePage() {
   );
   // Asked only once debts (with their euro rates) and payments are in: a half-loaded list would
   // guess wrong.
-  const ready = splits.isSuccess && balances.isSuccess && rates.isSuccess && candidates.isSuccess;
+  const ready =
+    splits.isSuccess &&
+    balances.isSuccess &&
+    rates.isSuccess &&
+    candidates.isSuccess &&
+    toLink.settled;
   const suggestions = useMemo(
-    () => (ready ? suggestPaybacks(candidates.data ?? [], debtors) : []),
-    [ready, candidates.data, debtors],
+    () =>
+      ready
+        ? suggestPaybacks(
+            withoutToLink(
+              candidates.data ?? [],
+              [...toLink.suggestions.values()].map((s) => s.tx),
+            ),
+            debtors,
+          )
+        : [],
+    [ready, candidates.data, toLink.suggestions, debtors],
   );
   // The questions sit above the lists: the lists wait for them, so nothing moves under a tap.
   // (Rates load only after the balances: if those fail, rates never come and nothing is asked.)
-  const asking = candidates.isPending || (rates.isPending && !balances.isError);
+  const asking = candidates.isPending || !toLink.settled || (rates.isPending && !balances.isError);
   const busy = record.isPending && record.variables ? txId(record.variables.payment) : null;
 
   const confirmPayback = (payment: PaybackCandidate, debtor: Debtor) => {

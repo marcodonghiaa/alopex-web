@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { GroupSummary } from "@/lib/import/splitwise-balances";
 import { NO_NAME, type SplitPerson } from "@/lib/splits";
-import type { TxKey } from "@/lib/transactions";
+import { txId, type TxKey } from "@/lib/transactions";
 
 /** A recent incoming payment nobody has checked yet (see payback_candidates in the backend). */
 export interface PaybackCandidate extends TxKey {
@@ -183,6 +183,19 @@ export function namesLookAlike(payer: string | null, contact: string): boolean {
 }
 
 const sameCents = (a: number, b: number) => Math.abs(a - b) < 0.005;
+
+/**
+ * Leaves out the payments To link already suggests for a Splitwise expense (a settle-up someone paid
+ * you): that list asks about them, so "Is this Anna?" would ask about the same money twice. Said
+ * no to there, a payment is no longer suggested and comes back here.
+ */
+export function withoutToLink(
+  payments: Array<PaybackCandidate>,
+  suggested: Array<{ accountUid: string; entryReference: string }>,
+): Array<PaybackCandidate> {
+  const taken = new Set(suggested.map((t) => `${t.accountUid}|${t.entryReference}`));
+  return payments.filter((p) => !taken.has(txId(p)));
+}
 
 /**
  * The question to ask for each payment, best guess first: a payer you linked before (only while

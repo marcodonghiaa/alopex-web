@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { FindInBank } from "@/components/import/find-in-bank";
 import { Button } from "@/components/ui/button";
@@ -10,23 +10,19 @@ import { isDemoMode } from "@/lib/demo/mode";
 import { cn } from "@/lib/utils";
 import { PENDING } from "./pending";
 import { moneyAmount, money, shortDate } from "@/lib/import/splitwise-format";
-import { fetchBankWindow } from "@/lib/import/splitwise-bank";
-import { makeRate } from "@/lib/fx";
 import {
   canCount,
   directionOf,
-  fetchReview,
   formatCount,
   KIND_LABEL,
-  REVIEW_KEY,
   reviewRow,
   runReviewAction,
-  suggestMatches,
   syncRefreshKeys,
   type ReviewAction,
   type ReviewItem,
   type Suggestion,
 } from "@/lib/splitwise-sync";
+import { useToLinkMatches } from "@/lib/use-splitwise-sync";
 
 // The sheet hands focus back to the expense it was opened from, not to <body> (as the CSV review).
 const rowId = (id: string) => `to-link-${id}`;
@@ -58,26 +54,7 @@ const DONE: Record<ReviewAction["action"], string> = {
  */
 export function ToLink({ connected }: { connected: boolean }) {
   const queryClient = useQueryClient();
-  const review = useQuery({ queryKey: REVIEW_KEY, queryFn: fetchReview });
-  const items = useMemo(() => review.data?.items ?? [], [review.data]);
-  const dates = items.map((i) => i.booking_date).sort();
-  // Every input of the fetch: the window's ends and the currencies it reads rates for.
-  const currencies = [...new Set(items.map((i) => i.currency))].sort().join(",");
-  // Under "transactions" so the import's refresh keys refetch it after a link.
-  const bank = useQuery({
-    queryKey: ["transactions", "splitwise-to-link", dates[0], dates[dates.length - 1], currencies],
-    queryFn: () =>
-      fetchBankWindow(
-        items.map((i) => i.booking_date),
-        items.map((i) => i.currency),
-      ),
-    enabled: items.length > 0,
-  });
-  const rate = useMemo(() => makeRate(bank.data?.fx ?? []), [bank.data]);
-  const suggestions = useMemo(
-    () => suggestMatches(items, bank.data?.bank ?? [], rate),
-    [items, bank.data, rate],
-  );
+  const { review, items, bank, rate, suggestions } = useToLinkMatches();
   const [finding, setFinding] = useState<ReviewItem | null>(null);
   // Stable between renders: Find in bank clears the picked payment when its row changes.
   const findRow = useMemo(() => (finding ? reviewRow(finding, 0) : null), [finding]);

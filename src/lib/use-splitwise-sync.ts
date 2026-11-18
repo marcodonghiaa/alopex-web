@@ -1,8 +1,14 @@
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { toast } from "sonner";
+import { fetchBankWindow } from "@/lib/import/splitwise-bank";
+import { makeRate } from "@/lib/fx";
 import {
   CONNECTION_KEY,
   fetchConnection,
+  fetchReview,
+  REVIEW_KEY,
+  suggestMatches,
   syncNow,
   syncRefreshKeys,
   syncSummary,
@@ -43,4 +49,38 @@ export function useSyncNow(onSettled?: () => void) {
   return () => {
     if (queryClient.isMutating({ mutationKey: SYNC_NOW_KEY }) === 0) sync.mutate();
   };
+}
+
+/**
+ * The Splitwise expenses waiting on To link and the bank payment suggested for each. Shared by the
+ * To link list and the payback questions (same cache), so both always agree on which payment To
+ * link is asking about.
+ */
+export function useToLinkMatches() {
+  const review = useQuery({ queryKey: REVIEW_KEY, queryFn: fetchReview });
+  const items = useMemo(() => review.data?.items ?? [], [review.data]);
+  const dates = items.map((i) => i.booking_date).sort();
+  // Every input of the fetch: the window's ends and the currencies it reads rates for.
+  const currencies = [...new Set(items.map((i) => i.currency))].sort().join(",");
+  // Under "transactions" so the import's refresh keys refetch it after a link.
+  const bank = useQuery({
+    queryKey: ["transactions", "splitwise-to-link", dates[0], dates[dates.length - 1], currencies],
+    queryFn: () =>
+      fetchBankWindow(
+        items.map((i) => i.booking_date),
+        items.map((i) => i.currency),
+      ),
+    enabled: items.length > 0,
+  });
+  const rate = useMemo(() => makeRate(bank.data?.fx ?? []), [bank.data]);
+  const suggestions = useMemo(
+    () => suggestMatches(items, bank.data?.bank ?? [], rate),
+    [items, bank.data, rate],
+  );
+  // Done once the list is read and, with items, their bank payments. A first failure counts as
+  // done: what waits on this (the payback questions) shouldn't wait out the retries.
+  const done = (q: { isPending: boolean; failureCount: number }) =>
+    !q.isPending || q.failureCount > 0;
+  const settled = done(review) && (items.length === 0 || done(bank));
+  return { review, items, bank, rate, suggestions, settled };
 }
