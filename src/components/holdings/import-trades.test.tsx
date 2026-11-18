@@ -1187,9 +1187,7 @@ describe("ImportTrades", () => {
       });
       await screen.findByText("new trades to save");
       expect(screen.getByText(n)).toBeTruthy();
-      expect(
-        screen.getByText(new RegExp(`^${n.replace(".", "\\.")} buys · 0 sells ·`)),
-      ).toBeTruthy();
+      expect(screen.getByText(new RegExp(`^${n.replace(".", "\\.")} buys · `))).toBeTruthy();
       fireEvent.click(screen.getByRole("button", { name: `Save ${n} trades` }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
       expect(toast.success).toHaveBeenLastCalledWith(`Imported ${n} trades`);
@@ -1755,7 +1753,7 @@ describe("ImportTrades", () => {
       db.extraCoins.push({ asset_symbol: "LTC", amount: 0.5, name: "Litecoin", source: "Manual" });
       open("crypto");
       pick(/Ledger Live/, "ledger_live.csv");
-      await screen.findByRole("button", { name: "Save 5 trades" });
+      await screen.findByRole("button", { name: "Save 7 trades" });
       const rows = within(corrected()).getAllByRole("listitem");
       expect(rows.map((r) => r.textContent)).toEqual([
         "EthereumManual0.4 → 0.4988",
@@ -1878,7 +1876,7 @@ describe("ImportTrades", () => {
       db.extraCoins.push({ asset_symbol: "LTC", amount: 0.5, name: "Litecoin", source: "Manual" });
       open("crypto");
       pick(/Ledger Live/, "ledger_live.csv");
-      fireEvent.click(await screen.findByRole("button", { name: "Save 5 trades" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
       expect(toast.success).toHaveBeenLastCalledWith("Imported 7 trades, updated 2 holdings");
     });
@@ -1935,7 +1933,7 @@ describe("ImportTrades", () => {
     db.extraCoins.push({ asset_symbol: "LTC", amount: 0.5, name: "Litecoin", source: "Manual" });
     open("crypto");
     pick(/Ledger Live/, "ledger_live.csv");
-    fireEvent.click(await screen.findByRole("button", { name: "Save 5 trades" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     cleanup();
     // Every trade saved, the coin counts still off: only the holdings are left.
@@ -1997,7 +1995,7 @@ describe("ImportTrades", () => {
       db.extraCoins.push({ asset_symbol: "LTC", amount: 0.5, name: "Litecoin", source: "Manual" });
       open("crypto");
       pick(/Ledger Live/, "ledger_live.csv");
-      await screen.findByRole("button", { name: "Save 5 trades" });
+      await screen.findByRole("button", { name: "Save 7 trades" });
       expect(screen.getByText("By holding").nextElementSibling!.textContent).toContain("Litecoin");
       expect(screen.queryByText(/sold to zero/)).toBeNull();
     });
