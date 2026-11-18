@@ -16,17 +16,24 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+const latestPriceEur = vi.fn();
+const recordTrade = vi.fn();
+vi.mock("@/lib/manual-trades", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/manual-trades")>()),
+  latestPriceEur: (...args: unknown[]) => latestPriceEur(...args),
+  recordTrade: (...args: unknown[]) => recordTrade(...args),
+}));
 
 import { EditHolding } from "./edit-holding";
 import { setLocaleOverride } from "@/lib/locale";
 import { parseQuantity } from "@/lib/holdings";
 
-function setup(target: Parameters<typeof EditHolding>[0]["target"]) {
+function setup(target: Parameters<typeof EditHolding>[0]["target"], tradesMatch = false) {
   const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
   render(
     <QueryClientProvider client={queryClient}>
-      <EditHolding target={target} name="Test ETF" quantity={1} />
+      <EditHolding target={target} name="Test ETF" quantity={1} tradesMatch={tradesMatch} />
     </QueryClientProvider>,
   );
   fireEvent.click(screen.getByRole("button", { name: "Edit Test ETF" }));
@@ -34,6 +41,8 @@ function setup(target: Parameters<typeof EditHolding>[0]["target"]) {
 }
 
 beforeEach(() => {
+  latestPriceEur.mockReset().mockResolvedValue(80);
+  recordTrade.mockReset().mockResolvedValue(undefined);
   rpc.mockReset();
   update.mockClear();
 });
@@ -182,5 +191,75 @@ describe("EditHolding as a text button", () => {
     expect(button).toHaveTextContent("Edit shares");
     fireEvent.click(button);
     expect(screen.getByText("How many you hold now")).toBeInTheDocument();
+  });
+
+  // protects=editing by hand keeps trades in step with what you hold (Marco); fails_when=the
+  // return hides after an edit, as trades no longer match the shares
+  describe("recording the change as a trade", () => {
+    const record = "Record the change as a buy or sale at today's price";
+
+    it("records more as a buy at today's price", async () => {
+      rpc.mockResolvedValue({ data: 1, error: null });
+      setup({ kind: "stock", isin: "IE00TEST" }, true);
+      expect(screen.getByLabelText(record)).toBeChecked();
+      fireEvent.change(screen.getByLabelText("How many you hold now"), { target: { value: "3" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(recordTrade).toHaveBeenCalled());
+      expect(latestPriceEur.mock.calls[0]!.slice(1)).toEqual(["stock", "IE00TEST"]);
+      expect(recordTrade.mock.calls[0]![1]).toMatchObject({
+        kind: "stock",
+        key: "IE00TEST",
+        side: "buy",
+        shares: 2,
+        price_eur: 80,
+        source: "Manual",
+      });
+    });
+
+    it("records Mark as sold as a sale of everything", async () => {
+      rpc.mockResolvedValue({ data: 1, error: null });
+      setup({ kind: "crypto", symbol: "BTC", source: "Manual" }, true);
+      fireEvent.click(screen.getByRole("button", { name: "Mark as sold" }));
+      await waitFor(() => expect(recordTrade).toHaveBeenCalled());
+      expect(recordTrade.mock.calls[0]![1]).toMatchObject({ key: "BTC", side: "sell", shares: 1 });
+    });
+
+    it("records nothing when unticked", async () => {
+      rpc.mockResolvedValue({ data: 1, error: null });
+      setup({ kind: "stock", isin: "IE00TEST" }, true);
+      fireEvent.click(screen.getByLabelText(record));
+      fireEvent.click(screen.getByRole("button", { name: "Mark as sold" }));
+      await waitFor(() => expect(rpc).toHaveBeenCalled());
+      await new Promise((r) => setTimeout(r, 20));
+      expect(recordTrade).not.toHaveBeenCalled();
+    });
+
+    it("isn't offered without trades that match what you hold: one trade would make them disagree", () => {
+      setup({ kind: "stock", isin: "IE00TEST" });
+      expect(screen.queryByLabelText(record)).toBeNull();
+    });
+
+    it("records nothing without today's price", async () => {
+      rpc.mockResolvedValue({ data: 1, error: null });
+      latestPriceEur.mockResolvedValue(null);
+      setup({ kind: "stock", isin: "IE00TEST" }, true);
+      fireEvent.click(screen.getByRole("button", { name: "Mark as sold" }));
+      await waitFor(() => expect(latestPriceEur).toHaveBeenCalled());
+      await new Promise((r) => setTimeout(r, 20));
+      expect(recordTrade).not.toHaveBeenCalled();
+    });
+
+    it("says so when the trade can't be saved", async () => {
+      const { toast } = await import("sonner");
+      rpc.mockResolvedValue({ data: 1, error: null });
+      recordTrade.mockRejectedValue(new Error("down"));
+      setup({ kind: "stock", isin: "IE00TEST" }, true);
+      fireEvent.click(screen.getByRole("button", { name: "Mark as sold" }));
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith(
+          "Test ETF: the sale wasn't saved as a trade. Tap its return to add it.",
+        ),
+      );
+    });
   });
 });

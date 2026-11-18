@@ -19,6 +19,7 @@ import { DetailRow, HoldingRow } from "@/components/holdings/holding-row";
 import { InvestingSwitch } from "@/components/investing-switch";
 import { EmptyState } from "@/components/empty-state";
 import { useValueHistory } from "@/lib/use-value-history";
+import { tradesMatchHeld } from "@/lib/trades";
 import { splitSmallBalances } from "@/lib/small-balances";
 import { usePerformance, useStartPrices } from "@/lib/use-performance";
 import { InvestmentIncome } from "@/components/holdings/investment-income";
@@ -298,7 +299,10 @@ function CryptoPage() {
                           {formatEur(asset.valueEur)}
                         </td>
                         <td className="px-2 py-1 text-right">
-                          <AssetEdits asset={asset} />
+                          <AssetEdits
+                            asset={asset}
+                            tradesMatch={tradesMatchHeld(perf, asset.symbol)}
+                          />
                         </td>
                       </tr>
                     );
@@ -355,6 +359,7 @@ function CryptoPage() {
                           asset.bySource.length > 1 ? `${asset.name} (${s.source})` : asset.name
                         }
                         quantity={s.amount}
+                        tradesMatch={tradesMatchHeld(perf, asset.symbol)}
                         label={
                           asset.bySource.length > 1 ? `Edit ${s.source} amount` : "Edit amount"
                         }
@@ -415,7 +420,7 @@ function CryptoPage() {
 }
 
 // One edit control per source you entered yourself; Coinbase amounts come from the sync.
-function AssetEdits({ asset }: { asset: AssetGroup }) {
+function AssetEdits({ asset, tradesMatch }: { asset: AssetGroup; tradesMatch: boolean }) {
   const editable = asset.bySource.filter((s) => isEditableCryptoSource(s.source));
   return (
     <>
@@ -425,6 +430,7 @@ function AssetEdits({ asset }: { asset: AssetGroup }) {
           target={{ kind: "crypto", symbol: asset.symbol, source: s.source }}
           name={asset.bySource.length > 1 ? `${asset.name} (${s.source})` : asset.name}
           quantity={s.amount}
+          tradesMatch={tradesMatch}
         />
       ))}
     </>

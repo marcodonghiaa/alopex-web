@@ -110,13 +110,16 @@ describe("sidebar icons", () => {
 });
 
 describe("nav links", () => {
-  // Regression: the Rules page existed but no link led to it.
-  it("links to Rules from the sidebar", async () => {
+  // protects=a lighter first start: Rules lives in Settings, Cash flow opens from Reports;
+  // fails_when=either comes back into the sidebar
+  it("keeps Rules and Cash flow out of the sidebar", () => {
     rows.current = [];
     renderLayout();
-    const links = await screen.findAllByRole("link", { name: /Rules/ });
-    expect(links).toHaveLength(1);
-    links.forEach((l) => expect(l).toHaveAttribute("href", "/rules"));
+    const aside = document.querySelector("aside")!;
+    const hrefs = [...aside.querySelectorAll("a")].map((a) => a.getAttribute("href"));
+    expect(hrefs).not.toContain("/rules");
+    expect(hrefs).not.toContain("/cash-flow");
+    expect(hrefs).toContain("/budgets");
   });
 });
 
@@ -149,7 +152,7 @@ describe("phone tabs and More", () => {
     expect(tabBar().querySelector('[aria-current="page"]')).toBeNull();
   });
 
-  it("lists in More every page without a tab, Import and Rules included, and none twice", () => {
+  it("lists in More every page without a tab, Import included, and none twice", () => {
     const tabbed = new Set(TAB_BAR_ITEMS.flatMap((t) => t.owns));
     const more = MORE_GROUPS.flatMap((g) => g.items.map((i) => i.to));
     expect(more).toEqual(
@@ -160,9 +163,10 @@ describe("phone tabs and More", () => {
         "/subscriptions",
         "/splitwise",
         "/import",
-        "/rules",
       ]),
     );
+    expect(more).not.toContain("/rules");
+    expect(more).not.toContain("/cash-flow");
     expect(more.some((to) => tabbed.has(to))).toBe(false);
     expect(new Set(more).size).toBe(more.length);
   });
@@ -180,8 +184,6 @@ describe("phone tabs and More", () => {
       "Subscriptions",
       "Who owes you",
       "Reports",
-      // Cash flow (Sankey, savings rate) sits with Reports in Overview.
-      "Cash flow",
       "Income",
       // Budgets (#139) has no phone tab, so More is where phones reach it.
       "Budgets",

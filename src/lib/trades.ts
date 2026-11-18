@@ -180,3 +180,14 @@ export function parseTypedAmount(input: string): number | null {
   const value = Number(text);
   return Number.isFinite(value) ? value : null;
 }
+
+/** The holding's trades add up to what you hold, so a change by hand can be kept as a trade. */
+export function tradesMatchHeld(
+  perf: { tradesByKey: Map<string, Array<unknown>>; measuredByKey: Map<string, Measured> },
+  key: string,
+): boolean {
+  return (
+    (perf.tradesByKey.get(key)?.length ?? 0) > 0 &&
+    perf.measuredByKey.get(key)?.state !== "mismatch"
+  );
+}
