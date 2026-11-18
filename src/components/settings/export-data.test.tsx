@@ -32,6 +32,14 @@ describe("ExportData", () => {
     });
   });
 
+  it("titles the section like the rest of the app", () => {
+    render(<ExportData />);
+    expect(screen.getByRole("heading", { level: 2 })).toHaveClass(
+      "font-semibold",
+      "text-foreground",
+    );
+  });
+
   it("downloads a dated zip and says so", async () => {
     fetchAllTables.mockImplementation(async (_c, _id, onProgress) => {
       onProgress("transactions", 5, 10);

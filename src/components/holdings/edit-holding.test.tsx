@@ -144,3 +144,23 @@ describe("EditHolding delete", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/database update/i);
   });
 });
+
+// iOS view board: on phones the pencil leaves the Shares row; a text button under the details opens it.
+describe("EditHolding as a text button", () => {
+  it("shows its label and still names the holding for screen readers", () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <EditHolding
+          target={{ kind: "stock", isin: "X" }}
+          name="Test ETF"
+          quantity={1}
+          label="Edit shares"
+        />
+      </QueryClientProvider>,
+    );
+    const button = screen.getByRole("button", { name: "Edit shares of Test ETF" });
+    expect(button).toHaveTextContent("Edit shares");
+    fireEvent.click(button);
+    expect(screen.getByText("How many you hold now")).toBeInTheDocument();
+  });
+});

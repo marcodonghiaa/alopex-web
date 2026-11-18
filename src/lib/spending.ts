@@ -1,3 +1,4 @@
+import { formatPercent } from "@/lib/locale";
 import { toneOf, type Tone } from "@/lib/tone";
 
 /** One row of v_spend_by_category_monthly, as Spending and Reports read it. */
@@ -55,8 +56,8 @@ export function spendChange(
 /** A category's share of the month as a whole percent; slivers read "<1%", not "0%". */
 export function sharePercent(value: number, total: number): string {
   if (total <= 0) return "";
-  const pct = (value / total) * 100;
-  return pct > 0 && pct < 1 ? "<1%" : `${Math.round(pct)}%`;
+  const share = value / total;
+  return share > 0 && share < 0.0005 ? `<${formatPercent(0.001)}` : formatPercent(share);
 }
 
 /** "1 of 8 rated purchases": how many of the month's rated purchases were not worth it. */

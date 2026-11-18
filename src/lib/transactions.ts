@@ -154,6 +154,8 @@ export interface TransactionsSearch {
   category?: string;
   /** "YYYY-MM". */
   month?: string;
+  /** entry_reference of a row to scroll to and flash. */
+  highlight?: string;
 }
 
 // From 1970: `new Date` would read a year 0-99 as 1900-1999.
@@ -166,7 +168,17 @@ export function parseTransactionsSearch(raw: Record<string, unknown>): Transacti
   if (typeof category === "string" && category.trim()) out.category = category.trim();
   const month = raw["month"];
   if (typeof month === "string" && MONTH_PARAM.test(month)) out.month = month;
+  const highlight = raw["highlight"];
+  if (typeof highlight === "string" && highlight.trim()) out.highlight = highlight;
   return out;
+}
+
+/** The query string with the one-shot `highlight` removed and every other param kept. */
+export function withoutHighlight(search: string): string {
+  const params = new URLSearchParams(search);
+  params.delete("highlight");
+  const rest = params.toString();
+  return rest ? `?${rest}` : "";
 }
 
 /** The "YYYY-MM" param for a month. */

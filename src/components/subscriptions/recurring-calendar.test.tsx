@@ -401,6 +401,20 @@ describe("RecurringCalendar", () => {
     expect(await screen.findByText("+1 more")).toBeTruthy();
   });
 
+  // iOS view board: a second entry on the same day had no date, so the list read as undated.
+  it("dates every row in the list, even two on the same day", async () => {
+    const day = (id: string, name: string) =>
+      stream({
+        id,
+        merchant_key: name.toLowerCase(),
+        display_name: name,
+        next_expected: "2026-11-20",
+      });
+    renderCal([day("a", "A1"), day("b", "B2")]);
+    const rows = (await screen.findAllByText("Bill · expected")).map((el) => el.closest("li")!);
+    expect(rows.map((r) => r.textContent?.slice(0, 6))).toEqual(["20 Nov", "20 Nov"]);
+  });
+
   it("judges a past month's income on the six months up to it", async () => {
     // Paid May, June, October: regular by October (May-Oct), not by November (Jun-Nov).
     db.income = [credit("m", "2026-05-27"), credit("j", "2026-06-27"), credit("o", "2026-10-27")];

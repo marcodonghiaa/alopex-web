@@ -74,7 +74,7 @@ export function ValueChart<T extends { ts: number; snapshot_date: string }>({
             name={name}
             isAnimationActive={false}
             stroke="var(--color-foreground)"
-            strokeWidth={1.5}
+            strokeWidth={2.5}
             dot={latestDot(data.length - 1)}
             activeDot={{
               r: 3,

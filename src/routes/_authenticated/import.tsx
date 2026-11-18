@@ -17,13 +17,15 @@ function ImportPage() {
         </p>
       </header>
       <section className="mb-8 rounded-2xl border bg-card p-5 card-ring">
-        <h2 className="text-sm font-semibold">Bank statement</h2>
+        <h2 className="text-lg font-semibold text-foreground">Bank statement</h2>
         <p className="mt-1 mb-3 text-sm text-muted-foreground">
           Transactions from a CSV or PDF your bank gives you. Duplicates are skipped.
         </p>
         <ImportStatement label="Import a statement" />
       </section>
-      <h2 className="mb-3 text-sm font-semibold">Monthly history from a spreadsheet</h2>
+      <h2 className="mb-3 text-lg font-semibold text-foreground">
+        Monthly history from a spreadsheet
+      </h2>
       <ImportWizard />
     </div>
   );

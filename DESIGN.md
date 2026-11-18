@@ -32,18 +32,18 @@ colors:
   dark-loss: "oklch(0.72 0.17 20)"
 typography:
   display:
-    fontFamily: "Fragment Mono, ui-monospace, SF Mono, Menlo, monospace"
+    fontFamily: "Geist Variable, -apple-system, BlinkMacSystemFont, system-ui, sans-serif"
     fontSize: "clamp(2.5rem, 1.5rem + 2.8vw, 3.75rem)"
-    fontWeight: 400
+    fontWeight: 700
     lineHeight: 1
-    letterSpacing: "-0.04em"
+    letterSpacing: "-0.02em"
     fontFeature: "tnum, lnum"
   headline:
     fontFamily: "Geist Variable, -apple-system, BlinkMacSystemFont, system-ui, sans-serif"
     fontSize: "2rem"
     fontWeight: 600
     lineHeight: 1.15
-    letterSpacing: "-0.03em"
+    letterSpacing: "normal"
   title:
     fontFamily: "Geist Variable, -apple-system, BlinkMacSystemFont, system-ui, sans-serif"
     fontSize: "1.25rem"
@@ -59,7 +59,7 @@ typography:
     fontWeight: 400
     fontFeature: "tnum"
   figure:
-    fontFamily: "Fragment Mono, ui-monospace, SF Mono, Menlo, monospace"
+    fontFamily: "Geist Variable, -apple-system, BlinkMacSystemFont, system-ui, sans-serif"
     fontSize: "0.9375rem"
     fontWeight: 400
     letterSpacing: "-0.02em"
@@ -74,7 +74,7 @@ typography:
     fontSize: "0.75rem"
     fontWeight: 400
   eyebrow:
-    fontFamily: "Fragment Mono, ui-monospace, SF Mono, Menlo, monospace"
+    fontFamily: "Geist Variable, -apple-system, BlinkMacSystemFont, system-ui, sans-serif"
     fontSize: "0.6875rem"
     letterSpacing: "0.08em"
     textTransform: "uppercase"
@@ -86,6 +86,7 @@ rounded:
   control: "4px"
   container: "8px"
   sheet: "12px"
+  full: "9999px"
 spacing:
   row-x: "16px"
   row-y: "12px"
@@ -99,12 +100,12 @@ components:
   segmented-control:
     backgroundColor: "{colors.fill}"
     textColor: "{colors.ink-muted}"
-    rounded: "{rounded.control}"
+    rounded: "{rounded.full}"
     padding: "4px"
   segmented-control-selected:
     backgroundColor: "{colors.ink}"
     textColor: "{colors.surface}"
-    rounded: "{rounded.control}"
+    rounded: "{rounded.full}"
     height: "36px"
   focus-ring:
     outline: "2px solid {colors.ember}"
@@ -165,17 +166,17 @@ components:
 
 **Creative North Star: "Arctic Ledger"**
 
-Alopex reads like a well-made bank app: one exact figure at the top of the screen, quiet rows beneath, and nothing else competing. The world is played straight in the Revolut / Trade Republic register the user pinned: a snow ground, white grouped lists floating on it with no outlines, every amount set in Fragment Mono and every word in Geist, cold ink as the one control tint and Ember (fox fur) as the single accent. Colour carries meaning (gain, loss, warning) or rank (a category, by lightness), never decoration.
+Alopex reads like a well-made bank app: one exact figure at the top of the screen, quiet rows beneath, and nothing else competing. The world is played straight in the Revolut / Trade Republic register the user pinned: a snow ground, white grouped lists floating on it with no outlines, every word and every amount in Geist (amounts with even-width digits), cold ink as the one control tint and Ember (fox fur) as the single accent. Colour carries meaning (gain, loss, warning) or rank (a category, by lightness), never decoration.
 
 Density is calm rather than sparse. Rows are generous (40px avatar, 64px breakdown rows, 44px minimum tap targets), sections breathe at 32px, and the page column caps at 64rem so the figure and its chart stay in one glance on a 1440 screen. The interface is read-only in tone: no trading cues, no hype, no tinted stat tiles in boxed cards.
 
 The tinted ground with white grouped lists was approved by the user after seeing it. Import, onboarding and setup surfaces are out of scope for this system and keep their older styling; do not treat them as reference.
 
 **Key Characteristics:**
-- One headline figure per screen that has one agreed total, in Fragment Mono 400; symbol and cents at full size, symbol muted, cents at 55%.
+- One headline figure per screen that has one agreed total, in bold Geist (700, tabular figures); symbol and cents at full size, symbol muted, cents at 55%.
 - Pale ground, white grouped lists, hairline dividers, no borders or drop shadows on containers.
 - Cold ink is the only control tint (white on dark); Ember is the only accent: focus ring, live cursor, counts.
-- Figures are mono, words are sans; a mono eyebrow (`01 OVERVIEW`) indexes sections.
+- Figures and words share Geist; figures use even-width digits; an eyebrow (`01 OVERVIEW`) indexes sections.
 - Green and red mean gain and loss, and nothing else.
 - 4px corners on controls, 8px on containers. No pills.
 - The outline fox appears only in empty states: never beside an amount, never in a chart, one per viewport.
@@ -216,26 +217,27 @@ A cold neutral world: snow ground, cold ink for controls, one warm Ember accent,
 
 ## Typography
 
-**Figures:** Fragment Mono 400 (`font-figure`, `figure-display`, `eyebrow`): every amount, percent, date tick, count and section index.
+**Figures:** Geist with tabular, lining digits (`font-figure`, `eyebrow`): every amount, percent, date tick, count and section index; the headline figure (`figure-display`) is bold Geist. Fragment Mono is kept only for codes (2FA, pasted CSV).
 **Text:** Geist Variable (`font-sans`): every word.
 
-**Character:** A ledger. Money is set in a monospace so columns align by construction and a figure is recognisable as a figure before it is read; words sit in a warm grotesk beside it. Tight negative tracking (-0.04em) on the display size keeps the mono from feeling like code.
+**Character:** A ledger. One grotesk for words and money; even-width digits make columns align by construction.
 
 ### Hierarchy
-- **Display** (mono 400, clamp 40px to 60px, line-height 1, -0.04em): the headline figure only. Symbol, whole units and cents at one size; symbol muted, cents at 55% opacity.
-- **Delta** (mono 13px): the change line under the figure, in gain or loss, with its range label in sans muted.
-- **Headline** (sans 600, 32px, 1.15, -0.03em): the large title on list screens without one agreed total (Transactions, Reports, Splitwise, Rules, and Income above its month switcher). 24px in the mobile menu sheet.
+- **Display** (Geist 700, tabular figures, clamp 40px to 60px, line-height 1, -0.02em): the headline figure only. Symbol, whole units and cents at one size; symbol muted, cents at 55% opacity.
+- **Delta** (figure 13px): the change line under the figure, in gain or loss, with its range label in sans muted.
+- **Headline** (sans 600, 32px, 1.15, normal letter-spacing like every title): the large title on list screens without one agreed total (Transactions, Reports, Splitwise, Rules, and Income above its month switcher). 24px in the mobile menu sheet.
 - **Title** (600, 20px, -0.02em): the month name in the month switcher.
 - **Section** (600, 18px): section headings above grouped lists (Breakdown).
 - **Body** (400 or 500, 15px): row names, nav items, change lines. 14px for secondary copy.
-- **Figure** (mono 400, 15px, -0.02em): amounts on the right of a row. Secondary figures (percent of total, legend percentages) drop to 12-14px in muted ink.
-- **Label** (500, 13px, 1.25): grouped-list section titles and segment labels. Sentence case, muted.
+- **Figure** (Geist, tabular digits, 15px, -0.02em): amounts on the right of a row. Secondary figures (percent of total, legend percentages) drop to 12-14px in muted ink.
+- **Label** (500, 13px, 1.25): day headers, counts and segment labels. Sentence case, muted.
+- **Section title** (sans 600, 18px, ink): every section heading, as Net Worth's "Breakdown" card (`SectionTitle`). Page titles differ in size only, never in font or letter-spacing.
 - **Caption** (400, 12px): trust note, FX rate line, sidebar group names (500).
-- **Eyebrow** (mono 11px, 0.08em, uppercase, muted): section indices and small labels ("01 OVERVIEW").
+- **Eyebrow** (figure 11px, 0.08em, uppercase, muted): section indices and small labels ("01 OVERVIEW").
 - **Tab** (500, 11px): mobile tab bar labels under 24px icons.
 
 ### Named Rules
-**The Mono Figure Rule.** Every number is set in Fragment Mono; every word in Geist. Never set an amount in the sans, never a sentence in the mono.
+**The One Font Rule.** Every word and every number is set in Geist (numbers through `font-figure`, with even-width digits). Mono is only for codes.
 
 **The Quiet Page Name Rule.** On screens that open on a figure, the page name is the h1 set small (15px, 500, muted) so the figure is the loudest thing. Labels stay sentence case; the eyebrow is the one uppercase style.
 
@@ -266,7 +268,7 @@ Two radii, both small: 4px on controls (segments, buttons, fields, selects, side
 ## Components
 
 ### Segmented Control
-Same-surface choice (currency, chart range). A 4px-radius Fill track with 2px padding; one Ink thumb slides under the selected option (300ms, cubic-bezier(0.32, 0.72, 0, 1), none under reduced motion). Segments are 36px tall, 13px 500; selected text takes the primary foreground, the rest are muted and darken on hover. Arrow keys move the selection.
+Same-surface choice (currency, chart range). A fully rounded (pill) Fill track with 2px padding; one Ink pill slides under the selected option (300ms, cubic-bezier(0.32, 0.72, 0, 1), none under reduced motion). Segments are 36px tall, 13px 500; selected text takes the primary foreground, the rest are muted and darken on hover. Arrow keys move the selection.
 
 ### Buttons
 - **Primary:** Ink, 4px corners, white 14px 500 text, 44px tall, 16px horizontal padding; hover drops to 90% opacity, disabled to 50%.
@@ -275,7 +277,7 @@ Same-surface choice (currency, chart range). A 4px-radius Fill track with 2px pa
 - **Focus:** a 2px Ember outline, offset 2px, for every custom control.
 
 ### Headline Figure
-The screen's one amount in the display style (`HeadlineFigure`): symbol muted, whole units in ink, cents at 55% opacity, all one size. The optional delta line underneath is mono 13px in gain or loss with its range label in sans muted.
+The screen's one amount in the display style (`HeadlineFigure`): symbol muted, whole units in ink, cents at 55% opacity, all one size. The optional delta line underneath is mono 13px in gain or loss with its range label in sans muted. Net Worth instead passes `change`: a 16px figure chip beside the figure (`▲ 25.81%` in gain or loss) that swaps to the amount on tap, with the range named once on a muted line underneath.
 
 ### Empty State
 `EmptyState({ title, hint, action? })`: a 48px outline fox (the brand path, `stroke="currentColor"` 2px, muted), a 15px 500 sans title, a 14px muted hint, an optional action. Used where a list has nothing to show (Transactions, Subscriptions, Portfolio). The fox never sits beside an amount or inside a chart, and a viewport shows at most one.
@@ -284,7 +286,7 @@ The screen's one amount in the display style (`HeadlineFigure`): symbol muted, w
 Skeleton blocks in Fill at the control radius. Buttons show a spinner in place of their icon.
 
 ### Grouped Lists and Rows
-White (Surface) fill, 8px corners, hairline dividers, clipped. Rows are 16px by 12px with a 40px round avatar on the left, name (15px 500) over a muted secondary line (13px), and the amount right-aligned in the figure style. Section titles sit above the list in the label style, inset 16px.
+White (Surface) fill, 8px corners, hairline dividers, clipped. Rows are 16px by 12px with a 40px round avatar on the left, name (15px 500) over a muted secondary line (13px), and the amount right-aligned in the figure style. Section titles sit above the list in the section-title style; day headers and counts keep the label style, inset 16px (`SectionTitle variant="label"`). Percents in rows have one decimal; amounts show cents (Net Worth's Breakdown rounds to euros).
 
 ### Merchant Avatar
 A 40px circle with the merchant's initial (15px 600, ink) on a 22% wash of the category colour mixed into the surface. Neutral rows (Breakdown) use a Fill circle with an 18px line icon.
@@ -296,7 +298,7 @@ The month as a 20px 600 heading, announced politely when it changes, with two 44
 How a total splits: one 10px bar of lightness-ranked segments with 2px gaps, and a wrapped legend underneath (8px dot, label in ink, percent in muted figures). Exposed to assistive tech as one image with a text summary.
 
 ### Charts
-The net worth chart is a single 2px Ink line over a fading Ink area, no grid, no y-axis, muted 11px date ticks. Scrubbing rewrites the headline figure and change line to the hovered day; leaving restores today. Chart entry animation is off. Every chart carries a text summary as its accessible name.
+The net worth chart is a single 2.5px Ink line over a fading Ink area, no grid, no y-axis, muted 11px date ticks. Scrubbing rewrites the headline figure and change line to the hovered day; leaving restores today. Chart entry animation is off. Every chart carries a text summary as its accessible name.
 
 ### Inputs
 - **Search and filters:** 44px Surface fields, 4px corners, on the ground, 16px text, Ember ring on focus.
@@ -313,7 +315,7 @@ Errors are a 10% loss wash with loss text, 8px corners, 12px by 16px padding, ro
 ### Do:
 - **Do** open every screen with one agreed total on the Headline Figure, and list screens on the large title or the month switcher.
 - **Do** keep Ink (white on dark) as the only control tint.
-- **Do** set every amount in Fragment Mono, right-aligned in rows, and every word in Geist.
+- **Do** set every amount with `font-figure` (Geist, even-width digits), right-aligned in rows, and every word in Geist.
 - **Do** separate rows with hairlines inside white grouped lists on the pale ground.
 - **Do** use 4px corners on controls and 8px on containers.
 - **Do** keep Ember to lines, dots and counts: focus ring, live cursor, badges.

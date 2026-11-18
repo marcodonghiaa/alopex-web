@@ -1,5 +1,8 @@
 import { useId, useState, type ReactNode } from "react";
-import { ChevronRight, Users } from "lucide-react";
+import { ChevronRight, MoreHorizontal, ThumbsDown, ThumbsUp, Users } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { categoryColor } from "@/lib/categories";
+import { cleanMerchantName } from "@/lib/merchant-name";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { GroupedList } from "@/components/ui/grouped-list";
@@ -66,10 +69,6 @@ const tagLine = (tx: TransactionRow): string => (tx.tags ?? []).map((t) => `#${t
 const isSplit = (tx: TransactionRow): boolean =>
   tx.personal_amount != null && tx.personal_amount < Math.abs(tx.amount ?? 0);
 
-/** "Worth it" / "Not worth it" once answered, for the row's quiet second line. */
-const worthItNote = (tx: TransactionRow): string | null =>
-  tx.worth_it === "yes" ? "Worth it" : tx.worth_it === "no" ? "Not worth it" : null;
-
 /** An open "worth it?" question: a hint on the row, answered in the row's sheet. */
 function WorthItHint({ tx }: { tx: TransactionRow }) {
   if (isSplitwiseShare(tx) || !isWorthItEligible(tx)) return null;
@@ -77,16 +76,16 @@ function WorthItHint({ tx }: { tx: TransactionRow }) {
 }
 
 /** Signed amount in the transaction's own currency, with the euro value under it if foreign. */
-function AmountText({ tx }: { tx: TransactionRow }) {
+function AmountText({ tx, large = false }: { tx: TransactionRow; large?: boolean }) {
   const native = nativeSignedAmount(tx);
   if (native == null) return <span className="text-sm text-muted-foreground">—</span>;
   const currency = tx.currency ?? "EUR";
   const positive = native >= 0;
   const eur = tx.signed_amount_eur;
   return (
-    <div className="shrink-0 text-right">
+    <div className={large ? "text-center" : "shrink-0 text-right"}>
       <div
-        className={`font-figure text-[0.9375rem] whitespace-nowrap ${
+        className={`font-figure whitespace-nowrap ${large ? "text-3xl" : "text-[0.9375rem]"} ${
           positive ? "text-positive" : "text-foreground"
         }`}
       >
@@ -118,9 +117,11 @@ function TransactionEditSheet({
 }: TransactionViewProps & { open: boolean; onOpenChange: (open: boolean) => void }) {
   const isMobile = useIsMobile();
   const { tx } = p;
-  const name = tx.creditor_name ?? "—";
+  const name = cleanMerchantName(tx.creditor_name) ?? "—";
   const share = isSplitwiseShare(tx);
   const fieldId = useId();
+  // An open worth-it question leads the sheet (iOS view board); answered, it sits further down.
+  const askWorthIt = !share && isWorthItEligible(tx);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -132,19 +133,52 @@ function TransactionEditSheet({
           aria-hidden
           className="mx-auto mt-2 h-1 w-9 rounded-full bg-muted-foreground/40 md:hidden"
         />
-        <SheetHeader className="px-5 pt-3 pb-3 text-left md:pt-6">
-          <SheetTitle className="truncate pr-10 text-xl">{name}</SheetTitle>
-          <p className="text-sm text-muted-foreground">
+        {/* Revolut-style header (iOS view board): initial, name, the amount large, then the day. */}
+        <SheetHeader className="relative items-center px-12 pt-4 pb-5 text-center md:pt-8">
+          {!share && <SheetMoreMenu selected={p.selected} onToggleSelect={p.onToggleSelect} />}
+          <span
+            data-testid="merchant-initial"
+            aria-hidden
+            className="flex size-14 items-center justify-center rounded-full text-xl font-semibold text-foreground"
+            style={{
+              backgroundColor: `color-mix(in oklab, ${categoryColor(tx.category)} 22%, var(--color-card))`,
+            }}
+          >
+            {name === "—" ? "?" : name.charAt(0).toUpperCase()}
+          </span>
+          <SheetTitle className="mt-2 max-w-full truncate text-base font-medium">{name}</SheetTitle>
+          <div className="mt-1">
+            <AmountText tx={tx} large />
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
             {formatBookingDate(tx.booking_date)} · {p.accountLabel}
           </p>
-          <div className="pt-1 text-left">
-            <AmountText tx={tx} />
-          </div>
         </SheetHeader>
         <div className="space-y-4 px-4 pb-4">
+          {askWorthIt && (
+            <div
+              role="group"
+              aria-label="Worth it?"
+              className="flex items-center justify-between gap-3 rounded-lg bg-card px-4 py-3"
+            >
+              <span className="text-[0.9375rem] font-medium text-foreground">Worth it?</span>
+              <span className="flex gap-2">
+                <Button variant="secondary" onClick={() => p.onAnswerWorthIt("yes")}>
+                  <ThumbsUp /> Yes
+                </Button>
+                <Button variant="secondary" onClick={() => p.onAnswerWorthIt("no")}>
+                  <ThumbsDown /> No
+                </Button>
+              </span>
+            </div>
+          )}
           <GroupedList>
             <Field label="Name">
-              <NameEditor name={tx.creditor_name} onSave={p.onRename} saving={p.savingRename} />
+              <NameEditor
+                name={name === "—" ? null : name}
+                onSave={p.onRename}
+                saving={p.savingRename}
+              />
             </Field>
             {p.onSaveAmount && (
               <Field label="Amount">
@@ -225,28 +259,52 @@ function TransactionEditSheet({
               )}
             </GroupedList>
           )}
-          {!share && (
+          {!share && tx.worth_it != null && (
             <GroupedList>
-              {(tx.worth_it != null || isWorthItEligible(tx)) && (
-                <Field label="Worth it">
-                  <WorthItPrompt tx={tx} onAnswer={p.onAnswerWorthIt} />
-                </Field>
-              )}
-              <label className="flex min-h-12 cursor-pointer items-center justify-between gap-4 px-4 text-sm">
-                <span className="text-muted-foreground">Select</span>
-                <input
-                  type="checkbox"
-                  checked={p.selected}
-                  onChange={p.onToggleSelect}
-                  className="size-5 rounded border-border accent-primary"
-                />
-              </label>
+              <Field label="Worth it">
+                <WorthItPrompt tx={tx} onAnswer={p.onAnswerWorthIt} />
+              </Field>
             </GroupedList>
           )}
           <RefundedBadge flowType={tx.flow_type} />
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** The sheet's ⋯ menu: actions you rarely need while reading one transaction. */
+function SheetMoreMenu({
+  selected,
+  onToggleSelect,
+}: {
+  selected: boolean;
+  onToggleSelect: () => void;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="More actions"
+          className="absolute top-2 left-2 size-11"
+        >
+          <MoreHorizontal />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-56 p-1">
+        <label className="flex min-h-11 cursor-pointer items-center justify-between gap-4 rounded-sm px-3 text-sm hover:bg-accent">
+          <span>Select</span>
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            className="size-5 rounded border-border accent-primary"
+          />
+        </label>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -266,7 +324,6 @@ export function TransactionRowView(props: TransactionViewProps) {
     isSplit(tx)
       ? `split, owed ${formatMoney(Math.abs(tx.amount ?? 0) - (tx.personal_amount ?? 0), tx.currency ?? "EUR")}`
       : null,
-    share ? null : worthItNote(tx),
     tagLine(tx) || null,
   ].filter(Boolean);
 
@@ -302,7 +359,7 @@ export function TransactionRowView(props: TransactionViewProps) {
           <div className="min-w-0">
             <div className="truncate font-medium text-foreground">
               <NameEditor
-                name={tx.creditor_name}
+                name={cleanMerchantName(tx.creditor_name)}
                 onSave={props.onRename}
                 saving={props.savingRename}
               />
@@ -360,7 +417,7 @@ export function TransactionCardView(props: TransactionViewProps) {
       <CategoryAvatar category={tx.category} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-[0.9375rem] font-medium text-foreground">
-          {tx.creditor_name ?? "—"}
+          {cleanMerchantName(tx.creditor_name) ?? "—"}
         </p>
         <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
           {share && (
@@ -372,7 +429,6 @@ export function TransactionCardView(props: TransactionViewProps) {
             {[
               tx.category ?? "Uncategorized",
               tx.flow_type === "refunded" ? "Refunded" : null,
-              share ? null : worthItNote(tx),
               tagLine(tx) || null,
             ]
               .filter(Boolean)

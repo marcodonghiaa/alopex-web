@@ -30,7 +30,7 @@ describe("TrendTooltip", () => {
     const { container } = render(<TrendTooltip bar={bar({})} />);
     expect(container).toHaveTextContent("Nov");
     // Polish 4 #10: no "+"; the words say the direction.
-    expect(container).toHaveTextContent("€750.00 saved · 25% of income");
+    expect(container).toHaveTextContent("€750.00 saved · 25.0% of income");
     expect(container).not.toHaveTextContent("+");
   });
 

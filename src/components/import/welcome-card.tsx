@@ -97,7 +97,7 @@ export function WelcomeCard({ history }: { history: number }) {
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 id="getting-started" className="text-base font-semibold">
+          <h2 id="getting-started" className="text-lg font-semibold text-foreground">
             Get started
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Loader2, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -25,7 +25,7 @@ const COPY: Record<
 > = {
   stock: {
     title: "Add an investment",
-    placeholder: "Name, ticker or ISIN, e.g. VWCE or IE00BK5BQT80",
+    placeholder: "Name, ticker or ISIN",
     nothingFound: "Nothing found. Try the ISIN or a shorter name.",
     quantity: "Shares",
     queryKey: "portfolio-latest",
@@ -76,17 +76,27 @@ export function AddHoldingPanel({
   const [broker, setBroker] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
+  // The words last sent, so Search after a live suggestion doesn't ask again.
+  const lastSearched = useRef("");
+  const resultsRef = useRef<HTMLDivElement>(null);
+
   const search = useMutation({
     mutationFn: (q: string) =>
       callAddHolding<{ results: Array<Candidate> }>(
         { action: "search", kind, query: q },
         "Search is unavailable right now, try again",
       ),
-    onSuccess: (data) => {
+    onSuccess: (data, q) => {
+      // A slow answer for words already changed is dropped.
+      if (q !== lastSearched.current) return;
       setResults(data.results);
       setPicked(data.results.length === 1 ? data.results[0]! : null);
     },
-    onError: (err) => setFormError(err.message),
+    onError: (err) => {
+      // Let Search try the same words again.
+      lastSearched.current = "";
+      setFormError(err.message);
+    },
   });
 
   const add = useMutation({
@@ -126,12 +136,40 @@ export function AddHoldingPanel({
     onError: (err) => setFormError(err.message),
   });
 
+  function runSearch(q: string) {
+    if (q === lastSearched.current) return;
+    lastSearched.current = q;
+    setFormError(null);
+    search.mutate(q);
+  }
+
+  // Live suggestions (iOS view board): one search per pause in typing, from two letters.
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      lastSearched.current = "";
+      setResults(null);
+      setPicked(null);
+      return;
+    }
+    const timer = setTimeout(() => runSearch(q), 350);
+    return () => clearTimeout(timer);
+    // runSearch only reads refs and stable setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
+  // On a phone the list opens under the keyboard: bring it into view.
+  useEffect(() => {
+    if (results) resultsRef.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  }, [results]);
+
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     const q = query.trim();
     if (!q) return;
-    setFormError(null);
-    search.mutate(q);
+    // Closes the phone keyboard so the results below are visible.
+    (document.activeElement as HTMLElement | null)?.blur();
+    runSearch(q);
   }
 
   function handleAdd() {
@@ -192,6 +230,7 @@ export function AddHoldingPanel({
             </Button>
           </form>
 
+          <div ref={resultsRef} />
           {results && results.length === 0 && (
             <p className="text-sm text-muted-foreground">{copy.nothingFound}</p>
           )}

@@ -218,7 +218,7 @@ function IncomePage() {
       />
 
       <section aria-label={`Received in ${monthLabel}`} className="mb-8">
-        <p className="text-[0.9375rem] font-medium text-muted-foreground">Received</p>
+        <p className="text-[0.9375rem] text-muted-foreground">Received</p>
         <div className="mt-1">
           {incomeQuery.isError ? (
             <p className="figure-display text-muted-foreground">—</p>

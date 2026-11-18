@@ -1,7 +1,7 @@
 import { isDemoMode } from "./demo/mode";
 
 // The stocks_eur class holds ETFs too; every screen names it the same way.
-export const STOCKS_LABEL = "Stocks & ETFs";
+export const STOCKS_LABEL = "Stocks";
 
 // (The public demo ignores it: its fake history is complete.)
 // Optional YYYY-MM-DD from which "change since the start" is measured. Set it when your first
@@ -229,22 +229,29 @@ export function monthAgo(iso: string, months = 1): string {
   return `${prevLast.getUTCFullYear()}-${String(prevLast.getUTCMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-export type ChartRange = "1M" | "3M" | "YTD" | "2Y" | "ALL";
-export const CHART_RANGES: Array<ChartRange> = ["1M", "3M", "YTD", "2Y", "ALL"];
+export type ChartRange = "WTD" | "1M" | "3M" | "YTD" | "ALL";
+export const CHART_RANGES: Array<ChartRange> = ["WTD", "1M", "3M", "YTD", "ALL"];
 export const RANGE_LABEL: Record<ChartRange, string> = {
+  WTD: "Week to date",
   "1M": "Past month",
   "3M": "Past 3 months",
   YTD: "Year to date",
-  "2Y": "Past 2 years",
   ALL: "All time",
 };
-const RANGE_MONTHS: Record<Exclude<ChartRange, "YTD" | "ALL">, number> = {
+const RANGE_MONTHS: Record<"1M" | "3M", number> = {
   "1M": 1,
   "3M": 3,
-  "2Y": 24,
 };
 
-/** Points from `range` before the last one; "YTD" starts at the last day of the previous year, "ALL" keeps everything. */
+/** The Sunday before `iso`'s Monday-to-Sunday week (the week-to-date base). */
+function weekBase(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - (d.getUTCDay() || 7));
+  return d.toISOString().slice(0, 10);
+}
+
+/** Points from `range` before the last one; "YTD" starts at the last day of the previous year,
+ * "WTD" at the Sunday before the week, "ALL" keeps everything. */
 export function inRange<T extends { snapshot_date: string }>(
   points: Array<T>,
   range: ChartRange,
@@ -254,6 +261,8 @@ export function inRange<T extends { snapshot_date: string }>(
   const start =
     range === "YTD"
       ? `${Number(lastIso.slice(0, 4)) - 1}-12-31`
-      : monthAgo(lastIso, RANGE_MONTHS[range]);
+      : range === "WTD"
+        ? weekBase(lastIso)
+        : monthAgo(lastIso, RANGE_MONTHS[range]);
   return points.filter((p) => p.snapshot_date >= start);
 }

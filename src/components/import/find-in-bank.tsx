@@ -64,7 +64,7 @@ export function FindInBank({
         className="mx-auto max-h-[90dvh] max-w-lg overflow-y-auto rounded-t-3xl border-0 bg-background px-5 pt-3 pb-8"
       >
         <div aria-hidden className="mx-auto mb-4 h-1.5 w-9 rounded-full bg-foreground/20" />
-        <SheetTitle className="text-xl font-semibold tracking-tight">
+        <SheetTitle className="text-xl font-semibold">
           {title ?? `Which payment was ${row?.description.trim() ?? "it"}?`}
         </SheetTitle>
         <SheetDescription className="mt-1 text-sm text-muted-foreground">

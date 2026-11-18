@@ -42,6 +42,14 @@ beforeEach(() => {
 
 // A self-hoster wanted their own categories instead of the built-in ones.
 describe("CategoriesSection", () => {
+  it("titles the section like the rest of the app", () => {
+    renderSection();
+    expect(screen.getByRole("heading", { level: 2 })).toHaveClass(
+      "font-semibold",
+      "text-foreground",
+    );
+  });
+
   it("adds a category of your own", async () => {
     renderSection();
     fireEvent.change(await screen.findByLabelText("New category"), {

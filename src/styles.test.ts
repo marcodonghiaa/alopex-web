@@ -14,6 +14,15 @@ describe("global styles", () => {
     expect(rule).toMatch(/min-width:\s*0/);
     expect(rule).toMatch(/-webkit-appearance:\s*none/);
   });
+
+  // iOS view (fonts, Marco): every number in Geist, like Net Worth's figure. Even-width digits keep
+  // amount columns aligned without a monospace font.
+  it("sets figures in Geist with even-width digits", () => {
+    expect(css).toMatch(/--font-figure:\s*"Geist Variable"/);
+    const rule = css.match(/@utility font-figure\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(rule).toMatch(/tabular-nums/);
+    expect(rule).not.toMatch(/font-weight/);
+  });
 });
 
 // Re-audit N1: 12 px Ember counts (nav badge, filter count) were 2.92:1 on the light sidebar.
