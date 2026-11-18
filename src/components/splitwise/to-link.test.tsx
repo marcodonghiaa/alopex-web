@@ -465,9 +465,11 @@ describe("ToLink", () => {
       else expect(b).toBeDisabled();
     expect(screen.getByRole("note")).toHaveTextContent("Linking is off in the demo.");
     await userEvent.click(within(row).getByRole("button", { name: "Find in bank" }));
-    expect(
-      await screen.findByRole("dialog", { name: "Which payment was Groceries?" }),
-    ).toBeTruthy();
+    const sheet = await screen.findByRole("dialog", { name: "Which payment was Groceries?" });
+    // polish-5 #6: picking a payment must not offer a Link that only fails with a toast
+    await userEvent.click(within(sheet).getAllByRole("radio")[0]!);
+    expect(within(sheet).getByRole("button", { name: "Link payment" })).toBeDisabled();
+    expect(within(sheet).getByRole("note")).toHaveTextContent("Linking is off in the demo.");
   });
 });
 

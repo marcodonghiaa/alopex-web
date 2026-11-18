@@ -210,6 +210,7 @@ export function ToLink({ connected }: { connected: boolean }) {
         rate={rate}
         direction={finding ? directionOf(finding.kind) : "DBIT"}
         showSplit={false}
+        {...(demo ? { disabledNote: "Linking is off in the demo." } : {})}
         {...(finding && SETTLE_TITLE[finding.kind]
           ? {
               title: SETTLE_TITLE[finding.kind],
@@ -335,7 +336,7 @@ function ReviewRow({
           id={`${rowId(item.id)}-find`}
           variant="secondary"
           {...off}
-          // It only reads: the demo can show it (its Link payment hits the demo's refusal).
+          // It only reads: the demo can show it (its Link payment stays off there, with the note).
           disabled={false}
           onClick={() => busy || onFind()}
         >

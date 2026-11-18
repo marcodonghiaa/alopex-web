@@ -28,6 +28,7 @@ export function FindInBank({
   otherwise = "If you paid it some other way, choose Paid in cash.",
   title,
   detail,
+  disabledNote,
 }: {
   /** The expense being linked; null keeps the sheet closed. */
   row: ClassifiedRow | null;
@@ -46,6 +47,8 @@ export function FindInBank({
   title?: string;
   /** Goes before "Payments around <date>, any amount.", e.g. the amount to look for. */
   detail?: string;
+  /** Linking is off (the demo): the list still reads, Link payment stays disabled and says why. */
+  disabledNote?: string;
 }) {
   const [chosen, setChosen] = useState<string | null>(null);
   useEffect(() => setChosen(null), [row]);
@@ -149,10 +152,15 @@ export function FindInBank({
             </Group>
           )}
 
+          {disabledNote && (
+            <p role="note" className="px-4 text-sm text-muted-foreground">
+              {disabledNote}
+            </p>
+          )}
           <button
             type="button"
             className={CTA}
-            disabled={!tx || (showSplit && !split)}
+            disabled={!tx || (showSplit && !split) || !!disabledNote}
             onClick={() => tx && onPick(tx)}
           >
             Link payment
