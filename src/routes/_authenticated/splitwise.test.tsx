@@ -408,6 +408,24 @@ describe("Who owes you", () => {
     expect(within(section).getByText("Is this Giulia?")).toBeTruthy();
   });
 
+  // protects=polish-5: the questions when To link's bank read fails; fails_when=they wait out
+  // that read's retries (seconds of skeletons) instead of showing after its first failure
+  it("still asks when To link's bank payments fail to load", async () => {
+    holdTable(
+      "transactions",
+      Promise.resolve(),
+      { data: null, error: { message: "boom" } },
+      (cols) => cols.includes("creditor_name"),
+    );
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    const section = await screen.findByRole("region", { name: "Did someone pay you back?" });
+    expect(within(section).getByText("Is this Giulia?")).toBeTruthy();
+  });
+
   // protects=self-hosters on a database without the payback functions; fails_when=the page breaks
   // or shows an error instead of just leaving the questions out
   it("without the payback functions, the page works and asks nothing", async () => {
