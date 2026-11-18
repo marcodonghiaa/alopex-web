@@ -138,6 +138,129 @@ describe("debts", () => {
   });
 });
 
+describe("sync errors", () => {
+  afterEach(() => {
+    rows.v_bank_accounts_latest = [];
+  });
+  const account = (over: Record<string, unknown>) => ({
+    uid: "a1",
+    label: "Demo Bank Current",
+    iban: null,
+    currency: "EUR",
+    snapshot_date: "2026-10-19",
+    amount: 1000,
+    amount_eur: 1000,
+    consent_valid_until: null,
+    bank_name: "Demo Bank",
+    account_type: null,
+    manual: false,
+    ...over,
+  });
+  const renderPage = () =>
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+
+  // protects=a bank that stopped updating says why; fails_when=the last sync error is not shown
+  it("says why a bank stopped updating", async () => {
+    rows.v_bank_accounts_latest = [
+      account({ sync_error: "ASPSP_TIMEOUT", sync_error_at: "2026-11-15T06:17:00Z" }),
+    ];
+    renderPage();
+    expect(await screen.findByText(/Demo Bank didn't answer the last sync/)).toBeInTheDocument();
+  });
+
+  // protects=a long unknown error code wraps on a phone; fails_when=the banner can grow wider than the screen
+  it("wraps a long error code instead of widening the page", async () => {
+    rows.v_bank_accounts_latest = [
+      account({ sync_error: "A".repeat(64), sync_error_at: "2026-11-15T06:17:00Z" }),
+    ];
+    renderPage();
+    expect(await screen.findByRole("status")).toHaveClass("break-words");
+  });
+
+  // protects=an ended consent shows only Renew; fails_when=a stale sync error promises a retry that never comes
+  it("shows no sync error for a consent that has run out", async () => {
+    rows.v_bank_accounts_latest = [
+      account({ sync_error: "ASPSP_TIMEOUT", consent_valid_until: "2020-01-01T00:00:00+00:00" }),
+    ];
+    renderPage();
+    await screen.findByRole("button", { name: "Add a debt" });
+    expect(screen.queryByText(/didn't answer the last sync/)).not.toBeInTheDocument();
+  });
+
+  // protects=a bank that stopped sharing an account can be reconnected in one tap, like Renew;
+  // fails_when=the banner asks to connect again with no button
+  it("connects the bank again from a 'no longer shares' banner", async () => {
+    rows.v_bank_accounts_latest = [
+      account({
+        sync_error: "ASPSP_ACCOUNT_NOT_ACCESSIBLE",
+        bank_name: "Gone Bank",
+        bank_country: "LT",
+      }),
+    ];
+    invoke.mockResolvedValue({
+      data: { banks: [{ name: "Other Bank", logo: null }] },
+      error: null,
+    });
+    renderPage();
+    Element.prototype.scrollIntoView = vi.fn();
+    // A long text shrinks beside the button on a wide screen, instead of pushing it to a new line.
+    const button = await screen.findByRole("button", { name: "Connect again" });
+    expect(button.previousElementSibling).toHaveClass("flex-1", "basis-64");
+    fireEvent.click(button);
+    expect(
+      await screen.findByText(
+        "Gone Bank isn't listed for this country anymore. Pick your bank again.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  // protects=each bank's banners sit together, Renew first, the shared app problem last;
+  // fails_when=one bank's Renew and its sync error are split by another bank's banner
+  it("groups the banners by bank, Renew first, the refused app last", async () => {
+    const soon = new Date(Date.now() + 3 * 86_400_000).toISOString();
+    rows.v_bank_accounts_latest = [
+      account({ uid: "b", bank_name: "Beta Bank", sync_error: "ASPSP_TIMEOUT" }),
+      account({ uid: "c", bank_name: "Gamma Bank", sync_error: "HTTP_401" }),
+      account({
+        uid: "a",
+        bank_name: "Alpha Bank",
+        sync_error: "ASPSP_TIMEOUT",
+        consent_valid_until: soon,
+      }),
+    ];
+    renderPage();
+    await screen.findByText(/Beta Bank didn't answer/);
+    const order = screen.getAllByRole("status").map((s) => s.textContent ?? "");
+    expect(order.map((t) => t.match(/Alpha|Beta|Enable Banking refused/)?.[0])).toEqual([
+      "Alpha",
+      "Alpha",
+      "Beta",
+      "Enable Banking refused",
+    ]);
+    expect(order[0]).toMatch(/Renew access/);
+  });
+
+  // protects=a long unknown code breaks at its underscores on a phone; fails_when=it splits mid-word
+  it("lets a long error code break after its underscores", async () => {
+    rows.v_bank_accounts_latest = [account({ sync_error: "WRONG_CONTINUATION_KEY" })];
+    renderPage();
+    const banner = (await screen.findByText(/WRONG_/)).closest("[role=status]")!;
+    expect(banner.textContent).toMatch(/\(WRONG_CONTINUATION_KEY\)/);
+    expect(banner.querySelectorAll("wbr")).toHaveLength(2);
+  });
+
+  it("shows nothing when the last sync went through", async () => {
+    rows.v_bank_accounts_latest = [account({ sync_error: null })];
+    renderPage();
+    await screen.findByRole("button", { name: "Add a debt" });
+    expect(screen.queryByText(/last sync/)).not.toBeInTheDocument();
+  });
+});
+
 describe("connect a bank", () => {
   beforeEach(() => {
     vi.spyOn(navigator, "languages", "get").mockReturnValue(["pl-PL"]);
@@ -234,6 +357,56 @@ describe("connect a bank", () => {
         "Gone Bank isn't listed for this country anymore. Pick your bank again.",
       ),
     ).toBeInTheDocument();
+    rows.v_bank_accounts_latest = [];
+  });
+
+  // Polish 5 F3. protects=Connect again for a bank with no country on file starts from an empty
+  // bank; fails_when=the bank an earlier Renew prefilled stays selected
+  it("clears an earlier Renew's bank when the next bank has nothing to prefill", async () => {
+    const soon = new Date(Date.now() + 3 * 86_400_000).toISOString();
+    const base = {
+      iban: null,
+      currency: "EUR",
+      snapshot_date: "2026-10-19",
+      amount: 1000,
+      amount_eur: 1000,
+      account_type: null,
+      manual: false,
+    };
+    rows.v_bank_accounts_latest = [
+      {
+        ...base,
+        uid: "a1",
+        label: "Gone Bank Current",
+        consent_valid_until: soon,
+        bank_name: "Gone Bank",
+        bank_country: "LT",
+      },
+      {
+        ...base,
+        uid: "a2",
+        label: "Old Bank Current",
+        consent_valid_until: null,
+        bank_name: "Old Bank",
+        bank_country: null,
+        sync_error: "ASPSP_ACCOUNT_NOT_ACCESSIBLE",
+      },
+    ];
+    invoke.mockResolvedValue({
+      data: { banks: [{ name: "Other Bank", logo: null }] },
+      error: null,
+    });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    Element.prototype.scrollIntoView = vi.fn();
+    fireEvent.click(await screen.findByRole("button", { name: "Renew access" }));
+    const gone = "Gone Bank isn't listed for this country anymore. Pick your bank again.";
+    expect(await screen.findByText(gone)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Connect again" }));
+    await waitFor(() => expect(screen.queryByText(gone)).not.toBeInTheDocument());
     rows.v_bank_accounts_latest = [];
   });
 

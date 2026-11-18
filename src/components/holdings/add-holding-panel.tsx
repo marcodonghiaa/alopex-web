@@ -4,6 +4,8 @@ import { ChevronDown, Loader2, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { parseQuantity } from "@/lib/holdings";
+import { formatISODate } from "@/lib/date";
+import { addedTrade, latestPriceEur, recordTrade } from "@/lib/manual-trades";
 import { ambiguousNumberHint } from "@/lib/locale";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
@@ -74,6 +76,8 @@ export function AddHoldingPanel({
   const [picked, setPicked] = useState<Candidate | null>(null);
   const [quantity, setQuantity] = useState("");
   const [broker, setBroker] = useState("");
+  const [boughtOn, setBoughtOn] = useState("");
+  const [paid, setPaid] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
   // The words last sent, so Search after a live suggestion doesn't ask again.
@@ -99,9 +103,39 @@ export function AddHoldingPanel({
     },
   });
 
+  // The holding's key, as add-holding saves it: the ISIN typed, else the pick's id; a coin's symbol.
+  const keyOf = (candidate: Candidate) =>
+    kind === "crypto"
+      ? candidate.symbol.toUpperCase()
+      : ISIN.test(query.trim().toUpperCase())
+        ? query.trim().toUpperCase()
+        : candidate.id;
+
+  // What you paid, as one buy: the return is measured from it. Without a price yet (none given
+  // and none synced) there is no buy, so no return until trades are added.
+  async function saveBuy(input: {
+    candidate: Candidate;
+    quantity: number;
+    boughtOn: string;
+    paid: number | null;
+  }) {
+    const key = keyOf(input.candidate);
+    const priceEur = input.paid ?? (await latestPriceEur(supabase, kind, key));
+    if (priceEur == null) return;
+    await recordTrade(
+      supabase,
+      addedTrade({ kind, key, quantity: input.quantity, boughtOn: input.boughtOn, priceEur }),
+    );
+  }
+
   const add = useMutation({
-    mutationFn: (input: { candidate: Candidate; quantity: number }) =>
-      callAddHolding<{ added: boolean; priced: boolean }>(
+    mutationFn: async (input: {
+      candidate: Candidate;
+      quantity: number;
+      boughtOn: string;
+      paid: number | null;
+    }) => {
+      const added = await callAddHolding<{ added: boolean; priced: boolean }>(
         {
           action: "add",
           kind,
@@ -116,8 +150,18 @@ export function AddHoldingPanel({
           ...(kind === "stock" && broker.trim() ? { broker: broker.trim() } : {}),
         },
         "Couldn't add it right now, try again",
-      ),
+      );
+      const bought = await saveBuy(input).then(
+        () => true,
+        () => false,
+      );
+      return { ...added, bought };
+    },
     onSuccess: (data, input) => {
+      if (!data.bought)
+        toast.error(
+          `${input.candidate.name}: what you paid wasn't saved. Tap its return to add it.`,
+        );
       toast.success(
         data.priced
           ? `${input.candidate.name} added`
@@ -127,11 +171,14 @@ export function AddHoldingPanel({
       void queryClient.invalidateQueries({ queryKey: ["net-worth-daily"] });
       // Returns compare trades with the quantity held, so they need the new holding too.
       void queryClient.invalidateQueries({ queryKey: ["holding-performance"] });
+      void queryClient.invalidateQueries({ queryKey: ["holding-trades"] });
       setQuery("");
       setResults(null);
       setPicked(null);
       setQuantity("");
       setBroker("");
+      setBoughtOn("");
+      setPaid("");
     },
     onError: (err) => setFormError(err.message),
   });
@@ -184,8 +231,22 @@ export function AddHoldingPanel({
       );
       return;
     }
+    const today = formatISODate(new Date());
+    if (boughtOn > today) {
+      setFormError("The day you bought it can't be in the future.");
+      return;
+    }
+    const price = paid.trim() ? parseQuantity(paid) : null;
+    if (paid.trim() && price == null) {
+      setFormError(ambiguousNumberHint(paid) ?? "The average price must be a number above zero.");
+      return;
+    }
+    if (boughtOn && boughtOn < today && price == null) {
+      setFormError("Enter the average price you paid, or leave the day empty for today.");
+      return;
+    }
     setFormError(null);
-    add.mutate({ candidate: picked, quantity: value });
+    add.mutate({ candidate: picked, quantity: value, boughtOn: boughtOn || today, paid: price });
   }
 
   return (
@@ -265,7 +326,7 @@ export function AddHoldingPanel({
           )}
 
           {picked && (
-            <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+            <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
               <div>
                 <label
                   className="mb-1 block text-xs text-muted-foreground"
@@ -298,7 +359,44 @@ export function AddHoldingPanel({
                   />
                 </div>
               )}
-              <Button onClick={handleAdd} disabled={add.isPending}>
+              <div>
+                <label
+                  className="mb-1 block text-xs text-muted-foreground"
+                  htmlFor={`${kind}-bought-on`}
+                >
+                  Bought on
+                </label>
+                <Input
+                  id={`${kind}-bought-on`}
+                  type="date"
+                  value={boughtOn}
+                  max={formatISODate(new Date())}
+                  onChange={(e) => setBoughtOn(e.target.value)}
+                />
+              </div>
+              <div>
+                <label
+                  className="mb-1 block text-xs text-muted-foreground"
+                  htmlFor={`${kind}-paid`}
+                >
+                  Average price, €
+                </label>
+                <Input
+                  id={`${kind}-paid`}
+                  inputMode="decimal"
+                  value={paid}
+                  onChange={(e) => setPaid(e.target.value)}
+                  placeholder="Today's price"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                Optional. What you paid gives this holding a return; empty means bought today.
+              </p>
+              <Button
+                onClick={handleAdd}
+                disabled={add.isPending}
+                className="sm:col-span-2 sm:justify-self-start"
+              >
                 {add.isPending && <Loader2 className="size-4 animate-spin" />}
                 Add
               </Button>

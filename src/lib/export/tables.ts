@@ -7,6 +7,7 @@ export const EXPORT_TABLES = [
   { name: "crypto_holdings", order: ["source", "asset_symbol"] },
   { name: "portfolio_holdings", order: ["broker_label", "isin"] },
   { name: "holding_trades", order: ["id"] },
+  { name: "investment_events", order: ["id"] },
   { name: "crypto_snapshots", order: ["snapshot_date", "source", "asset_symbol"] },
   { name: "portfolio_snapshots", order: ["snapshot_date", "isin"] },
   { name: "net_worth_snapshots", order: ["id"] },
@@ -19,6 +20,7 @@ export const EXPORT_TABLES = [
   { name: "splitwise_review", order: ["id"] },
   { name: "recurring_streams", order: ["stream_key"] },
   { name: "subscription_billing_overrides", order: ["creditor_name"] },
+  { name: "payer_links", order: ["payer_key"] },
 ] as const;
 
 export type ExportTableName = (typeof EXPORT_TABLES)[number]["name"];

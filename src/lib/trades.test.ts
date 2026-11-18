@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { measure, netShares, parseAmount, summarizeTrades } from "./trades";
+import { measure, netShares, parseAmount, summarizeTrades, tradesMatchHeld } from "./trades";
 import type { Measured, Trade } from "./trades";
 import type { PerformanceRow } from "./performance";
 
@@ -36,11 +36,43 @@ const ok = (m: Measured) => {
 };
 
 describe("measure", () => {
+  it("on one day, trades with a time go in time order: sold out, then bought back", () => {
+    // 10 bought at 10 (100 in). Next day: sold all at 09:00, bought 10 back at 10:00. At most 100
+    // was ever in at once; buys first would count 200.
+    const at = (t: Trade, traded_at: string | null) => ({ ...t, traded_at });
+    const trades = [
+      buy("2026-01-01", 10, 10),
+      at(buy("2026-01-02", 10, 10), "2026-01-02T10:00:00Z"),
+      at(sell("2026-01-02", 10, 10), "2026-01-02T09:00:00Z"),
+    ];
+    expect(ok(measure(row({ end_price_eur: 12 }), trades)).base).toBe(100);
+    // Without times, buys still go first on a day.
+    const untimed = trades.map((t) => at(t, null));
+    expect(ok(measure(row({ end_price_eur: 12 }), untimed)).base).toBe(200);
+  });
+
   it("is value minus what you paid, fees included (a broker statement by hand)", () => {
     // 10 bought at 80 with a 1 fee: paid 801. Worth 1200 now: +399, +49.81%.
     const m = ok(measure(row(), [buy("2025-01-10", 10, 80, 1)]));
     expect(m.gain).toBeCloseTo(399);
     expect(m.change).toBeCloseTo(399 / 801);
+  });
+
+  it("tax on a trade counts like a fee, on a buy and on a sale", () => {
+    const m = ok(
+      measure(row(), [
+        { ...buy("2025-01-10", 12, 80, 1), tax_eur: 2 },
+        { ...sell("2025-06-01", 2, 150), tax_eur: 3 },
+      ]),
+    );
+    // 960 + 1 + 2 in, 300 - 3 back, 10 left at 120: 1200 + 297 - 963.
+    expect(m.gain).toBeCloseTo(534);
+  });
+
+  it("what the holding paid you (dividends after tax) adds to its gain", () => {
+    const m = ok(measure(row(), [buy("2025-01-10", 10, 80, 1)], 25));
+    expect(m.gain).toBeCloseTo(424);
+    expect(m.change).toBeCloseTo(424 / 801);
   });
 
   it("counts profit already taken, against the most ever invested", () => {
@@ -240,5 +272,23 @@ describe("parseAmount", () => {
   });
   it.each(["", "abc", "-1", "1e5"])("refuses %s", (text) => {
     expect(parseAmount(text)).toBeNull();
+  });
+});
+
+// protects=a change by hand is offered as a trade only when trades match what you hold
+describe("tradesMatchHeld", () => {
+  const perf = (state: Measured["state"] | undefined, trades = 1) => ({
+    tradesByKey: new Map([["A", Array.from({ length: trades })]]),
+    measuredByKey: new Map<string, Measured>(state ? [["A", { state } as Measured]] : []),
+  });
+
+  it("is true when the holding's trades add up to what you hold", () => {
+    expect(tradesMatchHeld(perf("ok"), "A")).toBe(true);
+  });
+
+  it("is false without trades, or when they disagree", () => {
+    expect(tradesMatchHeld(perf("ok", 0), "A")).toBe(false);
+    expect(tradesMatchHeld(perf("mismatch"), "A")).toBe(false);
+    expect(tradesMatchHeld(perf("ok"), "B")).toBe(false);
   });
 });

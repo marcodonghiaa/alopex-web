@@ -6,39 +6,15 @@ import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { parseQuantity } from "@/lib/holdings";
+import { saveQuantity, type HoldingTarget } from "@/lib/holding-quantity";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
+import { formatISODate } from "@/lib/date";
+import { changeTrade, latestPriceEur, recordTrade } from "@/lib/manual-trades";
 
-export type HoldingTarget =
-  { kind: "stock"; isin: string } | { kind: "crypto"; symbol: string; source: string };
+export type { HoldingTarget } from "@/lib/holding-quantity";
 
-// set_holding_quantity also writes today's value from the latest price, so net worth moves at
-// once (it is built from each holding's latest price snapshot). Before that backend migration
-// (PGRST202) only the quantity changes, and net worth follows at the next price sync.
-async function saveQuantity(target: HoldingTarget, quantity: number): Promise<void> {
-  const { error } = await supabase.rpc("set_holding_quantity", {
-    p_kind: target.kind,
-    p_key: target.kind === "stock" ? target.isin : target.symbol,
-    p_quantity: quantity,
-    p_source: target.kind === "crypto" ? target.source : null,
-  });
-  if (!error) return;
-  if ((error as { code?: string }).code !== "PGRST202") throw error;
-  const { error: fallback } =
-    target.kind === "stock"
-      ? await supabase
-          .from("portfolio_holdings")
-          .update({ shares: quantity })
-          .eq("isin", target.isin)
-      : await supabase
-          .from("crypto_holdings")
-          .update({ amount: quantity })
-          .eq("asset_symbol", target.symbol)
-          .eq("source", target.source);
-  if (fallback) throw fallback;
-}
-
-// Deletes the holding for good, with its price history and trades (database function
+// Deletes the holding for good, with its price history, trades and income rows (database function
 // delete_holding): for one added by mistake. Its value also leaves past net worth.
 async function deleteHolding(target: HoldingTarget): Promise<void> {
   const { error } = await supabase.rpc("delete_holding", {
@@ -56,6 +32,28 @@ async function deleteHolding(target: HoldingTarget): Promise<void> {
   }
 }
 
+// The change as a buy or sale at today's price, so trades keep matching what you hold. False when
+// it couldn't be saved; nothing to save (no change, no price yet) counts as saved.
+async function saveChange(target: HoldingTarget, from: number, to: number): Promise<boolean> {
+  const key = target.kind === "stock" ? target.isin : target.symbol;
+  try {
+    const priceEur = await latestPriceEur(supabase, target.kind, key);
+    if (priceEur == null) return true;
+    const t = changeTrade({
+      kind: target.kind,
+      key,
+      from,
+      to,
+      date: formatISODate(new Date()),
+      priceEur,
+    });
+    if (t) await recordTrade(supabase, t);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Change how many you hold, or mark it sold. Sold sets the quantity to 0 instead of deleting the
 // row, so the holding's price history (and past net worth) stays.
 export function EditHolding({
@@ -63,10 +61,13 @@ export function EditHolding({
   name,
   quantity,
   label,
+  tradesMatch = false,
 }: {
   target: HoldingTarget;
   name: string;
   quantity: number;
+  /** Its trades add up to what you hold: offer to record a change as a trade, to keep it so. */
+  tradesMatch?: boolean;
   /** A text button (e.g. "Edit shares") instead of the pencil, for the phone details. */
   label?: string;
 }) {
@@ -75,6 +76,7 @@ export function EditHolding({
   const [value, setValue] = useState(() => inputNumber(quantity));
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [asTrade, setAsTrade] = useState(true);
 
   const refresh = () => {
     void queryClient.invalidateQueries({
@@ -91,14 +93,24 @@ export function EditHolding({
     onSuccess: () => {
       toast.success(`${name} deleted`);
       refresh();
+      // Delete also removes its dividends and other events.
+      void queryClient.invalidateQueries({ queryKey: ["investment-events"] });
       setOpen(false);
     },
     onError: (err) => setError(err instanceof Error ? err.message : "Couldn't delete"),
   });
 
   const save = useMutation({
-    mutationFn: (next: number) => saveQuantity(target, next),
-    onSuccess: (_data, next) => {
+    mutationFn: async (next: number) => {
+      await saveQuantity(target, next);
+      return tradesMatch && asTrade ? saveChange(target, quantity, next) : true;
+    },
+    onSuccess: (traded, next) => {
+      if (!traded) {
+        toast.error(
+          `${name}: the ${next < quantity ? "sale" : "buy"} wasn't saved as a trade. Tap its return to add it.`,
+        );
+      }
       toast.success(next === 0 ? `${name} marked as sold` : `${name} updated`);
       refresh();
       setOpen(false);
@@ -126,6 +138,7 @@ export function EditHolding({
           setValue(inputNumber(quantity));
           setError(null);
           setConfirmDelete(false);
+          setAsTrade(true);
         }
       }}
     >
@@ -159,6 +172,17 @@ export function EditHolding({
               Save
             </Button>
           </div>
+          {tradesMatch && (
+            <label className="flex items-start gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={asTrade}
+                onChange={(e) => setAsTrade(e.target.checked)}
+                className="mt-0.5 accent-primary"
+              />
+              Record the change as a buy or sale at today's price
+            </label>
+          )}
         </form>
         <Button
           variant="destructive"
@@ -171,8 +195,9 @@ export function EditHolding({
         {confirmDelete ? (
           <div className="space-y-2 rounded-lg bg-negative/10 p-3">
             <p className="text-xs text-foreground">
-              Deletes {name}, its price history and trades. It also leaves your past net worth. Sold
-              it? Use Mark as sold instead.
+              Deletes {name}, its price history, trades, and its dividends, interest, fees and taxes
+              in Income and costs. It also leaves your past net worth. Sold it? Use Mark as sold
+              instead.
             </p>
             <div className="flex gap-2">
               <Button variant="quiet" onClick={() => setConfirmDelete(false)} className="flex-1">

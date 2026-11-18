@@ -62,6 +62,10 @@ describe("buildZip", () => {
     expect(names).not.toContain("splitwise_attempts");
   });
 
+  it("includes the payer names you linked to contacts", () => {
+    expect(EXPORT_TABLES.map((t) => t.name)).toContain("payer_links");
+  });
+
   it("makes one holdings row per holding of every kind", () => {
     const lines = text("holdings.csv").trim().split("\r\n");
     expect(lines).toHaveLength(4);

@@ -23,6 +23,29 @@ describe("consentAlerts", () => {
     ]);
   });
 
+  // Polish 5 A2: a revoked or closed consent is ended by the sync at today 00:00 UTC; the bank
+  // already refuses it, so it must read "expired", not "ends today".
+  it("treats a consent whose end time has passed today as expired", () => {
+    const now = new Date("2026-10-23T09:00:00Z");
+    expect(consentAlerts([acc("Revolut EUR", "2026-10-23T00:00:00+00:00")], now)).toEqual([
+      { bank: "Revolut", daysLeft: -1 },
+    ]);
+  });
+
+  it("keeps a bare date running to the end of that day", () => {
+    const now = new Date("2026-10-23T09:00:00Z");
+    expect(consentAlerts([acc("Revolut EUR", "2026-10-23")], now)).toEqual([
+      { bank: "Revolut", daysLeft: 0 },
+    ]);
+  });
+
+  it("still says today when the consent ends later today", () => {
+    const now = new Date("2026-10-23T09:00:00Z");
+    expect(consentAlerts([acc("Revolut EUR", "2026-10-23T18:00:00Z")], now)).toEqual([
+      { bank: "Revolut", daysLeft: 0 },
+    ]);
+  });
+
   it("shows one alert per bank, using its soonest expiry, soonest bank first", () => {
     const alerts = consentAlerts(
       [

@@ -1144,7 +1144,9 @@ describe("Dialog X while a request runs", () => {
     await userEvent.type(within(dialog).getByLabelText("API key"), "abcdefghijkl");
     await userEvent.click(within(dialog).getByRole("checkbox"));
     await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
-    expect(within(dialog).getByRole("button", { name: "Close" })).toBeDisabled();
+    expect(
+      within(dialog).getByRole("button", { name: "Close" }).getAttribute("aria-disabled"),
+    ).toBe("true");
     finish(httpError(400, { error: "Splitwise did not accept this API key." }));
     await within(dialog).findByRole("alert");
     expect(within(dialog).getByRole("button", { name: "Close" })).toBeEnabled();
@@ -1158,7 +1160,9 @@ describe("Dialog X while a request runs", () => {
     const dialog = screen.getByRole("dialog", { name: "Disconnect Splitwise?" });
     expect(within(dialog).getByRole("button", { name: "Close" })).toBeEnabled();
     await userEvent.click(within(dialog).getByRole("button", { name: "Disconnect" }));
-    expect(within(dialog).getByRole("button", { name: "Close" })).toBeDisabled();
+    expect(
+      within(dialog).getByRole("button", { name: "Close" }).getAttribute("aria-disabled"),
+    ).toBe("true");
   });
 });
 

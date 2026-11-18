@@ -1,4 +1,5 @@
-import { TradesDialog } from "@/components/holdings/trades-dialog";
+import { TradesDialog, hasMissingPrice } from "@/components/holdings/trades-dialog";
+import { TriangleAlert } from "lucide-react";
 import { ImportTrades } from "@/components/holdings/import-trades";
 import { Alert } from "@/components/ui/alert";
 import { RETURN_NOISE_BAND, formatReturn } from "@/lib/performance";
@@ -24,6 +25,18 @@ function returnLabel(perf: Performance, holdingKey: string) {
   const trades = perf.tradesByKey.get(holdingKey) ?? [];
   if (measured?.state === "dust") return dash;
   if (trades.length === 0) return <span className="text-xs text-primary">Add purchases</span>;
+  if (measured?.state === "ok" && hasMissingPrice(trades)) {
+    // The €0 buy makes the return look better than it is: say so under it, so the cell stays narrow.
+    return (
+      <span className="inline-flex flex-col items-end leading-tight">
+        <Change change={measured.change} />{" "}
+        <span className="inline-flex items-center gap-1 text-xs whitespace-nowrap text-muted-foreground">
+          <TriangleAlert aria-hidden className="size-3 self-center text-warning" />
+          price missing
+        </span>
+      </span>
+    );
+  }
   if (measured?.state === "ok") return <Change change={measured.change} />;
   if (measured?.state === "mismatch") {
     return <span className="text-xs text-negative">Trades don't match</span>;

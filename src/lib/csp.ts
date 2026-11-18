@@ -1,16 +1,20 @@
 // connect-src must name the Supabase this dashboard was built for: hosted (<ref>.supabase.co),
 // self-hosted on a custom domain, or local (http://127.0.0.1:54321). A fixed *.supabase.co would
 // block sign-in for every self-hoster. ws(s):// is the same origin for Supabase Realtime.
+// Public exchange rates for days older than the ones the sync stored, read when a wallet export
+// is priced in dollars (src/lib/brokers/rates.ts). The same source the backend sync uses.
+export const FX_HISTORY = "https://api.frankfurter.dev";
+
 export function connectSrc(supabaseUrl: string | undefined): string {
   let url: URL;
   try {
     url = new URL(supabaseUrl ?? "");
   } catch {
-    return "'self'";
+    return `'self' ${FX_HISTORY}`;
   }
-  if (url.protocol !== "https:" && url.protocol !== "http:") return "'self'";
+  if (url.protocol !== "https:" && url.protocol !== "http:") return `'self' ${FX_HISTORY}`;
   const ws = url.protocol === "https:" ? "wss:" : "ws:";
-  return `'self' ${url.origin} ${ws}//${url.host}`;
+  return `'self' ${url.origin} ${ws}//${url.host} ${FX_HISTORY}`;
 }
 
 // script-src allows 'unsafe-inline' because TanStack Start SSR injects a per-request inline

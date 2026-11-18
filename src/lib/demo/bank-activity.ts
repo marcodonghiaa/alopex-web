@@ -89,10 +89,13 @@ function tx(
     own_counterparty: null,
     owed_by: null,
     owed_settled: false,
+    payback_contact: null,
     personal_amount: null,
     raw: null,
     remittance_info: null,
     settled_at: null,
+    settled_by_account: null,
+    settled_by_ref: null,
     transaction_type: "One-time",
     user_id: DEMO_USER_ID,
     value_date: p.booking_date,
@@ -262,6 +265,21 @@ export function dailyTransactions(n: number, todayNum: number): Array<Tx> {
         }),
       );
     }
+  }
+  // A friend paying back a dinner share by bank transfer: Who owes you asks "Is this Giulia?".
+  if (n === todayNum - 2) {
+    out.push(
+      tx({
+        entry_reference: `demo-${date}-giulia-pays`,
+        booking_date: date,
+        amount: 32,
+        category: "Income",
+        debtor_name: "GIULIA BIANCHI",
+        credit_debit_indicator: "CRDT",
+        flow_type: "income",
+        remittance_info: "Pizza, grazie!",
+      }),
+    );
   }
   if (n % 13 === 5) {
     out.push(
