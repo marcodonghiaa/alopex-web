@@ -37,6 +37,7 @@ export function PaymentsToCheck({
   busy,
   onConfirm,
   onDismiss,
+  afterLast,
 }: {
   suggestions: Array<PaybackSuggestion>;
   debtors: Array<Debtor>;
@@ -44,6 +45,8 @@ export function PaymentsToCheck({
   busy: string | null;
   onConfirm: (payment: PaybackCandidate, debtor: Debtor) => void;
   onDismiss: (payment: PaybackCandidate, suggestion: PaybackSuggestion) => void;
+  /** The element (by id) that takes focus once the last question is answered and the section goes. */
+  afterLast?: string | undefined;
 }) {
   const [choosing, setChoosing] = useState<string | null>(null);
   // Who you picked under "Someone else", by name: if they leave the list while the form is open,
@@ -75,13 +78,17 @@ export function PaymentsToCheck({
       started.current = true;
       return; // buttons wait while it saves: focus once it ends
     }
-    if (rows.length === 0) return done(); // the last one: nothing left to focus
+    if (rows.length === 0) {
+      // The last one: the section goes, so focus moves on to what follows it, not to <body>.
+      if (afterLast) document.getElementById(afterLast)?.focus();
+      return done();
+    }
     if (!rows.some((r) => r.dataset["row"] === focusAfter.id)) {
       rows[0]?.querySelector<HTMLElement>("button")?.focus();
       return done();
     }
     if (started.current) done(); // saved and still here: it failed
-  }, [focusAfter, suggestions, choosing, busy]);
+  }, [focusAfter, suggestions, choosing, busy, afterLast]);
   if (suggestions.length === 0) return null;
   const closeForm = (id: string) => {
     setChoosing(null);

@@ -238,6 +238,26 @@ describe("Who owes you", () => {
     expect(screen.queryByRole("status", { name: "Loading split bills" })).toBeNull();
   });
 
+  // protects=polish-4 P2-1: answering the last question doesn't drop keyboard focus to the page
+  // top; fails_when=the section unmounts and focus falls to <body>
+  it("moves focus to Split bills once the last question is answered", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    const section = await screen.findByRole("region", { name: "Did someone pay you back?" });
+    await userEvent.click(within(section).getByRole("button", { name: "Yes, it's Giulia" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: "Did someone pay you back?" })).toBeNull(),
+    );
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole("heading", { name: "Split bills · from your transactions" }),
+      ),
+    );
+  });
+
   // A query on `table` that waits for `held`, then answers as the demo would (or with `answer`).
   const holdTable = (
     table: string,

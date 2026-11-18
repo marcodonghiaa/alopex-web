@@ -293,9 +293,12 @@ function SplitwisePage() {
         busy={busy}
         onConfirm={confirmPayback}
         onDismiss={dismissPayback}
+        afterLast="split-bills"
       />
 
-      <SectionTitle className="mt-8">Split bills · from your transactions</SectionTitle>
+      <SectionTitle id="split-bills" focusable className="mt-8">
+        Split bills · from your transactions
+      </SectionTitle>
       {splits.isError ? (
         <Alert>Couldn't load your splits: {splits.error.message}</Alert>
       ) : splits.isPending || asking ? (

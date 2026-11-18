@@ -27,6 +27,7 @@ function view(
   s: Array<PaybackSuggestion>,
   debtors: Array<Debtor> = [mario, anna],
   busy: string | null = null,
+  afterLast?: string,
 ) {
   const onConfirm = vi.fn();
   const onDismiss = vi.fn();
@@ -39,6 +40,7 @@ function view(
       busy={now.b}
       onConfirm={onConfirm}
       onDismiss={onDismiss}
+      afterLast={afterLast}
     />
   );
   const { rerender } = render(ui());
@@ -230,6 +232,36 @@ describe("PaymentsToCheck", () => {
     outside.focus();
     setSuggestions([third]);
     expect(document.activeElement).toBe(outside);
+    outside.remove();
+  });
+
+  // protects=polish-4 P2-1: the last answer hands focus to what follows; fails_when=it drops to
+  // <body>, or moves even when the list empties without an answer (a refetch)
+  it("the last answer moves focus to the element after the section, a refetch doesn't", async () => {
+    const next = document.createElement("h2");
+    next.id = "after";
+    next.tabIndex = -1;
+    document.body.append(next);
+    const { setSuggestions, setBusy } = view([suggestion()], [mario, anna], null, "after");
+    await userEvent.click(screen.getByRole("button", { name: "Yes, it's Marverdi" }));
+    setBusy("acc|p1");
+    setSuggestions([]);
+    setBusy(null);
+    expect(document.activeElement).toBe(next);
+    next.remove();
+
+    // No answer given: the list emptying on its own leaves focus where it was.
+    const other = document.createElement("h2");
+    other.id = "after";
+    other.tabIndex = -1;
+    document.body.append(other);
+    const outside = document.createElement("input");
+    document.body.append(outside);
+    const second = view([suggestion()], [mario, anna], null, "after");
+    outside.focus();
+    second.setSuggestions([]);
+    expect(document.activeElement).toBe(outside);
+    other.remove();
     outside.remove();
   });
 
