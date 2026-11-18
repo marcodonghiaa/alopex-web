@@ -488,6 +488,9 @@ describe("Disconnect", () => {
   it("deletes synced data when chosen", async () => {
     functions({ "splitwise-connect": [ok({ disconnected: true, deleted: 7 })] });
     const dialog = await openDisconnect();
+    expect(within(dialog).getByRole("radio", { name: /Delete synced data/ })).toHaveAccessibleName(
+      /Your CSV imports stay\./,
+    );
     fireEvent.click(within(dialog).getByRole("radio", { name: /Delete synced data/ }));
     await userEvent.click(within(dialog).getByRole("button", { name: "Disconnect" }));
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
@@ -565,6 +568,9 @@ describe("Delete synced data after a disconnect", () => {
     const dialog = await openDelete();
     expect(invoke).not.toHaveBeenCalled();
     expect(dialog).toHaveTextContent("frees the bank payments they changed");
+    // polish-5 #1: CSV imports the sync adopted are kept, and the copy says so
+    expect(dialog).toHaveTextContent("Removes the expenses the sync added");
+    expect(dialog).toHaveTextContent("Your CSV imports stay.");
     rpc.mockResolvedValue(notConnected(false));
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());

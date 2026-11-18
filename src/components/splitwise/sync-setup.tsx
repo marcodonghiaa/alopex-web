@@ -248,7 +248,7 @@ function StatusRow({
 }
 
 const DELETE_DETAIL =
-  "Removes synced expenses, the To link list and Splitwise balances, and frees the bank payments they changed.";
+  "Removes the expenses the sync added, the To link list and Splitwise balances, and frees the bank payments they changed. Your CSV imports stay.";
 
 /**
  * Disconnect deletes the key; the user chooses whether what was synced goes too. In "delete" mode
