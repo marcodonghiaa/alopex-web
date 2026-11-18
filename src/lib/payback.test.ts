@@ -6,6 +6,7 @@ import {
   owesLine,
   paybackMessage,
   suggestPaybacks,
+  withoutToLink,
   type Debtor,
   type PaybackCandidate,
 } from "@/lib/payback";
@@ -212,6 +213,35 @@ describe("suggestPaybacks", () => {
       suggestPaybacks([pay({ payer: "Employer Srl", amount_eur: 2000 })], [debtor("Anna", 60)]),
     ).toEqual([]);
     expect(suggestPaybacks([pay()], [])).toEqual([]);
+  });
+});
+
+describe("withoutToLink", () => {
+  it("leaves out a payment To link already suggests for a Splitwise expense", () => {
+    const settleUp = pay({ entry_reference: "settle" });
+    const other = pay({ entry_reference: "other" });
+    expect(
+      withoutToLink([settleUp, other], [{ accountUid: "acc", entryReference: "settle" }]),
+    ).toEqual([other]);
+  });
+
+  it("keeps a payment with the same reference on another account", () => {
+    const payment = pay({ account_uid: "acc2", entry_reference: "settle" });
+    expect(withoutToLink([payment], [{ accountUid: "acc", entryReference: "settle" }])).toEqual([
+      payment,
+    ]);
+  });
+
+  it("keeps every payment when To link suggests none", () => {
+    const payments = [pay(), pay({ entry_reference: "p2" })];
+    expect(withoutToLink(payments, [])).toEqual(payments);
+  });
+
+  it("a person's older payment is asked about when To link takes their newest", () => {
+    const newest = pay({ entry_reference: "new", booking_date: "2026-11-15" });
+    const older = pay({ entry_reference: "old", booking_date: "2026-11-01" });
+    const left = withoutToLink([newest, older], [{ accountUid: "acc", entryReference: "new" }]);
+    expect(suggestPaybacks(left, [debtor("Marverdi", 320)])[0]?.payment).toBe(older);
   });
 });
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { FindInBank } from "@/components/import/find-in-bank";
 import { Button } from "@/components/ui/button";
@@ -8,25 +8,22 @@ import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isDemoMode } from "@/lib/demo/mode";
 import { cn } from "@/lib/utils";
+import { txId, type TxKey } from "@/lib/transactions";
 import { PENDING } from "./pending";
 import { moneyAmount, money, shortDate } from "@/lib/import/splitwise-format";
-import { fetchBankWindow } from "@/lib/import/splitwise-bank";
-import { makeRate } from "@/lib/fx";
 import {
   canCount,
   directionOf,
-  fetchReview,
   formatCount,
   KIND_LABEL,
-  REVIEW_KEY,
   reviewRow,
   runReviewAction,
-  suggestMatches,
   syncRefreshKeys,
   type ReviewAction,
   type ReviewItem,
   type Suggestion,
 } from "@/lib/splitwise-sync";
+import type { ToLinkMatches } from "@/lib/use-splitwise-sync";
 
 // The sheet hands focus back to the expense it was opened from, not to <body> (as the CSV review).
 const rowId = (id: string) => `to-link-${id}`;
@@ -56,28 +53,16 @@ const DONE: Record<ReviewAction["action"], string> = {
  * to its bank payment, count your share without one, or ignore it. Shown once Splitwise is
  * connected, or while items are still waiting after a disconnect.
  */
-export function ToLink({ connected }: { connected: boolean }) {
+export function ToLink({
+  connected,
+  matches,
+}: {
+  connected: boolean;
+  /** From the page's useToLinkMatches: read once there, shared with the payback questions. */
+  matches: ToLinkMatches;
+}) {
   const queryClient = useQueryClient();
-  const review = useQuery({ queryKey: REVIEW_KEY, queryFn: fetchReview });
-  const items = useMemo(() => review.data?.items ?? [], [review.data]);
-  const dates = items.map((i) => i.booking_date).sort();
-  // Every input of the fetch: the window's ends and the currencies it reads rates for.
-  const currencies = [...new Set(items.map((i) => i.currency))].sort().join(",");
-  // Under "transactions" so the import's refresh keys refetch it after a link.
-  const bank = useQuery({
-    queryKey: ["transactions", "splitwise-to-link", dates[0], dates[dates.length - 1], currencies],
-    queryFn: () =>
-      fetchBankWindow(
-        items.map((i) => i.booking_date),
-        items.map((i) => i.currency),
-      ),
-    enabled: items.length > 0,
-  });
-  const rate = useMemo(() => makeRate(bank.data?.fx ?? []), [bank.data]);
-  const suggestions = useMemo(
-    () => suggestMatches(items, bank.data?.bank ?? [], rate),
-    [items, bank.data, rate],
-  );
+  const { review, items, bank, rate, suggestions } = matches;
   const [finding, setFinding] = useState<ReviewItem | null>(null);
   // Stable between renders: Find in bank clears the picked payment when its row changes.
   const findRow = useMemo(() => (finding ? reviewRow(finding, 0) : null), [finding]);
@@ -89,7 +74,19 @@ export function ToLink({ connected }: { connected: boolean }) {
     mutationFn: runReviewAction,
     // Where the row sits, so focus can go to the one that takes its place once it's gone.
     onMutate: (a) => rowIds().indexOf(rowId(a.id)),
-    onSuccess: (_d, a) => toast.success(DONE[a.action]),
+    onSuccess: (_d, a) => {
+      // The linked payment leaves the payback questions now, not when their refetch lands: else
+      // it shows there once the item leaves this list (no longer suggested, so no longer hidden).
+      if (a.action === "link")
+        queryClient.setQueryData<Array<TxKey>>(["payback-candidates"], (list) =>
+          list?.filter(
+            (c) =>
+              txId(c) !==
+              txId({ account_uid: a.tx.accountUid, entry_reference: a.tx.entryReference }),
+          ),
+        );
+      toast.success(DONE[a.action]);
+    },
     onError: (err) => toast.error(err.message),
     // Awaited: the action stays pending (rows off) until the list shows its result.
     onSettled: async (_d, _e, a, at) => {

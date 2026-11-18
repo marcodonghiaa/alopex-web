@@ -19,10 +19,13 @@ export function SectionTitle({
   className,
   variant = "title",
   id,
+  focusable = false,
 }: {
   children: ReactNode;
   /** For aria-labelledby: lets a section take its name from this heading. */
   id?: string;
+  /** Can take focus from code (not in the tab order): where focus lands when what's above goes. */
+  focusable?: boolean;
   action?: ReactNode;
   className?: string;
   variant?: "title" | "label";
@@ -38,11 +41,13 @@ export function SectionTitle({
     >
       <h2
         id={id}
-        className={
+        tabIndex={focusable ? -1 : undefined}
+        className={cn(
           label
             ? "text-[0.8125rem] leading-tight font-medium text-muted-foreground"
-            : "text-lg font-semibold text-foreground"
-        }
+            : "text-lg font-semibold text-foreground",
+          focusable && "outline-none",
+        )}
       >
         {children}
       </h2>

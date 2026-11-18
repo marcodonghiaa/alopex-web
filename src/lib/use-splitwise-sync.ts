@@ -1,8 +1,20 @@
-import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useIsMutating,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useMemo, useRef } from "react";
 import { toast } from "sonner";
+import { fetchBankWindow } from "@/lib/import/splitwise-bank";
+import { makeRate } from "@/lib/fx";
 import {
   CONNECTION_KEY,
   fetchConnection,
+  fetchReview,
+  REVIEW_KEY,
+  suggestMatches,
   syncNow,
   syncRefreshKeys,
   syncSummary,
@@ -44,3 +56,46 @@ export function useSyncNow(onSettled?: () => void) {
     if (queryClient.isMutating({ mutationKey: SYNC_NOW_KEY }) === 0) sync.mutate();
   };
 }
+
+/**
+ * The Splitwise expenses waiting on To link and the bank payment suggested for each. The page reads
+ * it once and hands it to the To link list and the payback questions, so both always agree on
+ * which payment To link is asking about.
+ */
+export function useToLinkMatches() {
+  const review = useQuery({ queryKey: REVIEW_KEY, queryFn: fetchReview });
+  const items = useMemo(() => review.data?.items ?? [], [review.data]);
+  const dates = items.map((i) => i.booking_date).sort();
+  // Every input of the fetch: the window's ends and the currencies it reads rates for.
+  const currencies = [...new Set(items.map((i) => i.currency))].sort().join(",");
+  // Under "transactions" so the import's refresh keys refetch it after a link.
+  const bank = useQuery({
+    queryKey: ["transactions", "splitwise-to-link", dates[0], dates[dates.length - 1], currencies],
+    queryFn: () =>
+      fetchBankWindow(
+        items.map((i) => i.booking_date),
+        items.map((i) => i.currency),
+      ),
+    enabled: items.length > 0,
+    // A link or ignore can move the window's ends (a new key): keep the last read meanwhile, so
+    // what waits on it (the payback questions, the lists under them) doesn't blank and come back.
+    placeholderData: keepPreviousData,
+  });
+  const rate = useMemo(() => makeRate(bank.data?.fx ?? []), [bank.data]);
+  const suggestions = useMemo(
+    () => suggestMatches(items, bank.data?.bank ?? [], rate),
+    [items, bank.data, rate],
+  );
+  // Done once the list is read and, with items, their bank payments. A first failure counts as
+  // done: what waits on this (the payback questions) shouldn't wait out the retries. Once done it
+  // stays done: a Retry or a new window later updates the questions in place, it doesn't put the
+  // page back to loading.
+  const done = (q: { isPending: boolean; failureCount: number }) =>
+    !q.isPending || q.failureCount > 0;
+  const once = useRef(false);
+  if (done(review) && (items.length === 0 || done(bank))) once.current = true;
+  const settled = once.current;
+  return { review, items, bank, rate, suggestions, settled };
+}
+
+export type ToLinkMatches = ReturnType<typeof useToLinkMatches>;

@@ -440,7 +440,7 @@ describe("runReviewAction", () => {
 
 describe("syncRefreshKeys", () => {
   // protects=a link or a sync shows at once in spending and the bank list; fails_when=a key is dropped
-  it("refreshes the import's keys plus the connection and the To link list", () => {
+  it("refreshes the import's keys plus the connection, the To link list and the payback questions", () => {
     const keys = syncRefreshKeys().map((k) => k[0]);
     for (const k of [
       "transactions",
@@ -448,6 +448,7 @@ describe("syncRefreshKeys", () => {
       "splitwise-balances",
       "splitwise-connection",
       "splitwise-review",
+      "payback-candidates",
     ])
       expect(keys).toContain(k);
   });
