@@ -358,6 +358,18 @@ describe("generateDemoData: Splitwise To link", () => {
     expect(paid).toHaveLength(1);
   });
 
+  // polish-5 #7: money-in matching shows in the demo too, not only in unit tests
+  it("has an incoming payment for the settle-up you received, the same day and amount", () => {
+    const settle = db.splitwise_review.find((r) => r.kind === "settle_in")!;
+    const received = db.transactions.filter(
+      (t) =>
+        t.booking_date === settle.booking_date &&
+        t.credit_debit_indicator === "CRDT" &&
+        Number(t.amount) === Number(settle.cost),
+    );
+    expect(received).toHaveLength(1);
+  });
+
   it("puts the settle-up you received in a group where you are owed", () => {
     for (const r of db.splitwise_review.filter((x) => x.kind === "settle_in")) {
       const me = db.splitwise_balances.find(

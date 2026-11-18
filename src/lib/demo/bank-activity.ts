@@ -225,6 +225,19 @@ export function dailyTransactions(n: number, todayNum: number): Array<Tx> {
         creditor_name: "Trattoria da Gino",
       }),
     );
+  // The money Giulia sent for the demo's settle-up on the To link list (same day, €22), so a
+  // settle-up received shows a suggested payment in too.
+  if (todayNum - n === 6)
+    out.push(
+      tx({
+        entry_reference: `demo-${date}-settle-in`,
+        booking_date: date,
+        amount: 22,
+        debtor_name: "Giulia",
+        credit_debit_indicator: "CRDT",
+        flow_type: "income",
+      }),
+    );
   // Fixed rhythms guarantee a refund pair and a split bill in any window.
   if (n % 17 === 3) {
     const original = tx({
