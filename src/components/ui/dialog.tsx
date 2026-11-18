@@ -47,9 +47,31 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+// How many dialogs are on screen, so the toaster can keep out of their way on a phone.
+let openDialogs = 0;
+const dialogListeners = new Set<() => void>();
+const countDialogs = (by: number) => {
+  openDialogs += by;
+  dialogListeners.forEach((l) => l());
+};
+export function useDialogOpen() {
+  return React.useSyncExternalStore(
+    (l) => {
+      dialogListeners.add(l);
+      return () => dialogListeners.delete(l);
+    },
+    () => openDialogs > 0,
+    () => false,
+  );
+}
+
 // Mounted only while the dialog is on screen.
 function RememberOpener({ opener }: { opener: React.RefObject<Element | null> }) {
   React.useLayoutEffect(() => rememberOpener(opener), [opener]);
+  React.useEffect(() => {
+    countDialogs(1);
+    return () => countDialogs(-1);
+  }, []);
   return null;
 }
 

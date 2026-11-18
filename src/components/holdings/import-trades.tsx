@@ -211,6 +211,22 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       new Map([...wallet].map(([key, h]) => [key, h.shares])),
     );
   }, [parsed, saved, keys.data, kind, wallet, fileBroker]);
+  // Per coin the file sets, your saved trades from elsewhere: the holding is set to the file's
+  // amount, so its return won't match them, whether or not the amount changes.
+  const otherTrades = useMemo(() => {
+    const out = new Map<string, number>();
+    if (!parsed?.setsShares || !wallet || !fileBroker) return out;
+    const set = new Set(parsed.trades.map((t) => t.key));
+    for (const t of saved) {
+      const key = t.key.toUpperCase();
+      if (t.source !== fileBroker.id && set.has(key) && wallet.has(key))
+        out.set(key, (out.get(key) ?? 0) + 1);
+    }
+    return out;
+  }, [parsed, saved, wallet, fileBroker]);
+  const otherWarning = (n: number) =>
+    `Has ${plural(n, "trade")} not from ${fileBroker?.name}: its return will show as not matching until you remove ${n === 1 ? "it" : "them"}`;
+  const toCheck = [...otherTrades.keys()].filter((key) => !updates.some((u) => u.key === key));
 
   // Two clicks before a re-render would both start a save: only the first one counts.
   const saving = useRef(false);
@@ -331,6 +347,17 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
 
   // Each file read gets a number: one that ends after another file, or after a reset, is dropped.
   const readId = useRef(0);
+  // Closing the tab mid-save leaves holdings half-updated: the browser asks first.
+  useEffect(() => {
+    if (!save.isPending) return;
+    const ask = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Older browsers ask only when this is set too.
+      e.returnValue = true;
+    };
+    window.addEventListener("beforeunload", ask);
+    return () => window.removeEventListener("beforeunload", ask);
+  }, [save.isPending]);
 
   function reset() {
     readId.current++;
@@ -354,6 +381,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   }
 
   const correctedId = useId();
+  const toCheckId = useId();
   // Coin amounts keep their decimals (0.4988), share counts too.
   const amount = numberFormat({ maximumFractionDigits: 8 });
   const row = "flex min-h-12 items-center gap-3 px-4 py-2.5 text-[0.9375rem]";
@@ -798,6 +826,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                     {updates.map(({ key, shares }) => {
                       const held = wallet?.get(key);
                       const old = held ? held.shares : keys.data?.shares.get(key);
+                      const byHand = otherTrades.get(key) ?? 0;
                       return (
                         <li key={key} className={cn(row, "border-hairline not-first:border-t")}>
                           <span className="min-w-0 flex-1">
@@ -807,6 +836,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                             {held && (
                               <span className="block text-xs text-muted-foreground">
                                 {held.source}
+                                {byHand > 0 && ` · ${otherWarning(byHand)}`}
                               </span>
                             )}
                           </span>
@@ -822,6 +852,28 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               </section>
             )}
 
+            {toCheck.length > 0 && (
+              <section aria-labelledby={toCheckId}>
+                <p id={toCheckId} className="px-1 pb-1.5 text-xs font-medium text-muted-foreground">
+                  Trades to check
+                </p>
+                <GroupedList className="border border-hairline">
+                  <ul>
+                    {toCheck.map((key) => (
+                      <li key={key} className={cn(row, "border-hairline not-first:border-t")}>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate">{keys.data?.names.get(key) ?? key}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {wallet?.get(key)?.source} · {otherWarning(otherTrades.get(key)!)}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </GroupedList>
+              </section>
+            )}
+
             {summary && (
               <div>
                 <p className="px-1 pb-1.5 text-xs font-medium text-muted-foreground">By holding</p>
@@ -830,7 +882,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                     <div key={h.key} className={row}>
                       <span className="min-w-0 flex-1 truncate">
                         {keys.data?.names.get(h.key) ?? parsed.names?.get(h.key) ?? h.key}
-                        {/* No holding to set, kept because it nets to zero. */}
+                        {/* A stock with no holding, kept because it nets to zero (a coin is left out, with a note). */}
                         {ctx && !ctx.knownKeys.has(h.key) && " · fully sold"}
                       </span>
                       <span className="shrink-0 text-sm text-muted-foreground tabular-nums">

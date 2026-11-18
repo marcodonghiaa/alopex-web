@@ -191,8 +191,7 @@ export const ledgerLive: BrokerParser = {
       const shares = family === "stake" || failed ? fee : amount;
       if (shares === 0) return;
       // Ledger dates are UTC days; west of UTC that can be a day past your local today.
-      if (date > addDays(today, 1))
-        return void errors.push(`Line ${i + 2}: the date is in the future.`);
+      if (date > addDays(today, 1)) return fail("the date is in the future");
       const currency = currencyOf(get);
       const rate = currency === "EUR" ? 1 : (rateToEur?.(currency, date) ?? null);
       if (rate == null) {
@@ -217,9 +216,9 @@ export const ledgerLive: BrokerParser = {
         id = n === 1 ? base : `${base}#${n}`;
       }
       // Each number can be fine and still give a price too big to save. The database keeps coin
-      // symbols up to 100 characters and ids up to 200.
-      if (key.length > 100) return fail("the coin name is too long", false);
-      if ((id?.length ?? 0) > 200) return fail("the operation hash is too long");
+      // symbols up to 100 characters and ids up to 200, counted as it does (code points).
+      if ([...key].length > 100) return fail("the coin name is too long", false);
+      if ([...(id ?? "")].length > 200) return fail("the operation hash is too long");
       if (!Number.isFinite(price) || !Number.isFinite(shares * price)) {
         return fail(
           `the value "${valueText}" is too big for the amount "${get("operation amount").trim()}"`,
@@ -243,6 +242,15 @@ export const ledgerLive: BrokerParser = {
       notes.push(
         `${key} has no Ledger or manual holding, so it was left out. Add it as a coin, then import again.`,
       );
+    // Sold to zero with no holding here: no screen would show its trades, and none could delete them.
+    // It may still be held elsewhere (Coinbase): this wallet's export doesn't set that holding.
+    for (const key of new Set(trades.map((t) => t.key)))
+      if (!knownKeys.has(key) && !open.includes(key)) {
+        const n = trades.filter((t) => t.key === key).length;
+        notes.push(
+          `${key}: sold to zero and not held on Ledger or by hand, so its ${plural(n, "trade")} ${n === 1 ? "was" : "were"} left out.`,
+        );
+      }
     const ops = (n: number, one: string, many: string) =>
       `${plural(n, "operation")} ${n === 1 ? one : many}`;
     if (skipped > 0)
@@ -258,7 +266,7 @@ export const ledgerLive: BrokerParser = {
       notes.push(ops(noValue, counted, counted.replace("it was", "they were")));
     }
     return {
-      trades: trades.filter((t) => !open.includes(t.key)),
+      trades: trades.filter((t) => knownKeys.has(t.key)),
       errors,
       notes,
       setsShares: true,

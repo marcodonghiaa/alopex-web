@@ -3,6 +3,7 @@ import { act, render, screen } from "@testing-library/react";
 import { toast } from "sonner";
 import { Toaster } from "./sonner";
 import { Sheet, SheetContent, SheetTitle } from "./sheet";
+import { Dialog, DialogContent, DialogTitle } from "./dialog";
 
 describe("Toaster", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -87,6 +88,54 @@ describe("Toaster", () => {
     await screen.findByText("Marked");
     expect(list()).toHaveAttribute("data-y-position", "bottom");
     expect(list()).toHaveAttribute("data-x-position", "center");
+  });
+
+  // polish-5 #8: on a phone a toast at the bottom covered a dialog's sticky Save (Import trades).
+  // fails_when=a toast shown on a phone while a dialog is open sits at the bottom
+  describe("a dialog on a phone", () => {
+    const phone = () =>
+      vi.stubGlobal("matchMedia", (q: string) => ({
+        matches: q === "(max-width: 767px)",
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }));
+    const withDialog = (open: boolean) =>
+      render(
+        <>
+          <Toaster />
+          <Dialog open={open} onOpenChange={vi.fn()}>
+            <DialogContent aria-describedby={undefined}>
+              <DialogTitle>Import trades</DialogTitle>
+            </DialogContent>
+          </Dialog>
+        </>,
+      );
+    const list = () => document.querySelector("[data-sonner-toaster]") as HTMLElement;
+
+    it("open: toasts move to the top centre", async () => {
+      phone();
+      withDialog(true);
+      act(() => void toast("Imported 5 trades"));
+      await screen.findByText("Imported 5 trades");
+      expect(list()).toHaveAttribute("data-y-position", "top");
+      expect(list()).toHaveAttribute("data-x-position", "center");
+    });
+
+    it("closed: toasts stay at the bottom centre", async () => {
+      phone();
+      withDialog(false);
+      act(() => void toast("Imported 5 trades"));
+      await screen.findByText("Imported 5 trades");
+      expect(list()).toHaveAttribute("data-y-position", "bottom");
+      expect(list()).toHaveAttribute("data-x-position", "center");
+    });
+
+    it("on a wider screen an open dialog leaves toasts at the bottom", async () => {
+      withDialog(true);
+      act(() => void toast("Imported 5 trades"));
+      await screen.findByText("Imported 5 trades");
+      expect(list()).toHaveAttribute("data-y-position", "bottom");
+    });
   });
 
   // polish-4 #B: the Transactions page always renders its filter and edit sheets, closed.
