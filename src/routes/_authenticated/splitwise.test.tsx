@@ -144,10 +144,8 @@ describe("Who owes you", () => {
     expect(within(list).getByRole("listitem", { name: "Settle up" })).toBeTruthy();
   });
 
-  // protects=polish-1 P1-2: once To link links a settle-up, its payment is not asked about next;
-  // fails_when=the cached payback candidates still hold it ("Is this Giulia? €22.00" after Link)
-  it("doesn't ask about a settle-up's payment after linking it on To link", async () => {
-    // The demo has no link RPC (linking is off there): this one does what the server's does.
+  // The demo has no link RPC (linking is off there): this one does what the server's does.
+  const stubLinkRpc = () => {
     const client = db.client as {
       rpc: (name: string, args?: Record<string, unknown>) => unknown;
       from: (t: string) => { update: (p: object) => { eq: (c: string, v: unknown) => unknown } };
@@ -162,6 +160,12 @@ describe("Who owes you", () => {
       await client.from("splitwise_review").update({ status: "linked" }).eq("id", args!["p_id"]);
       return { data: { status: "linked" }, error: null };
     };
+  };
+
+  // protects=polish-1 P1-2: once To link links a settle-up, its payment is not asked about next;
+  // fails_when=the cached payback candidates still hold it ("Is this Giulia? €22.00" after Link)
+  it("doesn't ask about a settle-up's payment after linking it on To link", async () => {
+    stubLinkRpc();
     render(
       <QueryClientProvider client={new QueryClient()}>
         <Page />
@@ -184,7 +188,11 @@ describe("Who owes you", () => {
   });
 
   // A query on `table` that waits for `held`, then answers as the demo would (or with `answer`).
-  const holdTable = (table: string, held: Promise<void>, answer?: unknown) => {
+  const holdTable = (
+    table: string,
+    held: Promise<void> | (() => Promise<void>),
+    answer?: unknown,
+  ) => {
     const client = db.client as { from: (t: string) => unknown };
     const from = client.from.bind(client);
     const wrap = (q: object): unknown =>
@@ -192,9 +200,10 @@ describe("Who owes you", () => {
         get(target, key) {
           if (key === "then")
             return (ok: (v: unknown) => unknown, ko: (e: unknown) => unknown) =>
-              held.then(() =>
-                answer ? ok(answer) : (target as PromiseLike<unknown>).then(ok, ko),
-              );
+              (typeof held === "function" ? held() : held).then(() => {
+                const a = typeof answer === "function" ? (answer as () => unknown)() : answer;
+                return a ? ok(a) : (target as PromiseLike<unknown>).then(ok, ko);
+              });
           const v = (target as Record<PropertyKey, unknown>)[key];
           return typeof v === "function"
             ? (...a: Array<unknown>) =>
@@ -221,6 +230,69 @@ describe("Who owes you", () => {
     release();
     const section = await screen.findByRole("region", { name: "Did someone pay you back?" });
     expect(within(section).queryByText(/€22\.00/)).toBeNull();
+  });
+
+  // protects=polish-1 P1-2's twin P1-1: a To link action doesn't blank the page under it;
+  // fails_when=linking the oldest item changes To link's bank window and every list below turns
+  // back into a loading skeleton until it is read again
+  it("keeps the lists in place while To link reloads after a link", async () => {
+    stubLinkRpc();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    const list = await screen.findByRole("region", { name: "To link" });
+    await screen.findByRole("region", { name: "Did someone pay you back?" });
+    const settleUp = within(list).getByRole("listitem", { name: "Settle up" });
+    await waitFor(() =>
+      expect(within(settleUp).getByRole("button", { name: /^Link/ })).toBeEnabled(),
+    );
+    // From here every bank read is slow, so a reload of To link's window shows.
+    holdTable("transactions", () => new Promise((r) => setTimeout(r, 150)));
+    let blanked = false;
+    let lostSuggestion = false;
+    const watch = setInterval(() => {
+      if (screen.queryByRole("status", { name: "Loading split bills" })) blanked = true;
+      // The other expense keeps its suggested payment while the window reloads.
+      const dinner = within(list).queryByRole("listitem", { name: "Dinner out" });
+      if (!dinner?.textContent?.includes("Trattoria da Gino")) lostSuggestion = true;
+    }, 5);
+    await userEvent.click(within(settleUp).getByRole("button", { name: /^Link/ }));
+    await waitFor(() =>
+      expect(within(list).queryByRole("listitem", { name: "Settle up" })).toBeNull(),
+    );
+    await new Promise((r) => setTimeout(r, 400));
+    clearInterval(watch);
+    expect(blanked).toBe(false);
+    expect(lostSuggestion).toBe(false);
+  });
+
+  // protects=polish-1 P1-1 (retry): Retry on a To link that failed doesn't blank the page under
+  // it; fails_when=the retry puts To link back to loading and the lists below with it
+  it("keeps the lists in place while a failed To link retries", async () => {
+    let reads = 0;
+    holdTable(
+      "splitwise_review",
+      () => (reads === 0 ? Promise.resolve() : new Promise((r) => setTimeout(r, 150))),
+      () => (reads++ === 0 ? { data: null, error: { message: "boom" } } : undefined),
+    );
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <Page />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("region", { name: "Did someone pay you back?" });
+    let blanked = false;
+    const watch = setInterval(() => {
+      if (screen.queryByRole("status", { name: "Loading split bills" })) blanked = true;
+    }, 5);
+    await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
+    await screen.findByRole("listitem", { name: "Settle up" });
+    clearInterval(watch);
+    expect(blanked).toBe(false);
   });
 
   // protects=the questions when To link can't load; fails_when=they wait forever for it

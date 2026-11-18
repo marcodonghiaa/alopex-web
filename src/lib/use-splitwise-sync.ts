@@ -1,5 +1,11 @@
-import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import {
+  keepPreviousData,
+  useIsMutating,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { fetchBankWindow } from "@/lib/import/splitwise-bank";
 import { makeRate } from "@/lib/fx";
@@ -71,6 +77,9 @@ export function useToLinkMatches() {
         items.map((i) => i.currency),
       ),
     enabled: items.length > 0,
+    // A link or ignore can move the window's ends (a new key): keep the last read meanwhile, so
+    // what waits on it (the payback questions, the lists under them) doesn't blank and come back.
+    placeholderData: keepPreviousData,
   });
   const rate = useMemo(() => makeRate(bank.data?.fx ?? []), [bank.data]);
   const suggestions = useMemo(
@@ -78,9 +87,13 @@ export function useToLinkMatches() {
     [items, bank.data, rate],
   );
   // Done once the list is read and, with items, their bank payments. A first failure counts as
-  // done: what waits on this (the payback questions) shouldn't wait out the retries.
+  // done: what waits on this (the payback questions) shouldn't wait out the retries. Once done it
+  // stays done: a Retry or a new window later updates the questions in place, it doesn't put the
+  // page back to loading.
   const done = (q: { isPending: boolean; failureCount: number }) =>
     !q.isPending || q.failureCount > 0;
-  const settled = done(review) && (items.length === 0 || done(bank));
+  const once = useRef(false);
+  if (done(review) && (items.length === 0 || done(bank))) once.current = true;
+  const settled = once.current;
   return { review, items, bank, rate, suggestions, settled };
 }
