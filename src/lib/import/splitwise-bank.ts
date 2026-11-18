@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { BankTx } from "./splitwise-match";
-import { toBankTx, type FxRow } from "./splitwise-review";
+import { type FxRow } from "@/lib/fx";
+import { toBankTx } from "./splitwise-review";
 
 // The bank payments and exchange rates around some Splitwise dates, for the matcher: shared by
 // the CSV import's review and the To link list.

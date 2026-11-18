@@ -1,0 +1,617 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { setLocaleOverride } from "@/lib/locale";
+import { incomeByKey, newEvents, summarizeIncome } from "@/lib/investment-events";
+import { parseTradesCsv } from "@/lib/trades-csv";
+
+// The 23 columns of Trade Republic's transaction export, in its order.
+const HEADER =
+  '"datetime","date","account_type","category","type","asset_class","name","symbol","shares","price","amount","fee","tax","currency","original_amount","original_currency","fx_rate","description","transaction_id","counterparty_name","counterparty_iban","payment_reference","mcc_code"';
+type Row = Partial<{
+  date: string;
+  category: string;
+  type: string;
+  asset_class: string;
+  name: string;
+  symbol: string;
+  shares: string;
+  price: string;
+  amount: string;
+  fee: string;
+  tax: string;
+  currency: string;
+  original_amount: string;
+  original_currency: string;
+  fx_rate: string;
+  description: string;
+  id: string;
+  counterparty_name: string;
+  counterparty_iban: string;
+  payment_reference: string;
+  mcc_code: string;
+}>;
+let n = 0;
+const row = (r: Row) => {
+  const date = r.date ?? "2026-03-02";
+  const cells = [
+    `${date}T09:30:00.123Z`,
+    date,
+    "DEFAULT",
+    r.category ?? "TRADING",
+    r.type ?? "BUY",
+    r.asset_class ?? "STOCK",
+    r.name ?? "Example Corp",
+    r.symbol ?? "XX0000000001",
+    r.shares ?? "",
+    r.price ?? "",
+    r.amount ?? "",
+    r.fee ?? "",
+    r.tax ?? "",
+    r.currency ?? "EUR",
+    r.original_amount ?? "",
+    r.original_currency ?? "",
+    r.fx_rate ?? "",
+    r.description ?? "",
+    r.id ?? `00000000-0000-7000-8000-${String(++n).padStart(12, "0")}`,
+    r.counterparty_name ?? "",
+    r.counterparty_iban ?? "",
+    r.payment_reference ?? "",
+    r.mcc_code ?? "",
+  ];
+  return cells.map((c) => `"${c}"`).join(",");
+};
+const file = (...rows: Array<Row>) => [HEADER, ...rows.map(row)].join("\n");
+const stock = {
+  kind: "stock" as const,
+  knownKeys: new Set(["XX0000000001", "XX0000000002", "BTC"]),
+  today: "2026-11-17",
+};
+const crypto = { ...stock, kind: "crypto" as const };
+
+describe("Trade Republic, trades", () => {
+  it("keeps the tax on a trade, its exact time and what kind of buy it was", () => {
+    const { trades, errors } = parseTradesCsv(
+      file({
+        type: "BUY",
+        shares: "2.5",
+        price: "10",
+        amount: "-25.07",
+        fee: "-0.05",
+        tax: "-0.02",
+        description: "Savings plan execution",
+      }),
+      stock,
+    );
+    expect(errors).toEqual([]);
+    expect(trades[0]).toMatchObject({
+      side: "buy",
+      shares: 2.5,
+      price_eur: 10,
+      fee_eur: 0.05,
+      tax_eur: 0.02,
+      traded_at: "2026-03-02T09:30:00.123Z",
+      note: "Savings plan execution",
+    });
+  });
+
+  it("reads private-market buys and sells as trades", () => {
+    const { trades } = parseTradesCsv(
+      file(
+        { type: "PRIVATE_MARKET_BUY", shares: "1", price: "50", amount: "-50" },
+        { type: "PRIVATE_MARKET_SELL", shares: "-1", price: "60", amount: "60" },
+      ),
+      stock,
+    );
+    expect(trades.map((t) => t.side)).toEqual(["buy", "sell"]);
+  });
+
+  it("shares you got for free come in at no cost, so all their value is gain", () => {
+    const { trades, events } = parseTradesCsv(
+      file({ category: "TRADING", type: "STOCKPERK", shares: "0.5", amount: "0" }),
+      stock,
+    );
+    expect(trades[0]).toMatchObject({
+      side: "buy",
+      shares: 0.5,
+      price_eur: 0,
+      note: "Received free",
+    });
+    expect(events).toEqual([]);
+  });
+
+  it("a bond paid back at maturity is a sale at what you got for it", () => {
+    const { trades, events } = parseTradesCsv(
+      file({
+        category: "CORPORATE_ACTION",
+        type: "FINAL_MATURITY",
+        asset_class: "BOND",
+        shares: "-1000",
+        amount: "1000",
+      }),
+      stock,
+    );
+    expect(trades[0]).toMatchObject({
+      side: "sell",
+      shares: 1000,
+      price_eur: 1,
+      note: "Paid back",
+    });
+    expect(events?.[0]).toMatchObject({
+      kind: "corporate_action",
+      raw_type: "CORPORATE_ACTION|FINAL_MATURITY",
+    });
+  });
+
+  it("tax held back on a bond paid back goes on its sale, counted once", () => {
+    const { trades, events } = parseTradesCsv(
+      file({
+        category: "CORPORATE_ACTION",
+        type: "FINAL_MATURITY",
+        asset_class: "BOND",
+        shares: "-1000",
+        amount: "1000",
+        tax: "-26",
+      }),
+      stock,
+    );
+    expect(trades[0]).toMatchObject({ side: "sell", price_eur: 1, tax_eur: 26 });
+    expect(events?.map((e) => [e.kind, e.tax_eur])).toEqual([["corporate_action", 0]]);
+  });
+
+  it("shares moved in from elsewhere count at no cost, and you're told to fix the price", () => {
+    const { trades, notes } = parseTradesCsv(
+      file({ category: "CORPORATE_ACTION", type: "MERGER", shares: "3", amount: "" }),
+      stock,
+    );
+    expect(trades[0]).toMatchObject({ side: "buy", shares: 3, price_eur: 0 });
+    expect(notes).toContain(
+      "1 row moved shares in from elsewhere at no cost: the file doesn't say what you paid. Edit the price in the holding's trades.",
+    );
+  });
+
+  it("polish-5 A-P3-5 shares moved between brokers are transfers in or out by their sign", () => {
+    const { events } = parseTradesCsv(
+      file(
+        { category: "DELIVERY", type: "SECURITY_TRANSFER", shares: "5", fee: "-1.5" },
+        { category: "DELIVERY", type: "SECURITY_TRANSFER", shares: "-2" },
+        { category: "CORPORATE_ACTION", type: "TRANSFER", shares: "-1" },
+        { category: "DELIVERY", type: "INBOUND_DELIVERY", shares: "4" },
+      ),
+      stock,
+    );
+    expect(events?.map((e) => e.kind)).toEqual([
+      "transfer_in",
+      "transfer_out",
+      "transfer_out",
+      "transfer_in",
+    ]);
+    // Read like any other move: only the fee counts, and nothing goes into a return.
+    expect(summarizeIncome(events!)).toMatchObject({
+      dividends: 0,
+      interest: 0,
+      rewards: 0,
+      taxes: 0,
+      fees: 1.5,
+    });
+    expect(incomeByKey(events!).size).toBe(0);
+  });
+
+  it("polish-5 A-P3-5 a merger, spin-off, split or bond paid back stays a corporate action", () => {
+    const { events } = parseTradesCsv(
+      file(
+        { category: "CORPORATE_ACTION", type: "MERGER", shares: "3" },
+        { category: "CORPORATE_ACTION", type: "SPIN_OFF", shares: "1" },
+        { category: "CORPORATE_ACTION", type: "SPLIT", shares: "2" },
+        { category: "CORPORATE_ACTION", type: "FINAL_MATURITY", shares: "-1", amount: "1" },
+        // Filed under DELIVERY, still not a move between brokers.
+        { category: "DELIVERY", type: "SPIN_OFF", shares: "1" },
+      ),
+      stock,
+    );
+    expect(events?.map((e) => e.kind)).toEqual(Array(5).fill("corporate_action"));
+  });
+
+  it("a reverse split isn't guessed: you're asked to add it", () => {
+    const { trades, notes } = parseTradesCsv(
+      file({ category: "CORPORATE_ACTION", type: "SPLIT", shares: "-4" }),
+      stock,
+    );
+    expect(trades).toEqual([]);
+    expect(notes).toContain("1 reverse split wasn't imported. Add it by hand.");
+  });
+
+  it("a migration moves shares out and straight back: nothing is imported", () => {
+    const { trades, events, notes } = parseTradesCsv(
+      file(
+        { category: "DELIVERY", type: "MIGRATION", shares: "-7" },
+        { category: "DELIVERY", type: "MIGRATION", shares: "7" },
+      ),
+      stock,
+    );
+    expect([trades, events, notes]).toEqual([[], [], []]);
+  });
+
+  it("a number it can't read stops the import", () => {
+    const { errors } = parseTradesCsv(file({ shares: "abc", price: "10" }), stock);
+    expect(errors).toEqual(["Line 2: couldn't read this buy row."]);
+  });
+
+  it("a date it can't read stops the import", () => {
+    const { errors } = parseTradesCsv(
+      file({ date: "2026-02-31", shares: "1", price: "10" }),
+      stock,
+    );
+    expect(errors).toEqual(["Line 2: the date isn't valid."]);
+  });
+
+  it("a day-first date is saved as the ISO date it means, and checked against today", () => {
+    const { trades, events, errors } = parseTradesCsv(
+      file(
+        { date: "02/01/2026", shares: "1", price: "10" },
+        { date: "02/01/2026", category: "CASH", type: "DIVIDEND", amount: "1" },
+      ),
+      stock,
+    );
+    expect(errors).toEqual([]);
+    expect(trades[0]!.trade_date).toBe("2026-01-02");
+    expect(events![0]!.event_date).toBe("2026-01-02");
+    const future = parseTradesCsv(file({ date: "01/01/2027", shares: "1", price: "10" }), stock);
+    expect(future.errors).toEqual(["Line 2: the date is in the future."]);
+  });
+
+  it("a description with a line break inside quotes stays one row", () => {
+    const text = file({ shares: "1", price: "10", description: "Savings\nplan" });
+    const { trades, errors } = parseTradesCsv(text, stock);
+    expect(errors).toEqual([]);
+    expect(trades[0]?.note).toBe("Savings\nplan");
+  });
+
+  it("a long description is cut to 200 characters without splitting an emoji or an accent", () => {
+    const description = `${"a".repeat(198)}é😀 and more`;
+    const { trades } = parseTradesCsv(file({ shares: "1", price: "10", description }), stock);
+    expect(trades[0]?.note).toBe(`${"a".repeat(198)}é😀`);
+  });
+});
+
+describe("Trade Republic, crypto", () => {
+  const btc = { asset_class: "CRYPTO", name: "Bitcoin", symbol: "BTC" };
+
+  it("a coin bought on Trade Republic goes to the Crypto page, keyed by its ticker", () => {
+    const text = file({ ...btc, shares: "0.01", price: "60000", amount: "-600" });
+    const onCrypto = parseTradesCsv(text, crypto);
+    expect(onCrypto.trades[0]).toMatchObject({ kind: "crypto", key: "BTC", shares: 0.01 });
+    const onPortfolio = parseTradesCsv(text, stock);
+    expect(onPortfolio.trades).toEqual([]);
+    expect(onPortfolio.notes).toContain(
+      "1 crypto row is for the Crypto page: import this file there too.",
+    );
+  });
+
+  it("only shares get their count set from the file: coins also sit in other wallets", () => {
+    expect(parseTradesCsv(file(), stock).setsShares).toBe(true);
+    expect(parseTradesCsv(file(), crypto).setsShares).toBe(false);
+  });
+
+  it("a coin received for free (staking) is an event on the Crypto page, not on Portfolio", () => {
+    const text = file({ ...btc, category: "TRADING", type: "FREE_RECEIPT", shares: "0.001" });
+    expect(parseTradesCsv(text, crypto).trades[0]).toMatchObject({
+      price_eur: 0,
+      note: "Received free",
+    });
+    expect(parseTradesCsv(text, stock).trades).toEqual([]);
+  });
+});
+
+describe("Trade Republic, income, fees, taxes and cash", () => {
+  it("a foreign dividend is saved after its tax, and keeps the tax, the amount before converting and the rate", () => {
+    const { events } = parseTradesCsv(
+      file({
+        category: "CASH",
+        type: "DIVIDEND",
+        shares: "10",
+        amount: "4.21",
+        tax: "-0.74",
+        original_amount: "5.50",
+        original_currency: "usd",
+        fx_rate: "1.1",
+      }),
+      stock,
+    );
+    expect(events).toEqual([
+      expect.objectContaining({
+        kind: "dividend",
+        asset_kind: "stock",
+        key: "XX0000000001",
+        event_date: "2026-03-02",
+        occurred_at: "2026-03-02T09:30:00.123Z",
+        amount_eur: 3.47,
+        tax_eur: 0.74,
+        fee_eur: 0,
+        shares: 10,
+        orig_amount: 5.5,
+        orig_currency: "USD",
+        fx_rate: 1.1,
+        raw_type: "CASH|DIVIDEND",
+        source: "trade_republic",
+      }),
+    ]);
+  });
+
+  it("a tax charged only in the tax column (stamp duty) is a tax, its cancellation a refund", () => {
+    const cash = {
+      category: "CASH",
+      symbol: "",
+      name: "",
+      type: "TAX_OPTIMIZATION",
+      amount: "0.000000",
+    };
+    const { events } = parseTradesCsv(
+      file(
+        { ...cash, tax: "-12.67", description: "Stamp Duty Tax (Portfolio)" },
+        { ...cash, tax: "12.67", description: "Cancellation Stamp Duty Tax (Portfolio)" },
+      ),
+      stock,
+    );
+    expect(events?.map((e) => [e.kind, e.amount_eur, e.tax_eur])).toEqual([
+      ["tax", -12.67, 0],
+      ["tax_refund", 12.67, 0],
+    ]);
+  });
+
+  it("interest is saved after the tax held back from it", () => {
+    const { events } = parseTradesCsv(
+      file({
+        category: "CASH",
+        type: "INTEREST_PAYMENT",
+        symbol: "",
+        amount: "31.500000",
+        tax: "-7.88",
+      }),
+      stock,
+    );
+    expect(events?.[0]).toMatchObject({ kind: "interest", amount_eur: 23.62, tax_eur: 7.88 });
+  });
+
+  it("tax given back on a trade is a refund, not a cost", () => {
+    const { trades, events } = parseTradesCsv(
+      file({ type: "SELL", shares: "-1", price: "10", amount: "10", tax: "1.5" }),
+      stock,
+    );
+    expect(trades[0]).toMatchObject({ side: "sell", tax_eur: 0 });
+    expect(events?.[0]).toMatchObject({ kind: "tax_refund", amount_eur: 1.5, key: "XX0000000001" });
+  });
+
+  it("a fee given back on a trade (a rebate) is money in, not dropped", () => {
+    const { trades, events } = parseTradesCsv(
+      file({ type: "BUY", shares: "1", price: "10", amount: "-10", fee: "0.5" }),
+      stock,
+    );
+    expect(trades[0]).toMatchObject({ side: "buy", fee_eur: 0 });
+    expect(events?.map((e) => [e.kind, e.amount_eur, e.fee_eur, e.key])).toEqual([
+      ["fee", 0.5, 0, "XX0000000001"],
+    ]);
+    expect(summarizeIncome(events ?? []).fees).toBe(-0.5);
+    const both = parseTradesCsv(
+      file({ type: "SELL", shares: "-1", price: "10", amount: "10", fee: "0.5", tax: "1.5" }),
+      stock,
+    ).events!;
+    expect(newEvents(both, []).map((e) => e.kind)).toEqual(["tax_refund", "fee"]);
+  });
+
+  it("interest, saveback, fees, taxes and refunds each get their kind", () => {
+    const cash = { category: "CASH", symbol: "", name: "" };
+    const { events } = parseTradesCsv(
+      file(
+        { ...cash, type: "INTEREST_PAYMENT", amount: "3.10", tax: "-0.80" },
+        { ...cash, type: "BENEFITS_SAVEBACK", amount: "1.50" },
+        { ...cash, type: "CARD_ORDERING_FEE", amount: "-5" },
+        { ...cash, type: "TAX", amount: "-2" },
+        { ...cash, type: "TAX_OPTIMIZATION", amount: "2" },
+        { ...cash, type: "PRE_DETERMINED_TAX_BASE", amount: "-0.4" },
+      ),
+      stock,
+    );
+    expect(events?.map((e) => e.kind)).toEqual([
+      "interest",
+      "reward",
+      "fee",
+      "tax",
+      "tax_refund",
+      "tax",
+    ]);
+    expect(events?.every((e) => e.key == null && e.asset_kind == null)).toBe(true);
+  });
+
+  it("a fee row with the fee in the fee column counts the fee once", () => {
+    const { events } = parseTradesCsv(
+      file({ category: "CASH", type: "FEE", symbol: "", name: "", amount: "0", fee: "-1" }),
+      stock,
+    );
+    expect(events?.map((e) => [e.kind, e.amount_eur, e.fee_eur])).toEqual([["fee", -1, 0]]);
+    expect(summarizeIncome(events ?? []).fees).toBe(1);
+  });
+
+  it("saveback paid in, then spent on a buy: a reward for that holding and a buy at its price", () => {
+    const { trades, events } = parseTradesCsv(
+      file(
+        { category: "CASH", type: "BENEFITS_SAVEBACK", amount: "15" },
+        { type: "BUY", shares: "0.15", price: "100", amount: "-15", description: "Saveback" },
+      ),
+      stock,
+    );
+    expect(events?.map((e) => [e.kind, e.key, e.amount_eur])).toEqual([
+      ["reward", "XX0000000001", 15],
+    ]);
+    expect(trades).toEqual([
+      expect.objectContaining({ side: "buy", shares: 0.15, price_eur: 100, note: "Saveback" }),
+    ]);
+    expect([...incomeByKey(events ?? [])]).toEqual([["stock|XX0000000001", 15]]);
+  });
+
+  it("money moved in or out is a deposit or a withdrawal, by its sign", () => {
+    const cash = { category: "CASH", symbol: "", name: "" };
+    const { events } = parseTradesCsv(
+      file(
+        { ...cash, type: "CUSTOMER_INBOUND", amount: "500" },
+        { ...cash, type: "TRANSFER_INSTANT_OUTBOUND", amount: "-200" },
+        { ...cash, type: "TRANSFER_DIRECT_DEBIT_INBOUND", amount: "-50" },
+      ),
+      stock,
+    );
+    expect(events?.map((e) => e.kind)).toEqual(["deposit", "withdrawal", "withdrawal"]);
+  });
+
+  it("who money went to or came from is never saved, on a transfer or a trade", () => {
+    // All invented: no real person, account or reference.
+    const who = {
+      counterparty_name: "Testa Fakeperson",
+      counterparty_iban: "XX00TEST0000000000000001",
+      payment_reference: "FAKE-REF-4711",
+      mcc_code: "9999",
+    };
+    const cash = { category: "CASH", symbol: "", name: "", ...who };
+    const { trades, events, errors } = parseTradesCsv(
+      file(
+        {
+          ...cash,
+          type: "CUSTOMER_INBOUND",
+          amount: "500",
+          description: "Incoming transfer from Testa Fakeperson",
+        },
+        {
+          ...cash,
+          type: "TRANSFER_INSTANT_OUTBOUND",
+          amount: "-200",
+          description: "Outgoing transfer for Testa Fakeperson",
+        },
+        { ...who, type: "BUY", shares: "1", price: "10", amount: "-10" },
+      ),
+      stock,
+    );
+    expect(errors).toEqual([]);
+    expect(trades).toHaveLength(1);
+    expect(events).toHaveLength(2);
+    const stored = JSON.stringify([trades, events]);
+    for (const secret of ["Testa", "Fakeperson", "XX00TEST", "FAKE-REF-4711", "9999"])
+      expect(stored).not.toContain(secret);
+  });
+
+  it("card payments are skipped and counted; a card fee is still a fee", () => {
+    const cash = { category: "CASH", symbol: "", name: "" };
+    const { events, notes } = parseTradesCsv(
+      file(
+        { ...cash, type: "CARD_TRANSACTION", amount: "-9.90" },
+        { ...cash, type: "CARD_TRANSACTION_INTERNATIONAL", amount: "-20" },
+        { ...cash, type: "CARD_ORDERING_FEE", amount: "-5" },
+      ),
+      stock,
+    );
+    expect(events?.map((e) => [e.kind, e.amount_eur])).toEqual([["fee", -5]]);
+    expect(notes).toContain(
+      "2 card payments were skipped: they're your bank account's. Connect Trade Republic as a bank to see them.",
+    );
+  });
+
+  it("polish-4 R2 one card payment is told of in the singular", () => {
+    const cash = { category: "CASH", symbol: "", name: "" };
+    const { notes } = parseTradesCsv(
+      file({ ...cash, type: "CARD_TRANSACTION", amount: "-9.90" }),
+      stock,
+    );
+    expect(notes).toContain(
+      "1 card payment was skipped: it's your bank account's. Connect Trade Republic as a bank to see it.",
+    );
+  });
+
+  it("a kind it doesn't know is kept as other, with its name, and you're told", () => {
+    const { events, notes } = parseTradesCsv(
+      file({ category: "CASH", type: "SOMETHING_NEW", symbol: "", amount: "1" }),
+      stock,
+    );
+    expect(events?.[0]).toMatchObject({ kind: "other", raw_type: "CASH|SOMETHING_NEW" });
+    expect(notes).toContain('1 row of a kind Alopex doesn\'t know yet was kept as "other".');
+  });
+
+  it("polish-4 UB3 on Crypto an unknown cash row is counted once, for Portfolio, not as kept", () => {
+    const { events, notes } = parseTradesCsv(
+      file({ category: "CASH", type: "SOMETHING_NEW", symbol: "", amount: "1" }),
+      crypto,
+    );
+    expect(events).toEqual([]);
+    expect(notes).toEqual([
+      "1 row is for shares and cash: import this file on the Portfolio page too.",
+    ]);
+  });
+
+  it("polish-4 UB16 an error names the row's kind in plain words, not the file's code", () => {
+    const { errors } = parseTradesCsv(
+      file({ type: "PRIVATE_MARKET_BUY", shares: "1", price: "", amount: "-10" }),
+      stock,
+    );
+    expect(errors).toEqual(["Line 2: this private market buy row has no price."]);
+  });
+
+  it("a very long kind name is cut to 80 characters without splitting an emoji", () => {
+    const type = "X".repeat(74) + "😀É";
+    const { events } = parseTradesCsv(
+      file({ category: "CASH", type, symbol: "", amount: "1" }),
+      stock,
+    );
+    const raw = events?.[0]?.raw_type ?? "";
+    expect([...raw]).toHaveLength(80);
+    expect(raw.endsWith("😀")).toBe(true);
+  });
+
+  it("a dividend from something you don't hold is left out with its trades", () => {
+    const { events } = parseTradesCsv(
+      file(
+        { symbol: "ZZ", shares: "1", price: "10" },
+        { category: "CASH", type: "DIVIDEND", symbol: "ZZ", amount: "1" },
+      ),
+      stock,
+    );
+    expect(events).toEqual([]);
+  });
+
+  it("a coin's reward goes with the Crypto page, cash interest with Portfolio", () => {
+    const text = file(
+      { category: "CASH", type: "BONUS", asset_class: "CRYPTO", symbol: "BTC", amount: "1" },
+      { category: "CASH", type: "INTEREST_PAYMENT", symbol: "", amount: "2" },
+    );
+    expect(parseTradesCsv(text, crypto).events?.map((e) => e.kind)).toEqual(["reward"]);
+    expect(parseTradesCsv(text, stock).events?.map((e) => e.kind)).toEqual(["interest"]);
+  });
+
+  it("a future date stops the import", () => {
+    const { errors } = parseTradesCsv(
+      file({ date: "2027-01-01", category: "CASH", type: "DIVIDEND", amount: "1" }),
+      stock,
+    );
+    expect(errors).toEqual(["Line 2: the date is in the future."]);
+  });
+});
+
+describe("Trade Republic, the viewer's format", () => {
+  afterEach(() => setLocaleOverride(""));
+
+  it("a file reads the same whatever format the viewer picked", () => {
+    const sample = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8");
+    const sampleOpts = { ...stock, knownKeys: new Set(["XX0000000001", "XX0000000002"]) };
+    // A dot then three digits: German or Italian would read it as a thousands mark.
+    const grouped = file(
+      { shares: "0.125", price: "1.250", amount: "-0.16" },
+      { category: "CASH", type: "DIVIDEND", amount: "1.250" },
+    );
+    setLocaleOverride("en-GB");
+    const base = [parseTradesCsv(sample, sampleOpts), parseTradesCsv(grouped, stock)];
+    expect(base[0]!.trades[0]).toMatchObject({ shares: 2, price_eur: 100 });
+    expect(base[1]!.trades[0]).toMatchObject({ shares: 0.125, price_eur: 1.25 });
+    expect(base[1]!.events![0]).toMatchObject({ amount_eur: 1.25 });
+    for (const locale of ["de-DE", "it-IT", "en-US", "fr-FR"]) {
+      setLocaleOverride(locale);
+      expect([parseTradesCsv(sample, sampleOpts), parseTradesCsv(grouped, stock)], locale).toEqual(
+        base,
+      );
+    }
+  });
+});

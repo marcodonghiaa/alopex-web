@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asOf, axisDateFormatter } from "./date";
+import { asOf, axisDateFormatter, addDays, isDay } from "./date";
 
 describe("axisDateFormatter", () => {
   it("shows day and month on a short range, so daily ticks stay distinct", () => {
@@ -28,5 +28,33 @@ describe("asOf", () => {
   it("says nothing for today's balance or none", () => {
     expect(asOf("2026-11-05", "2026-11-05")).toBeNull();
     expect(asOf(null, "2026-11-05")).toBeNull();
+  });
+});
+
+describe("addDays", () => {
+  it("moves a calendar day across months, years and DST changes", () => {
+    expect(addDays("2026-03-28", 2)).toBe("2026-03-30");
+    expect(addDays("2026-01-01", -1)).toBe("2025-12-31");
+    expect(addDays("2024-02-28", 1)).toBe("2024-02-29");
+  });
+});
+
+describe("isDay", () => {
+  it("is a real calendar day written YYYY-MM-DD", () => {
+    expect(isDay("2026-02-28")).toBe(true);
+    expect(isDay("2024-02-29")).toBe(true);
+  });
+
+  it("not a day that doesn't exist, another shape, or text around it", () => {
+    for (const d of [
+      "2026-13-45",
+      "2026-02-30",
+      "2025-02-29",
+      "2026-1-05",
+      "zz",
+      "",
+      "2026-01-05T08",
+    ])
+      expect(isDay(d)).toBe(false);
   });
 });

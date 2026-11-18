@@ -1,6 +1,6 @@
 import { BROKERS } from "@/lib/brokers";
 import type { BrokerParser, CsvResult, ParseContext } from "@/lib/brokers";
-import { parseDate, splitLine } from "@/lib/brokers/csv";
+import { csvLines, parseDate, splitLine } from "@/lib/brokers/csv";
 import { netShares, parseAmount } from "@/lib/trades";
 import type { Trade } from "@/lib/trades";
 
@@ -11,19 +11,38 @@ import type { Trade } from "@/lib/trades";
 
 export type { CsvResult } from "@/lib/brokers";
 
+function readHeader(firstLine: string) {
+  const headerLine = firstLine.replace(/^\uFEFF/, "");
+  const separator = [";", "\t", ","].find((s) => headerLine.includes(s)) ?? ",";
+  return { separator, header: splitLine(headerLine, separator).map((h) => h.toLowerCase()) };
+}
+
+/** The broker whose export this is, by its header row; undefined for a plain spreadsheet. */
+export function detectBroker(text: string): BrokerParser | undefined {
+  const first = text.split(/\r?\n/).find((l) => l.trim() !== "");
+  return first ? BROKERS.find((b) => b.detect(readHeader(first).header)) : undefined;
+}
+
 /**
  * All or nothing: any error means nothing is saved, so a half-imported holding can't look right.
  * `from` is the broker you said the file comes from: then only that broker's format is accepted.
  */
 export function parseTradesCsv(text: string, ctx: ParseContext, from?: BrokerParser): CsvResult {
   const { kind, knownKeys, today } = ctx;
-  const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
+  const lines = csvLines(text);
   if (lines.length === 0) return { trades: [], errors: ["The file is empty."], notes: [] };
 
-  const headerLine = lines[0]!.replace(/^\uFEFF/, "");
-  const separator = [";", "\t", ","].find((s) => headerLine.includes(s)) ?? ",";
-  const header = splitLine(headerLine, separator).map((h) => h.toLowerCase());
+  const { separator, header } = readHeader(lines[0]!);
   if (from && !from.detect(header)) {
+    // Another broker Alopex knows: say which, and where it's imported.
+    const other = BROKERS.find((b) => b !== from && b.detect(header));
+    if (other) {
+      const where =
+        other.kind === kind || other.kind === "both"
+          ? `pick ${other.name} instead`
+          : `import it on the ${other.kind === "crypto" ? "Crypto" : "Portfolio"} page`;
+      return { trades: [], errors: [`This file comes from ${other.name}: ${where}.`], notes: [] };
+    }
     return {
       trades: [],
       errors: [

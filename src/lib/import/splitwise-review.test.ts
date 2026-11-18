@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { defaultSelection, makeRate, toBankTx, type BankRowFromDb } from "./splitwise-review";
+import { makeRate } from "@/lib/fx";
+import { defaultSelection, toBankTx, type BankRowFromDb } from "./splitwise-review";
 
 const dbRow = (over: Partial<BankRowFromDb> = {}): BankRowFromDb => ({
   account_uid: "acc",

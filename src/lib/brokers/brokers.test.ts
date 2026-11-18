@@ -38,12 +38,14 @@ describe("broker registry", () => {
     }
   });
 
-  it("samples carry no personal data: no IBAN, email or phone number", () => {
+  it("samples carry no personal data: no IBAN, email, phone number or wallet public key", () => {
     for (const file of readdirSync(FIXTURES)) {
       const text = readFileSync(path.join(FIXTURES, file), "utf8");
       expect(text).not.toMatch(/\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/); // IBAN
       expect(text).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/); // email
       expect(text).not.toMatch(/\+\d{2}\s?\d{3}/); // phone
+      // An extended public key (xpub, zpub, Ltub...) reveals every address of a wallet.
+      expect(text).not.toMatch(/\b[A-Za-z]{4}[1-9A-HJ-NP-Za-km-z]{100,}\b/);
     }
   });
 
@@ -64,6 +66,18 @@ describe("Trade Republic sample", () => {
     today: "2026-10-31",
   };
 
+  it("has the real export's shape: a trade's amount is shares × price, before its fee", () => {
+    const [head, ...rows] = fixture("trade_republic")
+      .trim()
+      .split("\n")
+      .map((l) => l.slice(1, -1).split('","'));
+    const col = (r: Array<string>, name: string) => Number(r[head!.indexOf(name)]);
+    const trades = rows.filter((r) => r[head!.indexOf("category")] === "TRADING");
+    expect(trades.length).toBeGreaterThan(0);
+    for (const r of trades)
+      expect(col(r, "amount")).toBeCloseTo(-col(r, "shares") * col(r, "price"), 2);
+  });
+
   it("reads every trade with Trade Republic's own id, and counts what it skipped", () => {
     const { trades, errors, notes } = parseTradesCsv(fixture("trade_republic"), ctx);
     expect(errors).toEqual([]);
@@ -74,8 +88,11 @@ describe("Trade Republic sample", () => {
       "Example World ETF",
     );
     expect(notes).toContain(
-      "2 rows that aren't trades were skipped (dividends, interest, card payments, transfers).",
+      "1 card payment was skipped: it's your bank account's. Connect Trade Republic as a bank to see it.",
     );
+    expect(parseTradesCsv(fixture("trade_republic"), ctx).events?.map((e) => e.kind)).toEqual([
+      "dividend",
+    ]);
   });
 
   it("a file missing one of its columns isn't read as Trade Republic", () => {
@@ -97,6 +114,34 @@ describe("Trade Republic sample", () => {
     expect(result.trades).toEqual([]);
     expect(result.unknownFormat).toBe(true);
     expect(result.errors[0]).toMatch(/doesn't look like a Trade Republic export/);
+  });
+
+  it("when you pick Trade Republic for another page's broker file, it says which page reads it", () => {
+    const result = parseTradesCsv(fixture("ledger_live"), ctx, BROKERS[0]);
+    expect(result.trades).toEqual([]);
+    expect(result.unknownFormat).toBeUndefined();
+    expect(result.errors).toEqual([
+      "This file comes from Ledger Live: import it on the Crypto page.",
+    ]);
+    // Trade Republic's files are read on the Crypto page too: there it's the broker to pick.
+    const crypto = { ...ctx, kind: "crypto" as const };
+    const ledger = BROKERS.find((b) => b.id === "ledger_live")!;
+    expect(parseTradesCsv(fixture("trade_republic"), crypto, ledger).errors).toEqual([
+      "This file comes from Trade Republic: pick Trade Republic instead.",
+    ]);
+  });
+
+  it("when you pick the wrong broker of this page, it names the right one", () => {
+    const other = { ...BROKERS[0]!, id: "other", name: "Other Bank", detect: () => true };
+    BROKERS.push(other);
+    try {
+      const plain = "date,side,isin,shares,price\n2026-01-02,buy,XX0000000001,1,100";
+      const result = parseTradesCsv(plain, ctx, BROKERS[0]);
+      expect(result.unknownFormat).toBeUndefined();
+      expect(result.errors).toEqual(["This file comes from Other Bank: pick Other Bank instead."]);
+    } finally {
+      BROKERS.pop();
+    }
   });
 });
 

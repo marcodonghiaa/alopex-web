@@ -22,7 +22,8 @@ import { SplitwiseCorrections } from "@/components/import/splitwise-corrections"
 import { isShareRow, type StoredShare } from "@/lib/import/splitwise-corrections";
 import { planWrite, splitAtCheckpoint } from "@/lib/import/splitwise-plan";
 import { categorizeRow, ruleTextFor, type UserRule } from "@/lib/import/splitwise-categorize";
-import { defaultSelection, makeRate, type FxRow } from "@/lib/import/splitwise-review";
+import { makeRate, type FxRow } from "@/lib/fx";
+import { defaultSelection } from "@/lib/import/splitwise-review";
 import { fetchBankWindow } from "@/lib/import/splitwise-bank";
 
 // Stored shares: the database returns at most 1000 rows per call, so more than that is refused.

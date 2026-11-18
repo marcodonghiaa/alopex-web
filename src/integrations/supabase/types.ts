@@ -21,6 +21,8 @@ export type Database = {
           identification_hash: string | null;
           label: string | null;
           manual: boolean;
+          sync_error: string | null;
+          sync_error_at: string | null;
           uid: string;
           user_id: string;
         };
@@ -36,6 +38,8 @@ export type Database = {
           identification_hash?: string | null;
           label?: string | null;
           manual?: boolean;
+          sync_error?: string | null;
+          sync_error_at?: string | null;
           uid: string;
           user_id: string;
         };
@@ -51,6 +55,8 @@ export type Database = {
           identification_hash?: string | null;
           label?: string | null;
           manual?: boolean;
+          sync_error?: string | null;
+          sync_error_at?: string | null;
           uid?: string;
           user_id?: string;
         };
@@ -377,44 +383,128 @@ export type Database = {
       holding_trades: {
         Row: {
           created_at: string;
+          currency: string | null;
           external_id: string | null;
           fee_eur: number;
+          group_id: string | null;
           id: string;
           key: string;
           kind: string;
+          note: string | null;
           price_eur: number;
+          price_native: number | null;
           shares: number;
           side: string;
           source: string | null;
+          tax_eur: number;
           trade_date: string;
+          traded_at: string | null;
           user_id: string;
         };
         Insert: {
           created_at?: string;
+          currency?: string | null;
           external_id?: string | null;
           fee_eur?: number;
+          group_id?: string | null;
           id?: string;
           key: string;
           kind: string;
+          note?: string | null;
           price_eur: number;
+          price_native?: number | null;
           shares: number;
           side: string;
           source?: string | null;
+          tax_eur?: number;
           trade_date: string;
+          traded_at?: string | null;
           user_id: string;
         };
         Update: {
           created_at?: string;
+          currency?: string | null;
           external_id?: string | null;
           fee_eur?: number;
+          group_id?: string | null;
           id?: string;
           key?: string;
           kind?: string;
+          note?: string | null;
           price_eur?: number;
+          price_native?: number | null;
           shares?: number;
           side?: string;
           source?: string | null;
+          tax_eur?: number;
           trade_date?: string;
+          traded_at?: string | null;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      investment_events: {
+        Row: {
+          amount_eur: number;
+          asset_kind: string | null;
+          created_at: string;
+          event_date: string;
+          external_id: string | null;
+          fee_eur: number;
+          fx_rate: number | null;
+          id: string;
+          key: string | null;
+          kind: string;
+          note: string | null;
+          occurred_at: string | null;
+          orig_amount: number | null;
+          orig_currency: string | null;
+          raw_type: string;
+          shares: number | null;
+          source: string | null;
+          tax_eur: number;
+          user_id: string;
+        };
+        Insert: {
+          amount_eur: number;
+          asset_kind?: string | null;
+          created_at?: string;
+          event_date: string;
+          external_id?: string | null;
+          fee_eur?: number;
+          fx_rate?: number | null;
+          id?: string;
+          key?: string | null;
+          kind: string;
+          note?: string | null;
+          occurred_at?: string | null;
+          orig_amount?: number | null;
+          orig_currency?: string | null;
+          raw_type: string;
+          shares?: number | null;
+          source?: string | null;
+          tax_eur?: number;
+          user_id?: string;
+        };
+        Update: {
+          amount_eur?: number;
+          asset_kind?: string | null;
+          created_at?: string;
+          event_date?: string;
+          external_id?: string | null;
+          fee_eur?: number;
+          fx_rate?: number | null;
+          id?: string;
+          key?: string | null;
+          kind?: string;
+          note?: string | null;
+          occurred_at?: string | null;
+          orig_amount?: number | null;
+          orig_currency?: string | null;
+          raw_type?: string;
+          shares?: number | null;
+          source?: string | null;
+          tax_eur?: number;
           user_id?: string;
         };
         Relationships: [];
@@ -585,6 +675,12 @@ export type Database = {
           stocks_eur?: number;
           user_id?: string;
         };
+        Relationships: [];
+      };
+      payer_links: {
+        Row: { contact: string; created_at: string; payer_key: string; user_id: string };
+        Insert: { contact: string; created_at?: string; payer_key: string; user_id: string };
+        Update: { contact?: string; created_at?: string; payer_key?: string; user_id?: string };
         Relationships: [];
       };
       splitwise_balances: {
@@ -912,7 +1008,10 @@ export type Database = {
           personal_amount: number | null;
           raw: Json | null;
           remittance_info: string | null;
+          payback_contact: string | null;
           settled_at: string | null;
+          settled_by_account: string | null;
+          settled_by_ref: string | null;
           transaction_type: string | null;
           user_id: string;
           value_date: string | null;
@@ -946,7 +1045,10 @@ export type Database = {
           personal_amount?: number | null;
           raw?: Json | null;
           remittance_info?: string | null;
+          payback_contact?: string | null;
           settled_at?: string | null;
+          settled_by_account?: string | null;
+          settled_by_ref?: string | null;
           transaction_type?: string | null;
           user_id: string;
           value_date?: string | null;
@@ -980,7 +1082,10 @@ export type Database = {
           personal_amount?: number | null;
           raw?: Json | null;
           remittance_info?: string | null;
+          payback_contact?: string | null;
           settled_at?: string | null;
+          settled_by_account?: string | null;
+          settled_by_ref?: string | null;
           transaction_type?: string | null;
           user_id?: string;
           value_date?: string | null;
@@ -1055,6 +1160,8 @@ export type Database = {
           user_id: string | null;
           account_type: string | null;
           manual: boolean | null;
+          sync_error: string | null;
+          sync_error_at: string | null;
         };
         Relationships: [];
       };
@@ -1322,6 +1429,27 @@ export type Database = {
           p_shares: Json;
           p_to: string;
         };
+        Returns: Json;
+      };
+      payback_candidates: {
+        Args: { p_days?: number };
+        Returns: Array<{
+          account_uid: string;
+          entry_reference: string;
+          booking_date: string;
+          amount: number;
+          currency: string;
+          amount_eur: number | null;
+          payer: string | null;
+          linked_contact: string | null;
+        }>;
+      };
+      record_payback: {
+        Args: { p_account: string; p_ref: string; p_contact: string; p_remember?: boolean };
+        Returns: Json;
+      };
+      undo_payback: {
+        Args: { p_account: string; p_ref: string; p_forget?: boolean };
         Returns: Json;
       };
       save_splitwise_balances: {

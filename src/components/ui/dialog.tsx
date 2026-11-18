@@ -47,46 +47,82 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+// How many dialogs are on screen, so the toaster can keep out of their way on a phone.
+let openDialogs = 0;
+const dialogListeners = new Set<() => void>();
+const countDialogs = (by: number) => {
+  openDialogs += by;
+  dialogListeners.forEach((l) => l());
+};
+export function useDialogOpen() {
+  return React.useSyncExternalStore(
+    (l) => {
+      dialogListeners.add(l);
+      return () => dialogListeners.delete(l);
+    },
+    () => openDialogs > 0,
+    () => false,
+  );
+}
+
 // Mounted only while the dialog is on screen.
 function RememberOpener({ opener }: { opener: React.RefObject<Element | null> }) {
   React.useLayoutEffect(() => rememberOpener(opener), [opener]);
+  React.useEffect(() => {
+    countDialogs(1);
+    return () => countDialogs(-1);
+  }, []);
   return null;
 }
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
-    /** A request runs and the dialog won't close: the X shows it's off instead of doing nothing. */
+    /** The dialog won't close now (a save is running): the X says so instead of doing nothing. */
     closeDisabled?: boolean;
   }
->(({ className, children, onCloseAutoFocus, closeDisabled, ...props }, ref) => {
-  const opener = React.useRef<Element | null>(null);
-  return (
-    <DialogPortal>
-      <DialogOverlay />
-      <DialogPrimitive.Content
-        ref={ref}
-        className={cn(
-          "fixed left-[50%] top-[50%] z-50 grid grid-cols-[minmax(0,1fr)] max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto overscroll-contain rounded-3xl bg-background p-6 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
-          className,
-        )}
-        // A dialog opened from state has no Trigger for Radix to refocus (U1).
-        onCloseAutoFocus={returnFocus(opener, onCloseAutoFocus)}
-        {...props}
-      >
-        <RememberOpener opener={opener} />
-        {children}
-        <DialogPrimitive.Close
-          disabled={closeDisabled}
-          className="absolute right-1 top-1 flex size-11 items-center justify-center rounded-sm opacity-70 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-30 data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+>(
+  (
+    { className, children, onCloseAutoFocus, onPointerDownOutside, closeDisabled, ...props },
+    ref,
+  ) => {
+    const opener = React.useRef<Element | null>(null);
+    return (
+      <DialogPortal>
+        <DialogOverlay />
+        <DialogPrimitive.Content
+          ref={ref}
+          className={cn(
+            "fixed left-[50%] top-[50%] z-50 grid grid-cols-[minmax(0,1fr)] max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto overscroll-contain rounded-3xl bg-background p-6 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+            className,
+          )}
+          onPointerDownOutside={(e) => {
+            // A toast shown over the dialog isn't a click outside: touching it must not close the dialog.
+            if (e.target instanceof Element && e.target.closest("[data-sonner-toaster]"))
+              e.preventDefault();
+            onPointerDownOutside?.(e);
+          }}
+          // A dialog opened from state has no Trigger for Radix to refocus (U1).
+          onCloseAutoFocus={returnFocus(opener, onCloseAutoFocus)}
+          {...props}
         >
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </DialogPrimitive.Close>
-      </DialogPrimitive.Content>
-    </DialogPortal>
-  );
-});
+          <RememberOpener opener={opener} />
+          {children}
+          <DialogPrimitive.Close
+            aria-disabled={closeDisabled || undefined}
+            className={cn(
+              "absolute right-1 top-1 flex size-11 items-center justify-center rounded-sm opacity-70 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground",
+              closeDisabled && "cursor-default opacity-30 hover:opacity-30",
+            )}
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+        </DialogPrimitive.Content>
+      </DialogPortal>
+    );
+  },
+);
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (

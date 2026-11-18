@@ -200,7 +200,9 @@ describe("Dialog close button", () => {
 
   it("is off with closeDisabled", () => {
     render(<Open closeDisabled />);
-    expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Close" }).getAttribute("aria-disabled")).toBe(
+      "true",
+    );
   });
 
   it("is on by default", () => {
@@ -223,5 +225,48 @@ describe("Sheet close button", () => {
     expect(close).toContain("size-11");
     expect(close).toContain("right-1");
     expect(close).toContain("top-1");
+  });
+});
+
+// polish-4 #15 / UB2: a toast shown over an open dialog (say, one left from the last save) sits
+// outside it. fails_when=touching the toast counts as a click outside, closes the dialog and drops
+// what was picked in it
+describe("Dialog and toasts", () => {
+  const renderDialog = (onOpenChange = vi.fn()) => {
+    render(
+      <>
+        <ol data-sonner-toaster="">
+          <li>Import failed</li>
+        </ol>
+        <div>elsewhere</div>
+        <Dialog open onOpenChange={onOpenChange}>
+          <DialogContent aria-describedby={undefined}>
+            <DialogTitle>Import</DialogTitle>
+          </DialogContent>
+        </Dialog>
+      </>,
+    );
+    return onOpenChange;
+  };
+  // The dialog starts listening for outside clicks a tick after it opens.
+  const tick = () => act(() => new Promise((r) => setTimeout(r, 0)));
+  // jsdom's pointer events carry no pointerType, so Radix waits for the click that follows.
+  const tap = (el: HTMLElement) => {
+    fireEvent.pointerDown(el);
+    fireEvent.click(el);
+  };
+
+  it("stays open when a toast is touched", async () => {
+    const onOpenChange = renderDialog();
+    await tick();
+    tap(screen.getByText("Import failed"));
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("still closes on a click elsewhere outside", async () => {
+    const onOpenChange = renderDialog();
+    await tick();
+    tap(screen.getByText("elsewhere"));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });

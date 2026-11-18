@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { PENDING } from "./pending";
 import { moneyAmount, money, shortDate } from "@/lib/import/splitwise-format";
 import { fetchBankWindow } from "@/lib/import/splitwise-bank";
-import { makeRate } from "@/lib/import/splitwise-review";
+import { makeRate } from "@/lib/fx";
 import {
   canCount,
   directionOf,

@@ -18,8 +18,11 @@ export function SectionTitle({
   action,
   className,
   variant = "title",
+  id,
 }: {
   children: ReactNode;
+  /** For aria-labelledby: lets a section take its name from this heading. */
+  id?: string;
   action?: ReactNode;
   className?: string;
   variant?: "title" | "label";
@@ -34,6 +37,7 @@ export function SectionTitle({
       )}
     >
       <h2
+        id={id}
         className={
           label
             ? "text-[0.8125rem] leading-tight font-medium text-muted-foreground"

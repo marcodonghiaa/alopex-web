@@ -17,6 +17,8 @@ export const DEMO_EXEMPT_TABLES = [
   "category_budgets",
   "cd_holdings",
   "v_cd_holdings",
+  // Filled when the visitor answers "Is this Giulia?" on Who owes you.
+  "payer_links",
   "pending_bank_consents",
   "price_history",
   "push_subscriptions",
