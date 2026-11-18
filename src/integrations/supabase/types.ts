@@ -677,6 +677,12 @@ export type Database = {
         };
         Relationships: [];
       };
+      payer_links: {
+        Row: { contact: string; created_at: string; payer_key: string; user_id: string };
+        Insert: { contact: string; created_at?: string; payer_key: string; user_id: string };
+        Update: { contact?: string; created_at?: string; payer_key?: string; user_id?: string };
+        Relationships: [];
+      };
       splitwise_balances: {
         Row: {
           balance: number;
@@ -930,7 +936,10 @@ export type Database = {
           personal_amount: number | null;
           raw: Json | null;
           remittance_info: string | null;
+          payback_contact: string | null;
           settled_at: string | null;
+          settled_by_account: string | null;
+          settled_by_ref: string | null;
           transaction_type: string | null;
           user_id: string;
           value_date: string | null;
@@ -964,7 +973,10 @@ export type Database = {
           personal_amount?: number | null;
           raw?: Json | null;
           remittance_info?: string | null;
+          payback_contact?: string | null;
           settled_at?: string | null;
+          settled_by_account?: string | null;
+          settled_by_ref?: string | null;
           transaction_type?: string | null;
           user_id: string;
           value_date?: string | null;
@@ -998,7 +1010,10 @@ export type Database = {
           personal_amount?: number | null;
           raw?: Json | null;
           remittance_info?: string | null;
+          payback_contact?: string | null;
           settled_at?: string | null;
+          settled_by_account?: string | null;
+          settled_by_ref?: string | null;
           transaction_type?: string | null;
           user_id?: string;
           value_date?: string | null;
@@ -1342,6 +1357,27 @@ export type Database = {
           p_shares: Json;
           p_to: string;
         };
+        Returns: Json;
+      };
+      payback_candidates: {
+        Args: { p_days?: number };
+        Returns: Array<{
+          account_uid: string;
+          entry_reference: string;
+          booking_date: string;
+          amount: number;
+          currency: string;
+          amount_eur: number | null;
+          payer: string | null;
+          linked_contact: string | null;
+        }>;
+      };
+      record_payback: {
+        Args: { p_account: string; p_ref: string; p_contact: string; p_remember?: boolean };
+        Returns: Json;
+      };
+      undo_payback: {
+        Args: { p_account: string; p_ref: string; p_forget?: boolean };
         Returns: Json;
       };
       save_splitwise_balances: {

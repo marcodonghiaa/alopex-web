@@ -148,11 +148,53 @@ function demoStatementRows(now: Date) {
   ];
 }
 
+// Mirrors payer_name_of and payer_key in the database: the bank's payer, compared without case,
+// accents, spacing or punctuation.
+const payerNameOf = (t: Row): string | null =>
+  String(t["debtor_name"] ?? "").trim() || String(t["creditor_name"] ?? "").trim() || null;
+const FOLD: Record<string, string> = {
+  ł: "l",
+  ø: "o",
+  đ: "d",
+  ħ: "h",
+  ı: "i",
+  ß: "ss",
+  æ: "ae",
+  œ: "oe",
+};
+export const payerKey = (name: string | null): string | null =>
+  (name ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[łøđħıßæœ]/gu, (ch) => FOLD[ch] ?? ch)
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    // Characters, not UTF-16 units, like left() in the database.
+    .match(/^[\s\S]{0,200}/u)?.[0]
+    .trim() || null;
+// Mirrors payback_eligible: plain incoming money only.
+const paybackEligible = (t: Row): boolean =>
+  t["credit_debit_indicator"] === "CRDT" &&
+  !t["deleted_at"] &&
+  Number(t["amount"]) > 0 &&
+  String(t["flow_type"] ?? "income") === "income" &&
+  t["import_batch_id"] == null &&
+  t["personal_amount"] == null &&
+  t["refund_of"] == null &&
+  t["own_counterparty"] !== true;
+// owed_by as the page reads it: comma-separated, blanks dropped.
+const owedNames = (t: Row): Array<string> =>
+  String(t["owed_by"] ?? "")
+    .split(",")
+    .map((n) => n.trim().toLowerCase())
+    .filter(Boolean);
+
 class Store {
   readonly db: Record<string, Array<Row>>;
   private nextId = 1;
   private readonly shapes: Map<string, Row>;
-  constructor(now: Date) {
+  constructor(private readonly now: Date) {
     this.db = generateDemoData(now) as unknown as Record<string, Array<Row>>;
     // Read each table's shape once: the first row is gone once a table is emptied.
     this.shapes = new Map(Object.entries(this.db).map(([t, rows]) => [t, rows[0] ?? {}]));
@@ -527,6 +569,193 @@ class Store {
     } else return bad("unknown action");
     return { data: null, error: null };
   }
+  /** Mirror of payback_candidates: recent incoming payments nobody has checked, with the payer. */
+  paybackCandidates(days: unknown) {
+    const span = Math.min(Math.max(Number(days) || 60, 1), 366);
+    const since = new Date(this.now.getTime() - span * 864e5).toISOString().slice(0, 10);
+    const links = this.db["payer_links"] ?? [];
+    const data = (this.db["transactions"] ?? [])
+      .filter(
+        (t) =>
+          paybackEligible(t) && t["payback_contact"] == null && String(t["booking_date"]) >= since,
+      )
+      .sort((a, b) => compare(b["booking_date"], a["booking_date"]))
+      .slice(0, 200)
+      .map((t) => {
+        const payer = payerNameOf(t);
+        const key = payerKey(payer);
+        return {
+          account_uid: t["account_uid"],
+          entry_reference: t["entry_reference"],
+          booking_date: t["booking_date"],
+          amount: t["amount"],
+          currency: t["currency"],
+          amount_eur: t["currency"] === "EUR" ? Number(t["amount"]) : null,
+          payer,
+          linked_contact: links.find((l) => l["payer_key"] === key)?.["contact"] ?? null,
+        };
+      });
+    return { data, error: null };
+  }
+  /** Mirror of record_payback: oldest open bills of that person first, whole bills only. */
+  recordPayback(args: Record<string, unknown>) {
+    if (args["p_contact"] == null)
+      return { data: null, error: { message: "Contact required", code: "P0001" } };
+    const txs = this.db["transactions"] ?? [];
+    const credit = txs.find(
+      (t) =>
+        t["account_uid"] === args["p_account"] &&
+        t["entry_reference"] === args["p_ref"] &&
+        t["credit_debit_indicator"] === "CRDT" &&
+        !t["deleted_at"],
+    );
+    if (!credit) return { data: null, error: { message: "Payment not found", code: "P0001" } };
+    if (credit["payback_contact"] != null)
+      return { data: null, error: { message: "Payment already checked", code: "P0001" } };
+    const contact = String(args["p_contact"]).trim();
+    if ([...contact].length > 100)
+      return { data: null, error: { message: "Contact name too long", code: "P0001" } };
+    if (!paybackEligible(credit))
+      return { data: null, error: { message: "Payment not found", code: "P0001" } };
+    if (contact === "") {
+      credit["payback_contact"] = "";
+      const key = payerKey(payerNameOf(credit));
+      this.db["payer_links"] = (this.db["payer_links"] ?? []).filter((l) => l["payer_key"] !== key);
+      return { data: { settled: [], settled_eur: 0, left_eur: null, linked: false }, error: null };
+    }
+    credit["payback_contact"] = contact;
+    credit["flow_type"] = "transfer";
+    credit["flow_source"] = "user";
+    let left = credit["currency"] === "EUR" ? Number(credit["amount"]) : null;
+    let settledEur = 0;
+    const settled: Array<string> = [];
+    // Signed like the view: what they owe on a bill, minus what a split refund owes them.
+    const owedOf = (t: Row) =>
+      Math.round(
+        (Number(t["amount"]) - Number(t["personal_amount"])) *
+          (t["credit_debit_indicator"] === "DBIT" ? 100 : -100),
+      ) / 100;
+    const rows = txs
+      .filter(
+        (t) =>
+          !t["deleted_at"] &&
+          !t["owed_settled"] &&
+          t["personal_amount"] != null &&
+          Number(t["personal_amount"]) >= 0 &&
+          t["import_batch_id"] == null &&
+          !["refunded", "transfer"].includes(String(t["flow_type"] ?? "")) &&
+          owedNames(t).join(",") === contact.toLowerCase() &&
+          owedOf(t) !== 0,
+      )
+      .sort(
+        (a, b) =>
+          compare(a["booking_date"], b["booking_date"]) ||
+          compare(a["entry_reference"], b["entry_reference"]),
+      );
+    const refunds = rows.filter((t) => owedOf(t) < 0);
+    const credits = refunds.reduce((sum, t) => sum + owedOf(t), 0);
+    if (left !== null) left -= credits;
+    const settle = (b: Row) =>
+      Object.assign(b, {
+        owed_settled: true,
+        settled_at: this.now.toISOString(),
+        settled_by_account: credit["account_uid"],
+        settled_by_ref: credit["entry_reference"],
+      });
+    for (const b of rows.filter((t) => owedOf(t) > 0)) {
+      const owed = owedOf(b);
+      if (left === null || owed > left + 0.005) break;
+      settle(b);
+      left -= owed;
+      settledEur += owed;
+      settled.push(String(b["entry_reference"]));
+    }
+    if (credits < 0) {
+      if (settledEur + credits >= -0.005) {
+        // The settled bills use the refunds in full: close them too.
+        refunds.forEach(settle);
+        settledEur += credits;
+      } else {
+        // Only part of a refund would be used, and it can't settle in part: settle nothing.
+        for (const b of txs)
+          if (
+            b["settled_by_account"] === credit["account_uid"] &&
+            b["settled_by_ref"] === credit["entry_reference"]
+          )
+            Object.assign(b, {
+              owed_settled: false,
+              settled_at: null,
+              settled_by_account: null,
+              settled_by_ref: null,
+            });
+        if (left !== null) left += credits + settledEur;
+        settledEur = 0;
+        settled.length = 0;
+      }
+    }
+    let linked = false;
+    const key = payerKey(payerNameOf(credit));
+    if (args["p_remember"] !== false && key) {
+      const links = (this.db["payer_links"] ??= []);
+      const hit = links.find((l) => l["payer_key"] === key);
+      linked = !hit || hit["contact"] !== contact;
+      if (!hit)
+        links.push({
+          user_id: DEMO_USER_ID,
+          payer_key: key,
+          contact,
+          created_at: this.now.toISOString(),
+        });
+      else hit["contact"] = contact;
+    }
+    this.refresh();
+    return {
+      data: {
+        settled,
+        settled_eur: Math.round(settledEur * 100) / 100,
+        left_eur: left === null ? null : Math.max(Math.round(left * 100) / 100, 0),
+        linked,
+      },
+      error: null,
+    };
+  }
+  /** Mirror of undo_payback. */
+  undoPayback(args: Record<string, unknown>) {
+    const txs = this.db["transactions"] ?? [];
+    const credit = txs.find(
+      (t) =>
+        t["account_uid"] === args["p_account"] &&
+        t["entry_reference"] === args["p_ref"] &&
+        t["credit_debit_indicator"] === "CRDT",
+    );
+    if (!credit || credit["payback_contact"] == null)
+      return { data: null, error: { message: "Payment not found", code: "P0001" } };
+    let reopened = 0;
+    for (const b of txs)
+      if (
+        b["settled_by_account"] === credit["account_uid"] &&
+        b["settled_by_ref"] === credit["entry_reference"]
+      ) {
+        Object.assign(b, {
+          owed_settled: false,
+          settled_at: null,
+          settled_by_account: null,
+          settled_by_ref: null,
+        });
+        reopened++;
+      }
+    if (credit["payback_contact"] !== "") {
+      credit["flow_type"] = null;
+      credit["flow_source"] = null;
+    }
+    credit["payback_contact"] = null;
+    if (args["p_forget"] === true) {
+      const key = payerKey(payerNameOf(credit));
+      this.db["payer_links"] = (this.db["payer_links"] ?? []).filter((l) => l["payer_key"] !== key);
+    }
+    this.refresh();
+    return { data: { reopened }, error: null };
+  }
   refresh(): void {
     Object.assign(this.db, deriveViews(this.db as unknown as DemoDb));
   }
@@ -838,56 +1067,65 @@ export function createFakeClient(now: Date = new Date()): SupabaseClient<Databas
   const client = {
     from: (table: string) => new Query(store, table),
     rpc: async (fn: string, args: Record<string, unknown> = {}) =>
-      fn === "holding_performance"
-        ? {
-            data: demoHoldingPerformance(store.db, args["p_from"] as string | undefined),
-            error: null,
-          }
-        : fn === "rename_merchant"
-          ? {
-              data: store.renameMerchant(
-                args["p_entry_reference"] as string,
-                args["p_account_uid"],
-                (args["p_name"] as string | null) ?? null,
-              ),
-              error: null,
-            }
-          : fn === "resolve_transfer_pair"
-            ? store.resolveTransferPair(args["p_pair"], args["p_keep"] === true)
-            : fn === "stream_action"
-              ? store.streamAction(args["p_stream"], args["p_action"], args["p_args"] as Row)
-              : fn === "add_manual_transaction"
-                ? store.addManualTransaction(args)
-                : fn === "set_account_type"
-                  ? store.setAccountType(args["p_account"], args["p_type"] ?? null)
-                  : fn === "add_manual_debt"
-                    ? store.addManualDebt(args)
-                    : fn === "set_manual_balance"
-                      ? store.setManualBalance(args["p_account"], args["p_amount"])
-                      : fn === "delete_manual_debt"
-                        ? store.deleteManualDebt(args["p_account"])
-                        : fn === "set_holding_quantity"
-                          ? {
-                              data: store.setHoldingQuantity(
-                                args["p_kind"],
-                                args["p_key"],
-                                args["p_quantity"],
-                                args["p_source"],
-                              ),
-                              error: null,
-                            }
-                          : fn === "delete_holding"
-                            ? {
-                                data: store.deleteHolding(
-                                  args["p_kind"],
-                                  args["p_key"],
-                                  args["p_source"],
-                                ),
-                                error: null,
-                              }
-                            : fn === "my_transaction_tags"
-                              ? { data: demoTagCounts(store.db["transactions"] ?? []), error: null }
-                              : { data: null, error: DISABLED },
+      fn === "payback_candidates"
+        ? store.paybackCandidates(args["p_days"])
+        : fn === "record_payback"
+          ? store.recordPayback(args)
+          : fn === "undo_payback"
+            ? store.undoPayback(args)
+            : fn === "holding_performance"
+              ? {
+                  data: demoHoldingPerformance(store.db, args["p_from"] as string | undefined),
+                  error: null,
+                }
+              : fn === "rename_merchant"
+                ? {
+                    data: store.renameMerchant(
+                      args["p_entry_reference"] as string,
+                      args["p_account_uid"],
+                      (args["p_name"] as string | null) ?? null,
+                    ),
+                    error: null,
+                  }
+                : fn === "resolve_transfer_pair"
+                  ? store.resolveTransferPair(args["p_pair"], args["p_keep"] === true)
+                  : fn === "stream_action"
+                    ? store.streamAction(args["p_stream"], args["p_action"], args["p_args"] as Row)
+                    : fn === "add_manual_transaction"
+                      ? store.addManualTransaction(args)
+                      : fn === "set_account_type"
+                        ? store.setAccountType(args["p_account"], args["p_type"] ?? null)
+                        : fn === "add_manual_debt"
+                          ? store.addManualDebt(args)
+                          : fn === "set_manual_balance"
+                            ? store.setManualBalance(args["p_account"], args["p_amount"])
+                            : fn === "delete_manual_debt"
+                              ? store.deleteManualDebt(args["p_account"])
+                              : fn === "set_holding_quantity"
+                                ? {
+                                    data: store.setHoldingQuantity(
+                                      args["p_kind"],
+                                      args["p_key"],
+                                      args["p_quantity"],
+                                      args["p_source"],
+                                    ),
+                                    error: null,
+                                  }
+                                : fn === "delete_holding"
+                                  ? {
+                                      data: store.deleteHolding(
+                                        args["p_kind"],
+                                        args["p_key"],
+                                        args["p_source"],
+                                      ),
+                                      error: null,
+                                    }
+                                  : fn === "my_transaction_tags"
+                                    ? {
+                                        data: demoTagCounts(store.db["transactions"] ?? []),
+                                        error: null,
+                                      }
+                                    : { data: null, error: DISABLED },
     functions: {
       invoke: async (name: string, opts?: { body?: Record<string, unknown> }) =>
         name === "add-holding"

@@ -1034,3 +1034,235 @@ describe("demo notes and tags", () => {
     );
   });
 });
+
+describe("fake client: payback matching mirrors the database", () => {
+  const ACC = "demo-pb-acc";
+  const row = (ref: string, over: Record<string, unknown>) => ({
+    entry_reference: ref,
+    account_uid: ACC,
+    user_id: DEMO_USER_ID,
+    currency: "EUR",
+    booking_date: "2026-10-10",
+    credit_debit_indicator: "DBIT",
+    owed_settled: false,
+    ...over,
+  });
+  const seed = async (rows: Array<Record<string, unknown>>) => {
+    const c = fresh();
+    await c.from("transactions").insert(rows as never);
+    return c;
+  };
+  const record = (c: ReturnType<typeof fresh>, ref: string, contact: string | null) =>
+    c.rpc("record_payback", {
+      p_account: ACC,
+      p_ref: ref,
+      p_contact: contact as string,
+      p_remember: false,
+    });
+
+  it("a split refund counts against the bill and settles with it; alone it stays open", async () => {
+    const c = await seed([
+      row("sr-bill", {
+        amount: 100,
+        personal_amount: 40,
+        owed_by: "Bea",
+        booking_date: "2026-10-01",
+      }),
+      row("sr-ref", {
+        amount: 30,
+        personal_amount: 10,
+        owed_by: "Bea",
+        credit_debit_indicator: "CRDT",
+        booking_date: "2026-10-02",
+      }),
+      row("sr-pay", {
+        amount: 40,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Bea Verdi",
+        flow_type: "income",
+      }),
+      row("sr-pay2", {
+        amount: 30,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Bea Verdi",
+        flow_type: "income",
+      }),
+    ]);
+    const { data } = await record(c, "sr-pay", "Bea");
+    expect(data).toMatchObject({ settled: ["sr-bill"], settled_eur: 40, left_eur: 0 });
+    const { data: rows } = await c
+      .from("transactions")
+      .select("entry_reference, owed_settled")
+      .in("entry_reference", ["sr-bill", "sr-ref"]);
+    expect(rows!.every((r) => r.owed_settled)).toBe(true);
+    await c.rpc("undo_payback", { p_account: ACC, p_ref: "sr-pay", p_forget: false });
+    const { data: short } = await record(c, "sr-pay2", "Bea");
+    expect(short).toMatchObject({ settled: [], left_eur: 30 });
+  });
+
+  it("refund credit is never half used: bills settle only when they use it all", async () => {
+    const c = await seed([
+      row("pr-ref", {
+        amount: 60,
+        personal_amount: 10,
+        owed_by: "Fede",
+        credit_debit_indicator: "CRDT",
+        booking_date: "2026-10-01",
+      }),
+      row("pr-b1", {
+        amount: 20,
+        personal_amount: 10,
+        owed_by: "Fede",
+        booking_date: "2026-10-02",
+      }),
+      row("pr-b2", {
+        amount: 200,
+        personal_amount: 100,
+        owed_by: "Fede",
+        booking_date: "2026-10-03",
+      }),
+      row("pr-pay", {
+        amount: 5,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Fede Rosa",
+        flow_type: "income",
+      }),
+      row("pr-pay2", {
+        amount: 70,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Fede Rosa",
+        flow_type: "income",
+      }),
+    ]);
+    expect((await record(c, "pr-pay", "Fede")).data).toMatchObject({ settled: [], left_eur: 5 });
+    const { data: open } = await c
+      .from("transactions")
+      .select("entry_reference, owed_settled")
+      .in("entry_reference", ["pr-ref", "pr-b1", "pr-b2"]);
+    expect(open!.filter((r) => r.owed_settled)).toEqual([]);
+    expect((await record(c, "pr-pay2", "Fede")).data).toMatchObject({
+      settled: ["pr-b1", "pr-b2"],
+      settled_eur: 60,
+      left_eur: 10,
+    });
+  });
+
+  it("asks for a contact before anything else, like the database", async () => {
+    const c = await seed([
+      row("ck-pay", {
+        amount: 20,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Ugo",
+        flow_type: "income",
+        payback_contact: "",
+      }),
+    ]);
+    expect((await record(c, "ck-pay", null)).error?.message).toBe("Contact required");
+  });
+
+  it("a yes links the payer: the next payment comes back linked; undo with forget unlinks", async () => {
+    const c = await seed([
+      row("lk-bill", { amount: 40, personal_amount: 20, owed_by: "Ida" }),
+      row("lk-pay", {
+        amount: 20,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "IDA NERI",
+        flow_type: "income",
+      }),
+      row("lk-next", {
+        amount: 5,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Ida  Neri.",
+        flow_type: "income",
+      }),
+    ]);
+    const { data } = await c.rpc("record_payback", {
+      p_account: ACC,
+      p_ref: "lk-pay",
+      p_contact: "Ida",
+      p_remember: true,
+    });
+    expect(data).toMatchObject({ settled: ["lk-bill"], linked: true });
+    expect((await record(c, "lk-pay", "Ida")).error?.message).toBe("Payment already checked");
+    const linked = async () =>
+      (
+        (await c.rpc("payback_candidates", { p_days: 60 })).data as Array<{
+          entry_reference: string;
+          linked_contact: string | null;
+        }>
+      ).find((r) => r.entry_reference === "lk-next")?.linked_contact;
+    expect(await linked()).toBe("Ida");
+    await c.rpc("undo_payback", { p_account: ACC, p_ref: "lk-pay", p_forget: true });
+    expect(await linked()).toBeNull();
+  });
+
+  it("names are read like the page: 'Carla,' is Carla alone", async () => {
+    const c = await seed([
+      row("cm-1", { amount: 20, personal_amount: 10, owed_by: "Carla," }),
+      row("cm-2", { amount: 20, personal_amount: 10, owed_by: "Carla, Dino" }),
+      row("cm-pay", {
+        amount: 20,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Carla Blu",
+        flow_type: "income",
+      }),
+    ]);
+    const { data } = await record(c, "cm-pay", "Carla");
+    expect(data).toMatchObject({ settled: ["cm-1"], left_eur: 10 });
+  });
+
+  it("refuses a missing contact and a payment that is not plain income", async () => {
+    const c = await seed([
+      row("x-pay", {
+        amount: 20,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Ugo",
+        flow_type: "income",
+      }),
+      row("x-transfer", {
+        amount: 20,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Ugo",
+        flow_type: "transfer",
+      }),
+      row("x-split", {
+        amount: 20,
+        personal_amount: 5,
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Ugo",
+        flow_type: "income",
+      }),
+      row("x-sw", {
+        amount: 20,
+        import_batch_id: "b1",
+        credit_debit_indicator: "CRDT",
+        debtor_name: "Ugo",
+        flow_type: "income",
+      }),
+    ]);
+    expect((await record(c, "x-pay", null)).error?.message).toBe("Contact required");
+    for (const ref of ["x-transfer", "x-split", "x-sw"])
+      expect((await record(c, ref, "Ugo")).error?.message).toBe("Payment not found");
+    const { data } = await c.rpc("payback_candidates", { p_days: 60 });
+    const refs = (data as Array<{ entry_reference: string }>).map((r) => r.entry_reference);
+    expect(refs).toContain("x-pay");
+    expect(refs).not.toEqual(expect.arrayContaining(["x-transfer"]));
+    expect(refs.filter((r) => r.startsWith("x-") && r !== "x-pay")).toEqual([]);
+  });
+});
+
+describe("demo payerKey matches the database's payer_key", () => {
+  it("folds the same letters and cuts at 200", async () => {
+    const { payerKey } = await import("./fake-client");
+    expect(
+      payerKey(
+        "Řehoř ŁUKASZ Øster Šťastný Dvořák Ćwik Węgrzyn Nagy Ödön Győző Žanić Ålund Ærø Straße",
+      ),
+    ).toBe(
+      "rehor lukasz oster stastny dvorak cwik wegrzyn nagy odon gyozo zanic alund aero strasse",
+    );
+    expect(payerKey("ab ".repeat(150))?.length).toBe(200);
+    // Characters, like the database's left(): a letter outside the BMP is one, not two units.
+    expect([...(payerKey("𠀀".repeat(250)) ?? "")].length).toBe(200);
+  });
+});
