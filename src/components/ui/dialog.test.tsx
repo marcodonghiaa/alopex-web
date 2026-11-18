@@ -188,8 +188,9 @@ describe("Dialog with a sheet over it", () => {
   });
 });
 
-// polish-4 #15: a toast shown over an open dialog sits outside it. fails_when=touching the toast
-// counts as a click outside, closes the dialog and drops what was picked in it
+// polish-4 #15 / UB2: a toast shown over an open dialog (say, one left from the last save) sits
+// outside it. fails_when=touching the toast counts as a click outside, closes the dialog and drops
+// what was picked in it
 describe("Dialog and toasts", () => {
   const renderDialog = (onOpenChange = vi.fn()) => {
     render(

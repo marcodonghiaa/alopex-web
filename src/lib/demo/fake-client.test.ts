@@ -168,6 +168,41 @@ describe("fake client: writes live in memory only", () => {
     expect(n2).toBe(n);
   });
 
+  it("upserts like Postgres: ignoreDuplicates keeps the saved row, a null key never matches", async () => {
+    const c = fresh();
+    const event = (external_id: string | null, amount_eur: number) => ({
+      user_id: DEMO_USER_ID,
+      kind: "dividend",
+      event_date: "2026-03-01",
+      amount_eur,
+      raw_type: "CASH|DIVIDEND",
+      source: "test",
+      external_id,
+    });
+    const opts = { onConflict: "user_id,source,external_id", ignoreDuplicates: true };
+    const up = (rows: Array<ReturnType<typeof event>>, o: object = opts) =>
+      c
+        .from("investment_events")
+        .upsert(rows as never, o)
+        .select("external_id");
+    expect((await up([event("a", 1), event(null, 2)])).data).toHaveLength(2);
+    // The same id again is skipped and not returned; a second null id is a new row.
+    const again = await up([event("a", 9), event(null, 3)]);
+    expect(again.data!.map((r) => r.external_id)).toEqual([null]);
+    // Without ignoreDuplicates the saved row takes the new values.
+    await up([event("a", 5)], { onConflict: "user_id,source,external_id" });
+    const { data } = await c
+      .from("investment_events")
+      .select("external_id,amount_eur")
+      .eq("source", "test")
+      .order("amount_eur");
+    expect(data!.map((r) => [r.external_id, r.amount_eur])).toEqual([
+      [null, 2],
+      [null, 3],
+      ["a", 5],
+    ]);
+  });
+
   // Regression: once a table was emptied, new rows got no id, so deleting one
   // (`.eq("id", undefined)`) matched and removed every new row.
   it("gives new rows ids even after the table was emptied", async () => {
@@ -485,6 +520,24 @@ describe("fake client: delete_holding", () => {
     expect((await c.from("portfolio_snapshots").select("isin").eq("isin", isin)).data).toEqual([]);
     expect((await c.from("holding_trades").select("key").eq("key", isin)).data).toEqual([]);
     expect(await latestTotal(c)).toBeCloseTo(before - lastValue, 1);
+  });
+
+  it("removes the deleted holding's dividends and other events, and no one else's", async () => {
+    const c = fresh();
+    const { data: holdings } = await c.from("portfolio_holdings").select("isin");
+    const [isin, other] = [holdings![0]!.isin!, holdings![1]!.isin!];
+    const event = (key: string) => ({
+      kind: "dividend",
+      asset_kind: "stock",
+      key,
+      event_date: "2026-03-01",
+      amount_eur: 1,
+      raw_type: "CASH|DIVIDEND",
+    });
+    await c.from("investment_events").insert([event(isin), event(other)] as never);
+    await (c.rpc as unknown as Rpc)("delete_holding", { p_kind: "stock", p_key: isin });
+    const { data } = await c.from("investment_events").select("key").in("key", [isin, other]);
+    expect([...new Set(data!.map((e) => e.key))]).toEqual([other]);
   });
 
   // protects=add then delete leaves every net-worth day as it was, even just after local

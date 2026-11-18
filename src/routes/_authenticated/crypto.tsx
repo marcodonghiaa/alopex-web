@@ -22,6 +22,7 @@ import { useValueHistory } from "@/lib/use-value-history";
 import { tradesMatchHeld } from "@/lib/trades";
 import { splitSmallBalances } from "@/lib/small-balances";
 import { usePerformance, useStartPrices } from "@/lib/use-performance";
+import { InvestmentIncome } from "@/components/holdings/investment-income";
 import {
   PerformanceNotice,
   ReturnCell,
@@ -384,6 +385,15 @@ function CryptoPage() {
       )}
 
       {!query.isPending && <TradesImport perf={perf} />}
+
+      {/* Under the holdings and the import that fills it: the holdings are the everyday task. */}
+      {!query.isPending && (
+        <InvestmentIncome
+          events={perf.events}
+          trades={[...perf.tradesByKey.values()].flat()}
+          page="crypto"
+        />
+      )}
 
       {/* Coinbase coins come back on their own when the sync sees them again. */}
       <SoldHoldings

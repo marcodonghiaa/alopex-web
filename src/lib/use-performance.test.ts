@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchPerformance, fetchTrades, startPricesOf } from "./use-performance";
+import { fetchEvents, fetchPerformance, fetchTrades, startPricesOf } from "./use-performance";
 
 const client = (result: unknown) =>
   ({ rpc: vi.fn(async () => result) }) as unknown as Parameters<typeof fetchPerformance>[0];
@@ -70,6 +70,62 @@ describe("fetchTrades", () => {
       { data: null, error: { code: "500", message: "boom" }, count: null },
     ]);
     await expect(fetchTrades(client)).rejects.toThrow("boom");
+  });
+});
+
+describe("fetchEvents", () => {
+  const client = (page: unknown) =>
+    ({
+      from: () => ({ select: () => ({ order: () => ({ range: async () => page }) }) }),
+    }) as unknown as Parameters<typeof fetchEvents>[0];
+
+  it("pages events like trades", async () => {
+    const rows = [{ kind: "dividend" }, { kind: "fee" }];
+    expect(await fetchEvents(client({ data: rows, error: null, count: 2 }))).toEqual(rows);
+  });
+
+  it("throws on an error: the table comes with trades' columns, so no fallback of its own", async () => {
+    const missing = { data: null, error: { code: "PGRST205", message: "no table" }, count: null };
+    await expect(fetchEvents(client(missing))).rejects.toThrow("no table");
+  });
+});
+
+describe("fetchTrades and fetchEvents columns", () => {
+  const columnsOf = async (fetch: typeof fetchTrades | typeof fetchEvents) => {
+    const select = vi.fn(() => ({
+      order: () => ({ range: async () => ({ data: [], error: null, count: 0 }) }),
+    }));
+    await fetch({ from: () => ({ select }) } as unknown as Parameters<typeof fetchTrades>[0]);
+    return (select.mock.calls[0] as unknown as [string])[0].split(",");
+  };
+
+  it("fetch only the columns the app reads", async () => {
+    expect(await columnsOf(fetchTrades)).toEqual([
+      "id",
+      "kind",
+      "key",
+      "side",
+      "trade_date",
+      "shares",
+      "price_eur",
+      "fee_eur",
+      "tax_eur",
+      "traded_at",
+      "source",
+      "external_id",
+      "note",
+    ]);
+    expect(await columnsOf(fetchEvents)).toEqual([
+      "kind",
+      "asset_kind",
+      "key",
+      "event_date",
+      "amount_eur",
+      "tax_eur",
+      "fee_eur",
+      "source",
+      "external_id",
+    ]);
   });
 });
 

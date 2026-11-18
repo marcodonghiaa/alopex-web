@@ -1,104 +1,287 @@
+import type { EventKind, InvestmentEvent } from "@/lib/investment-events";
 import type { Trade } from "@/lib/trades";
+import { cutChars } from "@/lib/transactions";
 import { parseDate, splitLine, unheldKeys } from "./csv";
 import type { BrokerParser } from "./types";
 
 const COLUMNS = ["transaction_id", "category", "type", "symbol", "shares", "price", "currency"];
 
+// Rows that change how many shares or coins you hold.
+//   BUY/SELL and the private-market ones: trades at the file's price.
+//   Shares you got for free (a stock perk, a gift, a staking reward): a buy at no cost, all gain.
+//   A bond paid back at maturity: a sale at what you got for it.
+//   A split: more shares at no cost. Shares that come in from or go out to another broker: their
+//   price isn't in the file, so they're counted at no cost and you're told.
+/** A row's kind as words: PRIVATE_MARKET_BUY is "private market buy". */
+const plain = (type: string) => type.toLowerCase().replace(/_/g, " ");
+
+const TRADES = new Set(["BUY", "SELL", "PRIVATE_MARKET_BUY", "PRIVATE_MARKET_SELL"]);
+const FREE = new Set(["FREE_RECEIPT", "GIFT", "STOCKPERK", "STOCK_PERK"]);
+const PAID_BACK = new Set(["FINAL_MATURITY", "REDEMPTION", "TILG", "LIQUIDATION"]);
+const MOVED = new Set(["MERGER", "SPIN_OFF", "SECURITY_TRANSFER", "TRANSFER", "DELIVERY"]);
+// Kept as corporate actions even when filed under DELIVERY: they aren't moves between brokers.
+const CORPORATE = new Set(["MERGER", "SPIN_OFF", "SPLIT"]);
+// A MIGRATION row moves shares in and straight out again: nothing changes.
+const IGNORED = new Set(["MIGRATION"]);
+// Spending on the card and transfers from your own bank are your bank account's, not your
+// investments': connect Trade Republic as a bank to see them in Transactions.
+const CARD = /^CARD_/;
+
+// Cash rows: what kind of event each is. Deposits and withdrawals go by the sign of the amount.
+const CASH: Record<string, EventKind> = {
+  DIVIDEND: "dividend",
+  DISTRIBUTION: "dividend",
+  DIVIDEND_EQUIVALENT_PAYMENT: "dividend",
+  INTEREST_PAYMENT: "interest",
+  BOND_ACCRUED_INTEREST: "interest",
+  BENEFITS_SAVEBACK: "reward",
+  BONUS: "reward",
+  REFERRAL: "reward",
+  KINDERGELD_BONUS: "reward",
+  FEE: "fee",
+  CARD_ORDERING_FEE: "fee",
+  TAX: "tax",
+  PRE_DETERMINED_TAX_BASE: "tax",
+  TAX_OPTIMIZATION: "tax",
+  SEC_ACCOUNT: "tax",
+};
+const MONEY_MOVE = /^(CUSTOMER_|TRANSFER_|VIBAN_|PAYMENT_|SEPA_|INPAYMENT|OUTPAYMENT)/;
+
+const num = (text: string) => (text.trim() === "" ? 0 : Number(text));
+// Adding cents in floating point leaves dust (0.67 - 0.1 = 0.5700000000000001).
+const add = (...n: Array<number>) => Number(n.reduce((a, b) => a + b, 0).toFixed(8));
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
 /**
- * Trade Republic's transaction export (Profile > Documents, CSV). BUY and SELL rows are trades, a
- * split adds shares at no cost. Dividends, card payments and MIGRATION rows (a move in and straight
- * out again) are not trades, so they're skipped and counted. Things you sold that aren't in your
- * holdings are kept, so their profit counts. Each trade keeps Trade Republic's transaction_id, so
- * importing the file again skips exactly what's saved.
+ * Trade Republic's transaction export (Profile › Statements › Transaction export, CSV): the whole
+ * history in one file. Trades go to your holdings; dividends, interest, saveback, fees, taxes,
+ * deposits and withdrawals are saved as events, so returns count what your investments paid you.
+ * Crypto rows are imported on the Crypto page, the rest on Portfolio, from the same file. Card
+ * payments are your bank account's and are skipped. Each row keeps Trade Republic's
+ * transaction_id, so importing the file again skips exactly what's saved.
  */
 export const tradeRepublic: BrokerParser = {
   id: "trade_republic",
   name: "Trade Republic",
   country: "DE, IT, FR, ES and more",
-  kind: "stock",
+  kind: "both",
+  // Its coins go only to ones you added by hand: Ledger and Coinbase keep their own records.
+  holdingSource: "Manual",
   howToExport: [
     "Open the Trade Republic app",
-    "Profile › Documents › export your transactions as CSV",
-    "Pick the file here, as it comes",
+    "Profile › Statements › Transaction export",
+    "Pick a start date before your first deposit, create the CSV",
+    "Pick the file here, as it comes. Import it again any time: what's saved is skipped",
   ],
-  verifiedAt: "2026-11-10",
+  verifiedAt: "2026-11-17",
   detect: (header) => COLUMNS.every((c) => header.includes(c)),
   parse(lines, separator, header, { kind, knownKeys, today }) {
-    if (kind !== "stock") {
-      return {
-        trades: [],
-        errors: ["This file comes from Trade Republic: import it on the Portfolio page."],
-        notes: [],
-      };
-    }
     const trades: Array<Trade> = [];
+    const events: Array<InvestmentEvent> = [];
     const errors: Array<string> = [];
     const notes: Array<string> = [];
     const names = new Map<string, string>();
-    let skipped = 0;
+    let card = 0;
+    let otherPage = 0;
+    let unknown = 0;
+    let movedIn = 0;
+    let reverse = 0;
+
     lines.slice(1).forEach((line, i) => {
       const cells = splitLine(line, separator);
       const get = (name: string) => cells[header.indexOf(name)] ?? "";
+      const category = get("category");
       const type = get("type");
-      const key = get("symbol").toUpperCase();
-      const date = get("date");
-      const shares = Math.abs(Number(get("shares")));
-      if (type !== "BUY" && type !== "SELL" && type !== "SPLIT") {
-        skipped++;
+      const rowKind: "stock" | "crypto" = get("asset_class") === "CRYPTO" ? "crypto" : "stock";
+      const key = get("symbol").toUpperCase() || null;
+      // As ISO: a day-first 02/01/2026 is saved and compared as 2026-01-02.
+      const date = parseDate(get("date")) ?? "";
+      const id = get("transaction_id").trim() || null;
+      const at = get("datetime").trim() || null;
+      const line_ = `Line ${i + 2}`;
+
+      if (IGNORED.has(type)) return;
+      if (!date) return void errors.push(`${line_}: the date isn't valid.`);
+      if (date > today) return void errors.push(`${line_}: the date is in the future.`);
+      const shares = num(get("shares"));
+      const amount = num(get("amount"));
+      // amount is before fee and tax (a trade's shares × price, a dividend's gross); fee and tax are
+      // their own signed columns, negative when charged, positive when given back.
+      const feeSigned = num(get("fee"));
+      const taxSigned = num(get("tax"));
+      const fee = Math.max(0, -feeSigned);
+      const tax = Math.max(0, -taxSigned);
+      if (![shares, amount, feeSigned, taxSigned].every(Number.isFinite)) {
+        return void errors.push(`${line_}: couldn't read this ${plain(type)} row.`);
+      }
+
+      const movesShares =
+        TRADES.has(type) ||
+        FREE.has(type) ||
+        PAID_BACK.has(type) ||
+        MOVED.has(type) ||
+        type === "SPLIT" ||
+        category === "CORPORATE_ACTION" ||
+        category === "DELIVERY";
+      if (movesShares && key && shares !== 0) {
+        if (rowKind !== kind) return void otherPage++;
+        names.set(key, get("name"));
+        if (type === "SPLIT" && shares < 0) {
+          reverse++;
+          return;
+        }
+        let price: number;
+        let note: string | null = null;
+        if (TRADES.has(type)) {
+          // A blank price read as 0 and saved a buy at no cost, inflating the return.
+          if (get("price").trim() === "")
+            return void errors.push(`${line_}: this ${plain(type)} row has no price.`);
+          price = num(get("price"));
+          if (get("currency") !== "EUR")
+            return void errors.push(`${line_}: the price isn't in EUR.`);
+          const description = get("description").trim();
+          if (description) note = cutChars(description, 200);
+        } else if (PAID_BACK.has(type)) {
+          price = Math.abs(amount) / Math.abs(shares);
+          note = "Paid back";
+        } else {
+          price = 0;
+          note = FREE.has(type) ? "Received free" : type === "SPLIT" ? "Split" : "Moved in or out";
+          if (!FREE.has(type) && type !== "SPLIT" && shares > 0) movedIn++;
+        }
+        if (!(price >= 0))
+          return void errors.push(`${line_}: couldn't read this ${plain(type)} row.`);
+        trades.push({
+          kind,
+          key,
+          side: shares < 0 ? "sell" : "buy",
+          trade_date: date,
+          shares: Math.abs(shares),
+          price_eur: price,
+          fee_eur: TRADES.has(type) ? fee : 0,
+          // A bond paid back can have tax held back: it lowers that sale's return.
+          tax_eur: TRADES.has(type) || PAID_BACK.has(type) ? tax : 0,
+          traded_at: at,
+          note,
+          source: "trade_republic",
+          external_id: id,
+        });
+        // A corporate action is also kept as an event, so its cash (if any) and type aren't lost.
+        // Shares moved from or to another broker are a transfer in or out instead, by their sign.
+        if (!TRADES.has(type) && !FREE.has(type)) {
+          const transfer =
+            type === "SECURITY_TRANSFER" ||
+            type === "TRANSFER" ||
+            (category === "DELIVERY" && !PAID_BACK.has(type) && !CORPORATE.has(type));
+          const action = event(
+            transfer ? (shares > 0 ? "transfer_in" : "transfer_out") : "corporate_action",
+          );
+          events.push(PAID_BACK.has(type) ? { ...action, tax_eur: 0 } : action);
+        }
+        // Tax given back on a trade is money in: a refund of its own.
+        if (TRADES.has(type) && taxSigned > 0) {
+          events.push({ ...event("tax_refund"), amount_eur: taxSigned, tax_eur: 0, fee_eur: 0 });
+        }
+        // And a fee given back (a rebate) is money in too. Its own id, so a trade with both a tax
+        // refund and a rebate keeps both: an event's id is saved once.
+        if (TRADES.has(type) && feeSigned > 0) {
+          events.push({
+            ...event("fee"),
+            amount_eur: feeSigned,
+            tax_eur: 0,
+            fee_eur: 0,
+            external_id: id && `${id}:fee`,
+          });
+        }
         return;
       }
-      names.set(key, get("name"));
-      if (type === "SPLIT" && Number(get("shares")) < 0) {
-        notes.push(`${get("name")}: a reverse split on ${date} wasn't imported. Add it by hand.`);
-        return;
+
+      if (CARD.test(type) && type !== "CARD_ORDERING_FEE") return void card++;
+      let eventKind: EventKind | undefined = CASH[type];
+      // What reached the account: the amount after its fee and tax.
+      const net = add(amount, feeSigned, taxSigned);
+      // A tax row (stamp duty, a tax optimisation, its cancellation) may carry the tax only in the
+      // tax column, with amount 0: its sign says whether it was charged or given back.
+      const taxRow = eventKind === "tax";
+      if (taxRow && net > 0) eventKind = "tax_refund";
+      if (!eventKind && MONEY_MOVE.test(type)) eventKind = amount >= 0 ? "deposit" : "withdrawal";
+      // An event about a coin goes with the Crypto page, about a share with Portfolio; cash alone
+      // (interest, a deposit) with Portfolio.
+      const eventPage = key && rowKind === "crypto" ? "crypto" : "stock";
+      if (eventPage !== kind) return void otherPage++;
+      // Counted only once it's kept on this page: a row for the other page is that page's note.
+      if (!eventKind) {
+        unknown++;
+        eventKind = "other";
       }
-      // A blank price read as 0 and saved a buy at no cost, inflating the return.
-      if (type !== "SPLIT" && get("price").trim() === "") {
-        errors.push(`Line ${i + 2}: this ${type} row has no price.`);
-        return;
+      if (key) names.set(key, get("name"));
+      // A fee row's fee is the row itself: kept in the amount only, or it counts twice.
+      events.push(
+        taxRow || eventKind === "fee"
+          ? { ...event(eventKind), tax_eur: 0, fee_eur: 0 }
+          : event(eventKind),
+      );
+
+      function event(k: EventKind): InvestmentEvent {
+        const orig = get("original_amount").trim();
+        const rate = get("fx_rate").trim();
+        const origCurrency = get("original_currency").trim().toUpperCase();
+        return {
+          kind: k,
+          asset_kind: key ? rowKind : null,
+          key,
+          event_date: date,
+          occurred_at: at,
+          amount_eur: add(amount, feeSigned, taxSigned),
+          tax_eur: tax,
+          fee_eur: fee,
+          shares: shares !== 0 ? Math.abs(shares) : null,
+          orig_amount: orig !== "" && Number.isFinite(Number(orig)) ? Number(orig) : null,
+          orig_currency: /^[A-Z]{3}$/.test(origCurrency) ? origCurrency : null,
+          fx_rate: rate !== "" && Number(rate) > 0 ? Number(rate) : null,
+          raw_type: cutChars(`${category}|${type}`, 80),
+          source: "trade_republic",
+          external_id: id,
+        };
       }
-      if (date > today) {
-        errors.push(`Line ${i + 2}: the date is in the future.`);
-        return;
-      }
-      const price = type === "SPLIT" ? 0 : Number(get("price"));
-      const fee = type === "SPLIT" ? 0 : Math.abs(Number(get("fee")));
-      if (!key || parseDate(date) == null || !(shares > 0) || !(price >= 0) || !(fee >= 0)) {
-        errors.push(`Line ${i + 2}: couldn't read this ${type} row.`);
-        return;
-      }
-      if (type !== "SPLIT" && get("currency") !== "EUR") {
-        errors.push(`Line ${i + 2}: the price isn't in EUR.`);
-        return;
-      }
-      const id = get("transaction_id").trim();
-      trades.push({
-        kind,
-        key,
-        side: type === "SELL" ? "sell" : "buy",
-        trade_date: date,
-        shares,
-        price_eur: price,
-        fee_eur: fee,
-        source: "trade_republic",
-        external_id: id === "" ? null : id,
-      });
     });
 
     const open = unheldKeys(trades, knownKeys);
     for (const key of open)
       notes.push(
-        `${names.get(key)} isn't in your holdings, so it was left out. Add it, then import again.`,
+        kind === "crypto"
+          ? `${names.get(key) || key} has no manual holding, so it was left out. Add it as a manual coin, then import again.`
+          : `${names.get(key) || key} isn't in your holdings, so it was left out. Add it, then import again.`,
       );
-    if (skipped > 0)
+    if (reverse > 0)
       notes.push(
-        `${skipped} row${skipped === 1 ? " that isn't a trade was" : "s that aren't trades were"} skipped (dividends, interest, card payments, transfers).`,
+        `${plural(reverse, "reverse split wasn't", "reverse splits weren't")} imported. Add ${reverse === 1 ? "it" : "them"} by hand.`,
+      );
+    if (movedIn > 0)
+      notes.push(
+        `${plural(movedIn, "row moved shares in", "rows moved shares in")} from elsewhere at no cost: the file doesn't say what you paid. Edit the price in the holding's trades.`,
+      );
+    if (otherPage > 0)
+      notes.push(
+        kind === "stock"
+          ? `${plural(otherPage, "crypto row is", "crypto rows are")} for the Crypto page: import this file there too.`
+          : `${plural(otherPage, "row is", "rows are")} for shares and cash: import this file on the Portfolio page too.`,
+      );
+    if (card > 0)
+      notes.push(
+        `${plural(card, "card payment was skipped: it's", "card payments were skipped: they're")} your bank account's. Connect Trade Republic as a bank to see ${card === 1 ? "it" : "them"}.`,
+      );
+    if (unknown > 0)
+      notes.push(
+        `${plural(unknown, "row of a kind Alopex doesn't know yet was", "rows of kinds Alopex doesn't know yet were")} kept as "other".`,
       );
     return {
       trades: trades.filter((t) => !open.includes(t.key)),
+      events: events.filter((e) => !(e.key && open.includes(e.key))),
       errors,
       notes,
-      setsShares: true,
+      // The file is your whole history, but only for shares: coins also sit in other wallets.
+      setsShares: kind === "stock",
       names,
     };
   },

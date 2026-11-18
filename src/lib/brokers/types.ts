@@ -1,7 +1,10 @@
+import type { InvestmentEvent } from "@/lib/investment-events";
 import type { Trade } from "@/lib/trades";
 
 export interface CsvResult {
   trades: Array<Trade>;
+  /** What isn't a buy or a sell: dividends, interest, fees, taxes, deposits, transfers. */
+  events?: Array<InvestmentEvent>;
   errors: Array<string>;
   /** Left out on purpose, but you should know. */
   notes: Array<string>;
@@ -32,13 +35,14 @@ export interface BrokerParser {
   id: string;
   name: string;
   country: string;
-  /** Which page imports it: stock trades on Portfolio, coins on Crypto. */
-  kind: "stock" | "crypto";
+  /** Which page imports it: stock trades on Portfolio, coins on Crypto, or both from one file. */
+  kind: "stock" | "crypto" | "both";
   /** Where to find the file in the broker's app, one short step each, shown before you upload. */
   howToExport: Array<string>;
   /**
-   * Crypto only: the holding source the file is the full record of (crypto_holdings.source). Its
-   * share counts are set from this broker's trades alone, so coins held elsewhere stay as they are.
+   * Crypto only: the holding source the file's coins belong to (crypto_holdings.source); a coin
+   * with neither this nor a Manual holding is left out. When the file setsShares, their counts are
+   * set from this broker's trades alone, so coins held elsewhere stay as they are.
    */
   holdingSource?: string;
   /** Last day a real export was imported without problems, or null if only the sample was tested. */
