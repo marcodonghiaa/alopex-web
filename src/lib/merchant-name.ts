@@ -13,26 +13,22 @@ const PROCESSORS = new Set(
 /** Amazon's shop charges ("Amazon Mark* X", "AMZN Mktp DE", "Amazon.it*AB"), not every name that starts with Amazon. */
 const AMAZON =
   /^(amazon|amzn)(\.[a-z]{2,3})*(\s+(mark|mktp|mktplace|marketplace|reta|retail|payments?|eu|europe)\w*)*(\s+[a-z]{2})?\s*(\*.*)?$/i;
-/** Words a card or POS terminal puts before the merchant ("POS LIDL", "Card payment to Lidl"). */
+/** Words a card or POS terminal puts before the merchant ("POS LIDL"), followed by a letter. */
 const CARD_PREFIX =
-  /^(pos( purchase)?|(debit )?card (payment|purchase)( to| at)?|contactless( payment)?|pagamento (pos|carta)|acquisto (pos|carta)|kartenzahlung|compra con tarjeta)\s+(?=\S)/i;
+  /^(pos( purchase)?|card (payment|purchase)( to| at)?|contactless( payment)?|pagamento (pos|carta)|acquisto (pos|carta)|kartenzahlung|compra con tarjeta) (?=\p{L})/iu;
 /** A whole name that is a web address: "NETFLIX.COM", "www.ryanair.com", "apple.com/bill". */
 const DOMAIN =
   /^(www\.)?([a-z0-9-]+)\.(com|it|io|eu|net|org|co|uk|de|fr|es|nl|be|at|ch|ie|pt|pl|app|tv|me)(\/\S*)?$/i;
-
-const isReference = (t: string) =>
-  /^#\d+$/.test(t) ||
-  /^\d{1,2}[./]\d{1,2}([./]\d{2,4})?$/.test(t) ||
-  (t.length >= 6 && /\d/.test(t) && /\p{L}/u.test(t));
 
 export function cleanMerchantName(raw: string): string;
 export function cleanMerchantName(raw: string | null | undefined): string | null;
 export function cleanMerchantName(raw: string | null | undefined): string | null {
   if (raw == null) return null;
-  let name = raw.trim().replace(/\s+/g, " ");
-  if (AMAZON.test(name)) return "Amazon";
+  const input = raw.trim().replace(/\s+/g, " ");
+  if (AMAZON.test(input)) return "Amazon";
 
-  name = name.replace(CARD_PREFIX, "");
+  // Bank text is upper case; a name a person typed ("POS system") is left alone.
+  let name = input === input.toUpperCase() ? input.replace(CARD_PREFIX, "") : input;
   const star = name.indexOf("*");
   if (star >= 0) {
     const left = name.slice(0, star).trim();
@@ -44,15 +40,12 @@ export function cleanMerchantName(raw: string | null | undefined): string | null
   const domain = DOMAIN.exec(name);
   if (domain?.[2]) name = domain[2];
 
-  // Reference codes at the end go: "E46na7fw3", "#1234", "12/03". "Hotel 31" and "Route 66" stay.
-  const words = name.split(" ");
-  while (words.length > 1 && isReference(words[words.length - 1] ?? "")) words.pop();
-  name = words
-    .join(" ")
+  name = name
     .replace(/[\s-]+\d{5,}$/, "") // store or terminal number: "Mbta-550057141438"
     .replace(/\s+&\s*\S?$/, "") // cut off mid-word: "Bagels & S"
     .trim();
 
   if (!name) return raw;
-  return name.charAt(0).toUpperCase() + name.slice(1);
+  // Capitalise only what was cut ("Tst*zuckers" -> "Zuckers"); "eBay" stays as typed.
+  return name === input ? name : name.charAt(0).toUpperCase() + name.slice(1);
 }

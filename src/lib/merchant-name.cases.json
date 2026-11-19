@@ -1,5 +1,5 @@
 {
-  "_": "Raw bank merchant text -> name shown. Same file in alopex (backend) and alopex-web: keep both in sync.",
+  "_": "Raw bank merchant text -> name shown. Same file in alopex (backend) and alopex-web: keep both in sync. 'keep' includes names a person types: the dashboard cannot tell them from bank text, so only clear bank artifacts are removed.",
   "clean": [
     ["Tst*zuckers Bagels & S", "Zuckers Bagels"],
     ["Sq *veniero's", "Veniero's"],
@@ -25,16 +25,38 @@
     ["www.ryanair.com", "Ryanair"],
     ["apple.com/bill", "Apple"],
     ["POS LIDL 4521", "LIDL 4521"],
-    ["Card payment to Tesco Stores", "Tesco Stores"],
     ["PAGAMENTO POS ESSELUNGA", "ESSELUNGA"],
-    ["Kartenzahlung REWE Markt", "REWE Markt"],
-    ["Starbucks Coffee #1234", "Starbucks Coffee"],
-    ["Bolt Ride 2024ABCD99", "Bolt Ride"],
-    ["Carrefour Express 12/03", "Carrefour Express"]
+    ["KARTENZAHLUNG REWE MARKT", "REWE MARKT"],
+    ["ACQUISTO POS CONAD", "CONAD"]
   ],
   "keep": [
-    "Esselunga", "IKEA", "Boston Sail Loft", "Hotel 31", "Bar 2000", "Route 66", "7-Eleven", "Café",
-    "Amazon Prime Video", "Amazon Web Services", "Card Factory", "Posta Market", "Lidl 4521 Milano",
-    "Mario Rossi"
+    "Esselunga",
+    "IKEA",
+    "Boston Sail Loft",
+    "Hotel 31",
+    "Bar 2000",
+    "Route 66",
+    "7-Eleven",
+    "Café",
+    "Amazon Prime Video",
+    "Amazon Web Services",
+    "Card Factory",
+    "Posta Market",
+    "Lidl 4521 Milano",
+    "Mario Rossi",
+    "Flight AZ1234",
+    "Gift for Mum 25/12",
+    "Coffee #2",
+    "Mortgage 2024Q1",
+    "POS system",
+    "Card payment to Mum",
+    "Pos Purchase",
+    "eBay",
+    "iPhone case",
+    "easyJet",
+    "Pizzeria 4Seasons",
+    "Bar Studio54",
+    "Bar 2.0",
+    "PAGAMENTO POS 12/03/2024 ORE 12:30 CARTA 1234 ESSELUNGA"
   ]
 }
