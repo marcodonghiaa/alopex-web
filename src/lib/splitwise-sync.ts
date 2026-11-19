@@ -23,7 +23,8 @@ export const syncRefreshKeys = (): Array<Array<string>> => [
   ["payback-candidates"],
 ];
 
-export type ConnectionStatus = "ok" | "needs_reconnect" | "error";
+/** pro_required: Splitwise wants Splitwise Pro for API keys; needs_reconnect: it refused the key. */
+export type ConnectionStatus = "ok" | "needs_reconnect" | "error" | "pro_required";
 
 export interface SplitwiseConnection {
   connected: boolean;

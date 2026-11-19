@@ -370,6 +370,54 @@ describe("Connect dialog", () => {
     expect(within(dialog).queryByText(/Connected as/)).toBeNull();
   });
 
+  // protects=users without Splitwise Pro learn it before making a key; fails_when=the note or its import action is gone
+  it("says up front that it needs Splitwise Pro, and offers the file import instead", async () => {
+    onImportFile.mockClear();
+    const dialog = await open();
+    expect(dialog).toHaveTextContent(
+      "Needs a Splitwise Pro subscription (Splitwise requires it for API keys). No Pro? Import a Splitwise file instead.",
+    );
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Import a Splitwise file instead" }),
+    );
+    expect(onImportFile).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  // protects=a key refused for want of Pro points to the file import; fails_when=only the message shows
+  it("offers the file import when Splitwise refuses the key or wants Splitwise Pro", async () => {
+    onImportFile.mockClear();
+    functions({
+      "splitwise-connect": [
+        httpError(400, { error: "No active Splitwise Pro subscription.", code: "pro_required" }),
+      ],
+    });
+    const dialog = await open();
+    await userEvent.type(within(dialog).getByLabelText("API key"), "abcdefghijkl");
+    await userEvent.click(within(dialog).getByRole("checkbox"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "No active Splitwise Pro subscription.",
+    );
+    await userEvent.click(within(dialog).getByRole("button", { name: "Import a file instead" }));
+    expect(onImportFile).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("offers no file import when Splitwise can't be reached (trying again may work)", async () => {
+    functions({
+      "splitwise-connect": [
+        httpError(502, { error: "Couldn't reach Splitwise. Try again later." }),
+      ],
+    });
+    const dialog = await open();
+    await userEvent.type(within(dialog).getByLabelText("API key"), "abcdefghijkl");
+    await userEvent.click(within(dialog).getByRole("checkbox"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Connect" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Couldn't reach Splitwise");
+    expect(within(dialog).queryByRole("button", { name: "Import a file instead" })).toBeNull();
+  });
+
   it("says up front that it is off in the demo, and Connect stays off", async () => {
     demo.on = true;
     const dialog = await open();
@@ -444,7 +492,33 @@ describe("SyncSetup when connected", () => {
     );
     await userEvent.click(await screen.findByRole("button", { name: "Reconnect" }));
     expect(screen.getByRole("dialog", { name: "Reconnect Splitwise" })).toBeTruthy();
-    expect(screen.getByText(/no longer accepts the key/)).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Splitwise refused the key, or your Splitwise Pro subscription ended. Reconnect, or import a Splitwise file instead.",
+      ),
+    ).toBeTruthy();
+  });
+
+  // protects=a refused key or lapsed Pro points to the file import; fails_when=only Reconnect is offered
+  it.each([
+    ["needs_reconnect", "Splitwise refused the key, or your Splitwise Pro subscription ended."],
+    ["pro_required", "Splitwise needs an active Splitwise Pro subscription for API keys."],
+  ])("offers Reconnect and the file import when the status is %s", async (status, text) => {
+    onImportFile.mockClear();
+    rpc.mockResolvedValue(connection({ status }));
+    renderSetup();
+    expect(await screen.findByText(text, { exact: false })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reconnect" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Sync now" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Import a file instead" }));
+    expect(onImportFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers no extra file import while the sync works", async () => {
+    rpc.mockResolvedValue(connection());
+    renderSetup();
+    await screen.findByRole("button", { name: "Sync now" });
+    expect(screen.queryByRole("button", { name: "Import a file instead" })).toBeNull();
   });
 
   it("shows the last error of a failed sync", async () => {
