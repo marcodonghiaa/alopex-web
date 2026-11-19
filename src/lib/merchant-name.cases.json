@@ -34,7 +34,8 @@
     ["Satispay *12/03", "Satispay"],
     ["GOOGLE *ADS1234567890", "GOOGLE"],
     ["AMAZON EU SARL", "Amazon"],
-    ["Amazon Payments Europe S.C.A.", "Amazon"]
+    ["Amazon Payments Europe S.C.A.", "Amazon"],
+    ["DEBIT CARD PAYMENT TO TESCO", "TESCO"]
   ],
   "keep": [
     "Esselunga",

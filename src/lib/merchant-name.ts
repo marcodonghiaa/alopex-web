@@ -15,7 +15,7 @@ const AMAZON =
   /^(amazon|amzn)(\.[a-z]{2,3})*(\s+(mark|mktp|mktplace|marketplace|reta|retail|payments?|eu|europe)\w*)*(\s+[a-z]{2})?(\s+(sarl|s\.?\s?a\.?\s?r\.?\s?l\.?|s\.?c\.?a\.?))?\s*(\*.*)?$/i;
 /** Words a card or POS terminal puts before the merchant ("POS LIDL"), followed by a letter. */
 const CARD_PREFIX =
-  /^(pos( purchase)?|card (payment|purchase)( to| at)?|contactless( payment)?|pagamento (pos|carta)|acquisto (pos|carta)|kartenzahlung|compra con tarjeta) (?=\p{L})/iu;
+  /^(pos( purchase)?|(debit )?card (payment|purchase)( to| at)?|contactless( payment)?|pagamento (pos|carta)|acquisto (pos|carta)|kartenzahlung|compra con tarjeta) (?=\p{L})/iu;
 /** A whole name that is a web address: "NETFLIX.COM", "www.ryanair.com", "apple.com/bill". */
 const DOMAIN =
   /^(www\.)?([a-z0-9-]+)\.(com|it|io|eu|net|org|co|uk|de|fr|es|nl|be|at|ch|ie|pt|pl|app|tv|me)(\/\S*)?$/i;
