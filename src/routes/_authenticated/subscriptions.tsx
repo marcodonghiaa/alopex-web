@@ -170,7 +170,9 @@ function SubscriptionsPage() {
       active: g.active.sort(byCost),
       stopped: g.stopped.sort(byCost),
       dismissed: g.dismissed.sort((a, b) =>
-        (a.display_name ?? "").localeCompare(b.display_name ?? ""),
+        (cleanMerchantName(a.display_name) ?? "").localeCompare(
+          cleanMerchantName(b.display_name) ?? "",
+        ),
       ),
     };
   }, [query.data]);
