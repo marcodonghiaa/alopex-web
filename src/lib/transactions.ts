@@ -64,7 +64,7 @@ export function nameRefunds(rows: Array<TransactionRow>): Array<TransactionRow> 
         : r;
     }
     const original = byRef.get(r.refund_of)?.creditor_name;
-    return { ...r, creditor_name: original ? `Refund: ${original}` : "Refund" };
+    return { ...r, creditor_name: original ? `Refund: ${cleanMerchantName(original)}` : "Refund" };
   });
 }
 
