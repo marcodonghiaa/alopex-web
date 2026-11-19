@@ -32,7 +32,9 @@
     ["Stripe*12345", "Stripe"],
     ["SUMUP *AB12CD34", "SUMUP"],
     ["Satispay *12/03", "Satispay"],
-    ["GOOGLE *ADS1234567890", "GOOGLE"]
+    ["GOOGLE *ADS1234567890", "GOOGLE"],
+    ["AMAZON EU SARL", "Amazon"],
+    ["Amazon Payments Europe S.C.A.", "Amazon"]
   ],
   "keep": [
     "Esselunga",

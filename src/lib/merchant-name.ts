@@ -12,7 +12,7 @@ const PROCESSORS = new Set(
 );
 /** Amazon's shop charges ("Amazon Mark* X", "AMZN Mktp DE", "Amazon.it*AB"), not every name that starts with Amazon. */
 const AMAZON =
-  /^(amazon|amzn)(\.[a-z]{2,3})*(\s+(mark|mktp|mktplace|marketplace|reta|retail|payments?|eu|europe)\w*)*(\s+[a-z]{2})?\s*(\*.*)?$/i;
+  /^(amazon|amzn)(\.[a-z]{2,3})*(\s+(mark|mktp|mktplace|marketplace|reta|retail|payments?|eu|europe)\w*)*(\s+[a-z]{2})?(\s+(sarl|s\.?\s?a\.?\s?r\.?\s?l\.?|s\.?c\.?a\.?))?\s*(\*.*)?$/i;
 /** Words a card or POS terminal puts before the merchant ("POS LIDL"), followed by a letter. */
 const CARD_PREFIX =
   /^(pos( purchase)?|card (payment|purchase)( to| at)?|contactless( payment)?|pagamento (pos|carta)|acquisto (pos|carta)|kartenzahlung|compra con tarjeta) (?=\p{L})/iu;
