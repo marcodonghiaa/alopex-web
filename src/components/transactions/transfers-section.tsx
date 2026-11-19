@@ -7,6 +7,7 @@ import {
   txId,
   type TransferRow,
 } from "@/lib/transactions";
+import { cleanMerchantName } from "@/lib/merchant-name";
 
 // Transactions marked as transfers are left out of spending and income. They are listed here so a
 // wrong one can be seen and put back. A row the sync paired with its other side on its own
@@ -40,7 +41,7 @@ export function TransfersSection({
             <li key={txId(tx)} className="flex items-center gap-3 px-4 py-3 sm:px-5">
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium text-foreground">
-                  {tx.creditor_name?.trim() || "Transfer"}
+                  {cleanMerchantName(tx.creditor_name?.trim() || null) ?? "Transfer"}
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {formatBookingDateShort(tx.booking_date)}

@@ -12,6 +12,7 @@ import {
   type IncomeRule,
   type IncomeTx,
 } from "@/lib/regular-income";
+import { cleanMerchantName } from "@/lib/merchant-name";
 
 /** Income credits in the six months ending with `month`, from `transactions` (original names). */
 export function fetchIncomeWindow(month: Date): Promise<Array<IncomeTx>> {
@@ -135,7 +136,7 @@ export function useMarkIncomeKind() {
       );
       void refresh();
       toast.success(
-        `${tx.creditor_name ?? "This payment"} now counts as ${kindLabel(kind)} income`,
+        `${cleanMerchantName(tx.creditor_name) ?? "This payment"} now counts as ${kindLabel(kind)} income`,
         {
           // Long enough to reach Undo from the keyboard (sonner pauses it on hover and focus).
           duration: 10_000,

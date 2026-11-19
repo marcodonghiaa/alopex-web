@@ -5,6 +5,7 @@ import { groupStreams, monthlyEur, monthlyTotal, romeToday } from "@/lib/recurri
 import { formatMoney } from "@/lib/transactions";
 import { useRecurringStreams } from "@/lib/use-recurring-streams";
 import { Button } from "@/components/ui/button";
+import { cleanMerchantName } from "@/lib/merchant-name";
 
 const SEEN_KEY = "mf.subscriptionsReveal.seen";
 // Covers the demo (shown on every start, never persisted) and blocked storage (once per page load).
@@ -84,7 +85,7 @@ export function RevealDialog() {
         <ul className="divide-y">
           {top.map(({ s, m }) => (
             <li key={s.id} className="flex justify-between gap-3 py-2 text-sm">
-              <span className="truncate">{s.display_name ?? "—"}</span>
+              <span className="truncate">{cleanMerchantName(s.display_name) ?? "—"}</span>
               <span className="shrink-0 font-figure">
                 {m == null ? "—" : `${formatMoney(m, "EUR")}/mo`}
               </span>

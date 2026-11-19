@@ -97,6 +97,10 @@ describe("billEntries", () => {
       }),
     ]);
   });
+  it("shows a bill under its clean merchant name", () => {
+    const out = billEntries([stream({ display_name: "PAYPAL *SPOTIFY" })], [], NOV, TODAY);
+    expect(out.map((e) => e.name)).toEqual(["SPOTIFY"]);
+  });
   it("expects an unpaid date: late once past, upcoming after today", () => {
     const late = billEntries([stream()], [], NOV, TODAY);
     expect(late).toEqual([expect.objectContaining({ date: "2026-11-05", status: "late" })]);

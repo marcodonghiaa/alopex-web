@@ -1,4 +1,5 @@
 import { dateLocale, numberFormat } from "@/lib/locale";
+import { cleanMerchantName } from "@/lib/merchant-name";
 
 export interface TransactionRow {
   entry_reference: string;
@@ -46,7 +47,10 @@ export const isSameTx = (a: TxKey | undefined, b: TxKey): boolean => !!a && txId
 export const incomeTitle = (
   tx: Pick<TransactionRow, "creditor_name" | "category"> & { payer_name?: string | null },
 ): string =>
-  tx.payer_name?.trim() || tx.creditor_name?.trim() || tx.category?.trim() || "Unlabelled income";
+  tx.payer_name?.trim() ||
+  cleanMerchantName(tx.creditor_name?.trim() || null) ||
+  tx.category?.trim() ||
+  "Unlabelled income";
 
 // A card refund arrives without a merchant; name it after the charge it reverses so the
 // pair reads as two linked entries.
@@ -60,7 +64,7 @@ export function nameRefunds(rows: Array<TransactionRow>): Array<TransactionRow> 
         : r;
     }
     const original = byRef.get(r.refund_of)?.creditor_name;
-    return { ...r, creditor_name: original ? `Refund: ${original}` : "Refund" };
+    return { ...r, creditor_name: original ? `Refund: ${cleanMerchantName(original)}` : "Refund" };
   });
 }
 

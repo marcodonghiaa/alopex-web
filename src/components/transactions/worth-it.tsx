@@ -8,6 +8,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { formatMoney, isWorthItEligible, type TransactionRow } from "@/lib/transactions";
+import { cleanMerchantName } from "@/lib/merchant-name";
 
 export function WorthItPrompt({
   tx,
@@ -71,7 +72,7 @@ export function WorthItSpotlight({
           <DialogHeader>
             <DialogTitle className="text-center text-xl">Worth it?</DialogTitle>
             <DialogDescription className="text-center">
-              {tx.creditor_name ?? "A purchase"} · {tx.category}
+              {cleanMerchantName(tx.creditor_name) ?? "A purchase"} · {tx.category}
             </DialogDescription>
           </DialogHeader>
           <p className="font-figure py-4 text-4xl text-foreground">

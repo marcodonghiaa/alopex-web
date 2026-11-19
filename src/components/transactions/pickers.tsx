@@ -4,6 +4,7 @@ import { TRANSACTION_TYPES, categoryColor } from "@/lib/categories";
 import { useCategories } from "@/lib/use-categories";
 import type { TransactionRow } from "@/lib/transactions";
 import { CategoryAvatar } from "@/components/category-avatar";
+import { cleanMerchantName } from "@/lib/merchant-name";
 
 export function CategoryPicker({
   tx,
@@ -25,7 +26,7 @@ export function CategoryPicker({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={`Change category for ${tx.creditor_name ?? "transaction"}`}
+          aria-label={`Change category for ${cleanMerchantName(tx.creditor_name) ?? "transaction"}`}
           disabled={saving}
           className="-m-2 inline-flex min-h-11 cursor-pointer items-center p-2 disabled:opacity-60"
         >
@@ -136,7 +137,7 @@ export function TypePicker({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={`Change type for ${tx.creditor_name ?? "transaction"}`}
+          aria-label={`Change type for ${cleanMerchantName(tx.creditor_name) ?? "transaction"}`}
           disabled={saving}
           className="-m-2 inline-flex min-h-11 cursor-pointer items-center p-2 disabled:opacity-60"
         >

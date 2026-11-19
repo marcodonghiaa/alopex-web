@@ -239,6 +239,19 @@ describe("nameRefunds", () => {
     ]);
   });
 
+  // The row view cleans the whole name, so a raw "PAYPAL *SPOTIFY" inside it read "Refund: PAYPAL".
+  it("names the refund after the charge's clean merchant name", () => {
+    const charge = tx({ entry_reference: "c1", creditor_name: "PAYPAL *SPOTIFY" });
+    const refund = tx({
+      entry_reference: "r1",
+      creditor_name: null,
+      flow_type: "refunded",
+      refund_of: "c1",
+      credit_debit_indicator: "CRDT",
+    });
+    expect(nameRefunds([charge, refund])[1]!.creditor_name).toBe("Refund: SPOTIFY");
+  });
+
   it("falls back to a plain label when the charge is not in the list", () => {
     const refund = tx({ creditor_name: null, flow_type: "refunded", refund_of: "gone" });
     expect(nameRefunds([refund])[0]!.creditor_name).toBe("Refund");

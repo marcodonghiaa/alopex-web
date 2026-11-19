@@ -153,6 +153,13 @@ describe("regularSources", () => {
     ]);
     expect(sources[1]!.rows[0]!.booking_date).toBe("2026-11-27");
   });
+  // Bills next to it show clean names; income must too.
+  it("names a source with its clean merchant name", () => {
+    const rows = ["2026-09-05", "2026-10-05", "2026-11-05"].map((d) =>
+      tx(d, "PAYPAL *ACME STUDIO"),
+    );
+    expect(regularSources(rows, []).map((s) => s.name)).toEqual(["ACME STUDIO"]);
+  });
   it("puts two sources on the same day in name order (Polish 3 #12)", () => {
     const rows = ["2026-09-05", "2026-10-05", "2026-11-05"].flatMap((d) => [
       tx(d, "Zeta"),

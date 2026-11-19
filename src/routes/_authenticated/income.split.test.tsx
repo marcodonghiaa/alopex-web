@@ -166,6 +166,19 @@ describe("Income: Regular and One-off", () => {
     expect(db.inserts[0]).not.toHaveProperty("set_category"); // Polish 3 #8: null by default
   });
 
+  it("names the payer in the toast without the bank's codes", async () => {
+    db.window[3] = bank("e2", `${ym(0)}-01`, "PAYPAL *AUNT MAY");
+    renderPage();
+    const oneOff = await screen.findByRole("region", { name: "One-off" });
+    fireEvent.click(within(oneOff).getByRole("button", { name: "Mark Aunt May as regular" }));
+    await vi.waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith(
+        "AUNT MAY now counts as regular income",
+        expect.anything(),
+      ),
+    );
+  });
+
   it("changes the rule that already decides the row instead of adding one", async () => {
     db.rules = [
       {

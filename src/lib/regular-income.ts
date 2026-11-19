@@ -1,6 +1,7 @@
 import type { Tables } from "@/integrations/supabase/types";
 import { formatISODate } from "@/lib/date";
 import { foldText, textMatches } from "@/lib/rules";
+import { cleanMerchantName } from "@/lib/merchant-name";
 
 // Regular income: money from a sender who paid you in at least REGULAR_MONTHS of the last
 // WINDOW_MONTHS months, whatever the amount (a salary with a 13th month, a steady client). A
@@ -153,7 +154,7 @@ export function regularSources(
     const same = list.filter((t) => t.currency === currency);
     out.push({
       key,
-      name: newest.creditor_name ?? key,
+      name: cleanMerchantName(newest.creditor_name) ?? key,
       day: Math.round(median(list.map((t) => Number(t.booking_date!.slice(8, 10))))),
       amount: median(same.map((t) => Math.abs(t.amount))),
       currency,

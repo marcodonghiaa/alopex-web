@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/field";
 import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cleanMerchantName } from "@/lib/merchant-name";
 
 // The view and the calendar's month live in the URL: Back returns to the list, and a reload or a
 // shared link opens the same month.
@@ -143,7 +144,9 @@ function SubscriptionsPage() {
     onSuccess: (_data, vars, context) => {
       if (vars.action === "set_cadence") toast.success("Billing frequency saved");
       if (vars.action !== "dismiss") return;
-      const name = context.previous?.find((s) => s.id === vars.id)?.display_name ?? "subscription";
+      const name =
+        cleanMerchantName(context.previous?.find((s) => s.id === vars.id)?.display_name) ??
+        "subscription";
       toast.success(`Removed ${name}`, {
         action: {
           label: "Undo",
@@ -167,7 +170,9 @@ function SubscriptionsPage() {
       active: g.active.sort(byCost),
       stopped: g.stopped.sort(byCost),
       dismissed: g.dismissed.sort((a, b) =>
-        (a.display_name ?? "").localeCompare(b.display_name ?? ""),
+        (cleanMerchantName(a.display_name) ?? "").localeCompare(
+          cleanMerchantName(b.display_name) ?? "",
+        ),
       ),
     };
   }, [query.data]);
@@ -348,7 +353,7 @@ function SubscriptionsPage() {
 }
 
 function DismissedRow({ stream, onRestore }: { stream: Stream; onRestore: () => void }) {
-  const name = stream.display_name ?? "—";
+  const name = cleanMerchantName(stream.display_name) ?? "—";
   const cadence = effectiveCadence(stream);
   const monthly = monthlyEur(stream);
   return (
@@ -397,7 +402,7 @@ function ReviewRow({
   onConfirm: () => void;
   onDismiss: () => void;
 }) {
-  const name = stream.display_name ?? "—";
+  const name = cleanMerchantName(stream.display_name) ?? "—";
   const details = [effectiveCadence(stream), `${stream.charge_count ?? 0} charges`].filter(Boolean);
   return (
     <li className="px-4 py-3">
@@ -432,7 +437,7 @@ function SubscriptionCard({
   onSelectFrequency: (frequency: string) => void;
   onSelectCustom: (value: number, unit: IntervalUnit) => void;
 }) {
-  const name = sub.display_name ?? "—";
+  const name = cleanMerchantName(sub.display_name) ?? "—";
   // With the year when it isn't this year, so a charge from last year doesn't read as recent.
   const lastCharged = sub.last_charged ? formatBookingDateShort(sub.last_charged) : null;
   const details = [

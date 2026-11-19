@@ -48,6 +48,17 @@ describe("TransfersSection", () => {
     expect(onRestore).toHaveBeenCalledWith(debit);
   });
 
+  it("shows the clean merchant name, not the bank's codes", () => {
+    render(
+      <TransfersSection
+        rows={[transfer({ creditor_name: "PAYPAL *ALEX ROSSI" })]}
+        savingId={undefined}
+        onRestore={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("ALEX ROSSI")).toBeInTheDocument();
+  });
+
   it("polish-5 #10 writes amounts with a real minus and a plus, like the list above", () => {
     const credit = transfer({
       entry_reference: "r2",
