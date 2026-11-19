@@ -30,5 +30,7 @@ it("cleans a 50k-character name in well under a second", () => {
   cleanMerchantName(" -".repeat(25_000) + "x");
   cleanMerchantName("a".repeat(50_000));
   cleanMerchantName("PAYPAL *" + "A".repeat(50_000) + "1");
+  cleanMerchantName("AMAZON" + " EUROPE".repeat(30) + "!");
+  cleanMerchantName("AMAZON" + " MARKETPLACE".repeat(30) + "!");
   expect(performance.now() - start).toBeLessThan(100);
 });
