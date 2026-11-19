@@ -44,7 +44,7 @@ export function cleanMerchantName(raw: string | null | undefined): string | null
 
   name = name
     .replace(/[\s-]+\d{5,}$/, "") // store or terminal number: "Mbta-550057141438"
-    .replace(/\s+&\s*\S?$/, "") // cut off mid-word: "Bagels & S"
+    .replace(/(\p{L}{4,})\s+&\s*\S?$/u, "$1") // cut off mid-word: "Bagels & S"; "H & M" stays
     .trim();
 
   if (!name) return raw;
