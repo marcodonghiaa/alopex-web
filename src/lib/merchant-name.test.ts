@@ -16,7 +16,7 @@ describe("cleanMerchantName", () => {
   });
 
   it("never returns an empty name", () => {
-    expect(cleanMerchantName("SQ *")).toBe("SQ *");
+    expect(cleanMerchantName("SQ *")).toBe("SQ");
     expect(cleanMerchantName("   ")).toBe("   ");
     expect(cleanMerchantName(null)).toBeNull();
     expect(cleanMerchantName(undefined)).toBeNull();

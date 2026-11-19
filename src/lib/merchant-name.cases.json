@@ -27,7 +27,12 @@
     ["POS LIDL 4521", "LIDL 4521"],
     ["PAGAMENTO POS ESSELUNGA", "ESSELUNGA"],
     ["KARTENZAHLUNG REWE MARKT", "REWE MARKT"],
-    ["ACQUISTO POS CONAD", "CONAD"]
+    ["ACQUISTO POS CONAD", "CONAD"],
+    ["PAYPAL *1234567890AB", "PAYPAL"],
+    ["Stripe*12345", "Stripe"],
+    ["SUMUP *AB12CD34", "SUMUP"],
+    ["Satispay *12/03", "Satispay"],
+    ["GOOGLE *ADS1234567890", "GOOGLE"]
   ],
   "keep": [
     "Esselunga",

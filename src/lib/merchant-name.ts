@@ -33,8 +33,10 @@ export function cleanMerchantName(raw: string | null | undefined): string | null
   if (star >= 0) {
     const left = name.slice(0, star).trim();
     const right = name.slice(star + 1).trim();
-    // A processor tag hides the merchant after it; otherwise "Merchant*REF": keep the merchant.
-    name = PROCESSORS.has(left.toLowerCase()) ? right : left;
+    // A processor tag hides the merchant after it, unless only a code follows ("PAYPAL *1234AB");
+    // otherwise "Merchant*REF": keep the merchant.
+    const merchantFollows = /^[^\s\d]*\p{L}{2}[^\s\d]*(\s|$)/u.test(right);
+    name = PROCESSORS.has(left.toLowerCase()) && merchantFollows ? right : left;
   }
 
   const domain = DOMAIN.exec(name);
