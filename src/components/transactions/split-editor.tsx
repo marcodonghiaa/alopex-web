@@ -6,6 +6,7 @@ import { formatAmountPlain, formatMoney, type TransactionRow } from "@/lib/trans
 import { evenShare, joinNames, parseNames } from "@/lib/splits";
 import { parseOwed } from "@/lib/account-types";
 import { ambiguousNumberHint, numberFormat } from "@/lib/locale";
+import { cleanMerchantName } from "@/lib/merchant-name";
 
 const QUICK_SPLITS = [2, 3, 4];
 
@@ -83,7 +84,7 @@ export function SplitEditor({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={`Split ${tx.creditor_name ?? "transaction"}`}
+          aria-label={`Split ${cleanMerchantName(tx.creditor_name) ?? "transaction"}`}
           disabled={saving}
           className="-m-2 inline-flex min-h-11 cursor-pointer items-center p-2 disabled:opacity-60"
         >

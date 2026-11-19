@@ -11,6 +11,7 @@ import {
 import { txId } from "@/lib/transactions";
 import { Button } from "@/components/ui/button";
 import { GroupedList } from "@/components/ui/grouped-list";
+import { cleanMerchantName } from "@/lib/merchant-name";
 
 const eur = (value: number) => money(value, "EUR");
 
@@ -85,7 +86,7 @@ export function OwedView({
               const isSettled = !!r.owed_settled;
               const names = parseNames(r.owed_by);
               const share = owedEur(r) / Math.max(1, names.length);
-              const label = r.creditor_name ?? "Transaction";
+              const label = cleanMerchantName(r.creditor_name) ?? "Transaction";
               return (
                 <li
                   key={txId(r)}

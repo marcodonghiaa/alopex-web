@@ -337,7 +337,7 @@ export function TransactionRowView(props: TransactionViewProps) {
           <label className="-m-3.5 inline-flex size-11 cursor-pointer items-center justify-center p-3.5">
             <input
               type="checkbox"
-              aria-label={`Select ${tx.creditor_name ?? "transaction"}`}
+              aria-label={`Select ${cleanMerchantName(tx.creditor_name) ?? "transaction"}`}
               checked={selected}
               onChange={onToggleSelect}
               className="size-4 rounded border-border accent-primary"
@@ -390,7 +390,7 @@ export function TransactionRowView(props: TransactionViewProps) {
               variant="ghost"
               size="icon"
               onClick={() => show(true)}
-              aria-label={`Edit ${tx.creditor_name ?? "transaction"}`}
+              aria-label={`Edit ${cleanMerchantName(tx.creditor_name) ?? "transaction"}`}
             >
               <ChevronRight className="size-4" />
             </Button>

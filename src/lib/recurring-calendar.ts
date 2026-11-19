@@ -1,6 +1,7 @@
 import type { Tables } from "@/integrations/supabase/types";
 import { formatISODate } from "@/lib/date";
 import type { RegularSource } from "@/lib/regular-income";
+import { cleanMerchantName } from "@/lib/merchant-name";
 
 // The recurring calendar: one month of expected charges (from recurring_streams) and regular
 // income, each ticked once it has happened. Pure date math on ISO "YYYY-MM-DD" strings.
@@ -131,7 +132,7 @@ export function billEntries(
       id: `paid:${c.account_uid}:${c.entry_reference}`,
       date: c.booking_date,
       kind: "bill",
-      name: owner.display_name ?? owner.merchant_key,
+      name: cleanMerchantName(owner.display_name) ?? owner.merchant_key,
       amount,
       currency: c.currency,
       status: "done",
@@ -161,7 +162,7 @@ export function billEntries(
         id: `due:${s.id}:${date}`,
         date,
         kind: "bill",
-        name: s.display_name ?? s.merchant_key,
+        name: cleanMerchantName(s.display_name) ?? s.merchant_key,
         amount: Math.abs(s.typical_amount ?? 0),
         currency: s.currency,
         status: date < todayIso ? "late" : "upcoming",
