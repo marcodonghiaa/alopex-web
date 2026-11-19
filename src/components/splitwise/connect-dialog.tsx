@@ -14,6 +14,7 @@ import {
   connectSplitwise,
   formatCount,
   previewSync,
+  SyncError,
   type SyncCounts,
 } from "@/lib/splitwise-sync";
 import { useSyncNow, useSyncRunning } from "@/lib/use-splitwise-sync";
@@ -30,19 +31,23 @@ const COUNTS: Array<[keyof SyncCounts, string]> = [
 ];
 
 /**
- * Connect (or reconnect) Splitwise: three steps to get the personal API key, the key, consent.
+ * Connect (or reconnect) Splitwise: Splitwise only gives API keys to Splitwise Pro accounts, so it
+ * says that first and offers the file import instead. Then three steps to get the personal API key, the key, consent.
  * Once connected, a dry run says what the next sync will bring in before it starts.
  */
 export function ConnectDialog({
   open,
   onOpenChange,
   onCloseAutoFocus,
+  onImportFile,
   reconnect = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** After close: the opener may be gone (connecting replaces the Connect row). */
   onCloseAutoFocus?: () => void;
+  /** The CSV import: the way in without Splitwise Pro. */
+  onImportFile: () => void;
   reconnect?: boolean;
 }) {
   const queryClient = useQueryClient();
@@ -50,7 +55,12 @@ export function ConnectDialog({
   const [apiKey, setApiKey] = useState("");
   const [consent, setConsent] = useState(false);
   // Which field the problem is about: it is described by the alert and gets focus.
-  const [problem, setProblem] = useState<{ text: string; on: "key" | "consent" } | null>(null);
+  // `refused`: Splitwise said no to the key (or wants Splitwise Pro), so the file import is offered.
+  const [problem, setProblem] = useState<{
+    text: string;
+    on: "key" | "consent";
+    refused?: boolean;
+  } | null>(null);
   const problemId = useId();
   const keyRef = useRef<HTMLInputElement>(null);
   const consentRef = useRef<HTMLInputElement>(null);
@@ -78,7 +88,11 @@ export function ConnectDialog({
       void queryClient.invalidateQueries({ queryKey: CONNECTION_KEY });
     },
     onError: (err) => {
-      setProblem({ text: err.message, on: "key" });
+      setProblem({
+        text: err.message,
+        on: "key",
+        refused: err instanceof SyncError && err.status === 400,
+      });
       keyRef.current?.focus();
     },
   });
@@ -110,6 +124,10 @@ export function ConnectDialog({
     connect.mutate();
   };
 
+  const importFile = () => {
+    onOpenChange(false);
+    onImportFile();
+  };
   const title = reconnect ? "Reconnect Splitwise" : "Connect Splitwise";
   return (
     <Dialog open={open} onOpenChange={(next) => connect.isPending || onOpenChange(next)}>
@@ -124,6 +142,17 @@ export function ConnectDialog({
             <DialogDescription className="mt-1 text-sm text-muted-foreground">
               Your Splitwise expenses come in by themselves, every 6 hours and on Sync now.
             </DialogDescription>
+            <p className="mt-4 rounded-md bg-muted px-3 py-2 text-sm">
+              Needs a Splitwise Pro subscription (Splitwise requires it for API keys). No Pro?{" "}
+              <button
+                type="button"
+                onClick={importFile}
+                className="font-medium text-primary underline underline-offset-2"
+              >
+                Import a Splitwise file instead
+              </button>
+              .
+            </p>
             {demo && (
               <p role="note" className="mt-4 rounded-md bg-muted px-3 py-2 text-sm">
                 Splitwise sync is off in the demo. Look around: Connect won't send anything.
@@ -188,6 +217,11 @@ export function ConnectDialog({
               <p id={problemId} role="alert" className="mt-4 text-sm text-negative">
                 {problem.text}
               </p>
+            )}
+            {problem?.refused && (
+              <Button variant="quiet" className="mt-2 w-full" onClick={importFile}>
+                Import a file instead
+              </Button>
             )}
             <Button
               type="submit"

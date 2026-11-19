@@ -94,6 +94,7 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
           ) : connected ? (
             <StatusRow
               c={c}
+              onImportFile={onImportFile}
               onReconnect={() => setConnecting("reconnect")}
               onDisconnect={() => setDisconnecting(true)}
             />
@@ -161,6 +162,7 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
         open={connecting !== null}
         onOpenChange={(open) => open || setConnecting(null)}
         onCloseAutoFocus={afterDialog}
+        onImportFile={onImportFile}
         reconnect={connecting === "reconnect"}
       />
       <DisconnectDialog
@@ -178,19 +180,31 @@ export function SyncSetup({ onImportFile }: { onImportFile: () => void }) {
   );
 }
 
+// Why the sync stopped and Reconnect replaces Sync now. A 401 on a key that worked can also mean
+// Splitwise Pro ended (Splitwise only gives API keys to Pro accounts).
+const STOPPED: Partial<Record<NonNullable<SplitwiseConnection["status"]>, string>> = {
+  needs_reconnect:
+    "Splitwise refused the key, or your Splitwise Pro subscription ended. Reconnect, or import a Splitwise file instead.",
+  pro_required:
+    "Splitwise needs an active Splitwise Pro subscription for API keys. Renew it and reconnect, or import a Splitwise file instead.",
+};
+
 function StatusRow({
   c,
+  onImportFile,
   onReconnect,
   onDisconnect,
 }: {
   c: SplitwiseConnection;
+  onImportFile: () => void;
   onReconnect: () => void;
   onDisconnect: () => void;
 }) {
   const sync = useSyncNow();
   const syncing = useSyncRunning();
   const demo = isDemoMode();
-  const reconnect = c.status === "needs_reconnect";
+  const stopped = c.status ? STOPPED[c.status] : undefined;
+  const reconnect = stopped !== undefined;
   return (
     <div className="px-4 py-3 sm:px-5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -224,10 +238,18 @@ function StatusRow({
         )}
       </div>
       {reconnect && (
-        <p role="status" className="mt-2 flex items-start gap-2 text-sm">
-          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
-          Splitwise no longer accepts the key. Reconnect with a new one to keep syncing.
-        </p>
+        <>
+          <p role="status" className="mt-2 flex items-start gap-2 text-sm">
+            <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+            {stopped}
+          </p>
+          <div className="mt-2">
+            <Button variant="secondary" onClick={onImportFile}>
+              <Upload aria-hidden />
+              Import a file instead
+            </Button>
+          </div>
+        </>
       )}
       {c.status === "error" && (
         <p role="status" className="mt-2 flex items-start gap-2 text-sm">
