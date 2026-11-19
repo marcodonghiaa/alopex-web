@@ -6,6 +6,10 @@ describe("incomeTitle", () => {
     expect(incomeTitle({ creditor_name: "ACME Ltd", category: "Services" })).toBe("ACME Ltd");
   });
 
+  it("shows the clean merchant name, not the bank's codes", () => {
+    expect(incomeTitle({ creditor_name: "PAYPAL *ACME", category: "Services" })).toBe("ACME");
+  });
+
   it("falls back to the category when the name is missing or blank", () => {
     expect(incomeTitle({ creditor_name: null, category: "Services" })).toBe("Services");
     expect(incomeTitle({ creditor_name: "  ", category: "Income" })).toBe("Income");
