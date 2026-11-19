@@ -28,5 +28,7 @@ it("cleans a 50k-character name in well under a second", () => {
   const start = performance.now();
   cleanMerchantName("-".repeat(50_000) + "x");
   cleanMerchantName(" -".repeat(25_000) + "x");
+  cleanMerchantName("a".repeat(50_000));
+  cleanMerchantName("PAYPAL *" + "A".repeat(50_000) + "1");
   expect(performance.now() - start).toBeLessThan(100);
 });

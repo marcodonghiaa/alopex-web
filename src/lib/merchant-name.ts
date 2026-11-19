@@ -35,7 +35,7 @@ export function cleanMerchantName(raw: string | null | undefined): string | null
     const right = name.slice(star + 1).trim();
     // A processor tag hides the merchant after it, unless only a code follows ("PAYPAL *1234AB");
     // otherwise "Merchant*REF": keep the merchant.
-    const merchantFollows = /^[^\s\d]*\p{L}{2}[^\s\d]*(\s|$)/u.test(right);
+    const merchantFollows = /^(?=[^\s\d]*\p{L}{2})[^\s\d]*(\s|$)/u.test(right);
     name = PROCESSORS.has(left.toLowerCase()) && merchantFollows ? right : left;
   }
 
@@ -44,7 +44,7 @@ export function cleanMerchantName(raw: string | null | undefined): string | null
 
   name = name
     .replace(/(?<![\s-])[\s-]+\d{5,}$/, "") // store or terminal number: "Mbta-550057141438"
-    .replace(/(\p{L}{4,})\s+&\s*\S?$/u, "$1") // cut off mid-word: "Bagels & S"; "H & M" stays
+    .replace(/(?<=\p{L}{4})\s+&\s*\S?$/u, "") // cut off mid-word: "Bagels & S"; "H & M" stays
     .trim();
 
   if (!name) return raw;
