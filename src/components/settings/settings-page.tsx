@@ -4,6 +4,7 @@ import { TwoFactorSection } from "@/components/settings/two-factor-section";
 import { ExportData } from "@/components/settings/export-data";
 import { FormatsSection } from "@/components/settings/formats-section";
 import { CategoriesSection } from "@/components/settings/categories-section";
+import { RulesSection } from "@/components/settings/rules-section";
 import { HealthSection, NotificationsSection } from "@/components/health/health-section";
 import { isDemoMode } from "@/lib/demo/mode";
 
@@ -15,6 +16,7 @@ export function SettingsPage() {
       <HealthSection />
       <NotificationsSection />
       <CategoriesSection />
+      <RulesSection />
       <FormatsSection />
       {/* The demo has no real account: a password change or account deletion would do nothing and an export would be fake data. */}
       {!isDemoMode() && (

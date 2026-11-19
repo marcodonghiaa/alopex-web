@@ -19,8 +19,10 @@ import { DetailRow, HoldingRow } from "@/components/holdings/holding-row";
 import { InvestingSwitch } from "@/components/investing-switch";
 import { EmptyState } from "@/components/empty-state";
 import { useValueHistory } from "@/lib/use-value-history";
+import { tradesMatchHeld } from "@/lib/trades";
 import { splitSmallBalances } from "@/lib/small-balances";
 import { usePerformance, useStartPrices } from "@/lib/use-performance";
+import { InvestmentIncome } from "@/components/holdings/investment-income";
 import {
   PerformanceNotice,
   ReturnCell,
@@ -234,7 +236,8 @@ function CryptoPage() {
         <>
           {/* Desktop table */}
           <section className="hidden overflow-hidden rounded-lg bg-card md:block">
-            <div className="overflow-x-auto">
+            {/* relative: the sr-only header label is absolute; without it the page scrolls sideways. */}
+            <div className="relative overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="border-b text-left text-xs font-medium text-muted-foreground">
                   <tr>
@@ -296,7 +299,10 @@ function CryptoPage() {
                           {formatEur(asset.valueEur)}
                         </td>
                         <td className="px-2 py-1 text-right">
-                          <AssetEdits asset={asset} />
+                          <AssetEdits
+                            asset={asset}
+                            tradesMatch={tradesMatchHeld(perf, asset.symbol)}
+                          />
                         </td>
                       </tr>
                     );
@@ -353,6 +359,7 @@ function CryptoPage() {
                           asset.bySource.length > 1 ? `${asset.name} (${s.source})` : asset.name
                         }
                         quantity={s.amount}
+                        tradesMatch={tradesMatchHeld(perf, asset.symbol)}
                         label={
                           asset.bySource.length > 1 ? `Edit ${s.source} amount` : "Edit amount"
                         }
@@ -379,6 +386,15 @@ function CryptoPage() {
 
       {!query.isPending && <TradesImport perf={perf} />}
 
+      {/* Under the holdings and the import that fills it: the holdings are the everyday task. */}
+      {!query.isPending && (
+        <InvestmentIncome
+          events={perf.events}
+          trades={[...perf.tradesByKey.values()].flat()}
+          page="crypto"
+        />
+      )}
+
       {/* Coinbase coins come back on their own when the sync sees them again. */}
       <SoldHoldings
         items={(query.data ?? []).flatMap((row) =>
@@ -404,7 +420,7 @@ function CryptoPage() {
 }
 
 // One edit control per source you entered yourself; Coinbase amounts come from the sync.
-function AssetEdits({ asset }: { asset: AssetGroup }) {
+function AssetEdits({ asset, tradesMatch }: { asset: AssetGroup; tradesMatch: boolean }) {
   const editable = asset.bySource.filter((s) => isEditableCryptoSource(s.source));
   return (
     <>
@@ -414,6 +430,7 @@ function AssetEdits({ asset }: { asset: AssetGroup }) {
           target={{ kind: "crypto", symbol: asset.symbol, source: s.source }}
           name={asset.bySource.length > 1 ? `${asset.name} (${s.source})` : asset.name}
           quantity={s.amount}
+          tradesMatch={tradesMatch}
         />
       ))}
     </>

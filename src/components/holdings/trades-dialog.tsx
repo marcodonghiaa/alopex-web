@@ -1,7 +1,7 @@
 import { ambiguousNumberHint, formatQuantity, inputNumber } from "@/lib/locale";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -15,9 +15,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/field";
 import { formatDay } from "@/lib/date";
-import { localToday, netShares, parseTypedAmount } from "@/lib/trades";
+import { inOrder, localToday, netShares, parseTypedAmount } from "@/lib/trades";
 import { parseQuantity } from "@/lib/holdings";
 import { formatEur } from "@/lib/transactions";
+import { cn } from "@/lib/utils";
 import type { SavedTrade } from "@/lib/use-performance";
 
 interface Form {
@@ -51,6 +52,14 @@ function validate(form: Form) {
   };
 }
 
+/** "bought 2 on 1 Mar 2026": names a trade for a screen reader. */
+const tradeName = (t: SavedTrade) =>
+  `${t.side === "buy" ? "bought" : "sold"} ${formatQuantity(t.shares, 8)} on ${formatDay(t.trade_date)}`;
+
+/** A buy saved at €0.00: shares moved in from another broker, whose price the file didn't give. */
+export const hasMissingPrice = (trades: Array<Pick<SavedTrade, "side" | "price_eur">>) =>
+  trades.some((t) => t.side === "buy" && t.price_eur === 0);
+
 /** Every buy and sell of one holding: add, correct or remove them. */
 export function TradesDialog({
   kind,
@@ -71,13 +80,16 @@ export function TradesDialog({
   const [form, setForm] = useState<Form>(blank);
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const priceRef = useRef<HTMLInputElement>(null);
 
-  const done = (message: string) => {
+  const done = (message: string, clearForm = true) => {
     toast.success(message);
     void queryClient.invalidateQueries({ queryKey: ["holding-trades"] });
     void queryClient.invalidateQueries({ queryKey: ["holding-performance"] });
-    setForm(blank());
-    setEditing(null);
+    if (clearForm) {
+      setForm(blank());
+      setEditing(null);
+    }
     setError(null);
   };
   const failed = (err: Error) => setError(err.message);
@@ -85,7 +97,11 @@ export function TradesDialog({
   const save = useMutation({
     mutationFn: async (values: NonNullable<ReturnType<typeof validate>["values"]>) => {
       if (editing) {
-        const { error: e } = await supabase.from("holding_trades").update(values).eq("id", editing);
+        // A broker's time is of the old day: kept, it would order the trade among the new day's.
+        const was = trades.find((t) => t.id === editing);
+        const patch =
+          was && was.trade_date !== values.trade_date ? { ...values, traded_at: null } : values;
+        const { error: e } = await supabase.from("holding_trades").update(patch).eq("id", editing);
         if (e) throw e;
         return;
       }
@@ -105,7 +121,8 @@ export function TradesDialog({
       const { error: e } = await supabase.from("holding_trades").delete().eq("id", id);
       if (e) throw e;
     },
-    onSuccess: () => done("Trade removed"),
+    // Only the trade you were editing leaves the form: a half-typed new trade stays.
+    onSuccess: (_, id) => done("Trade removed", id === editing),
     onError: failed,
   });
 
@@ -116,9 +133,27 @@ export function TradesDialog({
     else setError(result.error);
   }
 
+  function startEdit(t: SavedTrade) {
+    setEditing(t.id);
+    setError(null);
+    setForm({
+      side: t.side,
+      date: t.trade_date,
+      shares: inputNumber(t.shares),
+      price: inputNumber(t.price_eur),
+      fee: t.fee_eur ? inputNumber(t.fee_eur) : "",
+    });
+  }
+  function cancelEdit() {
+    setForm(blank());
+    setEditing(null);
+    setError(null);
+  }
+
   const set = (field: keyof Form) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
-  const sorted = [...trades].sort((a, b) => b.trade_date.localeCompare(a.trade_date));
+  // Newest first: the order returns are worked out in, backwards (same day by the broker's time).
+  const sorted = inOrder(trades).reverse();
   const net = netShares(trades);
 
   return (
@@ -145,6 +180,27 @@ export function TradesDialog({
             Prices are per share, in EUR.
           </DialogDescription>
         </DialogHeader>
+        {hasMissingPrice(trades) && (
+          <p className="flex items-start gap-2 text-sm">
+            <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+            {/* The row shows a figure that's too high, or — when nothing was paid in at all. */}
+            <span>
+              A buy has no price, so the return is too high or can't be worked out.{" "}
+              <button
+                type="button"
+                className="text-primary underline-offset-2 hover:underline"
+                onClick={() => {
+                  startEdit(trades.find((t) => t.side === "buy" && t.price_eur === 0)!);
+                  // The note asks for the price: go straight to it.
+                  priceRef.current?.focus();
+                }}
+              >
+                Edit that trade
+              </button>{" "}
+              and enter what you paid per share.
+            </span>
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-3 text-left">
           <div>
@@ -184,6 +240,7 @@ export function TradesDialog({
               Price per share (EUR)
             </label>
             <Input
+              ref={priceRef}
               id="trade-price"
               inputMode="decimal"
               value={form.price}
@@ -196,8 +253,14 @@ export function TradesDialog({
             </label>
             <Input id="trade-fee" inputMode="decimal" value={form.fee} onChange={set("fee")} />
           </div>
-          <div className="flex items-end">
-            <Button type="submit" disabled={save.isPending} className="w-full">
+          {/* On a phone Cancel sits above Save trade: side by side they don't fit the column. */}
+          <div className="flex flex-wrap items-end justify-end gap-2">
+            {editing && (
+              <Button variant="ghost" onClick={cancelEdit} disabled={save.isPending}>
+                Cancel
+              </Button>
+            )}
+            <Button type="submit" disabled={save.isPending} className="flex-1 basis-28">
               {save.isPending && <Loader2 className="size-4 animate-spin" />}
               {editing ? "Save trade" : "Add trade"}
             </Button>
@@ -212,7 +275,11 @@ export function TradesDialog({
         {sorted.length > 0 && (
           <ul className="max-h-64 divide-y divide-hairline overflow-y-auto rounded-lg bg-background text-sm">
             {sorted.map((t) => (
-              <li key={t.id} className="flex items-center gap-2 px-3 py-1">
+              <li
+                key={t.id}
+                aria-current={editing === t.id ? "true" : undefined}
+                className={cn("flex items-center gap-2 px-3 py-1", editing === t.id && "bg-accent")}
+              >
                 <span className="min-w-0 flex-1">
                   <span className="font-medium text-foreground">
                     {t.side === "buy" ? "Bought" : "Sold"} {formatQuantity(t.shares, 8)}
@@ -220,31 +287,34 @@ export function TradesDialog({
                   at {formatEur(t.price_eur)}
                   <span className="block text-xs text-muted-foreground">
                     {formatDay(t.trade_date)}
-                    {t.fee_eur > 0 && ` · fee ${formatEur(t.fee_eur)}`}
+                    {t.note && ` · ${t.note}`}
+                    {/* Each part stays on one line: "tax" never wraps away from its amount. */}
+                    {t.fee_eur > 0 && (
+                      <>
+                        {" "}
+                        <span className="whitespace-nowrap">· fee {formatEur(t.fee_eur)}</span>
+                      </>
+                    )}
+                    {(t.tax_eur ?? 0) > 0 && (
+                      <>
+                        {" "}
+                        <span className="whitespace-nowrap">· tax {formatEur(t.tax_eur!)}</span>
+                      </>
+                    )}
                   </span>
                 </span>
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label={`Edit trade of ${t.trade_date}`}
-                  onClick={() => {
-                    setEditing(t.id);
-                    setError(null);
-                    setForm({
-                      side: t.side,
-                      date: t.trade_date,
-                      shares: inputNumber(t.shares),
-                      price: inputNumber(t.price_eur),
-                      fee: t.fee_eur ? inputNumber(t.fee_eur) : "",
-                    });
-                  }}
+                  aria-label={`Edit: ${tradeName(t)}`}
+                  onClick={() => startEdit(t)}
                 >
                   <Pencil />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label={`Remove trade of ${t.trade_date}`}
+                  aria-label={`Remove: ${tradeName(t)}`}
                   disabled={remove.isPending}
                   onClick={() => remove.mutate(t.id)}
                 >

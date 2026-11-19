@@ -29,7 +29,9 @@ import { RangeChange, ValueHistoryChart, rangeChip } from "@/components/value-hi
 import { DetailRow, HoldingRow } from "@/components/holdings/holding-row";
 import { InvestingSwitch } from "@/components/investing-switch";
 import { useValueHistory } from "@/lib/use-value-history";
+import { tradesMatchHeld } from "@/lib/trades";
 import { usePerformance, useStartPrices } from "@/lib/use-performance";
+import { InvestmentIncome } from "@/components/holdings/investment-income";
 import {
   PerformanceNotice,
   ReturnCell,
@@ -340,6 +342,7 @@ function PortfolioPage() {
                                         target={{ kind: "stock", isin: row.isin }}
                                         name={row.name ?? row.isin}
                                         quantity={row.shares ?? 0}
+                                        tradesMatch={tradesMatchHeld(perf, row.isin)}
                                       />
                                     )}
                                   </td>
@@ -401,6 +404,7 @@ function PortfolioPage() {
                                   name={row.name ?? row.isin}
                                   quantity={row.shares ?? 0}
                                   label="Edit shares"
+                                  tradesMatch={tradesMatchHeld(perf, row.isin)}
                                 />
                               </div>
                             )}
@@ -417,6 +421,15 @@ function PortfolioPage() {
       )}
 
       {!query.isPending && <TradesImport perf={perf} />}
+
+      {/* Under the holdings and the import that fills it: the holdings are the everyday task. */}
+      {!query.isPending && (
+        <InvestmentIncome
+          events={perf.events}
+          trades={[...perf.tradesByKey.values()].flat()}
+          page="stock"
+        />
+      )}
 
       <SoldHoldings
         items={(query.data ?? []).flatMap((row) =>

@@ -19,7 +19,24 @@ import { summarizeBalances } from "@/lib/import/splitwise-balances";
 import { useSplitwiseBalances } from "@/lib/use-splitwise-balances";
 import { OwedView } from "@/components/splitwise/owed-view";
 import { LastImportRow } from "@/components/splitwise/last-import-row";
-import { useSettleSplitMutation } from "@/components/transactions/mutations";
+import {
+  useRecordPaybackMutation,
+  useSettleSplitMutation,
+  useUndoPaybackMutation,
+} from "@/components/transactions/mutations";
+import { PaymentsToCheck } from "@/components/splitwise/payments-to-check";
+import {
+  debtorsFrom,
+  fetchPaybackCandidates,
+  dismissMessage,
+  paybackMessage,
+  suggestPaybacks,
+  withoutToLink,
+  type Debtor,
+  type PaybackCandidate,
+  type PaybackSuggestion,
+} from "@/lib/payback";
+import { txId } from "@/lib/transactions";
 import { toast } from "sonner";
 import { fetchSplits, money, netOwed, peopleFrom, type SplitRow } from "@/lib/splits";
 import { HeadlineFigure } from "@/components/headline-figure";
@@ -28,7 +45,7 @@ import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SyncSetup } from "@/components/splitwise/sync-setup";
 import { balancesSource } from "@/lib/splitwise-sync";
-import { useSplitwiseConnection } from "@/lib/use-splitwise-sync";
+import { useSplitwiseConnection, useToLinkMatches } from "@/lib/use-splitwise-sync";
 import { ToLink } from "@/components/splitwise/to-link";
 
 export const Route = createFileRoute("/_authenticated/splitwise")({
@@ -52,7 +69,7 @@ export const Route = createFileRoute("/_authenticated/splitwise")({
 });
 
 function SplitwisePage() {
-  const { balances, rows, rate } = useSplitwiseBalances();
+  const { balances, rates, rows, rate } = useSplitwiseBalances();
   const groups = useMemo(() => summarizeBalances(rows, rate), [rows, rate]);
   const [importing, setImporting] = useState(false);
   const writing = useIsMutating({ mutationKey: IMPORT_KEY }) > 0;
@@ -62,6 +79,18 @@ function SplitwisePage() {
   const connection = useSplitwiseConnection().data;
   const connected = connection?.connected === true;
   const source = balancesSource(connection, groups.length > 0);
+  // Recent incoming payments to match to who owes you. On a database without the payback
+  // functions yet this fails: the page works as before, only without the questions.
+  const candidates = useQuery({
+    queryKey: ["payback-candidates"],
+    queryFn: fetchPaybackCandidates,
+    staleTime: 60_000,
+    retry: false,
+  });
+  // The payments To link asks about are left out of the questions: one payment, one question.
+  const toLink = useToLinkMatches();
+  const record = useRecordPaybackMutation(queryClient);
+  const undoPayback = useUndoPaybackMutation(queryClient);
 
   // The last Splitwise import, kept in this browser so it can be undone after looking at the page.
   const [userId, setUserId] = useState<string | null>(null);
@@ -138,6 +167,71 @@ function SplitwisePage() {
 
   const net = netOwed(totals.owedToYou, totals.youOwe);
 
+  const debtors = useMemo(
+    () => debtorsFrom(peopleFrom(splits.data ?? []), groups, rate),
+    [splits.data, groups, rate],
+  );
+  // Asked only once debts (with their euro rates) and payments are in: a half-loaded list would
+  // guess wrong.
+  const ready =
+    splits.isSuccess &&
+    balances.isSuccess &&
+    rates.isSuccess &&
+    candidates.isSuccess &&
+    toLink.settled;
+  const suggestions = useMemo(
+    () =>
+      ready
+        ? suggestPaybacks(
+            withoutToLink(
+              candidates.data ?? [],
+              [...toLink.suggestions.values()].map((s) => s.tx),
+            ),
+            debtors,
+          )
+        : [],
+    [ready, candidates.data, toLink.suggestions, debtors],
+  );
+  // The questions sit above the lists: the lists wait for them, so nothing moves under a tap.
+  // (Rates load only after the balances: if those fail, rates never come and nothing is asked.)
+  const asking = candidates.isPending || !toLink.settled || (rates.isPending && !balances.isError);
+  const busy = record.isPending && record.variables ? txId(record.variables.payment) : null;
+
+  const confirmPayback = (payment: PaybackCandidate, debtor: Debtor) => {
+    if (record.isPending) return;
+    record.mutate({
+      payment,
+      contact: debtor.name,
+      announce: (result) =>
+        toast.success(
+          paybackMessage(debtor.name, result, debtor.splitwiseOnly, (v) => money(v, "EUR")),
+          {
+            duration: 10_000,
+            action: {
+              label: "Undo",
+              onClick: () => undoPayback.mutate({ payment, forget: result.linked }),
+            },
+          },
+        ),
+    });
+  };
+  const dismissPayback = (payment: PaybackCandidate, s: PaybackSuggestion) => {
+    if (record.isPending) return;
+    record.mutate({
+      payment,
+      contact: "",
+      announce: () =>
+        toast.success(dismissMessage(s.debtor.name, s.reason === "linked"), {
+          // Its only Undo: give it the same time as the Yes toast.
+          duration: 10_000,
+          action: {
+            label: "Undo",
+            onClick: () => undoPayback.mutate({ payment, forget: false }),
+          },
+        }),
+    });
+  };
+
   const settleAll = (name: string, rows: Array<SplitRow>) => {
     for (const r of rows) settle.mutate({ tx: r, settled: true });
     toast.success(`Settled ${rows.length} bills with ${name}`, {
@@ -192,12 +286,22 @@ function SplitwisePage() {
         </p>
       )}
 
-      <ToLink connected={connected} />
+      <ToLink connected={connected} matches={toLink} />
+      <PaymentsToCheck
+        suggestions={suggestions}
+        debtors={debtors}
+        busy={busy}
+        onConfirm={confirmPayback}
+        onDismiss={dismissPayback}
+        afterLast="split-bills"
+      />
 
-      <SectionTitle className="mt-8">Split bills · from your transactions</SectionTitle>
+      <SectionTitle id="split-bills" focusable className="mt-8">
+        Split bills · from your transactions
+      </SectionTitle>
       {splits.isError ? (
         <Alert>Couldn't load your splits: {splits.error.message}</Alert>
-      ) : splits.isPending ? (
+      ) : splits.isPending || asking ? (
         loading("Loading split bills")
       ) : (
         <OwedView
@@ -210,13 +314,13 @@ function SplitwisePage() {
       <SectionTitle className="mt-8">Splitwise groups{source ? ` · ${source}` : ""}</SectionTitle>
       {balances.isError ? (
         <Alert>Couldn't load Splitwise balances: {balances.error.message}</Alert>
-      ) : balances.isPending ? (
+      ) : balances.isPending || asking ? (
         loading("Loading Splitwise groups")
       ) : (
         <BalancesView groups={groups} connected={connected} />
       )}
       {/* Setup after the balances: quiet rows, like Connect a bank on Accounts. */}
-      <SyncSetup onImportFile={() => setImporting(true)} />
+      {!asking && <SyncSetup onImportFile={() => setImporting(true)} />}
       {last && (
         <LastImportRow
           count={last.count}

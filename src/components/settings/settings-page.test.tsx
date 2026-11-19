@@ -14,6 +14,7 @@ vi.mock("@/components/settings/export-data", () => ({ ExportData: () => <h2>Expo
 vi.mock("@/components/settings/categories-section", () => ({
   CategoriesSection: () => <h2>Categories</h2>,
 }));
+vi.mock("@/components/settings/rules-section", () => ({ RulesSection: () => <h2>Rules</h2> }));
 vi.mock("@/components/health/health-section", () => ({
   HealthSection: () => <h2>Health</h2>,
   NotificationsSection: () => <h2>Notifications</h2>,
@@ -33,6 +34,7 @@ describe("SettingsPage order", () => {
       "Health",
       "Notifications",
       "Categories",
+      "Rules",
       "Number and date format",
       "Password",
       "Two-step",
@@ -44,6 +46,12 @@ describe("SettingsPage order", () => {
   it("leaves out the account sections in the demo", () => {
     demo.current = true;
     render(<SettingsPage />);
-    expect(order()).toEqual(["Health", "Notifications", "Categories", "Number and date format"]);
+    expect(order()).toEqual([
+      "Health",
+      "Notifications",
+      "Categories",
+      "Rules",
+      "Number and date format",
+    ]);
   });
 });

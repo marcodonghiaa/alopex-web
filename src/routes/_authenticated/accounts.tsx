@@ -23,6 +23,7 @@ import {
 } from "@/lib/bank-link";
 import { functionErrorMessage } from "@/lib/function-error";
 import { consentAlerts, type ConsentAlert } from "@/lib/consent-expiry";
+import { syncAlerts, type SyncAlert } from "@/lib/sync-error";
 import { asOf, formatISODate } from "@/lib/date";
 import { AccountBadge, accountName, bankOf } from "@/components/bank-badge";
 import { formatEur, formatMoney } from "@/lib/transactions";
@@ -66,6 +67,9 @@ interface BankAccountRow {
   // Absent before the account types migration; null = unknown, counted as checking.
   account_type?: string | null;
   manual?: boolean | null;
+  // Absent before the bank-sync-health migration; null when the last sync went through.
+  sync_error?: string | null;
+  sync_error_at?: string | null;
 }
 
 interface BankGroup {
@@ -155,6 +159,33 @@ function AccountsPage() {
 
   const bankAccounts = useMemo(() => bankQuery.data ?? [], [bankQuery.data]);
   const expiring = useMemo(() => consentAlerts(bankAccounts, new Date()), [bankAccounts]);
+  const syncIssues = useMemo(() => syncAlerts(bankAccounts), [bankAccounts]);
+  // One bank's banners sit together, Renew first; the app-wide refusal (no bank) goes last.
+  const banners = useMemo((): Array<{ renew?: ConsentAlert; issue?: SyncAlert }> => {
+    const renewing = new Set(expiring.map((r) => r.bank));
+    return [
+      ...expiring.flatMap((renew) => [
+        { renew },
+        ...syncIssues.filter((i) => i.bank === renew.bank).map((issue) => ({ issue })),
+      ]),
+      ...syncIssues.filter((i) => i.bank && !renewing.has(i.bank)).map((issue) => ({ issue })),
+      ...syncIssues.filter((i) => !i.bank).map((issue) => ({ issue })),
+    ];
+  }, [expiring, syncIssues]);
+  // Renew and "Connect again" both link the bank again: open Connect a bank with it prefilled.
+  const connectAgain = (bank: string) => {
+    // Prefill without the country select's handler, which would clear the bank.
+    const t = renewTarget(bank, bankAccounts);
+    if (t) {
+      setBankCountry(t.country);
+      setBankName(t.bankName);
+    } else {
+      setBankName(""); // never keep another bank from an earlier Renew
+    }
+    flushSync(() => setShowConnectForm(true));
+    connectStepsRef.current?.scrollIntoView({ block: "center" });
+    connectStepsRef.current?.focus({ preventScroll: true });
+  };
 
   // Credit cards and loans get their own group; everything else is cash, as before.
   const cashAccounts = useMemo(
@@ -303,35 +334,48 @@ function AccountsPage() {
           <Alert className="mb-4">Couldn't load bank accounts: {bankQuery.error.message}</Alert>
         )}
 
-        {/* Renewing is linking the bank again, so the button opens Connect a bank below. */}
-        {expiring.map((alert) => (
-          <div
-            key={alert.bank}
-            role="status"
-            className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-warning/10 px-4 py-3 text-sm text-foreground"
-          >
-            <span>{consentMessage(alert)}</span>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                // Prefill without the country select's handler, which would clear the bank.
-                const t = renewTarget(alert.bank, bankAccounts);
-                if (t) {
-                  setBankCountry(t.country);
-                  setBankName(t.bankName);
-                } else {
-                  setBankName(""); // never keep another bank from an earlier Renew
-                }
-                flushSync(() => setShowConnectForm(true));
-                connectStepsRef.current?.scrollIntoView({ block: "center" });
-                connectStepsRef.current?.focus({ preventScroll: true });
-              }}
-              className="px-3 text-primary hover:bg-primary/10 hover:text-primary"
+        {/* Renewing is linking the bank again, so the button opens Connect a bank below.
+            An ended consent shows only its Renew banner: syncAlerts drops its sync error. */}
+        {banners.map(({ renew, issue }) =>
+          renew ? (
+            <div
+              key={`renew:${renew.bank}`}
+              role="status"
+              className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-warning/10 px-4 py-3 text-sm text-foreground"
             >
-              Renew access
-            </Button>
-          </div>
-        ))}
+              <span>{consentMessage(renew)}</span>
+              <Button
+                variant="ghost"
+                onClick={() => connectAgain(renew.bank)}
+                className="px-3 text-primary hover:bg-primary/10 hover:text-primary"
+              >
+                Renew access
+              </Button>
+            </div>
+          ) : (
+            <div
+              key={issue!.text}
+              role="status"
+              className="mb-4 flex flex-wrap items-center justify-between gap-3 break-words rounded-lg bg-warning/10 px-4 py-3 text-sm text-foreground"
+            >
+              {/* A long code like WRONG_CONTINUATION_KEY breaks after an underscore, not mid-word. */}
+              <span className="min-w-0 flex-1 basis-64">
+                {issue!.text
+                  .split(/(?<=_)/)
+                  .flatMap((part, i) => (i ? [<wbr key={i} />, part] : [part]))}
+              </span>
+              {issue!.reconnect && issue!.bank && (
+                <Button
+                  variant="ghost"
+                  onClick={() => connectAgain(issue!.bank!)}
+                  className="px-3 text-primary hover:bg-primary/10 hover:text-primary"
+                >
+                  Connect again
+                </Button>
+              )}
+            </div>
+          ),
+        )}
 
         <div className="overflow-hidden rounded-lg bg-card">
           {bankQuery.isPending ? (

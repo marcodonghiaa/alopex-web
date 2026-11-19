@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
@@ -132,6 +132,67 @@ describe("ReturnCell", () => {
     cell(ok(200, 1000));
     // 44px tall so it's easy to tap on a phone (it was 24px).
     expect(screen.getByRole("button", { name: "+20.00%" })).toHaveClass("min-h-11");
+  });
+
+  it("flags a return built on a buy with no price; a priced buy gets no flag", () => {
+    const free = { ...trade, price_eur: 0 };
+    const view = renderWith(
+      <ReturnCell
+        perf={perf([{ row: row("K"), measured: ok(200, 1000) }], {
+          tradesByKey: new Map([["K", [trade, free]]]),
+        })}
+        holdingKey="K"
+        name="Holding"
+        quantity={10}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "+20.00% price missing" })).toBeInTheDocument();
+    view.unmount();
+    cell(ok(200, 1000));
+    expect(screen.queryByText("price missing")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["a figure", ok(200, 1000), "+20.00% price missing"],
+    ["—", { state: "ok", gain: 1200, base: 0, change: null } as Measured, "— price missing"],
+  ])(
+    "polish-5 A-P3-3 when the row shows %s, the trades dialog's price-missing note says so",
+    async (_, measured, name) => {
+      const free = { ...trade, price_eur: 0 };
+      renderWith(
+        <ReturnCell
+          perf={perf([{ row: row("K"), measured }], {
+            tradesByKey: new Map([["K", name.startsWith("—") ? [free] : [trade, free]]]),
+          })}
+          holdingKey="K"
+          name="Holding"
+          quantity={10}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name }));
+      expect(
+        await screen.findByText(
+          /^A buy has no price, so the return is too high or can't be worked out\./,
+        ),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it("polish-4 R1 puts the price-missing flag on its own small line under the return, so the cell gets no wider", () => {
+    const free = { ...trade, price_eur: 0 };
+    renderWith(
+      <ReturnText
+        perf={perf([{ row: row("K"), measured: ok(200, 1000) }], {
+          tradesByKey: new Map([["K", [trade, free]]]),
+        })}
+        holdingKey="K"
+      />,
+    );
+    const flag = screen.getByText("price missing");
+    // Stacked: the return on one line, the flag on the next, which never wraps.
+    expect(flag.parentElement).toHaveClass("flex-col");
+    expect(flag).toHaveClass("text-xs", "text-muted-foreground", "whitespace-nowrap");
+    expect(flag.parentElement?.firstElementChild).toHaveTextContent("+20.00%");
   });
 
   it("asks for purchases when there are none", () => {
