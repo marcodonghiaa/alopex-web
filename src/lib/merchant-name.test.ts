@@ -22,3 +22,11 @@ describe("cleanMerchantName", () => {
     expect(cleanMerchantName(undefined)).toBeNull();
   });
 });
+
+// Bank text has no length limit: a long run of dashes must not stall the page.
+it("cleans a 50k-character name in well under a second", () => {
+  const start = performance.now();
+  cleanMerchantName("-".repeat(50_000) + "x");
+  cleanMerchantName(" -".repeat(25_000) + "x");
+  expect(performance.now() - start).toBeLessThan(100);
+});
