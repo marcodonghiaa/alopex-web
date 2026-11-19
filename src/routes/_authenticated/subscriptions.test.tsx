@@ -305,6 +305,20 @@ describe("Subscriptions page", () => {
       expect(screen.queryByText(/Dismissed \(/)).not.toBeInTheDocument();
     });
 
+    it("lists dismissed streams by the name shown, not the bank's raw text", async () => {
+      db.rows = [
+        stream({ id: "d1", display_name: "PAYPAL *ALPHA", user_status: "dismissed" }),
+        stream({ id: "d2", display_name: "Mango", user_status: "dismissed" }),
+      ];
+      renderPage();
+      expect(await screen.findByText("Dismissed (2)")).toBeInTheDocument();
+      const restores = screen.getAllByRole("button", { name: /^Restore / });
+      expect(restores.map((b) => b.getAttribute("aria-label"))).toEqual([
+        "Restore ALPHA",
+        "Restore Mango",
+      ]);
+    });
+
     it("Restore returns a detected stream to Active", async () => {
       db.rows = [stream({ id: "d1", display_name: "Oldplan", user_status: "dismissed" })];
       renderPage();
