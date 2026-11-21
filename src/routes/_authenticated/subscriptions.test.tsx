@@ -143,6 +143,47 @@ describe("Subscriptions page", () => {
     warn.mockRestore();
   });
 
+  // Polish 1 #5: neither guard on the re-check's refetch had a test.
+  it("does not refetch when the re-check didn't run", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    invoke.mockResolvedValue({ data: null, error: new Error("FunctionsFetchError") });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = vi.spyOn(client, "invalidateQueries");
+    render(
+      <QueryClientProvider client={client}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    await screen.findByText("Streamflix");
+    await waitFor(() => expect(warn).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(spy).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("leaves the refetch to an action still in flight when the re-check ends", async () => {
+    let finishCheck!: () => void;
+    invoke.mockImplementation(
+      () => new Promise((res) => (finishCheck = () => res({ data: { streams: 1 }, error: null }))),
+    );
+    let finishAction!: () => void;
+    rpc.mockImplementation(() => new Promise((res) => (finishAction = () => res({ error: null }))));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = vi.spyOn(client, "invalidateQueries");
+    render(
+      <QueryClientProvider client={client}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Streamflix" }));
+    await waitFor(() => expect(rpc).toHaveBeenCalled());
+    finishCheck();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(spy).not.toHaveBeenCalled();
+    finishAction();
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+  });
+
   it("a stream no longer found (gone) is not listed", async () => {
     db.rows = [stream({ detected_status: "gone", user_status: "confirmed" })];
     renderPage();
