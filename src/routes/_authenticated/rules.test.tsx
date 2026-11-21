@@ -446,10 +446,14 @@ describe("match modes", () => {
     await openForm();
     fireEvent.change(screen.getByLabelText("Text to look for"), { target: { value: "bar" } });
     const category = screen.getByLabelText("Set category") as HTMLSelectElement;
-    fireEvent.change(category, { target: { value: [...category.options].find((o) => o.value)!.value } });
+    fireEvent.change(category, {
+      target: { value: [...category.options].find((o) => o.value)!.value },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
     await waitFor(() => expect(inserted).toHaveLength(1));
-    await waitFor(() => expect(invoke).toHaveBeenCalledWith("reapply-rules", { body: { apply: false } }));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("reapply-rules", { body: { apply: false } }),
+    );
     expect(await screen.findByRole("button", { name: "Update 3 transactions" })).toBeTruthy();
   });
 
