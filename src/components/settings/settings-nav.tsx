@@ -162,6 +162,8 @@ export function SettingsPageFrame({
       <div>
         <Link
           to="/settings"
+          // Not "current" on its own sub-pages: it leads back to the list.
+          activeOptions={{ exact: true }}
           className="-ml-1 mb-2 inline-flex min-h-11 items-center gap-1 text-[0.9375rem] text-primary md:hidden"
         >
           <ArrowLeft className="size-4" aria-hidden />
