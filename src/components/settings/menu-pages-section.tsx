@@ -3,17 +3,6 @@ import { GroupedList } from "@/components/ui/grouped-list";
 import { HIDEABLE_PAGES, setPageHidden, useHiddenPages } from "@/lib/hidden-pages";
 import { cn } from "@/lib/utils";
 
-// Menu names for the pages that can be switched off (same words as the sidebar).
-const PAGE_LABEL: Record<string, string> = {
-  "/reports": "Reports",
-  "/income": "Income",
-  "/budgets": "Budgets",
-  "/subscriptions": "Subscriptions",
-  "/splitwise": "Who owes you",
-  "/crypto": "Crypto",
-  "/import": "Import",
-};
-
 /** Settings › App: switch off pages you don't use, so the sidebar and More only list the rest. */
 export function MenuPagesSection() {
   const hidden = useHiddenPages();
@@ -28,9 +17,8 @@ export function MenuPagesSection() {
         device.
       </p>
       <GroupedList className="max-w-xl">
-        {HIDEABLE_PAGES.map((path) => {
+        {Object.entries(HIDEABLE_PAGES).map(([path, label]) => {
           const on = !hidden.includes(path);
-          const label = PAGE_LABEL[path] ?? path;
           return (
             <div
               key={path}

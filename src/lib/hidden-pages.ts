@@ -4,16 +4,17 @@ import { useSyncExternalStore } from "react";
 // opens from a link; only the sidebar and More stop listing it. Core pages can't be hidden.
 const KEY = "alopex.hiddenPages";
 
-/** The pages Settings › App can switch off, in menu order. */
-export const HIDEABLE_PAGES: ReadonlyArray<string> = [
-  "/reports",
-  "/income",
-  "/budgets",
-  "/subscriptions",
-  "/splitwise",
-  "/crypto",
-  "/import",
-];
+/** The pages Settings › App can switch off, in menu order, by their menu name. */
+export const HIDEABLE_PAGES: Readonly<Record<string, string>> = {
+  "/reports": "Reports",
+  "/income": "Income",
+  "/budgets": "Budgets",
+  "/subscriptions": "Subscriptions",
+  "/splitwise": "Who owes you",
+  "/crypto": "Crypto",
+  "/import": "Import",
+};
+const PATHS = Object.keys(HIDEABLE_PAGES);
 
 const EMPTY: ReadonlyArray<string> = [];
 let cached: ReadonlyArray<string> | undefined;
@@ -24,7 +25,7 @@ export function hiddenPages(): ReadonlyArray<string> {
   if (cached === undefined) {
     try {
       const raw: unknown = JSON.parse(localStorage.getItem(KEY) ?? "[]");
-      cached = Array.isArray(raw) ? HIDEABLE_PAGES.filter((p) => raw.includes(p)) : EMPTY;
+      cached = Array.isArray(raw) ? PATHS.filter((p) => raw.includes(p)) : EMPTY;
     } catch {
       cached = EMPTY;
     }
@@ -34,7 +35,7 @@ export function hiddenPages(): ReadonlyArray<string> {
 
 /** Shows or hides one page in the menus. False when the browser blocks storage. */
 export function setPageHidden(path: string, hidden: boolean): boolean {
-  const next = HIDEABLE_PAGES.filter((p) => (p === path ? hidden : hiddenPages().includes(p)));
+  const next = PATHS.filter((p) => (p === path ? hidden : hiddenPages().includes(p)));
   try {
     if (next.length) localStorage.setItem(KEY, JSON.stringify(next));
     else localStorage.removeItem(KEY);
