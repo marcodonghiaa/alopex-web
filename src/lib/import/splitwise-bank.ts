@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { BankTx } from "./splitwise-match";
-import { type FxRow } from "@/lib/fx";
+import { makeRate, type FxRow } from "@/lib/fx";
+import { loadRates } from "@/lib/brokers/rates";
 import { toBankTx } from "./splitwise-review";
 
 // The bank payments and exchange rates around some Splitwise dates, for the matcher: shared by
@@ -44,6 +45,39 @@ async function allPages<T>(
   const more = await page(MAX_PAGES * PAGE, MAX_PAGES * PAGE);
   if (more.error) throw new Error(more.error.message);
   return { rows, capped: (more.data ?? []).length > 0 };
+}
+
+/**
+ * The stored rates plus, for each currency with a row the stored ones can't value (a fresh install
+ * keeps rates only from its install day on), the file's dates from the broker import's source.
+ * A currency whose rates can't be loaded is in `failed`, once, with the reason.
+ */
+export async function withFileRates(
+  fx: Array<FxRow>,
+  rows: Array<{ currency: string; date: string }>,
+  load = loadRates,
+): Promise<{ fx: Array<FxRow>; failed: Array<{ currency: string; message: string }> }> {
+  const rate = makeRate(fx);
+  const dates = new Map<string, Array<string>>();
+  for (const r of rows) {
+    if (rate(r.currency, r.date) !== null) continue;
+    dates.set(r.currency, [...(dates.get(r.currency) ?? []), r.date]);
+  }
+  const loaded = await Promise.all(
+    [...dates].map(async ([currency, list]) => {
+      const sorted = list.sort();
+      try {
+        const got = await load(currency, sorted[0]!, sorted[sorted.length - 1]!);
+        return { rows: got.map((r) => ({ ...r, currency })) };
+      } catch (err) {
+        return { failed: { currency, message: err instanceof Error ? err.message : String(err) } };
+      }
+    }),
+  );
+  return {
+    fx: [...fx, ...loaded.flatMap((l) => l.rows ?? [])],
+    failed: loaded.flatMap((l) => l.failed ?? []),
+  };
 }
 
 /** `currencies`: the Splitwise side's; the bank's own are added. */

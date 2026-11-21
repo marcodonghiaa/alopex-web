@@ -144,6 +144,8 @@ describe("Subscriptions page", () => {
     renderPage();
     expect(await screen.findByText("No subscription charges found yet.")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "To review" })).toBeNull();
+    // e2e #13: no lone dash (a white bar in the big font) above the empty state.
+    expect(screen.queryByLabelText("Estimated monthly cost")).toBeNull();
   });
 
   it("Confirm calls the rpc and moves the stream to the active total", async () => {
@@ -191,7 +193,7 @@ describe("Subscriptions page", () => {
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith("Removed Streamflix", expect.anything()),
     );
-    expect(screen.getByLabelText("Estimated monthly cost")).toHaveTextContent("—");
+    expect(screen.queryByLabelText("Estimated monthly cost")).toBeNull();
   });
 
   it("a preset frequency sends the lowercase cadence", async () => {
@@ -236,7 +238,7 @@ describe("Subscriptions page", () => {
     db.rows = [stream({ last_charged: "2020-01-01", next_expected: "2020-02-01" })];
     renderPage();
     expect(await screen.findByText("Stopped (1)")).toBeInTheDocument();
-    expect(screen.getByLabelText("Estimated monthly cost")).toHaveTextContent("—");
+    expect(screen.queryByLabelText("Estimated monthly cost")).toBeNull();
   });
 
   it("shows the native amount for a non-EUR stream and a dash without a monthly amount", async () => {

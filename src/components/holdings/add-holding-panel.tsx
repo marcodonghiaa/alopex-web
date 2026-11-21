@@ -7,6 +7,7 @@ import { parseQuantity } from "@/lib/holdings";
 import { formatISODate } from "@/lib/date";
 import { addedTrade, latestPriceEur, recordTrade } from "@/lib/manual-trades";
 import { ambiguousNumberHint } from "@/lib/locale";
+import { callAddHolding } from "@/lib/add-holding";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 
@@ -40,26 +41,6 @@ const COPY: Record<
     queryKey: "crypto-latest",
   },
 };
-
-// add-holding answers errors as { error } with a 4xx/5xx; supabase-js wraps that in a generic
-// message, so read the body to show the real reason.
-async function functionError(error: unknown, fallback: string): Promise<string> {
-  const context = (error as { context?: Response }).context;
-  try {
-    const body = (await context?.json()) as { error?: string } | undefined;
-    if (body?.error) return body.error;
-  } catch {
-    // Not JSON: fall through.
-  }
-  return fallback;
-}
-
-async function callAddHolding<T>(body: Record<string, unknown>, fallback: string): Promise<T> {
-  const { data, error } = await supabase.functions.invoke<T>("add-holding", { body });
-  if (error) throw new Error(await functionError(error, fallback));
-  if (!data) throw new Error(fallback);
-  return data;
-}
 
 export function AddHoldingPanel({
   kind,
@@ -298,9 +279,11 @@ export function AddHoldingPanel({
 
           {results && results.length > 0 && (
             <fieldset>
-              <legend className="mb-2 text-xs text-muted-foreground">Pick the right one</legend>
+              <legend className="mb-2 text-xs text-muted-foreground">
+                {picked && results.length > 1 ? "Your pick" : "Pick the right one"}
+              </legend>
               <div className="divide-y divide-hairline overflow-hidden rounded-lg bg-background">
-                {results.map((r) => (
+                {(picked ? [picked] : results).map((r) => (
                   <label
                     key={r.id}
                     className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2 text-sm has-[:checked]:bg-primary/10"
@@ -322,6 +305,16 @@ export function AddHoldingPanel({
                   </label>
                 ))}
               </div>
+              {/* e2e #14: once you pick, the other matches step aside until you ask for them. */}
+              {picked && results.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setPicked(null)}
+                  className="mt-1 min-h-11 text-xs font-medium text-foreground underline underline-offset-4"
+                >
+                  Change
+                </button>
+              )}
             </fieldset>
           )}
 

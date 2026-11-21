@@ -1,5 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { money, moneyAmount, shortDate } from "./splitwise-format";
+import { importedMessage, money, moneyAmount, shortDate } from "./splitwise-format";
+
+// issue #12: the button said 61, the toast 70; the toast now says what the 70 are
+describe("importedMessage", () => {
+  it("says how many were paid by others and how many by you", () => {
+    expect(importedMessage({ shares: 70, paidByYou: 9, group: "Trip" })).toBe(
+      "70 expenses imported into Trip: 61 paid by others, 9 paid by you",
+    );
+    expect(importedMessage({ shares: 2, paidByYou: 1, group: "Trip" })).toBe(
+      "2 expenses imported into Trip: 1 paid by others, 1 paid by you",
+    );
+  });
+
+  it("names no split when all were paid by others, or it does not add up", () => {
+    expect(importedMessage({ shares: 1, paidByYou: 0, group: "Trip" })).toBe(
+      "1 expense imported into Trip",
+    );
+    expect(importedMessage({ shares: 3, paidByYou: 3, group: "Trip" })).toBe(
+      "3 expenses imported into Trip, all paid by you",
+    );
+    expect(importedMessage({ shares: 2, paidByYou: 5, group: "Trip" })).toBe(
+      "2 expenses imported into Trip",
+    );
+  });
+});
 
 describe("shortDate", () => {
   const today = new Date("2026-11-09T12:00:00Z");

@@ -51,6 +51,10 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 
+// The rates the stored ones miss, from the source the broker import asks; none unless a test says.
+const loadRates = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/brokers/rates", () => ({ loadRates }));
+
 import { SplitwiseReview } from "./splitwise-review";
 
 const CSV = [
@@ -105,6 +109,8 @@ beforeEach(() => {
   tables.category_rules = { data: [], error: null };
   insertRule.mockReset();
   onImported.mockReset();
+  loadRates.mockReset();
+  loadRates.mockResolvedValue([]);
 });
 
 const showWithBalances = () =>
@@ -163,6 +169,30 @@ describe("SplitwiseReview", () => {
     tables.fx_rates = { data: [], error: null };
     show();
     expect((await screen.findByRole("alert")).textContent).toMatch(/No exchange rate for USD/);
+  });
+
+  // issue #11: a fresh install stores rates only from its install day; the file's older dates
+  // are filled from the same source the broker import asks, for the file's dates
+  it("values a file older than the stored rates with rates loaded for its dates", async () => {
+    tables.fx_rates = { data: [], error: null };
+    loadRates.mockResolvedValue([{ date: "2026-08-10", rate_to_eur: 0.92 }]);
+    show();
+    expect(((await importButton()) as HTMLButtonElement).textContent).toBe("Import 2 expenses");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(loadRates).toHaveBeenCalledWith("USD", "2026-08-16", "2026-08-17");
+  });
+
+  // issue #11: one line naming the currency and the site, not one red line per row
+  it("says once why the rates could not be loaded", async () => {
+    tables.fx_rates = { data: [], error: null };
+    loadRates.mockRejectedValue(
+      new Error("Couldn't load USD to EUR rates from api.frankfurter.app to value this file."),
+    );
+    show();
+    await screen.findByRole("alert");
+    expect(screen.getAllByRole("alert").map((a) => a.textContent)).toEqual([
+      "Couldn't load USD to EUR rates from api.frankfurter.app to value this file.",
+    ]);
   });
 
   // protects=an expense I paid never drops silently; fails_when=no choice is required, or the
@@ -359,6 +389,8 @@ describe("SplitwiseReview", () => {
         batchId: args["p_batch"],
         group: "berkeley",
         shares: 2,
+        // Taxi, linked to its bank payment
+        paidByYou: 1,
         balancesError: null,
       }),
     );

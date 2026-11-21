@@ -19,6 +19,7 @@ const plan = (over: Partial<WritePlan> = {}): WritePlan => ({
     },
   ],
   links: [],
+  paidByYou: 0,
   problems: [],
   ...over,
 });

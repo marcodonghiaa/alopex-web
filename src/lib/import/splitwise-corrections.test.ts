@@ -239,6 +239,18 @@ describe("planCorrections", () => {
     });
     expect(plan.problems).toEqual([expect.stringMatching(/rate.*USD/i)]);
   });
+
+  // issue #11: one line per currency, not one per row
+  it("says once which days have no rate when several ticked rows lack one", () => {
+    const plan = planCorrections({
+      ...input,
+      ticked: new Set([fps[0] as string, edited.stored.id]),
+      rate: () => null,
+    });
+    expect(plan.problems).toEqual([
+      "No exchange rate for USD on 2 days, from 2026-08-10 to 2026-08-15.",
+    ]);
+  });
 });
 
 describe("runCorrections", () => {

@@ -31,6 +31,9 @@ import { localToday } from "@/lib/trades";
 import type { Trade } from "@/lib/trades";
 import { BROKERS, NEW_BROKER_URL } from "@/lib/brokers";
 import { saveQuantity } from "@/lib/holding-quantity";
+import type { HoldingTarget } from "@/lib/holding-quantity";
+import { callAddHolding } from "@/lib/add-holding";
+import { cutChars } from "@/lib/transactions";
 import { loadRates, rateLookup } from "@/lib/brokers/rates";
 import {
   detectBroker,
@@ -95,6 +98,41 @@ function walletHoldings(
   for (const from of ["Manual", source])
     for (const [key, held] of bySource.get(from) ?? []) out.set(key, { ...held, source: from });
   return out;
+}
+
+/** What one import saved, so Undo takes back exactly that. */
+interface ImportUndo {
+  trades: Array<string>;
+  events: Array<string>;
+  /** Holdings it added; keepTrades when they had trades from before this import. */
+  added: Array<{ key: string; keepTrades: boolean }>;
+  /** The counts it corrected, as they were. */
+  counts: Array<{ target: HoldingTarget; shares: number }>;
+}
+
+async function deleteIds(table: "holding_trades" | "investment_events", ids: Array<string>) {
+  // A hundred at a time: thousands of ids don't fit in one request's address.
+  for (let i = 0; i < ids.length; i += 100) {
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .in("id", ids.slice(i, i + 100));
+    if (error) throw error;
+  }
+}
+
+async function undoImport(undo: ImportUndo) {
+  await deleteIds("holding_trades", undo.trades);
+  await deleteIds("investment_events", undo.events);
+  for (const { key, keepTrades } of undo.added) {
+    // delete_holding removes all of a holding's trades: with older ones, mark it sold instead.
+    if (keepTrades) await saveQuantity({ kind: "stock", isin: key }, 0);
+    else {
+      const { error } = await supabase.rpc("delete_holding", { p_kind: "stock", p_key: key });
+      if (error) throw error;
+    }
+  }
+  for (const { target, shares } of undo.counts) await saveQuantity(target, shares);
 }
 
 const dateFormat = new Intl.DateTimeFormat(dateLocale(), {
@@ -196,9 +234,6 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   // With the new trades' fees and taxes, the same sum as the Income and costs section.
   const income = useMemo(() => incomeAndCosts(freshEvents, fresh), [freshEvents, fresh]);
   const incomeList = incomeRows(income);
-  // Dividends and Interest come first: the index of the last of them, -1 with neither.
-  const afterTax =
-    incomeList.filter((r) => r.label === "Dividends" || r.label === "Interest").length - 1;
   const summary = useMemo(() => summarizeImport(fresh), [fresh]);
   // Count only the wallet's own trades for its holding.
   const updates = useMemo(() => {
@@ -224,6 +259,18 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     }
     return out;
   }, [parsed, saved, wallet, fileBroker]);
+  // Shares the file says you hold but that aren't in your holdings yet (a fresh install): Save
+  // adds each one first, with what's left of it. One sold to zero needs no holding.
+  const toAdd = useMemo(() => {
+    if (kind !== "stock" || !parsed?.setsShares || !keys.data) return [];
+    const held = keys.data.shares;
+    const missing = new Map(parsed.trades.filter((t) => !held.has(t.key)).map((t) => [t.key, 0]));
+    return shareUpdates(parsed.trades, saved, missing).map((u) => ({
+      ...u,
+      name: parsed.names?.get(u.key) || u.key,
+    }));
+  }, [parsed, saved, keys.data, kind]);
+  const adding = new Set(toAdd.map((h) => h.key));
   const otherWarning = (n: number) =>
     `Has ${plural(n, "trade")} not from ${fileBroker?.name}: its return will show as not matching until you remove ${n === 1 ? "it" : "them"}`;
   const toCheck = [...otherTrades.keys()].filter((key) => !updates.some((u) => u.key === key));
@@ -234,95 +281,178 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     mutationFn: async () => {
       // Only new rows carry your id; share counts alone don't need it.
       let userId = "";
-      if (fresh.length > 0 || freshEvents.length > 0) {
+      if (fresh.length > 0 || freshEvents.length > 0 || toAdd.length > 0) {
         const { data } = await supabase.auth.getUser();
         if (!data.user) throw new Error("You're signed out. Sign in and try again.");
         userId = data.user.id;
       }
+      // The holdings first, as you'd add them by hand: found by ISIN, priced today. One that
+      // can't be found keeps its trades and dividends out, so it never shows without a value.
+      const added: Array<string> = [];
+      const missed: Array<string> = [];
+      for (const h of toAdd) {
+        try {
+          const { results } = await callAddHolding<{
+            results: Array<{ id: string; symbol: string }>;
+          }>({ action: "search", kind, query: h.key }, "Search is unavailable");
+          const found = results[0];
+          if (!found) throw new Error("Not found");
+          await callAddHolding(
+            {
+              action: "add",
+              kind,
+              id: found.id,
+              symbol: found.symbol,
+              name: cutChars(h.name, 120),
+              quantity: h.shares,
+              isin: h.key,
+              broker: fileBroker?.name,
+            },
+            "Couldn't add it",
+          );
+          added.push(h.key);
+        } catch {
+          missed.push(h.key);
+        }
+      }
+      const trades = fresh.filter((t) => !missed.includes(t.key));
+      const rows = freshEvents.filter((e) => !(e.key && missed.includes(e.key)));
+      const missedNames = missed.map((key) => toAdd.find((h) => h.key === key)!.name);
+      const undo: ImportUndo = {
+        trades: [],
+        events: [],
+        added: added.map((key) => ({
+          key,
+          keepTrades: saved.some((t) => t.key.toUpperCase() === key),
+        })),
+        counts: [],
+      };
+      const done = (events: number) => ({
+        trades: trades.length,
+        events,
+        counts: updates.length,
+        added: added.length,
+        missedNames,
+        undo,
+      });
       // One insert is one statement: all the rows land, or none do.
-      if (fresh.length > 0) {
-        const { error } = await supabase
+      if (trades.length > 0) {
+        const { data, error } = await supabase
           .from("holding_trades")
-          .insert(fresh.map((t) => ({ ...t, user_id: userId })));
+          .insert(trades.map((t) => ({ ...t, user_id: userId })))
+          .select("id");
         if (error) throw error;
+        undo.trades = (data ?? []).map((r) => r.id);
       }
       // If this fails the trades are safe: importing again skips them and retries the counts.
       // set_holding_quantity also writes today's value, so net worth moves at once.
       try {
         for (const { key, shares } of updates) {
           const held = wallet?.get(key);
-          await saveQuantity(
+          const target: HoldingTarget =
             kind === "stock"
               ? { kind: "stock", isin: key }
-              : { kind: "crypto", symbol: held!.symbol, source: held!.source },
-            shares,
-          );
+              : { kind: "crypto", symbol: held!.symbol, source: held!.source };
+          await saveQuantity(target, shares);
+          undo.counts.push({ target, shares: held ? held.shares : keys.data!.shares.get(key)! });
         }
       } catch (e) {
         // The trades are saved by now: say so, as for the income rows below.
-        if (fresh.length === 0) throw e;
+        if (trades.length === 0) throw e;
         const unsaved =
-          freshEvents.length > 0
+          rows.length > 0
             ? "the share counts and the income, fee and cash rows weren't"
             : "the share counts weren't";
         throw new Error(
-          `${plural(fresh.length, "trade")} saved, but ${unsaved} (${(e as Error).message}). Import the file again to save them.`,
+          `${plural(trades.length, "trade")} saved, but ${unsaved} (${(e as Error).message}). Import the file again to save them.`,
         );
       }
       // A re-import is skipped by the database too: the same broker id is saved once.
-      if (freshEvents.length > 0) {
+      if (rows.length > 0) {
         // Only rows the database saved come back: one already there (another tab) isn't counted.
         const { data: savedRows, error } = await supabase
           .from("investment_events")
           .upsert(
-            freshEvents.map((e) => ({ ...e, user_id: userId })),
+            rows.map((e) => ({ ...e, user_id: userId })),
             { onConflict: "user_id,source,external_id", ignoreDuplicates: true },
           )
           .select("id");
         // The trades and counts are saved by now: say so, or a retry looks like it starts over.
-        if (error && fresh.length > 0)
+        if (error && trades.length > 0)
           throw new Error(
-            `${plural(fresh.length, "trade")} saved, but the income, fee and cash rows weren't (${error.message}). Import the file again to save them.`,
+            `${plural(trades.length, "trade")} saved, but the income, fee and cash rows weren't (${error.message}). Import the file again to save them.`,
           );
         if (error) throw error;
-        return { trades: fresh.length, events: savedRows?.length ?? 0, counts: updates.length };
+        undo.events = (savedRows ?? []).map((r) => r.id);
+        return done(undo.events.length);
       }
-      return { trades: fresh.length, events: 0, counts: updates.length };
+      return done(0);
     },
     // Counts come from the save itself: the dialog may have been cleared while it ran.
     // Worded as the sibling CSV import's "Imported 3 rows".
-    onSuccess: ({ trades, events, counts }) => {
+    onSuccess: ({ trades, events, counts, added, missedNames, undo }) => {
       const imported = [
         trades > 0 && plural(trades, "trade"),
         events > 0 && plural(events, "income and cash row"),
       ]
         .filter(Boolean)
         .join(" and ");
-      const updated = plural(counts, kind === "crypto" ? "holding" : "share count");
+      const changed = [
+        added > 0 && `added ${plural(added, "holding")}`,
+        counts > 0 && `updated ${plural(counts, kind === "crypto" ? "holding" : "share count")}`,
+      ]
+        .filter(Boolean)
+        .join(", ");
       toast.success(
-        imported && counts > 0
-          ? `Imported ${imported}, updated ${updated}`
+        imported && changed
+          ? `Imported ${imported}, ${changed}`
           : imported
             ? `Imported ${imported}`
-            : counts > 0
-              ? `Updated ${updated}`
+            : changed
+              ? changed[0]!.toUpperCase() + changed.slice(1)
               : "Nothing new imported",
+        imported || changed
+          ? {
+              // Long enough to reach Undo from the keyboard (sonner pauses it on hover and focus).
+              duration: 10_000,
+              action: {
+                label: "Undo this import",
+                onClick: () =>
+                  void undoImport(undo)
+                    .then(
+                      () => toast.success("Import undone"),
+                      (e: Error) => toast.error("Couldn't undo", { description: e.message }),
+                    )
+                    .finally(refresh),
+              },
+            }
+          : undefined,
       );
+      // One line for all of them, however many.
+      if (missedNames.length > 0)
+        toast.error(
+          missedNames.length === 1
+            ? `${missedNames[0]} couldn't be added, so its trades weren't saved. Add it, then import again.`
+            : `${plural(missedNames.length, "holding")} couldn't be added, so their trades weren't saved: ${missedNames.join(", ")}. Add them, then import again.`,
+        );
       reset();
       setOpen(false);
     },
     onSettled: () => {
       saving.current = false;
-      void queryClient.invalidateQueries({ queryKey: ["holding-trades"] });
-      void queryClient.invalidateQueries({ queryKey: ["investment-events"] });
-      void queryClient.invalidateQueries({ queryKey: ["holding-keys", kind] });
-      void queryClient.invalidateQueries({ queryKey: ["holding-performance"] });
-      void queryClient.invalidateQueries({
-        queryKey: [kind === "stock" ? "portfolio-latest" : "crypto-latest"],
-      });
-      void queryClient.invalidateQueries({ queryKey: ["net-worth-daily"] });
+      refresh();
     },
   });
+  function refresh() {
+    void queryClient.invalidateQueries({ queryKey: ["holding-trades"] });
+    void queryClient.invalidateQueries({ queryKey: ["investment-events"] });
+    void queryClient.invalidateQueries({ queryKey: ["holding-keys", kind] });
+    void queryClient.invalidateQueries({ queryKey: ["holding-performance"] });
+    void queryClient.invalidateQueries({
+      queryKey: [kind === "stock" ? "portfolio-latest" : "crypto-latest"],
+    });
+    void queryClient.invalidateQueries({ queryKey: ["net-worth-daily"] });
+  }
 
   // Choosing a source or a file removes the control you used: focus goes on to the next step.
   // A new step focuses its title; Another broker focuses the way to ask for it.
@@ -413,7 +543,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     (parsed.events == null || savedEvents.data != null) &&
     fresh.length === 0 &&
     freshEvents.length === 0 &&
-    updates.length === 0;
+    updates.length === 0 &&
+    toAdd.length === 0;
   // Without the holdings or the rates the file can't be read: no spinner next to the error.
   const stuck = !parsed && (keys.isError || (rates.isError && !retrying));
   // Counts in the reader's locale (1,234).
@@ -756,6 +887,11 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                     .join(" · ")}
                 </p>
               )}
+              {toAdd.length > 0 && (
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  Adds {plural(toAdd.length, "holding")}
+                </p>
+              )}
             </div>
 
             {/* Shown once the saved rows are known: until then the file's could all be saved already. */}
@@ -768,16 +904,16 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                     : "Costs on these trades"}
                 </p>
                 <GroupedList className="border border-hairline">
-                  {incomeList.map((r, i) => (
+                  {incomeList.map((r) => (
                     <div key={r.label}>
                       <div className={row}>
                         <span className="flex-1">{r.label}</span>
                         <span className="font-figure">{formatIncome(r.value)}</span>
                       </div>
-                      {/* Right under the last of Dividends and Interest, which it's about. */}
-                      {i === afterTax && (
+                      {/* The amounts above are after tax: these aren't more to pay. */}
+                      {r.label === "Taxes" && (
                         <p className="-mt-1 px-4 pb-2 text-xs text-muted-foreground">
-                          Dividends and interest are after tax.
+                          Already taken off what you were paid, not extra.
                         </p>
                       )}
                     </div>
@@ -882,8 +1018,10 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                     <div key={h.key} className={row}>
                       <span className="min-w-0 flex-1 truncate">
                         {keys.data?.names.get(h.key) ?? parsed.names?.get(h.key) ?? h.key}
-                        {/* A stock with no holding, kept because it nets to zero (a coin is left out, with a note). */}
-                        {ctx && !ctx.knownKeys.has(h.key) && " · fully sold"}
+                        {/* A stock with no holding: added on Save, or kept because it nets to zero (a coin is left out, with a note). */}
+                        {ctx &&
+                          !ctx.knownKeys.has(h.key) &&
+                          (adding.has(h.key) ? " · new" : " · fully sold")}
                       </span>
                       <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
                         {[
@@ -926,7 +1064,10 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             <Button
               className="w-full"
               disabled={
-                (fresh.length === 0 && updates.length === 0 && freshEvents.length === 0) ||
+                (fresh.length === 0 &&
+                  updates.length === 0 &&
+                  freshEvents.length === 0 &&
+                  toAdd.length === 0) ||
                 (parsed.events != null && !savedEvents.data) ||
                 save.isPending
               }

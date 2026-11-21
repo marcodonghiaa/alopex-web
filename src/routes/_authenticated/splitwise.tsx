@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { BalancesView } from "@/components/splitwise/balances-view";
 import { summarizeBalances } from "@/lib/import/splitwise-balances";
+import { importedMessage } from "@/lib/import/splitwise-format";
 import { useSplitwiseBalances } from "@/lib/use-splitwise-balances";
 import { OwedView } from "@/components/splitwise/owed-view";
 import { LastImportRow } from "@/components/splitwise/last-import-row";
@@ -131,8 +132,7 @@ function SplitwisePage() {
     if (userId) saveLastImport(browserStorage(), userId, "splitwise", entry);
     setLast(entry);
     setImporting(false);
-    const n = done.shares === 1 ? "1 expense" : `${done.shares} expenses`;
-    toast.success(`${n} imported into ${done.group}`, {
+    toast.success(importedMessage(done), {
       duration: 10_000,
       action: { label: "Undo", onClick: () => undoBatch(done.batchId) },
     });

@@ -246,12 +246,12 @@ export const tradeRepublic: BrokerParser = {
       }
     });
 
-    const open = unheldKeys(trades, knownKeys);
+    // A share you don't hold yet is kept: the file is your whole history, so Save adds its
+    // holding with what's left. A coin may sit in another wallet too, so it's left out.
+    const open = kind === "crypto" ? unheldKeys(trades, knownKeys) : [];
     for (const key of open)
       notes.push(
-        kind === "crypto"
-          ? `${names.get(key) || key} has no manual holding, so it was left out. Add it as a manual coin, then import again.`
-          : `${names.get(key) || key} isn't in your holdings, so it was left out. Add it, then import again.`,
+        `${names.get(key) || key} has no manual holding, so it was left out. Add it as a manual coin, then import again.`,
       );
     if (reverse > 0)
       notes.push(

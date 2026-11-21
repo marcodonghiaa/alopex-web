@@ -562,15 +562,20 @@ describe("Trade Republic, income, fees, taxes and cash", () => {
     expect(raw.endsWith("😀")).toBe(true);
   });
 
-  it("a dividend from something you don't hold is left out with its trades", () => {
-    const { events } = parseTradesCsv(
-      file(
-        { symbol: "ZZ", shares: "1", price: "10" },
-        { category: "CASH", type: "DIVIDEND", symbol: "ZZ", amount: "1" },
-      ),
-      stock,
+  it("#15 a dividend from a share you don't hold yet is kept with its trades; a coin's is left out", () => {
+    const text = file(
+      { symbol: "ZZ", shares: "1", price: "10" },
+      { category: "CASH", type: "DIVIDEND", symbol: "ZZ", amount: "1" },
     );
-    expect(events).toEqual([]);
+    const kept = parseTradesCsv(text, stock);
+    expect(kept.trades.map((t) => t.key)).toEqual(["ZZ"]);
+    expect(kept.events?.map((e) => [e.kind, e.key])).toEqual([["dividend", "ZZ"]]);
+    const coin = file(
+      { asset_class: "CRYPTO", symbol: "ZZ", shares: "1", price: "10" },
+      { category: "CASH", type: "DIVIDEND", asset_class: "CRYPTO", symbol: "ZZ", amount: "1" },
+    );
+    const left = parseTradesCsv(coin, crypto);
+    expect([left.trades, left.events]).toEqual([[], []]);
   });
 
   it("a coin's reward goes with the Crypto page, cash interest with Portfolio", () => {

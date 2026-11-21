@@ -20,3 +20,13 @@ export function shortDate(iso: string, today = new Date()): string {
 export const moneyAmount = formatMoney;
 
 export const money = (cents: number, currency: string) => moneyAmount(cents / 100, currency);
+
+const expenses = (n: number) => (n === 1 ? "1 expense" : `${n} expenses`);
+
+/** The toast after an import: what was written, and how many of those you paid yourself. */
+export function importedMessage(done: { shares: number; paidByYou: number; group: string }) {
+  const head = `${expenses(done.shares)} imported into ${done.group}`;
+  if (done.paidByYou <= 0 || done.paidByYou > done.shares) return head;
+  if (done.paidByYou === done.shares) return `${head}, all paid by you`;
+  return `${head}: ${done.shares - done.paidByYou} paid by others, ${done.paidByYou} paid by you`;
+}

@@ -213,26 +213,31 @@ function SubscriptionsPage() {
         <Alert className="mb-6">Couldn't load subscriptions: {query.error.message}</Alert>
       )}
 
-      {/* Estimated monthly cost */}
-      <section aria-label="Estimated monthly cost" className="mb-5">
-        <div className="min-h-12">
-          {query.isPending ? (
-            <Skeleton className="h-12 w-72" />
-          ) : (
-            <p className="figure-display">
-              {total.known === 0 ? "—" : `~${formatMoney(total.sum, "EUR")}`}
-              {total.known > 0 && (
-                <span className="text-[0.4em] tracking-normal text-muted-foreground"> /month</span>
-              )}
+      {/* Estimated monthly cost: hidden with nothing active, where its dash read as a white bar (e2e #13). */}
+      {(query.isPending || active.length > 0) && (
+        <section aria-label="Estimated monthly cost" className="mb-5">
+          <div className="min-h-12">
+            {query.isPending ? (
+              <Skeleton className="h-12 w-72" />
+            ) : (
+              <p className="figure-display">
+                {total.known === 0 ? "—" : `~${formatMoney(total.sum, "EUR")}`}
+                {total.known > 0 && (
+                  <span className="text-[0.4em] tracking-normal text-muted-foreground">
+                    {" "}
+                    /month
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+          {!query.isPending && total.known > 0 && total.unknown > 0 && (
+            <p className="text-[0.8125rem] text-muted-foreground">
+              + {total.unknown} without a frequency
             </p>
           )}
-        </div>
-        {!query.isPending && total.known > 0 && total.unknown > 0 && (
-          <p className="text-[0.8125rem] text-muted-foreground">
-            + {total.unknown} without a frequency
-          </p>
-        )}
-      </section>
+        </section>
+      )}
 
       <div className="mb-8 max-w-xs">
         <SegmentedControl label="View" options={[...VIEWS]} value={view} onChange={setView} />
