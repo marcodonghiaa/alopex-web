@@ -429,6 +429,23 @@ describe("Settings sidebar", () => {
     }
   });
 
+  // polish-5 F2: the desktop link goes straight to Overview, so focus lands on the current
+  // settings link instead of the redirect's leftover. fails_when=it points at /settings again
+  it("sends the desktop Settings link straight to Overview", () => {
+    rows.current = [];
+    path.current = "/budgets";
+    try {
+      renderLayout();
+      const aside = document.querySelector("aside")!;
+      expect(within(aside).getByRole("link", { name: "Settings" })).toHaveAttribute(
+        "href",
+        "/settings/overview",
+      );
+    } finally {
+      path.current = "/";
+    }
+  });
+
   // polish-4 A1: the link you pressed unmounts with the sidebar swap; focus must land in the new
   // menu, not on <body> (WCAG 2.4.3). fails_when=the next Tab skips the settings menu
   it("moves keyboard focus into the menu that replaced the one you used", () => {

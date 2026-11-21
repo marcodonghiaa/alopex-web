@@ -334,9 +334,10 @@ function AuthenticatedLayout() {
 
         <div className="border-t p-3">
           <div className="mb-2 truncate px-3 text-xs text-muted-foreground">{user.email}</div>
-          {/* In Settings its own menu is above; the link would only repeat it. */}
+          {/* In Settings its own menu is above; the link would only repeat it. Desktop opens
+              Overview directly (phone /settings is the list), so focus lands on its link. */}
           {!inSettings && (
-            <Link to="/settings" className={SIDEBAR_LINK}>
+            <Link to="/settings/overview" className={SIDEBAR_LINK}>
               <Settings className="size-[1.125rem] shrink-0" />
               Settings
             </Link>
