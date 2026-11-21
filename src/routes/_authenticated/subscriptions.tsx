@@ -120,6 +120,8 @@ function SubscriptionsPage() {
   const query = useRecurringStreams();
   // Opening the page re-checks your subscriptions, so a transaction you just renamed, marked
   // One-time or deleted shows here. The saved list shows meanwhile; an action in flight refetches itself.
+  // shortcut: a full detection per visit (two paged reads + one upsert), cheap for one household.
+  // No skip-if-recent on purpose: edit a transaction, then open this page, must show the edit.
   useEffect(() => {
     void refreshRecurring().then(async (ran) => {
       if (!ran || queryClient.isMutating({ mutationKey: MUTATION_KEY }) > 0) return;
