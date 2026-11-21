@@ -30,6 +30,8 @@ describe("MenuPagesSection", () => {
     render(<MenuPagesSection />);
     fireEvent.click(screen.getByRole("switch", { name: "Income" }));
     expect(screen.getByRole("alert")).toHaveTextContent(/blocks site storage/);
+    // polish-4 V2: the app's Alert (loss wash), not a bare red line under the list.
+    expect(screen.getByRole("alert")).toHaveClass("bg-negative/10");
     expect(screen.getByRole("switch", { name: "Income" })).toBeChecked();
   });
 

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Alert } from "@/components/ui/alert";
 import { GroupedList } from "@/components/ui/grouped-list";
 import { Switch } from "@/components/ui/switch";
 import { HIDEABLE_PAGES, setPageHidden, useHiddenPages } from "@/lib/hidden-pages";
@@ -31,9 +32,9 @@ export function MenuPagesSection() {
         })}
       </GroupedList>
       {failed && (
-        <p role="alert" className="mt-3 text-sm text-negative">
+        <Alert className="mt-3 max-w-xl">
           Couldn&apos;t save on this device: the browser blocks site storage.
-        </p>
+        </Alert>
       )}
     </section>
   );
