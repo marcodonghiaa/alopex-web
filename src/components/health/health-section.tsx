@@ -117,7 +117,7 @@ function BankGroup({
           </span>
           <ChevronRight
             aria-hidden
-            className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
+            className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none"
           />
         </summary>
         <ul className="divide-y divide-hairline border-t border-hairline pl-5.5">

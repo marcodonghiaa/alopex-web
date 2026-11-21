@@ -138,6 +138,8 @@ describe("HealthSection", () => {
     // polish-4 V8: rows inside a bank read as its children: 14px regular under the 15px bank name.
     expect(screen.getByText("Revolut")).toHaveClass("font-medium");
     expect(screen.getByText("USD sync")).toHaveClass("text-sm", "font-normal");
+    // polish-4 A4: the chevron holds still under reduced motion.
+    expect(fineco!.querySelector("summary svg")).toHaveClass("motion-reduce:transition-none");
   });
 
   it("keeps the push row out of Health", async () => {
