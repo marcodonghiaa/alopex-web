@@ -241,4 +241,18 @@ describe("groupByBank", () => {
       "Revolut USD sync",
     ]);
   });
+
+  // polish-1 #2: real labels are the holder name, so two IBAN-less cards share it.
+  // fails_when=both rows still read "Revolut EUR sync · Jane Doe"
+  it("falls back to the account id's end when the label doesn't tell twins apart", () => {
+    const cards = [
+      acct({ uid: "card-1111", label: "Jane Doe" }),
+      acct({ uid: "card-2222", label: "Jane Doe" }),
+    ];
+    const [group] = groupByBank(syncRows(cards, NOW)) as Array<{ rows: Array<{ title: string }> }>;
+    expect(group!.rows.map((r) => r.title)).toEqual([
+      "Revolut EUR sync · …1111",
+      "Revolut EUR sync · …2222",
+    ]);
+  });
 });

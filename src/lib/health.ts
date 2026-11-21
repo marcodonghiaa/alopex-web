@@ -213,14 +213,16 @@ export function groupByBank(rows: Array<HealthRow>): Array<HealthItem> {
     else banks.set(row.bank, [...(banks.get(row.bank) ?? []), row]);
   }
   const groups = [...banks].map(([bank, list]): HealthItem => {
-    // Two "Revolut EUR sync" rows: name each by its account.
+    // Two "Revolut EUR sync" rows: name each by its account; when that is shared too (labels
+    // are often the holder's name), by the end of its id.
+    const twins = (r: HealthRow) => list.filter((o) => o !== r && o.title === r.title);
+    const tag = (r: HealthRow) =>
+      r.account && !twins(r).some((o) => o.account === r.account)
+        ? r.account
+        : `…${r.id.slice(-4)}`;
     const sorted = [...list]
       .sort(bySeverity)
-      .map((r) =>
-        r.account && list.some((o) => o !== r && o.title === r.title)
-          ? { ...r, title: `${r.title} · ${r.account}` }
-          : r,
-      );
+      .map((r) => (twins(r).length ? { ...r, title: `${r.title} · ${tag(r)}` } : r));
     return { bank, state: sorted[0]!.state, rows: sorted };
   });
   // Banks lead at equal severity: they are what the section is mostly about.
