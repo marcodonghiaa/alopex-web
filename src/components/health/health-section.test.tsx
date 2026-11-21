@@ -142,6 +142,16 @@ describe("HealthSection", () => {
     expect(fineco!.querySelector("summary svg")).toHaveClass("motion-reduce:transition-none");
   });
 
+  // polish-5 audit #9B: the plural form of the group's count.
+  it("counts several checks that need attention in one bank", async () => {
+    accountsResult = {
+      data: [staleAccount, { ...staleAccount, uid: "a2", currency: "USD" }],
+      error: null,
+    };
+    renderWith(<HealthSection />);
+    expect(await screen.findByText("2 accounts · 2 need attention")).toBeInTheDocument();
+  });
+
   it("keeps the push row out of Health", async () => {
     support = "install";
     renderWith(<HealthSection />);

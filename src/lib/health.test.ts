@@ -44,6 +44,13 @@ describe("syncState", () => {
 });
 
 describe("syncRows", () => {
+  // polish-5 audit #3: with no IBAN and no label there is nothing to name the account by;
+  // groupByBank then falls back to the end of its id.
+  it("leaves the account name out when there is neither IBAN nor label", () => {
+    const [row] = syncRows([acct({ iban: null, label: null })], new Date("2026-10-28T12:00:00Z"));
+    expect(row).not.toHaveProperty("account");
+  });
+
   it("skips accounts without a bank consent", () => {
     expect(syncRows([acct({ consent_valid_until: null })], NOW)).toEqual([]);
   });
