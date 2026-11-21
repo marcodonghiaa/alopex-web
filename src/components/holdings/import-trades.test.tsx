@@ -134,7 +134,9 @@ vi.mock("@/integrations/supabase/client", () => {
         upsert: (rows: Array<Record<string, unknown>>, options: unknown) => {
           db.upserted.push([table, rows, options]);
           const error = db.upsertError ? { message: db.upsertError } : null;
-          const saved = rows.slice(0, db.upsertSaved ?? rows.length);
+          const saved = rows
+            .slice(0, db.upsertSaved ?? rows.length)
+            .map((r, i) => ({ ...r, id: `event-${i + 1}` }));
           return Object.assign(Promise.resolve({ error }), {
             select: () => Promise.resolve({ data: error ? null : saved, error }),
           });
@@ -660,7 +662,7 @@ describe("ImportTrades", () => {
     open("stock");
     fireEvent.click(await pickTradeRepublic());
     await waitFor(() =>
-      expect(toast.success).toHaveBeenLastCalledWith(
+      expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe(
         "Imported 4 trades and 1 income and cash row, updated 2 share counts",
       ),
     );
@@ -1012,7 +1014,7 @@ describe("ImportTrades", () => {
     });
     fireEvent.click(await screen.findByRole("button", { name: "Save 1 row" }));
     await waitFor(() =>
-      expect(toast.success).toHaveBeenLastCalledWith(
+      expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe(
         "Imported 1 income and cash row, updated 2 share counts",
       ),
     );
@@ -1053,7 +1055,7 @@ describe("ImportTrades", () => {
       expect.objectContaining({ kind: "dividend", amount_eur: 1.2, user_id: "u1" }),
     ]);
     await waitFor(() =>
-      expect(toast.success).toHaveBeenLastCalledWith(
+      expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe(
         "Imported 4 trades and 1 income and cash row, updated 2 share counts",
       ),
     );
@@ -1219,7 +1221,7 @@ describe("ImportTrades", () => {
       expect(screen.getByText(new RegExp(`^${n.replace(".", "\\.")} buys · `))).toBeTruthy();
       fireEvent.click(screen.getByRole("button", { name: `Save ${n} trades` }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-      expect(toast.success).toHaveBeenLastCalledWith(`Imported ${n} trades`);
+      expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe(`Imported ${n} trades`);
     },
   );
 
@@ -1907,7 +1909,9 @@ describe("ImportTrades", () => {
       pick(/Ledger Live/, "ledger_live.csv");
       fireEvent.click(await screen.findByRole("button", { name: "Save 7 trades" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-      expect(toast.success).toHaveBeenLastCalledWith("Imported 7 trades, updated 2 holdings");
+      expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe(
+        "Imported 7 trades, updated 2 holdings",
+      );
     });
 
     it("one holding updated is singular", async () => {
@@ -1915,7 +1919,9 @@ describe("ImportTrades", () => {
       pick(/Ledger Live/, "ledger_live.csv");
       fireEvent.click(await screen.findByRole("button", { name: "Save 5 trades" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-      expect(toast.success).toHaveBeenLastCalledWith("Imported 5 trades, updated 1 holding");
+      expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe(
+        "Imported 5 trades, updated 1 holding",
+      );
     });
 
     it("nothing corrected: no list, and the toast only counts the trades", async () => {
@@ -1927,7 +1933,7 @@ describe("ImportTrades", () => {
       fireEvent.click(await screen.findByRole("button", { name: "Save 1 trade" }));
       expect(screen.queryByRole("region", { name: /corrected/ })).toBeNull();
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-      expect(toast.success).toHaveBeenLastCalledWith("Imported 1 trade");
+      expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe("Imported 1 trade");
     });
 
     it("a stock's count shows old → new, with no source", async () => {
@@ -1955,7 +1961,7 @@ describe("ImportTrades", () => {
     pick(/Trade Republic/, "trade_republic.csv");
     fireEvent.click(await screen.findByRole("button", { name: "Save share counts" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(toast.success).toHaveBeenLastCalledWith("Updated 2 share counts");
+    expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe("Updated 2 share counts");
   });
 
   it("on Crypto, a file that only corrects holdings offers Save holdings", async () => {
@@ -2243,6 +2249,102 @@ describe("ImportTrades", () => {
       expect(screen.queryByText(/^Adds /)).toBeNull();
       expect(screen.queryByRole("button", { name: /^Save/ })).toBeNull();
       expect(db.invoked).toEqual([]);
+    });
+  });
+  describe("#16 Undo this import removes what that import saved, and nothing else", () => {
+    /** Saves, then presses the toast's Undo. */
+    async function saveThenUndo(saveButton: Promise<HTMLElement>) {
+      vi.mocked(toast.success).mockClear();
+      fireEvent.click(await saveButton);
+      await waitFor(() => expect(toast.success).toHaveBeenCalled());
+      const options = vi.mocked(toast.success).mock.lastCall?.[1] as unknown as {
+        action: { label: string; onClick: () => void };
+      };
+      expect(options.action.label).toBe("Undo this import");
+      db.rpc.length = 0;
+      options.action.onClick();
+      await waitFor(() =>
+        expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe("Import undone"),
+      );
+    }
+
+    it("deletes its trades and rows by id, and the holding it added", async () => {
+      db.stocks.splice(0, Infinity);
+      open("stock");
+      await saveThenUndo(pickTradeRepublic());
+      expect(db.deleted).toEqual([
+        ["holding_trades", "id", ["trade-1", "trade-2", "trade-3", "trade-4"]],
+        ["investment_events", "id", ["event-1"]],
+      ]);
+      expect(db.rpc).toEqual([["delete_holding", { p_kind: "stock", p_key: "XX0000000001" }]]);
+    });
+
+    it("sets the share counts it corrected back, and deletes no holding", async () => {
+      open("stock");
+      await saveThenUndo(pickTradeRepublic());
+      expect(db.rpc).toEqual([
+        [
+          "set_holding_quantity",
+          { p_kind: "stock", p_key: "XX0000000001", p_quantity: 1, p_source: null },
+        ],
+        [
+          "set_holding_quantity",
+          { p_kind: "stock", p_key: "XX0000000002", p_quantity: 1, p_source: null },
+        ],
+      ]);
+    });
+
+    it("a holding it added that had trades from before is set to zero, so those stay", async () => {
+      db.stocks.splice(0, Infinity);
+      const earlier: Trade = {
+        kind: "stock",
+        key: "XX0000000001",
+        side: "buy",
+        trade_date: "2025-01-02",
+        shares: 1,
+        price_eur: 10,
+        fee_eur: 0,
+      };
+      open("stock", [earlier, { ...earlier, side: "sell", trade_date: "2025-02-02" }]);
+      await saveThenUndo(pickTradeRepublic());
+      expect(db.rpc).toEqual([
+        [
+          "set_holding_quantity",
+          { p_kind: "stock", p_key: "XX0000000001", p_quantity: 0, p_source: null },
+        ],
+      ]);
+    });
+
+    it("if it fails, it says so", async () => {
+      db.stocks.splice(0, Infinity);
+      vi.mocked(toast.error).mockClear();
+      open("stock");
+      fireEvent.click(await pickTradeRepublic());
+      await waitFor(() => expect(toast.success).toHaveBeenCalled());
+      const options = vi.mocked(toast.success).mock.lastCall?.[1] as unknown as {
+        action: { onClick: () => void };
+      };
+      db.rpcError = { message: "offline" };
+      options.action.onClick();
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith("Couldn't undo", { description: "offline" }),
+      );
+    });
+
+    it("a save that saved nothing offers no Undo", async () => {
+      const [header] = readFileSync("src/lib/brokers/fixtures/trade_republic.csv", "utf8").split(
+        "\n",
+      );
+      const saveback =
+        '"2026-03-02T09:00:00Z","2026-03-02","DEFAULT","CASH","BENEFITS_SAVEBACK","","","","","","1.50","","","EUR","00000000-0000-4000-8000-000000000007"';
+      // Another tab saved the row meanwhile: the database had it already.
+      db.upsertSaved = 0;
+      vi.mocked(toast.success).mockClear();
+      open("stock");
+      pickText(/Trade Republic/, `${header}\n${saveback}`);
+      fireEvent.click(await screen.findByRole("button", { name: "Save 1 row" }));
+      await waitFor(() => expect(toast.success).toHaveBeenCalled());
+      expect(vi.mocked(toast.success).mock.lastCall).toEqual(["Nothing new imported", undefined]);
     });
   });
 });
