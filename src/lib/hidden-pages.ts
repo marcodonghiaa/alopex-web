@@ -50,7 +50,7 @@ function subscribe(listener: () => void) {
   listeners.add(listener);
   // Another tab changed it.
   const onStorage = (e: StorageEvent) => {
-    if (e.key !== KEY) return;
+    if (e.key !== null && e.key !== KEY) return; // null: the other tab cleared all storage
     cached = undefined;
     listener();
   };

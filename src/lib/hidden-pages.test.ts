@@ -57,3 +57,17 @@ describe("hidden pages", () => {
     expect(result.current).toEqual(["/import"]);
   });
 });
+
+// polish-1 #7: localStorage.clear() in another tab fires "storage" with key null; the list
+// stayed stale until reload. fails_when=a cleared store in another tab isn't picked up
+it("picks up another tab clearing all storage", async () => {
+  const m = await load();
+  m.setPageHidden("/budgets", true);
+  const { result } = renderHook(() => m.useHiddenPages());
+  expect(result.current).toEqual(["/budgets"]);
+  act(() => {
+    localStorage.clear();
+    window.dispatchEvent(new StorageEvent("storage", { key: null }));
+  });
+  expect(result.current).toEqual([]);
+});
