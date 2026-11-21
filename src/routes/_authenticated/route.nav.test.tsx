@@ -366,6 +366,67 @@ describe("Settings sidebar", () => {
     }
   });
 
+  // polish-4 C2: a reload inside Settings remounts the layout; Back to app still returns to the
+  // filtered page. fails_when=it falls back to "/"
+  it("remembers the last app page across a reload inside Settings", () => {
+    rows.current = [];
+    path.current = "/transactions";
+    search.current = { category: "Dine Out" };
+    try {
+      renderLayout().unmount();
+      path.current = "/settings/app";
+      search.current = {};
+      renderLayout();
+      const nav = screen.getByRole("navigation", { name: "Settings" });
+      expect(within(nav).getByRole("link", { name: "Back to app" })).toHaveAttribute(
+        "href",
+        "/transactions?category=Dine+Out",
+      );
+    } finally {
+      path.current = "/";
+      search.current = {};
+      sessionStorage.clear();
+    }
+  });
+
+  it.each([
+    ["another site", JSON.stringify({ to: "//evil.example", search: {} })],
+    ["a settings page", JSON.stringify({ to: "/settings/app", search: {} })],
+    ["junk", "{"],
+  ])("ignores a saved last page that is %s", (_, saved) => {
+    rows.current = [];
+    sessionStorage.setItem("alopex.lastAppPage", saved);
+    path.current = "/settings/app";
+    try {
+      renderLayout();
+      const nav = screen.getByRole("navigation", { name: "Settings" });
+      expect(within(nav).getByRole("link", { name: "Back to app" })).toHaveAttribute("href", "/");
+    } finally {
+      path.current = "/";
+      sessionStorage.clear();
+    }
+  });
+
+  it("still works when the browser blocks session storage", () => {
+    rows.current = [];
+    const get = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    const set = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    path.current = "/settings/app";
+    try {
+      renderLayout();
+      const nav = screen.getByRole("navigation", { name: "Settings" });
+      expect(within(nav).getByRole("link", { name: "Back to app" })).toHaveAttribute("href", "/");
+    } finally {
+      get.mockRestore();
+      set.mockRestore();
+      path.current = "/";
+    }
+  });
+
   // polish-4 A1: the link you pressed unmounts with the sidebar swap; focus must land in the new
   // menu, not on <body> (WCAG 2.4.3). fails_when=the next Tab skips the settings menu
   it("moves keyboard focus into the menu that replaced the one you used", () => {

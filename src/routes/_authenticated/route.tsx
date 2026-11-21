@@ -178,6 +178,21 @@ const SHEET_ROW =
   "flex min-h-11 items-center gap-3 px-4 py-2.5 text-left text-[0.9375rem] text-foreground active:bg-accent";
 const SHEET_ROW_ACTIVE = `${SHEET_ROW} bg-accent font-medium`;
 
+type AppPage = { to: string; search: object };
+const LAST_APP_PAGE = "alopex.lastAppPage";
+// The last page outside Settings saved in this tab; only an in-app path is trusted.
+function savedAppPage(): AppPage {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(LAST_APP_PAGE) ?? "null") as Partial<AppPage>;
+    if (typeof v?.to === "string" && /^\/(?!\/)/.test(v.to) && !isSettingsPath(v.to)) {
+      return { to: v.to, search: typeof v.search === "object" && v.search ? v.search : {} };
+    }
+  } catch {
+    // Blocked or malformed: start from Net Worth.
+  }
+  return { to: "/", search: {} };
+}
+
 function AuthenticatedLayout() {
   const { user } = Route.useRouteContext();
   const navigate = useNavigate();
@@ -190,8 +205,18 @@ function AuthenticatedLayout() {
   // Settings replaces the sidebar; "Back to app" returns to the last page outside it.
   const inSettings = isSettingsPath(pathname);
   const search = useRouterState({ select: (st) => st.location.search });
-  const lastAppPage = useRef<{ to: string; search: object }>({ to: "/", search: {} });
+  const [savedPage] = useState(savedAppPage);
+  const lastAppPage = useRef<AppPage>(savedPage);
   if (!inSettings) lastAppPage.current = { to: pathname, search };
+  // Kept for this tab, so a reload inside Settings still goes back to the filtered page.
+  useEffect(() => {
+    if (inSettings) return;
+    try {
+      sessionStorage.setItem(LAST_APP_PAGE, JSON.stringify({ to: pathname, search }));
+    } catch {
+      // Storage blocked: Back to app falls back to this session's memory.
+    }
+  }, [inSettings, pathname, search]);
   // Entering or leaving Settings unmounts the link that was pressed: put keyboard focus on the
   // new menu's current link (else its first), so the next Tab doesn't skip the whole menu.
   const sidebar = useRef<HTMLElement>(null);
