@@ -288,11 +288,7 @@ function AuthenticatedLayout() {
           <div className="mb-2 truncate px-3 text-xs text-muted-foreground">{user.email}</div>
           {/* In Settings its own menu is above; the link would only repeat it. */}
           {!inSettings && (
-            <Link
-              to="/settings"
-              className={SIDEBAR_LINK}
-              activeProps={{ className: SIDEBAR_LINK_ACTIVE }}
-            >
+            <Link to="/settings" className={SIDEBAR_LINK}>
               <Settings className="size-[1.125rem] shrink-0" />
               Settings
             </Link>
