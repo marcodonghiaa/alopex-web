@@ -299,6 +299,30 @@ describe("connect a bank", () => {
     expect(screen.getByLabelText("Country")).toHaveValue("PL");
   });
 
+  // protects=a bank Enable Banking marks beta is listed (you can link it in its control panel)
+  // and labelled; fails_when=it is hidden or looks like any other bank (e2e: Trade Republic)
+  it("lists beta banks with a (beta) label, keeping the real name as the value", async () => {
+    invoke.mockResolvedValue({
+      data: {
+        banks: [
+          { name: "Sample Bank", logo: null, beta: false },
+          { name: "Beta Bank", logo: null, beta: true },
+        ],
+      },
+      error: null,
+    });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Connect a bank" }));
+    expect(await screen.findByRole("option", { name: "Beta Bank (beta)" })).toHaveValue(
+      "Beta Bank",
+    );
+    expect(screen.getByRole("option", { name: "Sample Bank" })).toHaveValue("Sample Bank");
+  });
+
   // protects=a failed bank list says so, is announced and can be retried; fails_when=the disabled
   // select still reads "Select a bank…" and only changing country tries again (polish 5, item 4)
   it("says the bank list failed and retries it", async () => {
