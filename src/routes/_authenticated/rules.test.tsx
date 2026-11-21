@@ -1315,3 +1315,15 @@ describe("re-sorting what a deleted rule filed", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 });
+
+// polish-1 #5: Rules is part of Settings › Personalization; on a phone it had no way back there.
+// fails_when=the phone back control is missing or goes elsewhere
+describe("Rules back to Settings (phone)", () => {
+  it("offers a phone-only way back to Personalization", async () => {
+    renderPage();
+    const back = await screen.findByRole("button", { name: "Personalization" });
+    expect(back.closest(".md\\:hidden")).not.toBeNull();
+    fireEvent.click(back);
+    expect(navigate).toHaveBeenCalledWith({ to: "/settings/personalization" });
+  });
+});
