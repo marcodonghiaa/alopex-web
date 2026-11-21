@@ -15,9 +15,9 @@ describe("MenuPagesSection", () => {
     render(<MenuPagesSection />);
     const budgets = screen.getByRole("switch", { name: "Budgets" });
     expect(screen.getAllByRole("switch")).toHaveLength(7);
-    expect(budgets).toHaveAttribute("aria-checked", "true");
+    expect(budgets).toBeChecked();
     fireEvent.click(budgets);
-    expect(budgets).toHaveAttribute("aria-checked", "false");
+    expect(budgets).not.toBeChecked();
     expect(hiddenPages()).toEqual(["/budgets"]);
     fireEvent.click(budgets);
     expect(hiddenPages()).toEqual([]);
@@ -30,7 +30,7 @@ describe("MenuPagesSection", () => {
     render(<MenuPagesSection />);
     fireEvent.click(screen.getByRole("switch", { name: "Income" }));
     expect(screen.getByRole("alert")).toHaveTextContent(/blocks site storage/);
-    expect(screen.getByRole("switch", { name: "Income" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("switch", { name: "Income" })).toBeChecked();
   });
 
   // polish-3 audit: fail, then retry once storage works again: the alert goes and the switch moves.
@@ -45,7 +45,7 @@ describe("MenuPagesSection", () => {
     spy.mockRestore();
     fireEvent.click(income);
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(income).toHaveAttribute("aria-checked", "false");
+    expect(income).not.toBeChecked();
     setPageHidden("/income", false);
   });
 });

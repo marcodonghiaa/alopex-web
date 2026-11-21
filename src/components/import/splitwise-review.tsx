@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, Loader2, TriangleAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Switch } from "@/components/ui/switch";
 import { CategoryTable } from "@/components/import/splitwise-category-table";
 import { FindInBank } from "@/components/import/find-in-bank";
 import { CTA, Group, LINK, PRIMARY, Steps, TINTED } from "@/components/import/splitwise-ui";
@@ -514,9 +515,7 @@ export function SplitwiseReview({
                       {m.confidence === "ambiguous" && " · not sure"}
                     </span>
                   </span>
-                  <input
-                    type="checkbox"
-                    role="switch"
+                  <Switch
                     aria-label={`${row.description.trim()} is this bank payment`}
                     checked={on}
                     onChange={(e) => {
@@ -528,11 +527,6 @@ export function SplitwiseReview({
                         setManual(next);
                       }
                     }}
-                    className="peer sr-only"
-                  />
-                  <span
-                    aria-hidden
-                    className="relative h-[31px] w-[51px] shrink-0 rounded-full bg-foreground/15 transition-colors peer-checked:bg-positive peer-focus-visible:ring-2 peer-focus-visible:ring-ring after:absolute after:top-[2px] after:left-[2px] after:size-[27px] after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-5"
                   />
                 </label>
                 {!on && row.kind === "paid_by_me" && actions(row)}
