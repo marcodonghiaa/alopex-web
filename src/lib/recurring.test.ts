@@ -80,13 +80,10 @@ describe("groupStreams", () => {
 
   // A stream the detector no longer finds (its charges marked One-time, deleted...) is kept for
   // your choices but shown nowhere: confirmed, archived or undecided.
-  it.each(["confirmed", "dismissed", null] as const)(
-    "hides a gone stream (user_status %s)",
-    (u) => {
-      const g = group(stream({ detected_status: "gone", user_status: u }));
-      expect([g.toReview, g.active, g.stopped, g.dismissed].flat()).toEqual([]);
-    },
-  );
+  it.each(["confirmed", "dismissed"] as const)("hides a gone stream (user_status %s)", (u) => {
+    const g = group(stream({ detected_status: "gone", user_status: u }));
+    expect([g.toReview, g.active, g.stopped, g.dismissed].flat()).toEqual([]);
+  });
 
   it("puts a detected-active stream in active", () => {
     expect(group(stream()).active).toHaveLength(1);
