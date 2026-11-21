@@ -380,3 +380,26 @@ describe("hidden pages", () => {
     }
   });
 });
+
+// polish-1 #1: the More tab summed Subscriptions and Who owes you even when hidden, so it showed
+// a count no row in the sheet carried. fails_when=a hidden page's badge still reaches More
+describe("More badge with hidden pages", () => {
+  it("leaves out the count of a page hidden from the menu", async () => {
+    rows.current = [suggested("a"), suggested("b")];
+    review.current = [{ id: "r1" }, { id: "r2" }, { id: "r3" }];
+    const { setPageHidden } = await import("@/lib/hidden-pages");
+    setPageHidden("/subscriptions", true);
+    try {
+      renderLayout();
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "More, 3 to review" })).toBeTruthy(),
+      );
+      setPageHidden("/splitwise", true);
+      await waitFor(() => expect(screen.getByRole("button", { name: "More" })).toBeTruthy());
+    } finally {
+      setPageHidden("/subscriptions", false);
+      setPageHidden("/splitwise", false);
+      review.current = [];
+    }
+  });
+});

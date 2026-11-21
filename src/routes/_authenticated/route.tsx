@@ -212,7 +212,11 @@ function AuthenticatedLayout() {
     "Who owes you": review.data ?? 0,
   };
   // The More tab sums what waits on the pages it holds that carry a badge.
-  const inMore = (badges["Subscriptions"] ?? 0) + (badges["Who owes you"] ?? 0);
+  // A page hidden in Settings › App has no row in More, so its count stays out too.
+  const inMore = MORE_GROUPS.flatMap((g) => shown(g.items)).reduce(
+    (sum, i) => sum + (badges[i.label] ?? 0),
+    0,
+  );
 
   // Once per page load: tells the backend this address is the dashboard (setup no longer asks for it).
   useEffect(() => {
