@@ -34,7 +34,8 @@ const STALE_RED_H = 72;
 
 // Worst first, so a page can show what needs attention at the top.
 const SEVERITY: Record<HealthState, number> = { bad: 0, warn: 1, ok: 2 };
-export const bySeverity = (a: HealthRow, b: HealthRow) => SEVERITY[a.state] - SEVERITY[b.state];
+export const bySeverity = (a: { state: HealthState }, b: { state: HealthState }) =>
+  SEVERITY[a.state] - SEVERITY[b.state];
 
 // Hours since the account's latest balance snapshot. The snapshot is a calendar day (UTC), so a
 // balance from today reads 0-24 h, yesterday's 24-48 h, and three days back is red.
@@ -226,7 +227,7 @@ export function groupByBank(rows: Array<HealthRow>): Array<HealthItem> {
     return { bank, state: sorted[0]!.state, rows: sorted };
   });
   // Banks lead at equal severity: they are what the section is mostly about.
-  return [...groups, ...singles].sort((a, b) => SEVERITY[a.state] - SEVERITY[b.state]);
+  return [...groups, ...singles].sort(bySeverity);
 }
 
 export const attentionCount = (rows: Array<HealthRow>) =>
