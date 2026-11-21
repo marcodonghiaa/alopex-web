@@ -86,7 +86,7 @@ export function SettingsSidebar({
   /** The last page outside Settings, with its filters. */
   backTo: { to: string; search: object };
 }) {
-  const pathname = useRouterState({ select: (st) => st.location.pathname });
+  const { pathname, hash } = useRouterState({ select: (st) => st.location });
   // A section stays lit on its sub-pages too (Personalization while on Rules).
   const lit = (s: SettingsSection) =>
     s.to === pathname || !!s.children?.some((c) => !c.hash && c.to === pathname);
@@ -114,6 +114,11 @@ export function SettingsSidebar({
                   key={c.label}
                   to={c.to}
                   {...(c.hash && { hash: c.hash })}
+                  // Same URL, so the router keeps the scroll: pressing it again would do nothing.
+                  onClick={() => {
+                    if (c.hash && c.to === pathname && c.hash === hash)
+                      document.getElementById(c.hash)?.scrollIntoView({ block: "start" });
+                  }}
                   // Categories is a section of its page: lit only when its anchor is the target.
                   activeOptions={{ exact: true, includeHash: !!c.hash }}
                   className={SUB}

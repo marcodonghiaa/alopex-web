@@ -33,6 +33,7 @@ async function at(url: string, ui: React.ReactNode) {
       ),
     ),
     history: createMemoryHistory({ initialEntries: [url] }),
+    scrollRestoration: true, // as the app: a same-URL click restores the scroll, not the anchor
   });
   await act(() => router.load());
   render(<RouterProvider router={router} />);
@@ -48,6 +49,31 @@ describe("SettingsSidebar", () => {
     expect(nav.getByRole("link", { name: "Personalization" })).toHaveClass("bg-sidebar-accent");
     expect(nav.getByRole("link", { name: "Rules" })).toHaveAttribute("aria-current", "page");
     expect(nav.getByRole("link", { name: "App" })).not.toHaveClass("bg-sidebar-accent");
+  });
+
+  // polish-4 C1: Categories is an anchor; pressing it again after scrolling away scrolls back
+  // instead of doing nothing (same URL, so the router doesn't move).
+  it("scrolls back to Categories when pressed again on its own anchor", async () => {
+    const scroll = vi.fn();
+    await at(
+      "/settings/personalization#categories",
+      <>
+        <SettingsSidebar backTo={{ to: "/", search: {} }} />
+        <h2
+          id="categories"
+          ref={(el) => {
+            if (el) el.scrollIntoView = scroll;
+          }}
+        >
+          Categories
+        </h2>
+      </>,
+    );
+    act(() => screen.getByRole("link", { name: "Categories" }).click());
+    await new Promise((r) => setTimeout(r, 50));
+    // The router's own hash scroll passes `true`, and in a browser it restores the saved
+    // window scroll instead; only our handler asks for { block: "start" }.
+    expect(scroll).toHaveBeenCalledWith({ block: "start" });
   });
 });
 
