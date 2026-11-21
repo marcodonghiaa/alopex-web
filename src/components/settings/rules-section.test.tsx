@@ -19,4 +19,14 @@ describe("RulesSection", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Rules" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Category rules/ })).toHaveAttribute("href", "/rules");
   });
+
+  // polish-4 V5: Categories and Rules are sibling sections on Personalization: same 18px title.
+  it("titles the section like Categories", () => {
+    render(<RulesSection />);
+    expect(screen.getByRole("heading", { level: 2 })).toHaveClass(
+      "text-lg",
+      "font-semibold",
+      "text-foreground",
+    );
+  });
 });

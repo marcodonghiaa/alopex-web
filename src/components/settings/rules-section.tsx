@@ -6,7 +6,7 @@ import { GroupedList } from "@/components/ui/grouped-list";
 export function RulesSection() {
   return (
     <section aria-labelledby="rules-heading">
-      <h2 id="rules-heading" className="mb-4 text-[0.9375rem] font-medium text-muted-foreground">
+      <h2 id="rules-heading" className="mb-4 text-lg font-semibold text-foreground">
         Rules
       </h2>
       <GroupedList className="max-w-sm">
