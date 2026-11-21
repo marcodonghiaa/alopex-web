@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { PushSubscribeButton } from "@/components/push-subscribe";
 import { ChevronRight } from "lucide-react";
+import { plural } from "@/lib/plural";
 import {
   attentionCount,
   groupByBank,
@@ -91,7 +92,7 @@ function BankGroup({
           <span className="min-w-0 flex-1">
             <span className="block text-[0.9375rem] font-medium text-foreground">{item.bank}</span>
             <span className="block text-sm text-muted-foreground">
-              {accounts} account{accounts === 1 ? "" : "s"} ·{" "}
+              {plural(accounts, "account")} ·{" "}
               {attention === 0
                 ? "all fine"
                 : `${attention} need${attention === 1 ? "s" : ""} attention`}
