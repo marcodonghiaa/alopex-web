@@ -365,6 +365,35 @@ describe("Settings sidebar", () => {
       path.current = "/";
     }
   });
+
+  // polish-4 A1: the link you pressed unmounts with the sidebar swap; focus must land in the new
+  // menu, not on <body> (WCAG 2.4.3). fails_when=the next Tab skips the settings menu
+  it("moves keyboard focus into the menu that replaced the one you used", () => {
+    rows.current = [];
+    path.current = "/budgets";
+    const again = () =>
+      rerender(
+        <QueryClientProvider client={new QueryClient()}>
+          <Layout />
+        </QueryClientProvider>,
+      );
+    const { rerender } = renderLayout();
+    try {
+      const app = screen.getAllByRole("navigation").find((n) => within(n).queryByText("Budgets"))!;
+      within(app).getAllByRole("link")[0]!.focus();
+      path.current = "/settings/app";
+      again();
+      const nav = screen.getByRole("navigation", { name: "Settings" });
+      expect(nav).toContainElement(document.activeElement as HTMLElement);
+      within(nav).getByRole("link", { name: "Back to app" }).focus();
+      path.current = "/budgets";
+      again();
+      expect(document.activeElement).not.toBe(document.body);
+      expect(screen.queryByRole("navigation", { name: "Settings" })).toBeNull();
+    } finally {
+      path.current = "/";
+    }
+  });
 });
 
 // protects=pages switched off in Settings › App leave the sidebar and More; fails_when=they stay

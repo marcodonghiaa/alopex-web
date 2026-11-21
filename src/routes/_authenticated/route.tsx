@@ -192,6 +192,20 @@ function AuthenticatedLayout() {
   const search = useRouterState({ select: (st) => st.location.search });
   const lastAppPage = useRef<{ to: string; search: object }>({ to: "/", search: {} });
   if (!inSettings) lastAppPage.current = { to: pathname, search };
+  // Entering or leaving Settings unmounts the link that was pressed: put keyboard focus on the
+  // new menu's current link (else its first), so the next Tab doesn't skip the whole menu.
+  const sidebar = useRef<HTMLElement>(null);
+  const wasInSettings = useRef(inSettings);
+  useEffect(() => {
+    if (wasInSettings.current === inSettings) return;
+    wasInSettings.current = inSettings;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    const links = sidebar.current?.querySelectorAll<HTMLElement>("nav a");
+    (
+      [...(links ?? [])].find((a) => a.getAttribute("aria-current") === "page") ?? links?.[0]
+    )?.focus();
+  }, [inSettings]);
   // A More link to the page you're on only closes the sheet: navigating would replace the
   // sheet's history entry with the same page and leave a Back that does nothing.
   const closeMenuTo = (e: React.MouseEvent, to: string) => {
@@ -246,7 +260,10 @@ function AuthenticatedLayout() {
   return (
     <div className="flex min-h-dvh bg-background">
       {/* Sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r bg-sidebar md:flex">
+      <aside
+        ref={sidebar}
+        className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r bg-sidebar md:flex"
+      >
         <div className="flex h-16 items-center gap-2.5 px-5">
           <BrandMark className="size-8" />
           <span className="text-[0.9375rem] font-semibold tracking-tight text-sidebar-foreground">
