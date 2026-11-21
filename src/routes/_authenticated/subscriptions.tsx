@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, ChevronDown, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,7 +14,7 @@ import {
   monthlyTotal,
   romeToday,
 } from "@/lib/recurring";
-import { RECURRING_KEY, useRecurringStreams } from "@/lib/use-recurring-streams";
+import { RECURRING_KEY, refreshRecurring, useRecurringStreams } from "@/lib/use-recurring-streams";
 import { formatBookingDateShort, formatMoney } from "@/lib/transactions";
 import { CategoryAvatar } from "@/components/category-avatar";
 import { RevealDialog } from "@/components/subscriptions/reveal-dialog";
@@ -118,6 +118,16 @@ function SubscriptionsPage() {
   // One "today" per visit: a new Date each render would recompute the calendar every time.
   const [today] = useState(romeToday);
   const query = useRecurringStreams();
+  // Opening the page re-checks your subscriptions, so a transaction you just renamed, marked
+  // One-time or deleted shows here. The saved list shows meanwhile; an action in flight refetches itself.
+  useEffect(() => {
+    void refreshRecurring().then(async (ran) => {
+      if (!ran || queryClient.isMutating({ mutationKey: MUTATION_KEY }) > 0) return;
+      // A read still in flight started before the re-check: drop it, or the refetch would reuse it.
+      await queryClient.cancelQueries({ queryKey: RECURRING_KEY });
+      void queryClient.invalidateQueries({ queryKey: RECURRING_KEY });
+    });
+  }, [queryClient]);
 
   const actionMutation = useMutation({
     mutationKey: MUTATION_KEY,
