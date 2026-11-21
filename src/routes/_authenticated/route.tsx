@@ -256,7 +256,7 @@ function AuthenticatedLayout() {
         </div>
 
         {inSettings ? (
-          <SettingsSidebar backTo={lastAppPage.current} pathname={pathname} />
+          <SettingsSidebar backTo={lastAppPage.current} />
         ) : (
           <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-3">
             {NAV_GROUPS.filter((g) => shown(g.items).length > 0).map((group, i) => (

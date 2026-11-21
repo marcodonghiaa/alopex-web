@@ -70,7 +70,6 @@ export const settingsSections = () =>
 export const isSettingsPath = (pathname: string) =>
   pathname === "/settings" || pathname.startsWith("/settings/") || pathname === "/rules";
 
-// Same look as the app sidebar (DESIGN.md "Navigation").
 // Desktop sidebar link (DESIGN.md "Navigation"): 18px line icon + label, 4px corners; hover and
 // active take the sidebar accent fill, active adds weight 500. Shared with the app sidebar.
 export const SIDEBAR_LINK =
@@ -83,11 +82,9 @@ const SUB =
 /** Desktop: replaces the app sidebar while in Settings, like most sites' settings screens. */
 export function SettingsSidebar({
   backTo,
-  pathname,
 }: {
   /** The last page outside Settings, with its filters. */
   backTo: { to: string; search: object };
-  pathname: string;
 }) {
   return (
     <nav aria-label="Settings" className="flex-1 space-y-4 overflow-y-auto px-3 py-3">
@@ -114,8 +111,10 @@ export function SettingsSidebar({
                   key={c.label}
                   to={c.to}
                   {...(c.hash && { hash: c.hash })}
-                  aria-current={c.to === "/rules" && pathname === "/rules" ? "page" : undefined}
-                  className={`${SUB} aria-[current=page]:font-medium aria-[current=page]:text-foreground`}
+                  // Categories is a section of its page: lit only when its anchor is the target.
+                  activeOptions={{ exact: true, includeHash: !!c.hash }}
+                  className={SUB}
+                  activeProps={{ className: `${SUB} font-medium text-foreground` }}
                 >
                   {c.label}
                 </Link>
