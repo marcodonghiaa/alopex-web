@@ -191,8 +191,9 @@ function AuthenticatedLayout() {
   const shown = (items: Array<NavItem>) => items.filter((i) => !hidden.includes(i.to));
   // Settings replaces the sidebar; "Back to app" returns to the last page outside it.
   const inSettings = isSettingsPath(pathname);
-  const lastAppPath = useRef("/");
-  if (!inSettings) lastAppPath.current = pathname;
+  const search = useRouterState({ select: (st) => st.location.search });
+  const lastAppPage = useRef<{ to: string; search: object }>({ to: "/", search: {} });
+  if (!inSettings) lastAppPage.current = { to: pathname, search };
   // A More link to the page you're on only closes the sheet: navigating would replace the
   // sheet's history entry with the same page and leave a Back that does nothing.
   const closeMenuTo = (e: React.MouseEvent, to: string) => {
@@ -257,7 +258,7 @@ function AuthenticatedLayout() {
         </div>
 
         {inSettings ? (
-          <SettingsSidebar backTo={lastAppPath.current} pathname={pathname} />
+          <SettingsSidebar backTo={lastAppPage.current} pathname={pathname} />
         ) : (
           <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-3">
             {NAV_GROUPS.filter((g) => shown(g.items).length > 0).map((group, i) => (

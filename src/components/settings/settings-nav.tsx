@@ -79,10 +79,17 @@ const SUB =
   "block rounded-sm py-1.5 pr-3 pl-[2.625rem] text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground";
 
 /** Desktop: replaces the app sidebar while in Settings, like most sites' settings screens. */
-export function SettingsSidebar({ backTo, pathname }: { backTo: string; pathname: string }) {
+export function SettingsSidebar({
+  backTo,
+  pathname,
+}: {
+  /** The last page outside Settings, with its filters. */
+  backTo: { to: string; search: object };
+  pathname: string;
+}) {
   return (
     <nav aria-label="Settings" className="flex-1 space-y-4 overflow-y-auto px-3 py-3">
-      <Link to={backTo} className={LINK}>
+      <Link to={backTo.to} search={backTo.search as never} className={LINK}>
         <ArrowLeft className="size-[1.125rem] shrink-0" />
         Back to app
       </Link>

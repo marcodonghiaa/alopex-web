@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-const { rows, review, reviewCalls, reviewError, path } = vi.hoisted(() => ({
+const { rows, review, reviewCalls, reviewError, path, search } = vi.hoisted(() => ({
   rows: { current: [] as Array<unknown> },
   // Splitwise expenses waiting on the To link list.
   review: { current: [] as Array<unknown> },
@@ -10,6 +10,7 @@ const { rows, review, reviewCalls, reviewError, path } = vi.hoisted(() => ({
   reviewCalls: { current: [] as Array<unknown> },
   reviewError: { current: null as unknown },
   path: { current: "/" },
+  search: { current: {} as Record<string, unknown> },
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -20,18 +21,20 @@ vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
     to,
+    search: query,
     replace,
     onClick,
     "aria-current": current,
   }: {
     children: React.ReactNode;
     to: string;
+    search?: Record<string, string>;
     replace?: boolean;
     onClick?: React.MouseEventHandler;
     "aria-current"?: "page";
   }) => (
     <a
-      href={to}
+      href={query && Object.keys(query).length ? `${to}?${new URLSearchParams(query)}` : to}
       onClick={onClick}
       aria-current={current}
       data-replace={replace ? "true" : undefined}
@@ -42,8 +45,11 @@ vi.mock("@tanstack/react-router", () => ({
   Outlet: () => null,
   redirect: vi.fn(),
   useNavigate: () => vi.fn(),
-  useRouterState: ({ select }: { select: (s: { location: { pathname: string } }) => string }) =>
-    select({ location: { pathname: path.current } }),
+  useRouterState: ({
+    select,
+  }: {
+    select: (s: { location: { pathname: string; search: Record<string, unknown> } }) => unknown;
+  }) => select({ location: { pathname: path.current, search: search.current } }),
 }));
 vi.mock("@/integrations/supabase/client", () => ({
   loadDemoClient: vi.fn(),
@@ -400,6 +406,35 @@ describe("More badge with hidden pages", () => {
       setPageHidden("/subscriptions", false);
       setPageHidden("/splitwise", false);
       review.current = [];
+    }
+  });
+});
+
+// polish-1 #4: Back to app dropped the search, so a filtered list came back unfiltered.
+// fails_when=the link leaves out the last page's search
+describe("Back to app keeps the page's filters", () => {
+  it("returns to the last app page with its search", () => {
+    rows.current = [];
+    path.current = "/transactions";
+    search.current = { category: "Groceries" };
+    const ui = () => (
+      <QueryClientProvider client={new QueryClient()}>
+        <Layout />
+      </QueryClientProvider>
+    );
+    try {
+      const { rerender } = render(ui());
+      path.current = "/settings/app";
+      search.current = {};
+      rerender(ui());
+      const nav = screen.getByRole("navigation", { name: "Settings" });
+      expect(within(nav).getByRole("link", { name: "Back to app" })).toHaveAttribute(
+        "href",
+        "/transactions?category=Groceries",
+      );
+    } finally {
+      path.current = "/";
+      search.current = {};
     }
   });
 });
