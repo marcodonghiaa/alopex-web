@@ -161,6 +161,21 @@ describe("planWrite", () => {
       expect(plan.problems).toEqual([expect.stringMatching(/rate.*USD.*2026-08-16/i)]);
     });
 
+    // issue #11: a file with no rates said so once per row, 70 red lines
+    it("says once per currency, not once per row, which days have no rate", () => {
+      const rows = rowsOf(
+        FRIEND_PAID,
+        row({ row: 2, date: "2026-09-01" }),
+        row({ row: 3, date: "2026-11-02" }),
+        row({ row: 4, date: "2026-11-02", currency: "GBP" }),
+      );
+      const plan = planWrite({ ...base(rows), rate: () => null });
+      expect(plan.problems).toEqual([
+        "No exchange rate for USD on 3 days, from 2026-08-16 to 2026-11-02.",
+        "No exchange rate for GBP on 2026-11-02.",
+      ]);
+    });
+
     it("the same bank transaction confirmed for two rows", () => {
       const plan = planWrite({
         ...base(),

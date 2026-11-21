@@ -3,6 +3,7 @@ import type { ClassifiedRow } from "./splitwise-classify";
 import {
   diffStored,
   isShareRow,
+  missingRates,
   type EditedRow,
   type FileRow,
   type StoredShare,
@@ -185,6 +186,7 @@ export function planWrite(input: PlanInput): WritePlan {
 
   const shares: Array<ShareRow> = [];
   const links: Array<LinkRow> = [];
+  const noRate: Array<ClassifiedRow> = [];
 
   rows.forEach((r, i) => {
     const fingerprint = fingerprints[i] ?? "";
@@ -208,9 +210,7 @@ export function planWrite(input: PlanInput): WritePlan {
       problems.push(`Row ${r.row} is too long to be identified.`);
       return;
     }
-    if (!match && input.rate(r.currency, r.date) === null) {
-      problems.push(`No exchange rate for ${r.currency} on ${r.date} (row ${r.row}).`);
-    }
+    if (!match && input.rate(r.currency, r.date) === null) noRate.push(r);
     shares.push({
       fingerprint,
       booking_date: r.date,
@@ -222,6 +222,7 @@ export function planWrite(input: PlanInput): WritePlan {
       linked_entry_reference: match?.entryReference ?? null,
     });
   });
+  problems.push(...missingRates(noRate));
 
   // After a checkpoint the range starts the next day, so the delete step cannot reach a stored
   // row; a checkpoint-day addition is inserted regardless, since inserts ignore the range.

@@ -41,6 +41,18 @@ export interface StoredDiff {
 export const isShareRow = (r: ClassifiedRow): boolean =>
   (r.kind === "paid_by_other" || r.kind === "paid_by_me") && (r.shareCents ?? 0) > 0;
 
+/** One line per currency for the rows with no rate, not one per row. */
+export function missingRates(rows: Array<{ currency: string; date: string }>): Array<string> {
+  const days = new Map<string, Set<string>>();
+  for (const r of rows) days.set(r.currency, (days.get(r.currency) ?? new Set()).add(r.date));
+  return [...days].map(([currency, set]) => {
+    const sorted = [...set].sort();
+    return sorted.length === 1
+      ? `No exchange rate for ${currency} on ${sorted[0]}.`
+      : `No exchange rate for ${currency} on ${sorted.length} days, from ${sorted[0]} to ${sorted[sorted.length - 1]}.`;
+  });
+}
+
 /** The id's own fields, which keep what Splitwise said even if the description was edited here. */
 export function readFingerprint(
   fingerprint: string,
@@ -152,13 +164,12 @@ const euros = (cents: number) => cents / 100;
 /** Builds the database call for the ticked rows only. */
 export function planCorrections(input: CorrectionInput): CorrectionPlan {
   const problems: Array<string> = [];
+  const noRate: Array<ClassifiedRow> = [];
   const check = (r: ClassifiedRow, fingerprint: string, needsRate: boolean) => {
     if (fingerprint.length > MAX_FINGERPRINT) {
       problems.push(`Row ${r.row} is too long to be identified.`);
     }
-    if (needsRate && input.rate(r.currency, r.date) === null) {
-      problems.push(`No exchange rate for ${r.currency} on ${r.date} (row ${r.row}).`);
-    }
+    if (needsRate && input.rate(r.currency, r.date) === null) noRate.push(r);
   };
 
   const add = input.older
@@ -197,7 +208,7 @@ export function planCorrections(input: CorrectionInput): CorrectionPlan {
     .filter((s) => input.ticked.has(s.id))
     .map((s) => ({ id: s.id, old_fingerprint: s.fingerprint }));
 
-  return { add, edit, remove, problems };
+  return { add, edit, remove, problems: [...problems, ...missingRates(noRate)] };
 }
 
 export interface CorrectionCounts {

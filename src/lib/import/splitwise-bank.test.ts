@@ -22,7 +22,7 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 
-import { fetchBankWindow } from "./splitwise-bank";
+import { fetchBankWindow, withFileRates } from "./splitwise-bank";
 
 const bankRow = (over: Record<string, unknown> = {}) => ({
   account_uid: "a1",
@@ -157,5 +157,44 @@ describe("fetchBankWindow", () => {
     const w = await fetchBankWindow(["2026-11-10"], []);
     expect(w.capped).toBe(true);
     expect(w.completeFrom).toBe("2026-11-04");
+  });
+});
+
+// issue #11: a fresh install keeps rates only from its install day, older file dates had none
+describe("withFileRates", () => {
+  const usd = (date: string) => ({ currency: "USD", date });
+  it("asks for the days the stored rates miss, only for the currencies that miss them", async () => {
+    const load = vi.fn(async () => [{ date: "2026-08-14", rate_to_eur: 0.9 }]);
+    const stored = [{ currency: "GBP", date: "2026-08-01", rate_to_eur: 1.2 }];
+    const rows = [
+      usd("2026-11-02"),
+      usd("2026-08-16"),
+      { currency: "GBP", date: "2026-09-01" },
+      { currency: "EUR", date: "2026-08-01" },
+    ];
+    const r = await withFileRates(stored, rows, load);
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(load).toHaveBeenCalledWith("USD", "2026-08-16", "2026-11-02");
+    expect(r.fx).toEqual([...stored, { currency: "USD", date: "2026-08-14", rate_to_eur: 0.9 }]);
+    expect(r.failed).toEqual([]);
+  });
+
+  it("asks nothing when every row already has a rate", async () => {
+    const load = vi.fn();
+    const stored = [{ currency: "USD", date: "2026-08-01", rate_to_eur: 0.9 }];
+    expect(await withFileRates(stored, [usd("2026-08-16")], load)).toEqual({
+      fx: stored,
+      failed: [],
+    });
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it("says once per currency when the rates can't be loaded", async () => {
+    const message = "Couldn't load USD to EUR rates from api.frankfurter.app to value this file.";
+    const load = vi.fn(async () => {
+      throw new Error(message);
+    });
+    const r = await withFileRates([], [usd("2026-08-16"), usd("2026-08-17")], load);
+    expect(r).toEqual({ fx: [], failed: [{ currency: "USD", message }] });
   });
 });

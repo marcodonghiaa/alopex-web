@@ -24,7 +24,7 @@ import { planWrite, splitAtCheckpoint } from "@/lib/import/splitwise-plan";
 import { categorizeRow, ruleTextFor, type UserRule } from "@/lib/import/splitwise-categorize";
 import { makeRate, type FxRow } from "@/lib/fx";
 import { defaultSelection } from "@/lib/import/splitwise-review";
-import { fetchBankWindow } from "@/lib/import/splitwise-bank";
+import { fetchBankWindow, withFileRates } from "@/lib/import/splitwise-bank";
 
 // Stored shares: the database returns at most 1000 rows per call, so more than that is refused.
 const PAGE_LIMIT = 1000;
@@ -41,6 +41,8 @@ function sharesTotal(shares: Array<{ amount: number; currency: string }>): strin
 interface Loaded {
   bank: Array<BankTx>;
   fx: Array<FxRow>;
+  /** Currencies whose missing rates could not be loaded, with the reason. */
+  rateFailures: Array<{ currency: string; message: string }>;
   stored: Array<StoredShare>;
   rules: Array<UserRule>;
 }
@@ -73,9 +75,11 @@ async function load(rows: Array<ClassifiedRow>, group: string): Promise<Loaded> 
   if ((stored.data ?? []).length >= PAGE_LIMIT) {
     throw new Error("Too many stored expenses in this group to review safely.");
   }
+  const rates = await withFileRates(window.fx, rows);
   return {
     bank: window.bank,
-    fx: window.fx,
+    fx: rates.fx,
+    rateFailures: rates.failed,
     rules: rules.data ?? [],
     stored: stored.data ?? [],
   };
@@ -565,7 +569,14 @@ export function SplitwiseReview({
         </Group>
       )}
 
-      {plan.problems.map((p, i) => (
+      {[
+        ...loaded.rateFailures.map((f) => f.message),
+        // A currency that failed to load is said once, above, with the reason.
+        ...plan.problems.filter(
+          (p) =>
+            !loaded.rateFailures.some((f) => p.startsWith(`No exchange rate for ${f.currency} `)),
+        ),
+      ].map((p, i) => (
         <p key={i} role="alert" className="px-4 text-sm text-negative">
           {p}
         </p>
