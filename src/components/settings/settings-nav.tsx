@@ -12,7 +12,7 @@ import {
 import { GroupedList } from "@/components/ui/grouped-list";
 import { isDemoMode } from "@/lib/demo/mode";
 
-export interface SettingsSection {
+interface SettingsSection {
   label: string;
   to: string;
   icon: LucideIcon;
@@ -23,7 +23,7 @@ export interface SettingsSection {
   account?: boolean;
 }
 
-export const SETTINGS_SECTIONS: Array<SettingsSection> = [
+const SETTINGS_SECTIONS: Array<SettingsSection> = [
   {
     label: "Overview",
     to: "/settings/overview",
