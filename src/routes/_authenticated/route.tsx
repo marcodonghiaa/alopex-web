@@ -45,7 +45,12 @@ import { useRecurringStreams } from "@/lib/use-recurring-streams";
 import { useQuery } from "@tanstack/react-query";
 import { fetchReviewCount, REVIEW_COUNT_KEY } from "@/lib/splitwise-sync";
 import { useHiddenPages } from "@/lib/hidden-pages";
-import { isSettingsPath, SettingsSidebar } from "@/components/settings/settings-nav";
+import {
+  isSettingsPath,
+  SettingsSidebar,
+  SIDEBAR_LINK,
+  SIDEBAR_LINK_ACTIVE,
+} from "@/components/settings/settings-nav";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -160,13 +165,6 @@ export const MORE_GROUPS: Array<NavGroup> = (() => {
     .sort((a, b) => moreRank(a.to) - moreRank(b.to));
   return [{ label: "", items: pages }, ...tools].filter((g) => g.items.length > 0);
 })();
-
-// Desktop sidebar (DESIGN.md "Navigation"): 18px line icon + label, 4px corners; hover and
-// active take the sidebar accent fill, active adds weight 500.
-const SIDEBAR_LINK =
-  "flex items-center gap-3 rounded-sm px-3 py-2 text-[0.9375rem] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground";
-const SIDEBAR_LINK_ACTIVE =
-  "flex items-center gap-3 rounded-sm px-3 py-2 text-[0.9375rem] font-medium bg-sidebar-accent text-foreground";
 
 // Mobile tab bar: icon + sans label; the active tab carries a 2px Ember rule on top.
 const TAB_LINK =

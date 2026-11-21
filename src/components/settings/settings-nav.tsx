@@ -71,9 +71,11 @@ export const isSettingsPath = (pathname: string) =>
   pathname === "/settings" || pathname.startsWith("/settings/") || pathname === "/rules";
 
 // Same look as the app sidebar (DESIGN.md "Navigation").
-const LINK =
+// Desktop sidebar link (DESIGN.md "Navigation"): 18px line icon + label, 4px corners; hover and
+// active take the sidebar accent fill, active adds weight 500. Shared with the app sidebar.
+export const SIDEBAR_LINK =
   "flex items-center gap-3 rounded-sm px-3 py-2 text-[0.9375rem] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground";
-const LINK_ACTIVE =
+export const SIDEBAR_LINK_ACTIVE =
   "flex items-center gap-3 rounded-sm px-3 py-2 text-[0.9375rem] font-medium bg-sidebar-accent text-foreground";
 const SUB =
   "block rounded-sm py-1.5 pr-3 pl-[2.625rem] text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground";
@@ -89,7 +91,7 @@ export function SettingsSidebar({
 }) {
   return (
     <nav aria-label="Settings" className="flex-1 space-y-4 overflow-y-auto px-3 py-3">
-      <Link to={backTo.to} search={backTo.search as never} className={LINK}>
+      <Link to={backTo.to} search={backTo.search as never} className={SIDEBAR_LINK}>
         <ArrowLeft className="size-[1.125rem] shrink-0" />
         Back to app
       </Link>
@@ -100,9 +102,9 @@ export function SettingsSidebar({
             <div key={s.to}>
               <Link
                 to={s.to}
-                className={LINK}
+                className={SIDEBAR_LINK}
                 activeOptions={{ exact: true }}
-                activeProps={{ className: LINK_ACTIVE }}
+                activeProps={{ className: SIDEBAR_LINK_ACTIVE }}
               >
                 <s.icon className="size-[1.125rem] shrink-0" />
                 {s.label}
