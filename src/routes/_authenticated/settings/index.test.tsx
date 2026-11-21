@@ -31,3 +31,21 @@ describe("/settings", () => {
     );
   });
 });
+
+// polish-1 #3: old one-page anchors now live on other pages; a bookmark should still land there.
+// fails_when=#categories, #two-step or #data open Overview instead
+describe("/settings#anchor from the old one-page Settings", () => {
+  it.each([
+    ["categories", "/settings/personalization"],
+    ["account", "/settings/security"],
+    ["two-step", "/settings/security"],
+    ["data", "/settings/account"],
+    ["formats", "/settings/overview"],
+    ["unknown", "/settings/overview"],
+  ])("#%s goes to %s", (hash, to) => {
+    wide(true);
+    expect(() => beforeLoad({ location: { hash } })).toThrowError(
+      expect.objectContaining({ options: expect.objectContaining({ to, hash }) }),
+    );
+  });
+});
