@@ -96,6 +96,13 @@ describe("planWrite", () => {
     expect(plan.links).toEqual([]);
   });
 
+  // issue #12: "Import 61" then "70 imported"; the toast says how many of them I paid
+  it("counts the shares of expenses I paid, linked or counted by hand", () => {
+    expect(planWrite(base()).paidByYou).toBe(0);
+    expect(planWrite({ ...base(), confirmed: [match({})] }).paidByYou).toBe(1);
+    expect(planWrite({ ...base(), countedRows: new Set([2]) }).paidByYou).toBe(1);
+  });
+
   it("keeps a confirmed expense I paid as a share linked to its bank transaction", () => {
     const plan = planWrite({ ...base(), confirmed: [match({})] });
     expect(plan.shares).toHaveLength(2);

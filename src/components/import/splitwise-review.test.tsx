@@ -389,6 +389,8 @@ describe("SplitwiseReview", () => {
         batchId: args["p_batch"],
         group: "berkeley",
         shares: 2,
+        // Taxi, linked to its bank payment
+        paidByYou: 1,
         balancesError: null,
       }),
     );

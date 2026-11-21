@@ -43,6 +43,8 @@ export interface WritePlan {
   to: string;
   shares: Array<ShareRow>;
   links: Array<LinkRow>;
+  /** How many of `shares` are expenses I paid (linked to the bank or counted by hand). */
+  paidByYou: number;
   /** Anything here blocks the import. */
   problems: Array<string>;
 }
@@ -187,6 +189,7 @@ export function planWrite(input: PlanInput): WritePlan {
   const shares: Array<ShareRow> = [];
   const links: Array<LinkRow> = [];
   const noRate: Array<ClassifiedRow> = [];
+  let paidByYou = 0;
 
   rows.forEach((r, i) => {
     const fingerprint = fingerprints[i] ?? "";
@@ -211,6 +214,7 @@ export function planWrite(input: PlanInput): WritePlan {
       return;
     }
     if (!match && input.rate(r.currency, r.date) === null) noRate.push(r);
+    if (r.kind === "paid_by_me") paidByYou++;
     shares.push({
       fingerprint,
       booking_date: r.date,
@@ -235,6 +239,7 @@ export function planWrite(input: PlanInput): WritePlan {
     to: last > from ? last : from,
     shares,
     links,
+    paidByYou,
     problems,
   };
 }

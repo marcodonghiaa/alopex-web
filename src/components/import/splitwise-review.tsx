@@ -90,6 +90,8 @@ export interface ImportDone {
   batchId: string;
   group: string;
   shares: number;
+  /** How many of `shares` you paid yourself; 0 when the database wrote fewer than planned. */
+  paidByYou: number;
   /** Set when the shares are saved but the friends' balances are not. */
   balancesError: string | null;
 }
@@ -258,11 +260,13 @@ export function SplitwiseReview({
           balancesError = err instanceof Error ? err.message : "unknown error";
         }
       }
-      return { ...result, balancesError };
+      // A share the sync already has is skipped, and then the split no longer adds up.
+      const paidByYou = result.shares === plan.shares.length ? plan.paidByYou : 0;
+      return { ...result, paidByYou, balancesError };
     },
-    onSuccess: ({ batchId, shares, balancesError }) => {
+    onSuccess: ({ batchId, shares, paidByYou, balancesError }) => {
       void refresh();
-      onImported?.({ batchId, group: group.trim(), shares, balancesError });
+      onImported?.({ batchId, group: group.trim(), shares, paidByYou, balancesError });
     },
   });
 
