@@ -4,9 +4,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 
 type Row = Record<string, unknown>;
-const { db, rpc, toast } = vi.hoisted(() => ({
+const { db, rpc, invoke, toast } = vi.hoisted(() => ({
   db: { rows: [] as Array<Row>, error: null as Error | null },
   rpc: vi.fn(),
+  invoke: vi.fn(),
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
@@ -20,6 +21,7 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     rpc,
+    functions: { invoke },
     from: () => ({ select: () => Promise.resolve({ data: db.rows, error: db.error }) }),
   },
 }));
@@ -88,6 +90,7 @@ beforeEach(() => {
   url.search = {};
   localStorage.setItem("mf.subscriptionsReveal.seen", "1"); // keep the one-time reveal out of these tests
   db.error = null;
+  invoke.mockResolvedValue({ data: { streams: 2 }, error: null });
   db.rows = [
     stream({}),
     stream({
@@ -116,6 +119,81 @@ beforeEach(() => {
 });
 
 describe("Subscriptions page", () => {
+  // Thread "Sync transaction edits to subscriptions": a transaction renamed (or marked One-time)
+  // still showed its old subscription until the 6-hour detection run.
+  it("re-checks your subscriptions when it opens, so transaction edits show at once", async () => {
+    invoke.mockImplementation(async () => {
+      db.rows = db.rows.map((r) => (r["id"] === "s1" ? { ...r, display_name: "iCloud" } : r));
+      return { data: { streams: 2 }, error: null };
+    });
+    renderPage();
+    expect(await screen.findByText("iCloud")).toBeInTheDocument();
+    expect(screen.queryByText("Streamflix")).not.toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledWith("refresh-recurring", { body: {} });
+  });
+
+  it("keeps the saved list, with no error, when the re-check fails (demo, offline, older backend)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    invoke.mockResolvedValue({ data: null, error: new Error("FunctionsFetchError") });
+    renderPage();
+    expect(await screen.findByText("Streamflix")).toBeInTheDocument();
+    await waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(toast.error).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  // Polish 1 #5: neither guard on the re-check's refetch had a test.
+  it("does not refetch when the re-check didn't run", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    invoke.mockResolvedValue({ data: null, error: new Error("FunctionsFetchError") });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = vi.spyOn(client, "invalidateQueries");
+    render(
+      <QueryClientProvider client={client}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    await screen.findByText("Streamflix");
+    await waitFor(() => expect(warn).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(spy).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("leaves the refetch to an action still in flight when the re-check ends", async () => {
+    let finishCheck!: () => void;
+    invoke.mockImplementation(
+      () => new Promise((res) => (finishCheck = () => res({ data: { streams: 1 }, error: null }))),
+    );
+    let finishAction!: () => void;
+    rpc.mockImplementation(() => new Promise((res) => (finishAction = () => res({ error: null }))));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = vi.spyOn(client, "invalidateQueries");
+    render(
+      <QueryClientProvider client={client}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Streamflix" }));
+    await waitFor(() => expect(rpc).toHaveBeenCalled());
+    finishCheck();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(spy).not.toHaveBeenCalled();
+    finishAction();
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+  });
+
+  it("a stream no longer found (gone) is not listed", async () => {
+    db.rows = [stream({ detected_status: "gone", user_status: "confirmed" })];
+    renderPage();
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Subscriptions" }),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(invoke).toHaveBeenCalled());
+    expect(screen.queryByText("Streamflix")).not.toBeInTheDocument();
+  });
+
   // iOS view board: page titles read like Net Worth's (white semibold), not a grey label.
   it("titles the page like Net Worth", async () => {
     renderPage();
@@ -290,6 +368,8 @@ describe("Subscriptions page", () => {
         <Page />
       </QueryClientProvider>,
     );
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1)); // the re-check on open
+    spy.mockClear();
     fireEvent.click(await screen.findByRole("button", { name: "Remove Aaa" }));
     fireEvent.click(await screen.findByRole("button", { name: "Remove Bbb" }));
     await waitFor(() => expect(resolvers).toHaveLength(2));

@@ -1159,8 +1159,10 @@ export function createFakeClient(now: Date = new Date()): SupabaseClient<Databas
               ? { data: { rows: demoStatementRows(now) }, error: null }
               : name === "reapply-rules"
                 ? { data: { changes: 0, sample: [] }, error: null } // demo rows already follow its rules
-                : // With a body, callers show "Disabled in the demo.", not their fallback (#148).
-                  functionError(403, DISABLED.message),
+                : name === "refresh-recurring"
+                  ? { data: { streams: 0 }, error: null } // the demo's streams are fixed: nothing to re-check
+                  : // With a body, callers show "Disabled in the demo.", not their fallback (#148).
+                    functionError(403, DISABLED.message),
     },
     auth: {
       getSession: async () => ({ data: { session }, error: null }),
