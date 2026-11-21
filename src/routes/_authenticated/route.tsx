@@ -407,8 +407,9 @@ function AuthenticatedLayout() {
                   to="/settings"
                   replace
                   onClick={(e) => closeMenuTo(e, "/settings")}
-                  className={SHEET_ROW}
-                  activeProps={{ className: SHEET_ROW_ACTIVE }}
+                  // Lit on every settings page, Rules included (it lives in Personalization).
+                  aria-current={inSettings ? "page" : undefined}
+                  className={inSettings ? SHEET_ROW_ACTIVE : SHEET_ROW}
                 >
                   <Settings className="size-5 shrink-0" />
                   Settings

@@ -438,3 +438,23 @@ describe("Back to app keeps the page's filters", () => {
     }
   });
 });
+
+// polish-3 #7: Rules is part of Settings (the desktop menu says so), but the More sheet's Settings
+// row didn't light up on /rules. fails_when=the row isn't marked current on /rules or /settings/*
+describe("More sheet Settings row", () => {
+  it.each(["/rules", "/settings/app"])("is marked current on %s", async (where) => {
+    rows.current = [];
+    path.current = where;
+    try {
+      renderLayout();
+      fireEvent.click(screen.getByRole("button", { name: /^More/ }));
+      const sheet = await screen.findByRole("dialog");
+      expect(within(sheet).getByRole("link", { name: /Settings/ })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+    } finally {
+      path.current = "/";
+    }
+  });
+});
