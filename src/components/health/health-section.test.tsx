@@ -135,6 +135,9 @@ describe("HealthSection", () => {
     expect(fineco).toHaveTextContent("Fineco");
     expect(fineco).toHaveAttribute("open");
     expect(revolut).not.toHaveAttribute("open");
+    // polish-4 V8: rows inside a bank read as its children: 14px regular under the 15px bank name.
+    expect(screen.getByText("Revolut")).toHaveClass("font-medium");
+    expect(screen.getByText("USD sync")).toHaveClass("text-sm", "font-normal");
   });
 
   it("keeps the push row out of Health", async () => {

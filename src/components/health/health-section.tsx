@@ -25,7 +25,16 @@ const STATE_LABEL: Record<HealthState, string> = {
   bad: "Broken",
 };
 
-function HealthRowItem({ row, onPushed }: { row: HealthRow; onPushed: () => void }) {
+function HealthRowItem({
+  row,
+  onPushed,
+  nested = false,
+}: {
+  row: HealthRow;
+  onPushed: () => void;
+  // Inside a bank group: a smaller title, so the bank name stays the heading.
+  nested?: boolean;
+}) {
   return (
     <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-4">
       <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -35,7 +44,15 @@ function HealthRowItem({ row, onPushed }: { row: HealthRow; onPushed: () => void
           className={`mt-1.5 size-2.5 shrink-0 rounded-full ${DOT[row.state]}`}
         />
         <div className="min-w-0">
-          <p className="text-[0.9375rem] font-medium text-foreground">{row.title}</p>
+          <p
+            className={
+              nested
+                ? "text-sm font-normal text-foreground"
+                : "text-[0.9375rem] font-medium text-foreground"
+            }
+          >
+            {row.title}
+          </p>
           <p className="max-w-xl text-sm text-muted-foreground">{row.detail}</p>
         </div>
       </div>
@@ -105,7 +122,7 @@ function BankGroup({
         </summary>
         <ul className="divide-y divide-hairline border-t border-hairline pl-5.5">
           {item.rows.map((row) => (
-            <HealthRowItem key={row.id} row={withoutBank(row)} onPushed={onPushed} />
+            <HealthRowItem key={row.id} row={withoutBank(row)} onPushed={onPushed} nested />
           ))}
         </ul>
       </details>
