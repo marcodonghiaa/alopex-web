@@ -32,4 +32,20 @@ describe("MenuPagesSection", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/blocks site storage/);
     expect(screen.getByRole("switch", { name: "Income" })).toHaveAttribute("aria-checked", "true");
   });
+
+  // polish-3 audit: fail, then retry once storage works again: the alert goes and the switch moves.
+  it("clears the error when a retry saves", () => {
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    render(<MenuPagesSection />);
+    const income = screen.getByRole("switch", { name: "Income" });
+    fireEvent.click(income);
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    spy.mockRestore();
+    fireEvent.click(income);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(income).toHaveAttribute("aria-checked", "false");
+    setPageHidden("/income", false);
+  });
 });
