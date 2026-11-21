@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import {
   ArrowLeft,
   ChevronRight,
@@ -86,6 +86,10 @@ export function SettingsSidebar({
   /** The last page outside Settings, with its filters. */
   backTo: { to: string; search: object };
 }) {
+  const pathname = useRouterState({ select: (st) => st.location.pathname });
+  // A section stays lit on its sub-pages too (Personalization while on Rules).
+  const lit = (s: SettingsSection) =>
+    s.to === pathname || !!s.children?.some((c) => !c.hash && c.to === pathname);
   return (
     <nav aria-label="Settings" className="flex-1 space-y-4 overflow-y-auto px-3 py-3">
       <Link to={backTo.to} search={backTo.search as never} className={SIDEBAR_LINK}>
@@ -99,9 +103,8 @@ export function SettingsSidebar({
             <div key={s.to}>
               <Link
                 to={s.to}
-                className={SIDEBAR_LINK}
+                className={lit(s) ? SIDEBAR_LINK_ACTIVE : SIDEBAR_LINK}
                 activeOptions={{ exact: true }}
-                activeProps={{ className: SIDEBAR_LINK_ACTIVE }}
               >
                 <s.icon className="size-[1.125rem] shrink-0" />
                 {s.label}
