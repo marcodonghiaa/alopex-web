@@ -7,6 +7,7 @@ import { parseQuantity } from "@/lib/holdings";
 import { formatISODate } from "@/lib/date";
 import { addedTrade, latestPriceEur, recordTrade } from "@/lib/manual-trades";
 import { ambiguousNumberHint } from "@/lib/locale";
+import { callAddHolding } from "@/lib/add-holding";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 
@@ -40,26 +41,6 @@ const COPY: Record<
     queryKey: "crypto-latest",
   },
 };
-
-// add-holding answers errors as { error } with a 4xx/5xx; supabase-js wraps that in a generic
-// message, so read the body to show the real reason.
-async function functionError(error: unknown, fallback: string): Promise<string> {
-  const context = (error as { context?: Response }).context;
-  try {
-    const body = (await context?.json()) as { error?: string } | undefined;
-    if (body?.error) return body.error;
-  } catch {
-    // Not JSON: fall through.
-  }
-  return fallback;
-}
-
-async function callAddHolding<T>(body: Record<string, unknown>, fallback: string): Promise<T> {
-  const { data, error } = await supabase.functions.invoke<T>("add-holding", { body });
-  if (error) throw new Error(await functionError(error, fallback));
-  if (!data) throw new Error(fallback);
-  return data;
-}
 
 export function AddHoldingPanel({
   kind,

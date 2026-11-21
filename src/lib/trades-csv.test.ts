@@ -229,13 +229,13 @@ describe("parseTradesCsv, Trade Republic export", () => {
     expect(notes).toEqual([]);
   });
 
-  it("leaves out something still held that isn't in your holdings, and says so", () => {
+  it("#15 keeps something still held that isn't in your holdings: Save adds it", () => {
     const { trades, notes } = parseTradesCsv(
       file(line("2026-01-02", "TRADING", "BUY", "Other", "ZZ", "1.0", "10")),
       known,
     );
-    expect(trades).toEqual([]);
-    expect(notes[0]).toMatch(/Other isn't in your holdings/);
+    expect(trades).toEqual([expect.objectContaining({ key: "ZZ", side: "buy", shares: 1 })]);
+    expect(notes).toEqual([]);
   });
 
   it("refuses a price that isn't in EUR", () => {
