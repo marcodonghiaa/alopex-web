@@ -82,6 +82,8 @@ function RulesPage() {
   }, [showForm]);
   const rulesQuery = useQuery(rulesQueryOptions);
   const rules = rulesQuery.data ?? [];
+  // e2e #17: a new category rule shows at once what it would change in past transactions.
+  const [previewAfterAdd, setPreviewAfterAdd] = useState(0);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8 md:py-12">
@@ -105,6 +107,7 @@ function RulesPage() {
         <RuleForm
           initialText={prefill.text ?? ""}
           initialCategory={prefill.category ?? ""}
+          onAdded={(setsCategory) => setsCategory && setPreviewAfterAdd((n) => n + 1)}
           onClose={() => {
             setShowForm(false);
             // Back or a refresh must not open the filled-in form again.
@@ -134,7 +137,7 @@ function RulesPage() {
           />
         </GroupedList>
       ) : (
-        <RuleList rules={rules} />
+        <RuleList rules={rules} previewKey={previewAfterAdd} />
       )}
     </div>
   );
@@ -143,10 +146,12 @@ function RulesPage() {
 function RuleForm({
   initialText,
   initialCategory,
+  onAdded,
   onClose,
 }: {
   initialText: string;
   initialCategory: string;
+  onAdded?: (setsCategory: boolean) => void;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -186,9 +191,10 @@ function RuleForm({
       });
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, rule) => {
       toast.success("Rule added");
       void queryClient.invalidateQueries({ queryKey: ["category-rules"] });
+      onAdded?.(!!rule.set_category);
       onClose();
     },
     onError: () => setFormError("Couldn't save the rule. Try again."),
@@ -377,9 +383,12 @@ const shortText = (text: string) => {
   return chars.length > 40 ? `${chars.slice(0, 39).join("")}…` : text;
 };
 
-function RuleList({ rules }: { rules: RuleRow[] }) {
+function RuleList({ rules, previewKey = 0 }: { rules: RuleRow[]; previewKey?: number }) {
   const queryClient = useQueryClient();
   const [checking, setChecking] = useState(false);
+  useEffect(() => {
+    if (previewKey > 0) setChecking(true);
+  }, [previewKey]);
   // Focus goes back to "Apply to past transactions" when the preview closes.
   const applyButton = useRef<HTMLButtonElement>(null);
   const wasChecking = useRef(false);

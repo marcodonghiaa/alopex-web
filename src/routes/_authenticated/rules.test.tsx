@@ -438,6 +438,32 @@ describe("match modes", () => {
     });
   });
 
+  // e2e #17: the form said nothing about how many transactions a new rule catches.
+  it("shows what a new category rule would change in past transactions, right after adding it", async () => {
+    invoke.mockReset();
+    invoke.mockResolvedValue({ data: { changes: 3, sample: [] }, error: null });
+    renderPage();
+    await openForm();
+    fireEvent.change(screen.getByLabelText("Text to look for"), { target: { value: "bar" } });
+    const category = screen.getByLabelText("Set category") as HTMLSelectElement;
+    fireEvent.change(category, { target: { value: [...category.options].find((o) => o.value)!.value } });
+    fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    await waitFor(() => expect(inserted).toHaveLength(1));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("reapply-rules", { body: { apply: false } }));
+    expect(await screen.findByRole("button", { name: "Update 3 transactions" })).toBeTruthy();
+  });
+
+  it("a type-only rule opens no preview (types are never re-applied)", async () => {
+    invoke.mockReset();
+    renderPage();
+    await openForm();
+    fireEvent.change(screen.getByLabelText("Text to look for"), { target: { value: "bar" } });
+    fireEvent.change(screen.getByLabelText("Set type"), { target: { value: "Subscription" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    await waitFor(() => expect(inserted).toHaveLength(1));
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   // Polish pass 2 #2: rule text had no limit; the database now caps it at 200 characters.
   it("caps rule text at 200 characters, typed or from a link", async () => {
     const validate = Route.options.validateSearch as (s: Record<string, unknown>) => {
