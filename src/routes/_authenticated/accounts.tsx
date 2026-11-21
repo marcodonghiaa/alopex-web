@@ -248,7 +248,7 @@ function AccountsPage() {
     queryKey: ["enable-banking-banks", bankCountry],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke<{
-        banks?: Array<{ name: string; logo: string | null }>;
+        banks?: Array<{ name: string; logo: string | null; beta?: boolean }>;
         error?: string;
       }>("list-banks", { body: { country: bankCountry } });
       if (error)
@@ -557,7 +557,7 @@ function AccountsPage() {
                       </option>
                       {banks.map((b) => (
                         <option key={b.name} value={b.name}>
-                          {b.name}
+                          {b.beta ? `${b.name} (beta)` : b.name}
                         </option>
                       ))}
                     </Select>
