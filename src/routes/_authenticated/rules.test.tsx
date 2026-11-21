@@ -23,6 +23,23 @@ const toastSuccess = vi.fn();
 const toastInfo = vi.fn((_m: string, _o?: unknown) => "");
 const toastDismiss = vi.fn();
 const toastLoading = vi.fn();
+// A real Link needs a router; this page's tests render it bare.
+vi.mock("@tanstack/react-router", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tanstack/react-router")>()),
+  Link: ({
+    children,
+    to,
+    className,
+  }: {
+    children: React.ReactNode;
+    to: string;
+    className?: string;
+  }) => (
+    <a href={to} className={className}>
+      {children}
+    </a>
+  ),
+}));
 vi.mock("sonner", () => ({
   toast: {
     success: (m: string, o?: unknown) => (o ? toastSuccess(m, o) : toastSuccess(m)),
@@ -1313,5 +1330,17 @@ describe("re-sorting what a deleted rule filed", () => {
     read.mockRestore();
     expect(toastSuccess).toHaveBeenCalledWith("Rule deleted");
     expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+// polish-1 #5: Rules is part of Settings › Personalization; on a phone it had no way back there.
+// fails_when=the phone back control is missing or goes elsewhere
+describe("Rules back to Settings (phone)", () => {
+  // polish-3 #5: a real link (address, long-press, open in new tab), like the other settings pages.
+  it("offers a phone-only link back to Personalization", async () => {
+    renderPage();
+    const back = await screen.findByRole("link", { name: "Personalization" });
+    expect(back).toHaveAttribute("href", "/settings/personalization");
+    expect(back.closest(".md\\:hidden")).not.toBeNull();
   });
 });

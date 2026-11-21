@@ -1,7 +1,15 @@
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { PushSubscribeButton } from "@/components/push-subscribe";
-import { attentionCount, type HealthRow, type HealthState } from "@/lib/health";
+import { ChevronRight } from "lucide-react";
+import { plural } from "@/lib/plural";
+import {
+  attentionCount,
+  groupByBank,
+  type HealthItem,
+  type HealthRow,
+  type HealthState,
+} from "@/lib/health";
 import { useHealth } from "./use-health";
 import { Alert } from "@/components/ui/alert";
 import { GroupedList } from "@/components/ui/grouped-list";
@@ -17,7 +25,16 @@ const STATE_LABEL: Record<HealthState, string> = {
   bad: "Broken",
 };
 
-function HealthRowItem({ row, onPushed }: { row: HealthRow; onPushed: () => void }) {
+function HealthRowItem({
+  row,
+  onPushed,
+  nested = false,
+}: {
+  row: HealthRow;
+  onPushed: () => void;
+  // Inside a bank group: a smaller title, so the bank name stays the heading.
+  nested?: boolean;
+}) {
   return (
     <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-4">
       <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -27,7 +44,15 @@ function HealthRowItem({ row, onPushed }: { row: HealthRow; onPushed: () => void
           className={`mt-1.5 size-2.5 shrink-0 rounded-full ${DOT[row.state]}`}
         />
         <div className="min-w-0">
-          <p className="text-[0.9375rem] font-medium text-foreground">{row.title}</p>
+          <p
+            className={
+              nested
+                ? "text-sm font-normal text-foreground"
+                : "text-[0.9375rem] font-medium text-foreground"
+            }
+          >
+            {row.title}
+          </p>
           <p className="max-w-xl text-sm text-muted-foreground">{row.detail}</p>
         </div>
       </div>
@@ -55,18 +80,69 @@ function HealthRowItem({ row, onPushed }: { row: HealthRow; onPushed: () => void
   );
 }
 
-function RowList({ rows }: { rows: Array<HealthRow> }) {
+// Inside a bank's group the bank name is already on top: "Revolut USD sync" reads "USD sync".
+const withoutBank = (row: HealthRow): HealthRow => {
+  const rest =
+    row.bank && row.title.startsWith(`${row.bank} `) && row.title.slice(row.bank.length + 1);
+  return rest ? { ...row, title: rest.charAt(0).toUpperCase() + rest.slice(1) } : row;
+};
+
+/** One bank: its worst state and a count; open by default only when something needs a look. */
+function BankGroup({
+  item,
+  onPushed,
+}: {
+  item: Extract<HealthItem, { rows: unknown }>;
+  onPushed: () => void;
+}) {
+  const attention = attentionCount(item.rows);
+  const accounts = item.rows.filter((r) => r.id.startsWith("sync:")).length;
+  return (
+    <li>
+      <details open={attention > 0} className="group">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 py-4 [&::-webkit-details-marker]:hidden">
+          <span
+            role="img"
+            aria-label={STATE_LABEL[item.state]}
+            className={`size-2.5 shrink-0 rounded-full ${DOT[item.state]}`}
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[0.9375rem] font-medium text-foreground">{item.bank}</span>
+            <span className="block text-sm text-muted-foreground">
+              {plural(accounts, "account")} ·{" "}
+              {attention === 0
+                ? "all fine"
+                : `${attention} need${attention === 1 ? "s" : ""} attention`}
+            </span>
+          </span>
+          <ChevronRight
+            aria-hidden
+            className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none"
+          />
+        </summary>
+        <ul className="divide-y divide-hairline border-t border-hairline pl-5.5">
+          {item.rows.map((row) => (
+            <HealthRowItem key={row.id} row={withoutBank(row)} onPushed={onPushed} nested />
+          ))}
+        </ul>
+      </details>
+    </li>
+  );
+}
+
+function RowList({ items }: { items: Array<HealthItem> }) {
   const queryClient = useQueryClient();
+  const onPushed = () => void queryClient.invalidateQueries({ queryKey: ["push-subscribed"] });
   return (
     <GroupedList className="px-5">
       <ul className="divide-y divide-hairline">
-        {rows.map((row) => (
-          <HealthRowItem
-            key={row.id}
-            row={row}
-            onPushed={() => void queryClient.invalidateQueries({ queryKey: ["push-subscribed"] })}
-          />
-        ))}
+        {items.map((item) =>
+          "rows" in item ? (
+            <BankGroup key={`bank:${item.bank}`} item={item} onPushed={onPushed} />
+          ) : (
+            <HealthRowItem key={item.id} row={item} onPushed={onPushed} />
+          ),
+        )}
       </ul>
     </GroupedList>
   );
@@ -93,7 +169,7 @@ export function HealthSection() {
         <Alert className="mb-4">Couldn't load your accounts: {accounts.error.message}</Alert>
       )}
 
-      {rows.length > 0 && <RowList rows={rows} />}
+      {rows.length > 0 && <RowList items={groupByBank(rows)} />}
       {!accounts.isPending && !accounts.isError && rows.length === 0 && (
         <p className="text-sm text-muted-foreground">Nothing to check yet. Connect a bank first.</p>
       )}
@@ -101,7 +177,10 @@ export function HealthSection() {
   );
 }
 
-/** The push enable row and its install hint. Renders nothing where push can't work. */
+/**
+ * The push enable row and its install hint, on phones only: purchase check-ins are a phone
+ * habit, so desktop shows the way to the phone app instead. Renders nothing where push can't work.
+ */
 export function NotificationsSection() {
   const { push } = useHealth();
   if (!push) return null;
@@ -109,12 +188,33 @@ export function NotificationsSection() {
     <section
       id="notifications"
       aria-labelledby="notifications-heading"
-      className="scroll-mt-20 md:scroll-mt-6"
+      className="scroll-mt-20 md:hidden"
     >
       <h2 id="notifications-heading" className="mb-4 text-lg font-semibold text-foreground">
         Notifications
       </h2>
-      <RowList rows={[push]} />
+      <RowList items={[push]} />
+    </section>
+  );
+}
+
+/** Desktop only: how to get the dashboard on a phone, where notifications live. */
+export function GetTheAppSection({ origin = window.location.origin }: { origin?: string }) {
+  return (
+    <section aria-labelledby="get-app-heading" className="hidden md:block">
+      <h2 id="get-app-heading" className="mb-4 text-lg font-semibold text-foreground">
+        Get the phone app
+      </h2>
+      <div className="max-w-xl rounded-lg bg-card px-5 py-4">
+        <p className="text-[0.9375rem] text-foreground">
+          Open <span className="font-medium">{origin.replace(/^https?:\/\//, "")}</span> on your
+          phone and add it to the Home Screen.
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          iPhone: Safari → Share → Add to Home Screen. Android: Chrome menu → Install app. Then turn
+          on notifications in its Settings to get purchase check-ins.
+        </p>
+      </div>
     </section>
   );
 }

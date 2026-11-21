@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-const { rows, review, reviewCalls, reviewError, path } = vi.hoisted(() => ({
+const { rows, review, reviewCalls, reviewError, path, search } = vi.hoisted(() => ({
   rows: { current: [] as Array<unknown> },
   // Splitwise expenses waiting on the To link list.
   review: { current: [] as Array<unknown> },
@@ -10,6 +10,7 @@ const { rows, review, reviewCalls, reviewError, path } = vi.hoisted(() => ({
   reviewCalls: { current: [] as Array<unknown> },
   reviewError: { current: null as unknown },
   path: { current: "/" },
+  search: { current: {} as Record<string, unknown> },
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -20,18 +21,20 @@ vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
     to,
+    search: query,
     replace,
     onClick,
     "aria-current": current,
   }: {
     children: React.ReactNode;
     to: string;
+    search?: Record<string, string>;
     replace?: boolean;
     onClick?: React.MouseEventHandler;
     "aria-current"?: "page";
   }) => (
     <a
-      href={to}
+      href={query && Object.keys(query).length ? `${to}?${new URLSearchParams(query)}` : to}
       onClick={onClick}
       aria-current={current}
       data-replace={replace ? "true" : undefined}
@@ -42,8 +45,11 @@ vi.mock("@tanstack/react-router", () => ({
   Outlet: () => null,
   redirect: vi.fn(),
   useNavigate: () => vi.fn(),
-  useRouterState: ({ select }: { select: (s: { location: { pathname: string } }) => string }) =>
-    select({ location: { pathname: path.current } }),
+  useRouterState: ({
+    select,
+  }: {
+    select: (s: { location: { pathname: string; search: Record<string, unknown> } }) => unknown;
+  }) => select({ location: { pathname: path.current, search: search.current } }),
 }));
 vi.mock("@/integrations/supabase/client", () => ({
   loadDemoClient: vi.fn(),
@@ -326,6 +332,235 @@ describe("More sheet link to the current page", () => {
       const again = await screen.findByRole("dialog");
       expect(fireEvent.click(within(again).getByRole("link", { name: other.textContent! }))).toBe(
         true,
+      );
+    } finally {
+      path.current = "/";
+    }
+  });
+});
+
+// protects=Settings opens as its own screen: its menu replaces the app sidebar, with a way back
+// (whiteboard note); fails_when=the app sidebar stays, or Back to app forgets where you were
+describe("Settings sidebar", () => {
+  it("swaps the app sidebar for the settings menu and goes back to the last app page", async () => {
+    rows.current = [];
+    path.current = "/budgets";
+    try {
+      const { rerender } = renderLayout();
+      expect(screen.queryByRole("navigation", { name: "Settings" })).toBeNull();
+      path.current = "/settings/app";
+      rerender(
+        <QueryClientProvider client={new QueryClient()}>
+          <Layout />
+        </QueryClientProvider>,
+      );
+      const nav = screen.getByRole("navigation", { name: "Settings" });
+      expect(within(nav).getByRole("link", { name: "Back to app" })).toHaveAttribute(
+        "href",
+        "/budgets",
+      );
+      expect(within(nav).getByRole("link", { name: "Security" })).toBeTruthy();
+      expect(within(nav).queryByRole("link", { name: "Net Worth" })).toBeNull();
+    } finally {
+      path.current = "/";
+    }
+  });
+
+  // polish-4 C2: a reload inside Settings remounts the layout; Back to app still returns to the
+  // filtered page. fails_when=it falls back to "/"
+  it("remembers the last app page across a reload inside Settings", () => {
+    rows.current = [];
+    path.current = "/transactions";
+    search.current = { category: "Dine Out" };
+    try {
+      renderLayout().unmount();
+      path.current = "/settings/app";
+      search.current = {};
+      renderLayout();
+      const nav = screen.getByRole("navigation", { name: "Settings" });
+      expect(within(nav).getByRole("link", { name: "Back to app" })).toHaveAttribute(
+        "href",
+        "/transactions?category=Dine+Out",
+      );
+    } finally {
+      path.current = "/";
+      search.current = {};
+      sessionStorage.clear();
+    }
+  });
+
+  it.each([
+    ["another site", JSON.stringify({ to: "//evil.example", search: {} })],
+    ["a backslash path", JSON.stringify({ to: "/\\evil.example", search: {} })],
+    ["a control character", JSON.stringify({ to: "/\t/evil.example", search: {} })],
+    ["a settings page", JSON.stringify({ to: "/settings/app", search: {} })],
+    ["junk", "{"],
+  ])("ignores a saved last page that is %s", (_, saved) => {
+    rows.current = [];
+    sessionStorage.setItem("alopex.lastAppPage", saved);
+    path.current = "/settings/app";
+    try {
+      renderLayout();
+      const nav = screen.getByRole("navigation", { name: "Settings" });
+      expect(within(nav).getByRole("link", { name: "Back to app" })).toHaveAttribute("href", "/");
+    } finally {
+      path.current = "/";
+      sessionStorage.clear();
+    }
+  });
+
+  it("still works when the browser blocks session storage", () => {
+    rows.current = [];
+    const get = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    const set = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    path.current = "/settings/app";
+    try {
+      renderLayout();
+      const nav = screen.getByRole("navigation", { name: "Settings" });
+      expect(within(nav).getByRole("link", { name: "Back to app" })).toHaveAttribute("href", "/");
+    } finally {
+      get.mockRestore();
+      set.mockRestore();
+      path.current = "/";
+    }
+  });
+
+  // polish-5 F2: the desktop link goes straight to Overview, so focus lands on the current
+  // settings link instead of the redirect's leftover. fails_when=it points at /settings again
+  it("sends the desktop Settings link straight to Overview", () => {
+    rows.current = [];
+    path.current = "/budgets";
+    try {
+      renderLayout();
+      const aside = document.querySelector("aside")!;
+      expect(within(aside).getByRole("link", { name: "Settings" })).toHaveAttribute(
+        "href",
+        "/settings/overview",
+      );
+    } finally {
+      path.current = "/";
+    }
+  });
+
+  // polish-4 A1: the link you pressed unmounts with the sidebar swap; focus must land in the new
+  // menu, not on <body> (WCAG 2.4.3). fails_when=the next Tab skips the settings menu
+  it("moves keyboard focus into the menu that replaced the one you used", () => {
+    rows.current = [];
+    path.current = "/budgets";
+    const again = () =>
+      rerender(
+        <QueryClientProvider client={new QueryClient()}>
+          <Layout />
+        </QueryClientProvider>,
+      );
+    const { rerender } = renderLayout();
+    try {
+      const app = screen.getAllByRole("navigation").find((n) => within(n).queryByText("Budgets"))!;
+      within(app).getAllByRole("link")[0]!.focus();
+      path.current = "/settings/app";
+      again();
+      const nav = screen.getByRole("navigation", { name: "Settings" });
+      expect(nav).toContainElement(document.activeElement as HTMLElement);
+      within(nav).getByRole("link", { name: "Back to app" }).focus();
+      path.current = "/budgets";
+      again();
+      expect(document.activeElement).not.toBe(document.body);
+      expect(screen.queryByRole("navigation", { name: "Settings" })).toBeNull();
+    } finally {
+      path.current = "/";
+    }
+  });
+});
+
+// protects=pages switched off in Settings › App leave the sidebar and More; fails_when=they stay
+describe("hidden pages", () => {
+  it("drops a hidden page from the sidebar and the More sheet", async () => {
+    rows.current = [];
+    const { setPageHidden } = await import("@/lib/hidden-pages");
+    setPageHidden("/budgets", true);
+    try {
+      renderLayout();
+      await screen.findAllByRole("link", { name: /^Who owes you/ });
+      expect(screen.queryByRole("link", { name: "Budgets" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: /^More/ }));
+      const sheet = await screen.findByRole("dialog");
+      expect(within(sheet).queryByRole("link", { name: "Budgets" })).toBeNull();
+      expect(within(sheet).getByRole("link", { name: /Subscriptions/ })).toBeTruthy();
+    } finally {
+      setPageHidden("/budgets", false);
+    }
+  });
+});
+
+// polish-1 #1: the More tab summed Subscriptions and Who owes you even when hidden, so it showed
+// a count no row in the sheet carried. fails_when=a hidden page's badge still reaches More
+describe("More badge with hidden pages", () => {
+  it("leaves out the count of a page hidden from the menu", async () => {
+    rows.current = [suggested("a"), suggested("b")];
+    review.current = [{ id: "r1" }, { id: "r2" }, { id: "r3" }];
+    const { setPageHidden } = await import("@/lib/hidden-pages");
+    setPageHidden("/subscriptions", true);
+    try {
+      renderLayout();
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "More, 3 to review" })).toBeTruthy(),
+      );
+      setPageHidden("/splitwise", true);
+      await waitFor(() => expect(screen.getByRole("button", { name: "More" })).toBeTruthy());
+    } finally {
+      setPageHidden("/subscriptions", false);
+      setPageHidden("/splitwise", false);
+      review.current = [];
+    }
+  });
+});
+
+// polish-1 #4: Back to app dropped the search, so a filtered list came back unfiltered.
+// fails_when=the link leaves out the last page's search
+describe("Back to app keeps the page's filters", () => {
+  it("returns to the last app page with its search", () => {
+    rows.current = [];
+    path.current = "/transactions";
+    search.current = { category: "Groceries" };
+    const ui = () => (
+      <QueryClientProvider client={new QueryClient()}>
+        <Layout />
+      </QueryClientProvider>
+    );
+    try {
+      const { rerender } = render(ui());
+      path.current = "/settings/app";
+      search.current = {};
+      rerender(ui());
+      const nav = screen.getByRole("navigation", { name: "Settings" });
+      expect(within(nav).getByRole("link", { name: "Back to app" })).toHaveAttribute(
+        "href",
+        "/transactions?category=Groceries",
+      );
+    } finally {
+      path.current = "/";
+      search.current = {};
+    }
+  });
+});
+
+// polish-3 #7: Rules is part of Settings (the desktop menu says so), but the More sheet's Settings
+// row didn't light up on /rules. fails_when=the row isn't marked current on /rules or /settings/*
+describe("More sheet Settings row", () => {
+  it.each(["/rules", "/settings/app"])("is marked current on %s", async (where) => {
+    rows.current = [];
+    path.current = where;
+    try {
+      renderLayout();
+      fireEvent.click(screen.getByRole("button", { name: /^More/ }));
+      const sheet = await screen.findByRole("dialog");
+      expect(within(sheet).getByRole("link", { name: /Settings/ })).toHaveAttribute(
+        "aria-current",
+        "page",
       );
     } finally {
       path.current = "/";
