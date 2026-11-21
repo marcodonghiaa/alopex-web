@@ -180,11 +180,17 @@ const SHEET_ROW_ACTIVE = `${SHEET_ROW} bg-accent font-medium`;
 
 type AppPage = { to: string; search: object };
 const LAST_APP_PAGE = "alopex.lastAppPage";
-// The last page outside Settings saved in this tab; only an in-app path is trusted.
+// The last page outside Settings saved in this tab; only a plain in-app path is trusted
+// (no //host, backslash or whitespace such as tabs, whatever the router would make of them).
 function savedAppPage(): AppPage {
   try {
     const v = JSON.parse(sessionStorage.getItem(LAST_APP_PAGE) ?? "null") as Partial<AppPage>;
-    if (typeof v?.to === "string" && /^\/(?!\/)/.test(v.to) && !isSettingsPath(v.to)) {
+    if (
+      typeof v?.to === "string" &&
+      /^\/(?!\/)/.test(v.to) &&
+      !/[\\\s]/.test(v.to) &&
+      !isSettingsPath(v.to)
+    ) {
       return { to: v.to, search: typeof v.search === "object" && v.search ? v.search : {} };
     }
   } catch {

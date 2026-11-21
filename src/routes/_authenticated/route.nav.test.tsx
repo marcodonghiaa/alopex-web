@@ -391,6 +391,8 @@ describe("Settings sidebar", () => {
 
   it.each([
     ["another site", JSON.stringify({ to: "//evil.example", search: {} })],
+    ["a backslash path", JSON.stringify({ to: "/\\evil.example", search: {} })],
+    ["a control character", JSON.stringify({ to: "/\t/evil.example", search: {} })],
     ["a settings page", JSON.stringify({ to: "/settings/app", search: {} })],
     ["junk", "{"],
   ])("ignores a saved last page that is %s", (_, saved) => {
