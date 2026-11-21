@@ -158,7 +158,7 @@ export function SettingsPageFrame({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mx-auto max-w-5xl space-y-10 px-4 py-6 sm:px-8 md:py-12">
+    <div className="mx-auto max-w-5xl space-y-10 px-4 py-8 sm:px-8 md:py-12">
       <div>
         <Link
           to="/settings"

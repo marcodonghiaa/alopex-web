@@ -17,7 +17,7 @@ import { isDemoMode } from "@/lib/demo/mode";
 /** /settings on a phone: the list of sections (desktop goes straight to Overview). */
 export function SettingsIndexPage() {
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-8 md:py-12">
+    <div className="mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-8 md:py-12">
       <h1 className="ios-large-title">Settings</h1>
       <SettingsMenuList />
     </div>

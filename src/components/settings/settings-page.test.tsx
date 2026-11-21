@@ -105,4 +105,15 @@ describe("settings pages", () => {
     render(<AppSettingsPage />);
     expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
   });
+
+  // polish-4 V3: DESIGN.md's 32px top padding, same as Rules, so the title doesn't jump
+  // between Personalization and Rules. fails_when=a settings page goes back to py-6
+  it("uses the standard 32px top padding, like Rules", () => {
+    demo.current = false;
+    const { unmount } = render(<SettingsIndexPage />);
+    expect(screen.getByRole("heading", { level: 1 }).parentElement).toHaveClass("py-8");
+    unmount();
+    render(<AppSettingsPage />);
+    expect(screen.getByRole("heading", { level: 1 }).closest(".max-w-5xl")).toHaveClass("py-8");
+  });
 });
