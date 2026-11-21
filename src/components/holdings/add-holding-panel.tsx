@@ -298,9 +298,11 @@ export function AddHoldingPanel({
 
           {results && results.length > 0 && (
             <fieldset>
-              <legend className="mb-2 text-xs text-muted-foreground">Pick the right one</legend>
+              <legend className="mb-2 text-xs text-muted-foreground">
+                {picked && results.length > 1 ? "Your pick" : "Pick the right one"}
+              </legend>
               <div className="divide-y divide-hairline overflow-hidden rounded-lg bg-background">
-                {results.map((r) => (
+                {(picked ? [picked] : results).map((r) => (
                   <label
                     key={r.id}
                     className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2 text-sm has-[:checked]:bg-primary/10"
@@ -322,6 +324,16 @@ export function AddHoldingPanel({
                   </label>
                 ))}
               </div>
+              {/* e2e #14: once you pick, the other matches step aside until you ask for them. */}
+              {picked && results.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setPicked(null)}
+                  className="mt-1 min-h-11 text-xs font-medium text-foreground underline underline-offset-4"
+                >
+                  Change
+                </button>
+              )}
             </fieldset>
           )}
 

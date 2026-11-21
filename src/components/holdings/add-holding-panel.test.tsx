@@ -209,4 +209,29 @@ describe("AddHoldingPanel", () => {
       expect(screen.getByRole("alert")).toHaveTextContent("can't be in the future");
     });
   });
+
+  // e2e #14: after you pick one, the other matches step aside; Change brings them back.
+  it("shows only the picked match, with Change to see the others again", async () => {
+    invoke.mockReset().mockResolvedValue({
+      data: {
+        results: [
+          { id: "btc", symbol: "BTC", name: "Bitcoin", detail: "Rank #1" },
+          { id: "ebtc", symbol: "EBTC", name: "eBTC", detail: "Rank #413" },
+        ],
+      },
+      error: null,
+    });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AddHoldingPanel kind="crypto" defaultOpen />
+      </QueryClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "btc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    fireEvent.click(await screen.findByRole("radio", { name: /Bitcoin/ }));
+    expect(screen.queryByRole("radio", { name: /eBTC/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Bitcoin/ })).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Change" }));
+    expect(screen.getByRole("radio", { name: /eBTC/ })).toBeInTheDocument();
+  });
 });
