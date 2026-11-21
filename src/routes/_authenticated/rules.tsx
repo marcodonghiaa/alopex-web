@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Loader2, Plus, Trash2, X } from "lucide-react";
@@ -91,14 +91,13 @@ function RulesPage() {
         <div>
           {/* Rules belongs to Settings › Personalization; desktop has the settings menu instead. */}
           <div className="md:hidden">
-            <button
-              type="button"
-              onClick={() => void navigate({ to: "/settings/personalization" })}
+            <Link
+              to="/settings/personalization"
               className="-ml-1 mb-2 inline-flex min-h-11 items-center gap-1 text-[0.9375rem] text-primary"
             >
               <ArrowLeft className="size-4" aria-hidden />
               Personalization
-            </button>
+            </Link>
           </div>
           <h1 className="ios-large-title">Rules</h1>
           <p className="mt-0.5 max-w-prose text-sm text-muted-foreground">
