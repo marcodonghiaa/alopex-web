@@ -38,7 +38,7 @@ vi.mock("@tanstack/react-router", () => ({
   ),
 }));
 
-import { HealthSection, NotificationsSection } from "./health-section";
+import { GetTheAppSection, HealthSection, NotificationsSection } from "./health-section";
 
 const renderWith = (ui: React.ReactElement) =>
   render(
@@ -109,8 +109,32 @@ describe("HealthSection", () => {
   it("lists a stale sync as needing attention", async () => {
     accountsResult = { data: [staleAccount], error: null };
     renderWith(<HealthSection />);
-    expect(await screen.findByText("Revolut EUR sync")).toBeInTheDocument();
-    expect(await screen.findByText(/need.? attention/)).toBeInTheDocument();
+    // Inside the bank's group the row drops the bank name it already sits under.
+    expect(await screen.findByText("EUR sync")).toBeInTheDocument();
+    expect(screen.getByText("1 needs attention.")).toBeInTheDocument();
+  });
+
+  // protects=linked accounts fold under their bank (whiteboard: the list was too long);
+  // fails_when=rows render flat again, or a bank that needs a look starts closed
+  it("groups a bank's checks under one row, open only when something needs attention", async () => {
+    const ok = { ...staleAccount, snapshot_date: new Date().toISOString().slice(0, 10) };
+    accountsResult = {
+      data: [
+        { ...ok, uid: "r1" },
+        { ...ok, uid: "r2", currency: "USD" },
+        { ...staleAccount, uid: "f1", bank_name: "Fineco" },
+      ],
+      error: null,
+    };
+    const { container } = renderWith(<HealthSection />);
+    expect(await screen.findByText("Revolut")).toBeInTheDocument();
+    expect(screen.getByText("2 accounts · all fine")).toBeInTheDocument();
+    expect(screen.getByText("1 account · 1 needs attention")).toBeInTheDocument();
+    const [fineco, revolut] = [...container.querySelectorAll("details")];
+    // Worst bank first.
+    expect(fineco).toHaveTextContent("Fineco");
+    expect(fineco).toHaveAttribute("open");
+    expect(revolut).not.toHaveAttribute("open");
   });
 
   it("keeps the push row out of Health", async () => {
@@ -157,4 +181,23 @@ describe("NotificationsSection", () => {
       await screen.findByRole("button", { name: /Enable purchase check-ins/ }),
     ).toBeInTheDocument();
   });
+});
+
+// protects=desktop shows the way to the phone app instead of the push row (whiteboard note)
+describe("GetTheAppSection", () => {
+  it("names this dashboard's address and is desktop-only", () => {
+    renderWith(<GetTheAppSection origin="https://app.example.org" />);
+    expect(screen.getByText("app.example.org")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Get the phone app" })).toHaveClass(
+      "hidden",
+      "md:block",
+    );
+  });
+});
+
+// protects=Notifications stay off desktop; fails_when=md:hidden is dropped
+it("NotificationsSection is phone-only", async () => {
+  support = "install";
+  renderWith(<NotificationsSection />);
+  expect(await screen.findByRole("region", { name: "Notifications" })).toHaveClass("md:hidden");
 });

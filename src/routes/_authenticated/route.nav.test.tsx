@@ -332,3 +332,51 @@ describe("More sheet link to the current page", () => {
     }
   });
 });
+
+// protects=Settings opens as its own screen: its menu replaces the app sidebar, with a way back
+// (whiteboard note); fails_when=the app sidebar stays, or Back to app forgets where you were
+describe("Settings sidebar", () => {
+  it("swaps the app sidebar for the settings menu and goes back to the last app page", async () => {
+    rows.current = [];
+    path.current = "/budgets";
+    try {
+      const { rerender } = renderLayout();
+      expect(screen.queryByRole("navigation", { name: "Settings" })).toBeNull();
+      path.current = "/settings/app";
+      rerender(
+        <QueryClientProvider client={new QueryClient()}>
+          <Layout />
+        </QueryClientProvider>,
+      );
+      const nav = screen.getByRole("navigation", { name: "Settings" });
+      expect(within(nav).getByRole("link", { name: "Back to app" })).toHaveAttribute(
+        "href",
+        "/budgets",
+      );
+      expect(within(nav).getByRole("link", { name: "Security" })).toBeTruthy();
+      expect(within(nav).queryByRole("link", { name: "Net Worth" })).toBeNull();
+    } finally {
+      path.current = "/";
+    }
+  });
+});
+
+// protects=pages switched off in Settings › App leave the sidebar and More; fails_when=they stay
+describe("hidden pages", () => {
+  it("drops a hidden page from the sidebar and the More sheet", async () => {
+    rows.current = [];
+    const { setPageHidden } = await import("@/lib/hidden-pages");
+    setPageHidden("/budgets", true);
+    try {
+      renderLayout();
+      await screen.findAllByRole("link", { name: /^Who owes you/ });
+      expect(screen.queryByRole("link", { name: "Budgets" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: /^More/ }));
+      const sheet = await screen.findByRole("dialog");
+      expect(within(sheet).queryByRole("link", { name: "Budgets" })).toBeNull();
+      expect(within(sheet).getByRole("link", { name: /Subscriptions/ })).toBeTruthy();
+    } finally {
+      setPageHidden("/budgets", false);
+    }
+  });
+});

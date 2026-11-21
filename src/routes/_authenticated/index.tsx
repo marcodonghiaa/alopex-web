@@ -256,7 +256,7 @@ function NetWorthPage() {
               (sync.attention > 0 ? (
                 // A failing check: the line becomes the way to it.
                 <Link
-                  to="/settings"
+                  to="/settings/overview"
                   hash="health"
                   className="inline-flex min-h-6 items-center underline decoration-hairline underline-offset-4 hover:text-foreground"
                 >

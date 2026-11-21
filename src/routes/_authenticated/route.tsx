@@ -6,7 +6,7 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Target,
   TrendingUp,
@@ -44,6 +44,8 @@ import { groupStreams, romeToday } from "@/lib/recurring";
 import { useRecurringStreams } from "@/lib/use-recurring-streams";
 import { useQuery } from "@tanstack/react-query";
 import { fetchReviewCount, REVIEW_COUNT_KEY } from "@/lib/splitwise-sync";
+import { useHiddenPages } from "@/lib/hidden-pages";
+import { isSettingsPath, SettingsSidebar } from "@/components/settings/settings-nav";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -184,6 +186,13 @@ function AuthenticatedLayout() {
   const [signingOut, setSigningOut] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = useRouterState({ select: (st) => st.location.pathname });
+  // Pages switched off in Settings › App drop out of the sidebar and More.
+  const hidden = useHiddenPages();
+  const shown = (items: Array<NavItem>) => items.filter((i) => !hidden.includes(i.to));
+  // Settings replaces the sidebar; "Back to app" returns to the last page outside it.
+  const inSettings = isSettingsPath(pathname);
+  const lastAppPath = useRef("/");
+  if (!inSettings) lastAppPath.current = pathname;
   // A More link to the page you're on only closes the sheet: navigating would replace the
   // sheet's history entry with the same page and leave a Back that does nothing.
   const closeMenuTo = (e: React.MouseEvent, to: string) => {
@@ -243,41 +252,48 @@ function AuthenticatedLayout() {
           <DemoBadge className="ml-auto" />
         </div>
 
-        <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-3">
-          {NAV_GROUPS.map((group, i) => (
-            <div key={group.label}>
-              <div className="eyebrow px-3 pb-2">
-                {String(i + 1).padStart(2, "0")} {group.label}
+        {inSettings ? (
+          <SettingsSidebar backTo={lastAppPath.current} pathname={pathname} />
+        ) : (
+          <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-3">
+            {NAV_GROUPS.filter((g) => shown(g.items).length > 0).map((group, i) => (
+              <div key={group.label}>
+                <div className="eyebrow px-3 pb-2">
+                  {String(i + 1).padStart(2, "0")} {group.label}
+                </div>
+                <div className="space-y-0.5">
+                  {shown(group.items).map((item) => (
+                    <Link
+                      key={item.label}
+                      to={item.to}
+                      activeOptions={{ exact: true }}
+                      className={SIDEBAR_LINK}
+                      activeProps={{ className: SIDEBAR_LINK_ACTIVE }}
+                    >
+                      <item.icon className="size-[1.125rem] shrink-0" />
+                      {item.label}
+                      <NavBadge count={badges[item.label]} />
+                    </Link>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-0.5">
-                {group.items.map((item) => (
-                  <Link
-                    key={item.label}
-                    to={item.to}
-                    activeOptions={{ exact: true }}
-                    className={SIDEBAR_LINK}
-                    activeProps={{ className: SIDEBAR_LINK_ACTIVE }}
-                  >
-                    <item.icon className="size-[1.125rem] shrink-0" />
-                    {item.label}
-                    <NavBadge count={badges[item.label]} />
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))}
-        </nav>
+            ))}
+          </nav>
+        )}
 
         <div className="border-t p-3">
           <div className="mb-2 truncate px-3 text-xs text-muted-foreground">{user.email}</div>
-          <Link
-            to="/settings"
-            className={SIDEBAR_LINK}
-            activeProps={{ className: SIDEBAR_LINK_ACTIVE }}
-          >
-            <Settings className="size-[1.125rem] shrink-0" />
-            Settings
-          </Link>
+          {/* In Settings its own menu is above; the link would only repeat it. */}
+          {!inSettings && (
+            <Link
+              to="/settings"
+              className={SIDEBAR_LINK}
+              activeProps={{ className: SIDEBAR_LINK_ACTIVE }}
+            >
+              <Settings className="size-[1.125rem] shrink-0" />
+              Settings
+            </Link>
+          )}
           {demo ? (
             <a href={GET_YOUR_OWN_URL} className={SIDEBAR_LINK}>
               <Download className="size-[1.125rem] shrink-0" />
@@ -353,11 +369,11 @@ function AuthenticatedLayout() {
           </SheetHeader>
 
           <nav aria-label="More" className="space-y-5 px-4 pt-2 pb-4">
-            {MORE_GROUPS.map((group) => (
+            {MORE_GROUPS.filter((g) => shown(g.items).length > 0).map((group) => (
               <div key={group.label || "pages"}>
                 {group.label && <div className="ios-section-title">{group.label}</div>}
                 <GroupedList>
-                  {group.items.map((item) => (
+                  {shown(group.items).map((item) => (
                     <Link
                       key={item.label}
                       to={item.to}

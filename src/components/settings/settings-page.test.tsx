@@ -18,40 +18,91 @@ vi.mock("@/components/settings/rules-section", () => ({ RulesSection: () => <h2>
 vi.mock("@/components/health/health-section", () => ({
   HealthSection: () => <h2>Health</h2>,
   NotificationsSection: () => <h2>Notifications</h2>,
+  GetTheAppSection: () => <h2>Get the phone app</h2>,
+}));
+vi.mock("@/components/settings/formats-section", () => ({
+  FormatsSection: () => <h2>Number and date format</h2>,
+}));
+vi.mock("@/components/settings/menu-pages-section", () => ({
+  MenuPagesSection: () => <h2>Pages in the menu</h2>,
+}));
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
+    <a href={to}>{children}</a>
+  ),
 }));
 
-import { SettingsPage } from "./settings-page";
+import {
+  AccountSettingsPage,
+  AppSettingsPage,
+  OverviewSettingsPage,
+  PersonalizationSettingsPage,
+  SecuritySettingsPage,
+  SettingsIndexPage,
+} from "./settings-page";
 
 const order = () => screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
 
-// protects=Health ("can I trust these numbers?") is the first thing in Settings (#14);
-// fails_when=it sinks below the category list again
-describe("SettingsPage order", () => {
-  it("puts Health first and account management last", () => {
+// protects=each settings page holds what the whiteboard put there; Health stays first in
+// Overview (#14); fails_when=a section moves to the wrong page or drops out
+describe("settings pages", () => {
+  it("Overview: Health first, then format, then notifications (phone) or the app (desktop)", () => {
     demo.current = false;
-    render(<SettingsPage />);
+    render(<OverviewSettingsPage />);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Overview");
     expect(order()).toEqual([
       "Health",
-      "Notifications",
-      "Categories",
-      "Rules",
       "Number and date format",
-      "Password",
-      "Two-step",
-      "Export",
-      "Delete",
+      "Notifications",
+      "Get the phone app",
     ]);
+  });
+
+  it("App, Personalization, Security and Account", () => {
+    demo.current = false;
+    const { unmount } = render(<AppSettingsPage />);
+    expect(order()).toEqual(["Pages in the menu"]);
+    unmount();
+    const p = render(<PersonalizationSettingsPage />);
+    expect(order()).toEqual(["Categories", "Rules"]);
+    p.unmount();
+    const sec = render(<SecuritySettingsPage />);
+    expect(order()).toEqual(["Password", "Two-step"]);
+    sec.unmount();
+    render(<AccountSettingsPage />);
+    expect(order()).toEqual(["Export", "Delete"]);
   });
 
   it("leaves out the account sections in the demo", () => {
     demo.current = true;
-    render(<SettingsPage />);
-    expect(order()).toEqual([
-      "Health",
-      "Notifications",
-      "Categories",
-      "Rules",
-      "Number and date format",
+    const sec = render(<SecuritySettingsPage />);
+    expect(screen.queryAllByRole("heading", { level: 2 })).toHaveLength(0);
+    expect(screen.getByText(/Not available in the demo/)).toBeInTheDocument();
+    sec.unmount();
+    render(<AccountSettingsPage />);
+    expect(screen.queryByText("Delete")).toBeNull();
+  });
+
+  it("phone: Settings opens on the section list; the demo has no Security or Account", () => {
+    demo.current = false;
+    const { unmount } = render(<SettingsIndexPage />);
+    const labels = () => screen.getAllByRole("link").map((l) => l.getAttribute("href"));
+    expect(labels()).toEqual([
+      "/settings/overview",
+      "/settings/app",
+      "/settings/personalization",
+      "/settings/security",
+      "/settings/account",
     ]);
+    unmount();
+    demo.current = true;
+    render(<SettingsIndexPage />);
+    expect(labels()).toEqual(["/settings/overview", "/settings/app", "/settings/personalization"]);
+  });
+
+  it("each section page has a phone back link to the list", () => {
+    demo.current = false;
+    render(<AppSettingsPage />);
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
   });
 });

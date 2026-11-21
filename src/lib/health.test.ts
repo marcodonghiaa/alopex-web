@@ -4,6 +4,7 @@ import {
   aiRow,
   attentionCount,
   bySeverity,
+  groupByBank,
   originRow,
   pushRow,
   supabaseSecretsUrl,
@@ -194,5 +195,50 @@ describe("syncStatus", () => {
       text: "Not synced yet",
       attention: 1,
     });
+  });
+});
+
+// protects=a long list of linked accounts reads as one item per bank (whiteboard note);
+// fails_when=per-account rows show flat again, or a broken bank hides behind a healthy one
+describe("groupByBank", () => {
+  const accounts = [
+    acct({ uid: "r1" }),
+    acct({ uid: "r2", currency: "USD" }),
+    acct({ uid: "f1", label: "Fineco EUR", bank_name: "Fineco", snapshot_date: "2026-10-20" }),
+  ];
+  const rows = [...accessRows(accounts, NOW), ...syncRows(accounts, NOW)];
+
+  it("folds each bank's checks into one item, worst bank and worst row first", () => {
+    const items = groupByBank(rows);
+    expect(items.map((i) => ("rows" in i ? i.bank : i.id))).toEqual(["Fineco", "Revolut"]);
+    const [fineco, revolut] = items as Array<{ state: string; rows: Array<{ id: string }> }>;
+    expect(fineco!.state).toBe("bad");
+    expect(fineco!.rows.map((r) => r.id)).toEqual(["sync:f1", "access:Fineco"]);
+    expect(revolut!.state).toBe("ok");
+    expect(revolut!.rows).toHaveLength(3);
+  });
+
+  it("keeps checks without a bank as single rows, after banks of the same state", () => {
+    const origin = originRow(1)!;
+    const items = groupByBank([origin, ...rows]);
+    expect(items.map((i) => ("rows" in i ? i.bank : i.id))).toEqual([
+      "Fineco",
+      "Revolut",
+      "origin",
+    ]);
+  });
+
+  it("names two accounts of one bank in the same currency by IBAN end, else label", () => {
+    const twins = [
+      acct({ uid: "a", iban: "IT60X0542811101000000123456" }),
+      acct({ uid: "b", label: "Savings" }),
+      acct({ uid: "c", currency: "USD" }),
+    ];
+    const [group] = groupByBank(syncRows(twins, NOW)) as Array<{ rows: Array<{ title: string }> }>;
+    expect(group!.rows.map((r) => r.title)).toEqual([
+      "Revolut EUR sync · •••• 3456",
+      "Revolut EUR sync · Savings",
+      "Revolut USD sync",
+    ]);
   });
 });
