@@ -855,6 +855,20 @@ describe("fake client: reapply-rules", () => {
   });
 });
 
+// Polish 1 #7: every Subscriptions visit in the demo logged a refresh-recurring 403.
+describe("fake client: refresh-recurring", () => {
+  it("answers the Subscriptions page's re-check without an error", async () => {
+    const { data, error } = await (
+      fresh().functions.invoke as unknown as (
+        n: string,
+        o: object,
+      ) => Promise<{ data: unknown; error: unknown }>
+    )("refresh-recurring", { body: {} });
+    expect(error).toBeNull();
+    expect(data).toEqual({ streams: 0 });
+  });
+});
+
 describe("fake client: set_holding_quantity", () => {
   type Rpc = (f: string, a: object) => PromiseLike<{ data: number; error: unknown }>;
   it("selling a stock takes its value out of today's net worth at once", async () => {
