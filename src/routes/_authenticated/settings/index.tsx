@@ -21,7 +21,9 @@ export const Route = createFileRoute("/_authenticated/settings/")({
     // Keep the hash: old /settings#health (and other section) links still land on their section.
     if (isWide() || location.hash)
       throw redirect({
-        to: PAGE_OF_ANCHOR[location.hash] ?? "/settings/overview",
+        to: Object.hasOwn(PAGE_OF_ANCHOR, location.hash)
+          ? PAGE_OF_ANCHOR[location.hash]!
+          : "/settings/overview",
         ...(location.hash && { hash: location.hash }),
         replace: true,
       });

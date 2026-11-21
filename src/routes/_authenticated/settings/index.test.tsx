@@ -49,3 +49,12 @@ describe("/settings#anchor from the old one-page Settings", () => {
     );
   });
 });
+
+// polish-2 #1: the anchor map is a plain object, so #constructor / #__proto__ looked up
+// Object.prototype keys and broke the redirect. fails_when=those land anywhere but Overview
+it.each(["constructor", "__proto__", "toString"])("#%s still opens Overview", (hash) => {
+  wide(true);
+  expect(() => beforeLoad({ location: { hash } })).toThrowError(
+    expect.objectContaining({ options: expect.objectContaining({ to: "/settings/overview" }) }),
+  );
+});
