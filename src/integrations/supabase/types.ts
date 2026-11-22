@@ -1013,6 +1013,7 @@ export type Database = {
           settled_by_account: string | null;
           settled_by_ref: string | null;
           transaction_type: string | null;
+          transaction_type_source: string | null;
           user_id: string;
           value_date: string | null;
           worth_it: string | null;
@@ -1050,6 +1051,7 @@ export type Database = {
           settled_by_account?: string | null;
           settled_by_ref?: string | null;
           transaction_type?: string | null;
+          transaction_type_source?: string | null;
           user_id: string;
           value_date?: string | null;
           worth_it?: string | null;
@@ -1087,6 +1089,7 @@ export type Database = {
           settled_by_account?: string | null;
           settled_by_ref?: string | null;
           transaction_type?: string | null;
+          transaction_type_source?: string | null;
           user_id?: string;
           value_date?: string | null;
           worth_it?: string | null;
