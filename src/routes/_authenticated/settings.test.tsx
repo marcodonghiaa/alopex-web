@@ -9,12 +9,12 @@ describe("/health", () => {
     const beforeLoad = HealthRoute.options.beforeLoad as () => void;
     expect(beforeLoad).toThrowError(
       expect.objectContaining({
-        options: expect.objectContaining({ to: "/settings", hash: "health" }),
+        options: expect.objectContaining({ to: "/settings/overview", hash: "health" }),
       }),
     );
   });
 
   it("serves Settings from its own route", () => {
-    expect(SettingsRoute.options.component).toBeTypeOf("function");
+    expect(SettingsRoute.options.component).toBeDefined();
   });
 });

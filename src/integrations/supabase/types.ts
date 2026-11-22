@@ -1351,6 +1351,10 @@ export type Database = {
       };
     };
     Functions: {
+      match_broker_rows: {
+        Args: { p_user?: string };
+        Returns: { matched: number; cleared: number; unmatched: number };
+      };
       my_transaction_tags: {
         Args: Record<PropertyKey, never>;
         Returns: Array<{ tag: string; uses: number }>;

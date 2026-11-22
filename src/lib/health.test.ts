@@ -4,6 +4,7 @@ import {
   aiRow,
   attentionCount,
   bySeverity,
+  groupByBank,
   originRow,
   pushRow,
   supabaseSecretsUrl,
@@ -43,6 +44,13 @@ describe("syncState", () => {
 });
 
 describe("syncRows", () => {
+  // polish-5 audit #3: with no IBAN and no label there is nothing to name the account by;
+  // groupByBank then falls back to the end of its id.
+  it("leaves the account name out when there is neither IBAN nor label", () => {
+    const [row] = syncRows([acct({ iban: null, label: null })], new Date("2026-10-28T12:00:00Z"));
+    expect(row).not.toHaveProperty("account");
+  });
+
   it("skips accounts without a bank consent", () => {
     expect(syncRows([acct({ consent_valid_until: null })], NOW)).toEqual([]);
   });
@@ -194,5 +202,64 @@ describe("syncStatus", () => {
       text: "Not synced yet",
       attention: 1,
     });
+  });
+});
+
+// protects=a long list of linked accounts reads as one item per bank (whiteboard note);
+// fails_when=per-account rows show flat again, or a broken bank hides behind a healthy one
+describe("groupByBank", () => {
+  const accounts = [
+    acct({ uid: "r1" }),
+    acct({ uid: "r2", currency: "USD" }),
+    acct({ uid: "f1", label: "Fineco EUR", bank_name: "Fineco", snapshot_date: "2026-10-20" }),
+  ];
+  const rows = [...accessRows(accounts, NOW), ...syncRows(accounts, NOW)];
+
+  it("folds each bank's checks into one item, worst bank and worst row first", () => {
+    const items = groupByBank(rows);
+    expect(items.map((i) => ("rows" in i ? i.bank : i.id))).toEqual(["Fineco", "Revolut"]);
+    const [fineco, revolut] = items as Array<{ state: string; rows: Array<{ id: string }> }>;
+    expect(fineco!.state).toBe("bad");
+    expect(fineco!.rows.map((r) => r.id)).toEqual(["sync:f1", "access:Fineco"]);
+    expect(revolut!.state).toBe("ok");
+    expect(revolut!.rows).toHaveLength(3);
+  });
+
+  it("keeps checks without a bank as single rows, after banks of the same state", () => {
+    const origin = originRow(1)!;
+    const items = groupByBank([origin, ...rows]);
+    expect(items.map((i) => ("rows" in i ? i.bank : i.id))).toEqual([
+      "Fineco",
+      "Revolut",
+      "origin",
+    ]);
+  });
+
+  it("names two accounts of one bank in the same currency by IBAN end, else label", () => {
+    const twins = [
+      acct({ uid: "a", iban: "IT60X0542811101000000123456" }),
+      acct({ uid: "b", label: "Savings" }),
+      acct({ uid: "c", currency: "USD" }),
+    ];
+    const [group] = groupByBank(syncRows(twins, NOW)) as Array<{ rows: Array<{ title: string }> }>;
+    expect(group!.rows.map((r) => r.title)).toEqual([
+      "Revolut EUR sync · •••• 3456",
+      "Revolut EUR sync · Savings",
+      "Revolut USD sync",
+    ]);
+  });
+
+  // polish-1 #2: real labels are the holder name, so two IBAN-less cards share it.
+  // fails_when=both rows still read "Revolut EUR sync · Jane Doe"
+  it("falls back to the account id's end when the label doesn't tell twins apart", () => {
+    const cards = [
+      acct({ uid: "card-1111", label: "Jane Doe" }),
+      acct({ uid: "card-2222", label: "Jane Doe" }),
+    ];
+    const [group] = groupByBank(syncRows(cards, NOW)) as Array<{ rows: Array<{ title: string }> }>;
+    expect(group!.rows.map((r) => r.title)).toEqual([
+      "Revolut EUR sync · …1111",
+      "Revolut EUR sync · …2222",
+    ]);
   });
 });

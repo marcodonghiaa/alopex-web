@@ -49,6 +49,15 @@ describe("ChangePasswordForm", () => {
     );
   });
 
+  // polish-5 F1: on the Security page this can't be called "Account" (a separate settings page);
+  // the old #account anchor still lands here. fails_when=the heading clashes again
+  it("is headed Password and keeps the old #account anchor", () => {
+    render(<ChangePasswordForm />);
+    const h2 = screen.getByRole("heading", { level: 2 });
+    expect(h2).toHaveTextContent(/^Password$/);
+    expect(h2.closest("section")).toHaveAttribute("id", "account");
+  });
+
   it("never signs in on this tab's client", async () => {
     render(<ChangePasswordForm />);
     fill("oldpassword", "newpassword1", "newpassword1");

@@ -6,7 +6,7 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Target,
   TrendingUp,
@@ -44,6 +44,13 @@ import { groupStreams, romeToday } from "@/lib/recurring";
 import { useRecurringStreams } from "@/lib/use-recurring-streams";
 import { useQuery } from "@tanstack/react-query";
 import { fetchReviewCount, REVIEW_COUNT_KEY } from "@/lib/splitwise-sync";
+import { useHiddenPages } from "@/lib/hidden-pages";
+import {
+  isSettingsPath,
+  SettingsSidebar,
+  SIDEBAR_LINK,
+  SIDEBAR_LINK_ACTIVE,
+} from "@/components/settings/settings-nav";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -159,13 +166,6 @@ export const MORE_GROUPS: Array<NavGroup> = (() => {
   return [{ label: "", items: pages }, ...tools].filter((g) => g.items.length > 0);
 })();
 
-// Desktop sidebar (DESIGN.md "Navigation"): 18px line icon + label, 4px corners; hover and
-// active take the sidebar accent fill, active adds weight 500.
-const SIDEBAR_LINK =
-  "flex items-center gap-3 rounded-sm px-3 py-2 text-[0.9375rem] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground";
-const SIDEBAR_LINK_ACTIVE =
-  "flex items-center gap-3 rounded-sm px-3 py-2 text-[0.9375rem] font-medium bg-sidebar-accent text-foreground";
-
 // Mobile tab bar: icon + sans label; the active tab carries a 2px Ember rule on top.
 const TAB_LINK =
   "flex flex-col items-center justify-center gap-0.5 border-t-2 border-transparent text-muted-foreground transition-opacity active:opacity-60";
@@ -178,12 +178,65 @@ const SHEET_ROW =
   "flex min-h-11 items-center gap-3 px-4 py-2.5 text-left text-[0.9375rem] text-foreground active:bg-accent";
 const SHEET_ROW_ACTIVE = `${SHEET_ROW} bg-accent font-medium`;
 
+type AppPage = { to: string; search: object };
+const LAST_APP_PAGE = "alopex.lastAppPage";
+// The last page outside Settings saved in this tab; only a plain in-app path is trusted
+// (no //host, backslash or whitespace such as tabs, whatever the router would make of them).
+function savedAppPage(): AppPage {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(LAST_APP_PAGE) ?? "null") as Partial<AppPage>;
+    if (
+      typeof v?.to === "string" &&
+      /^\/(?!\/)/.test(v.to) &&
+      !/[\\\s]/.test(v.to) &&
+      !isSettingsPath(v.to)
+    ) {
+      return { to: v.to, search: typeof v.search === "object" && v.search ? v.search : {} };
+    }
+  } catch {
+    // Blocked or malformed: start from Net Worth.
+  }
+  return { to: "/", search: {} };
+}
+
 function AuthenticatedLayout() {
   const { user } = Route.useRouteContext();
   const navigate = useNavigate();
   const [signingOut, setSigningOut] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = useRouterState({ select: (st) => st.location.pathname });
+  // Pages switched off in Settings › App drop out of the sidebar and More.
+  const hidden = useHiddenPages();
+  const shown = (items: Array<NavItem>) => items.filter((i) => !hidden.includes(i.to));
+  // Settings replaces the sidebar; "Back to app" returns to the last page outside it.
+  const inSettings = isSettingsPath(pathname);
+  const search = useRouterState({ select: (st) => st.location.search });
+  const [savedPage] = useState(savedAppPage);
+  const lastAppPage = useRef<AppPage>(savedPage);
+  if (!inSettings) lastAppPage.current = { to: pathname, search };
+  // Kept for this tab, so a reload inside Settings still goes back to the filtered page.
+  useEffect(() => {
+    if (inSettings) return;
+    try {
+      sessionStorage.setItem(LAST_APP_PAGE, JSON.stringify({ to: pathname, search }));
+    } catch {
+      // Storage blocked: Back to app falls back to this session's memory.
+    }
+  }, [inSettings, pathname, search]);
+  // Entering or leaving Settings unmounts the link that was pressed: put keyboard focus on the
+  // new menu's current link (else its first), so the next Tab doesn't skip the whole menu.
+  const sidebar = useRef<HTMLElement>(null);
+  const wasInSettings = useRef(inSettings);
+  useEffect(() => {
+    if (wasInSettings.current === inSettings) return;
+    wasInSettings.current = inSettings;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    const links = sidebar.current?.querySelectorAll<HTMLElement>("nav a");
+    (
+      [...(links ?? [])].find((a) => a.getAttribute("aria-current") === "page") ?? links?.[0]
+    )?.focus();
+  }, [inSettings]);
   // A More link to the page you're on only closes the sheet: navigating would replace the
   // sheet's history entry with the same page and leave a Back that does nothing.
   const closeMenuTo = (e: React.MouseEvent, to: string) => {
@@ -205,7 +258,11 @@ function AuthenticatedLayout() {
     "Who owes you": review.data ?? 0,
   };
   // The More tab sums what waits on the pages it holds that carry a badge.
-  const inMore = (badges["Subscriptions"] ?? 0) + (badges["Who owes you"] ?? 0);
+  // A page hidden in Settings › App has no row in More, so its count stays out too.
+  const inMore = MORE_GROUPS.flatMap((g) => shown(g.items)).reduce(
+    (sum, i) => sum + (badges[i.label] ?? 0),
+    0,
+  );
 
   // Once per page load: tells the backend this address is the dashboard (setup no longer asks for it).
   useEffect(() => {
@@ -236,7 +293,10 @@ function AuthenticatedLayout() {
   return (
     <div className="flex min-h-dvh bg-background">
       {/* Sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r bg-sidebar md:flex">
+      <aside
+        ref={sidebar}
+        className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r bg-sidebar md:flex"
+      >
         <div className="flex h-16 items-center gap-2.5 px-5">
           <BrandMark className="size-8" />
           <span className="text-[0.9375rem] font-semibold tracking-tight text-sidebar-foreground">
@@ -245,41 +305,45 @@ function AuthenticatedLayout() {
           <DemoBadge className="ml-auto" />
         </div>
 
-        <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-3">
-          {NAV_GROUPS.map((group, i) => (
-            <div key={group.label}>
-              <div className="eyebrow px-3 pb-2">
-                {String(i + 1).padStart(2, "0")} {group.label}
+        {inSettings ? (
+          <SettingsSidebar backTo={lastAppPage.current} />
+        ) : (
+          <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-3">
+            {NAV_GROUPS.filter((g) => shown(g.items).length > 0).map((group, i) => (
+              <div key={group.label}>
+                <div className="eyebrow px-3 pb-2">
+                  {String(i + 1).padStart(2, "0")} {group.label}
+                </div>
+                <div className="space-y-0.5">
+                  {shown(group.items).map((item) => (
+                    <Link
+                      key={item.label}
+                      to={item.to}
+                      activeOptions={{ exact: true }}
+                      className={SIDEBAR_LINK}
+                      activeProps={{ className: SIDEBAR_LINK_ACTIVE }}
+                    >
+                      <item.icon className="size-[1.125rem] shrink-0" />
+                      {item.label}
+                      <NavBadge count={badges[item.label]} />
+                    </Link>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-0.5">
-                {group.items.map((item) => (
-                  <Link
-                    key={item.label}
-                    to={item.to}
-                    activeOptions={{ exact: true }}
-                    className={SIDEBAR_LINK}
-                    activeProps={{ className: SIDEBAR_LINK_ACTIVE }}
-                  >
-                    <item.icon className="size-[1.125rem] shrink-0" />
-                    {item.label}
-                    <NavBadge count={badges[item.label]} />
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))}
-        </nav>
+            ))}
+          </nav>
+        )}
 
         <div className="border-t p-3">
           <div className="mb-2 truncate px-3 text-xs text-muted-foreground">{user.email}</div>
-          <Link
-            to="/settings"
-            className={SIDEBAR_LINK}
-            activeProps={{ className: SIDEBAR_LINK_ACTIVE }}
-          >
-            <Settings className="size-[1.125rem] shrink-0" />
-            Settings
-          </Link>
+          {/* In Settings its own menu is above; the link would only repeat it. Desktop opens
+              Overview directly (phone /settings is the list), so focus lands on its link. */}
+          {!inSettings && (
+            <Link to="/settings/overview" className={SIDEBAR_LINK}>
+              <Settings className="size-[1.125rem] shrink-0" />
+              Settings
+            </Link>
+          )}
           {demo ? (
             <a href={GET_YOUR_OWN_URL} className={SIDEBAR_LINK}>
               <Download className="size-[1.125rem] shrink-0" />
@@ -355,11 +419,11 @@ function AuthenticatedLayout() {
           </SheetHeader>
 
           <nav aria-label="More" className="space-y-5 px-4 pt-2 pb-4">
-            {MORE_GROUPS.map((group) => (
+            {MORE_GROUPS.filter((g) => shown(g.items).length > 0).map((group) => (
               <div key={group.label || "pages"}>
                 {group.label && <div className="ios-section-title">{group.label}</div>}
                 <GroupedList>
-                  {group.items.map((item) => (
+                  {shown(group.items).map((item) => (
                     <Link
                       key={item.label}
                       to={item.to}
@@ -390,8 +454,9 @@ function AuthenticatedLayout() {
                   to="/settings"
                   replace
                   onClick={(e) => closeMenuTo(e, "/settings")}
-                  className={SHEET_ROW}
-                  activeProps={{ className: SHEET_ROW_ACTIVE }}
+                  // Lit on every settings page, Rules included (it lives in Personalization).
+                  aria-current={inSettings ? "page" : undefined}
+                  className={inSettings ? SHEET_ROW_ACTIVE : SHEET_ROW}
                 >
                   <Settings className="size-5 shrink-0" />
                   Settings

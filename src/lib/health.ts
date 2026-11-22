@@ -1,6 +1,7 @@
 import { bankOf } from "@/components/bank-badge";
 import { consentAlerts } from "@/lib/consent-expiry";
 import { plural } from "@/lib/plural";
+import { maskIban } from "@/lib/iban";
 
 export type HealthState = "ok" | "warn" | "bad";
 
@@ -9,6 +10,10 @@ export interface HealthRow {
   title: string;
   state: HealthState;
   detail: string;
+  // The bank a per-bank check belongs to: Settings groups these rows under the bank.
+  bank?: string;
+  // Tells apart two accounts of one bank in the same currency: the IBAN's last four, else the label.
+  account?: string;
   // The one fix: a page to open, or a built-in control for the row.
   fix?: { label: string; to: "/accounts" } | { label: string; href: string } | { push: true };
 }
@@ -18,6 +23,7 @@ export interface HealthAccount {
   label: string | null;
   currency: string | null;
   bank_name?: string | null;
+  iban?: string | null;
   consent_valid_until: string | null;
   snapshot_date: string | null;
 }
@@ -28,7 +34,8 @@ const STALE_RED_H = 72;
 
 // Worst first, so a page can show what needs attention at the top.
 const SEVERITY: Record<HealthState, number> = { bad: 0, warn: 1, ok: 2 };
-export const bySeverity = (a: HealthRow, b: HealthRow) => SEVERITY[a.state] - SEVERITY[b.state];
+export const bySeverity = (a: { state: HealthState }, b: { state: HealthState }) =>
+  SEVERITY[a.state] - SEVERITY[b.state];
 
 // Hours since the account's latest balance snapshot. The snapshot is a calendar day (UTC), so a
 // balance from today reads 0-24 h, yesterday's 24-48 h, and three days back is red.
@@ -58,12 +65,13 @@ export function accessRows(accounts: Array<HealthAccount>, today: Date): Array<H
     const title = `${bank} access`;
     const daysLeft = alerts.get(bank);
     if (daysLeft === undefined) {
-      return { id: `access:${bank}`, title, state: "ok", detail: "Bank access is valid." };
+      return { id: `access:${bank}`, title, bank, state: "ok", detail: "Bank access is valid." };
     }
     if (daysLeft < 0) {
       return {
         id: `access:${bank}`,
         title,
+        bank,
         state: "bad",
         detail: "Bank access has expired, so it no longer syncs.",
         fix,
@@ -73,6 +81,7 @@ export function accessRows(accounts: Array<HealthAccount>, today: Date): Array<H
     return {
       id: `access:${bank}`,
       title,
+      bank,
       state: daysLeft === 0 ? "bad" : "warn",
       detail: `Bank access ends ${when}.`,
       fix,
@@ -84,15 +93,26 @@ export function accessRows(accounts: Array<HealthAccount>, today: Date): Array<H
 export function syncRows(accounts: Array<HealthAccount>, now: Date): Array<HealthRow> {
   return connected(accounts).map((a) => {
     const id = `sync:${a.uid ?? a.label}`;
-    const title = `${[bankOf(a), a.currency].filter(Boolean).join(" ")} sync`;
+    const bank = bankOf(a);
+    const title = `${[bank, a.currency].filter(Boolean).join(" ")} sync`;
+    const account = a.iban ? maskIban(a.iban) : (a.label ?? undefined);
     if (!a.snapshot_date) {
-      return { id, title, state: "warn", detail: "No balance synced yet." };
+      return {
+        id,
+        title,
+        bank,
+        ...(account && { account }),
+        state: "warn",
+        detail: "No balance synced yet.",
+      };
     }
     const age = syncAgeHours(a.snapshot_date, now);
     const state = syncState(age);
     return {
       id,
       title,
+      bank,
+      ...(account && { account }),
       state,
       detail: `Last synced ${ageText(age)}.`,
       ...(state !== "ok" && { fix: { label: "Check access", to: "/accounts" } as const }),
@@ -178,6 +198,36 @@ export function aiRow(
       "with setup.sh. Descriptions go to Google; its free tier may train on them.",
     ...(secretsUrl && { fix: { label: "Open Supabase secrets", href: secretsUrl } }),
   };
+}
+
+export type HealthItem = HealthRow | { bank: string; state: HealthState; rows: Array<HealthRow> };
+
+/**
+ * Per-bank checks folded into one item per bank (its worst state on top), so a long list of
+ * linked accounts reads as a few banks. Other checks stay single rows. Worst first.
+ */
+export function groupByBank(rows: Array<HealthRow>): Array<HealthItem> {
+  const banks = new Map<string, Array<HealthRow>>();
+  const singles: Array<HealthItem> = [];
+  for (const row of rows) {
+    if (!row.bank) singles.push(row);
+    else banks.set(row.bank, [...(banks.get(row.bank) ?? []), row]);
+  }
+  const groups = [...banks].map(([bank, list]): HealthItem => {
+    // Two "Revolut EUR sync" rows: name each by its account; when that is shared too (labels
+    // are often the holder's name), by the end of its id.
+    const twins = (r: HealthRow) => list.filter((o) => o !== r && o.title === r.title);
+    const tag = (r: HealthRow) =>
+      r.account && !twins(r).some((o) => o.account === r.account)
+        ? r.account
+        : `…${r.id.slice(-4)}`;
+    const sorted = [...list]
+      .sort(bySeverity)
+      .map((r) => (twins(r).length ? { ...r, title: `${r.title} · ${tag(r)}` } : r));
+    return { bank, state: sorted[0]!.state, rows: sorted };
+  });
+  // Banks lead at equal severity: they are what the section is mostly about.
+  return [...groups, ...singles].sort(bySeverity);
 }
 
 export const attentionCount = (rows: Array<HealthRow>) =>
