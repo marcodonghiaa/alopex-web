@@ -25,7 +25,7 @@ interface SettingsSection {
 
 const SETTINGS_SECTIONS: Array<SettingsSection> = [
   {
-    label: "Overview",
+    label: "General",
     to: "/settings/overview",
     icon: Gauge,
     hint: "Health, number and date format, notifications",

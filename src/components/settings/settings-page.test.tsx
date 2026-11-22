@@ -49,7 +49,8 @@ describe("settings pages", () => {
   it("Overview: Health first, then format, then notifications (phone) or the app (desktop)", () => {
     demo.current = false;
     render(<OverviewSettingsPage />);
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Overview");
+    // Named General (owner's call, 2026-11-22): "Overview" is already the app's first nav group.
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("General");
     expect(order()).toEqual([
       "Health",
       "Number and date format",
@@ -98,6 +99,7 @@ describe("settings pages", () => {
     demo.current = true;
     render(<SettingsIndexPage />);
     expect(labels()).toEqual(["/settings/overview", "/settings/app", "/settings/personalization"]);
+    expect(screen.getAllByRole("link")[0]).toHaveTextContent(/^General/);
   });
 
   it("each section page has a phone back link to the list", () => {

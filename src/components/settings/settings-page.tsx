@@ -26,7 +26,7 @@ export function SettingsIndexPage() {
 
 export function OverviewSettingsPage() {
   return (
-    <SettingsPageFrame title="Overview">
+    <SettingsPageFrame title="General">
       {/* Health first: it answers "can I trust these numbers?" (#14). */}
       <HealthSection />
       <FormatsSection />
