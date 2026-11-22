@@ -12,6 +12,9 @@ const db = vi.hoisted(() => ({
   /** Coin rows added for one test. */
   extraCoins: [] as Array<Record<string, unknown>>,
   rpcMissing: false,
+  /** match_broker_rows: how often it ran, and what it answers (null = an error, say an older backend). */
+  matchCalls: 0,
+  match: null as null | { matched: number; cleared: number; unmatched: number },
   /** Set, a write answers with this error (set_holding_quantity for rpcError). */
   insertError: null as null | Record<string, unknown>,
   rpcError: null as null | Record<string, unknown>,
@@ -143,6 +146,15 @@ vi.mock("@/integrations/supabase/client", () => {
         },
       }),
       rpc: (name: string, args: Record<string, unknown>) => {
+        // Bank-row matching is counted on its own, so the holding writes stay easy to check.
+        if (name === "match_broker_rows") {
+          db.matchCalls++;
+          return Promise.resolve(
+            db.match
+              ? { data: db.match, error: null }
+              : { data: null, error: { message: "not there" } },
+          );
+        }
         db.rpc.push([name, args]);
         return Promise.resolve(
           db.rpcError
@@ -249,6 +261,8 @@ describe("ImportTrades", () => {
     db.rpc.length = 0;
     db.updated.length = 0;
     db.rpcMissing = false;
+    db.matchCalls = 0;
+    db.match = null;
     db.rpcError = null;
     db.upsertError = null;
     db.upsertSaved = null;
@@ -2251,6 +2265,62 @@ describe("ImportTrades", () => {
       expect(db.invoked).toEqual([]);
     });
   });
+  describe("e2e #23 Trade Republic bank rows are matched to the import", () => {
+    const lastSuccess = () =>
+      vi.mocked(toast.success).mock.lastCall as unknown as [
+        string,
+        { description?: string; action: { onClick: () => void } },
+      ];
+
+    it("after Save it matches and says how many bank rows matched and how many are left", async () => {
+      db.match = { matched: 12, cleared: 0, unmatched: 3 };
+      open("stock");
+      fireEvent.click(await pickTradeRepublic());
+      await waitFor(() => expect(toast.success).toHaveBeenCalled());
+      expect(db.matchCalls).toBe(1);
+      expect(lastSuccess()[1].description).toBe("Matched 12 bank rows, 3 not matched yet");
+    });
+
+    it("no Trade Republic bank account: nothing to say", async () => {
+      db.match = { matched: 0, cleared: 0, unmatched: 0 };
+      open("stock");
+      fireEvent.click(await pickTradeRepublic());
+      await waitFor(() => expect(toast.success).toHaveBeenCalled());
+      expect(lastSuccess()[1].description).toBeUndefined();
+    });
+
+    it("if matching fails the import is still saved", async () => {
+      db.match = null;
+      open("stock");
+      fireEvent.click(await pickTradeRepublic());
+      await waitFor(() => expect(toast.success).toHaveBeenCalled());
+      expect(db.matchCalls).toBe(1);
+      expect(lastSuccess()[0]).toMatch(/^Imported 4 trades/);
+      expect(lastSuccess()[1].description).toBeUndefined();
+    });
+
+    it("Undo runs it again, so the bank rows go back to spending", async () => {
+      db.match = { matched: 4, cleared: 0, unmatched: 0 };
+      open("stock");
+      fireEvent.click(await pickTradeRepublic());
+      await waitFor(() => expect(toast.success).toHaveBeenCalled());
+      db.match = { matched: 0, cleared: 4, unmatched: 4 };
+      lastSuccess()[1].action.onClick();
+      await waitFor(() =>
+        expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe("Import undone"),
+      );
+      expect(db.matchCalls).toBe(2);
+    });
+
+    it("another broker's file doesn't run it", async () => {
+      open("crypto");
+      pick(/Ledger Live/, "ledger_live.csv");
+      fireEvent.click(await screen.findByRole("button", { name: "Save 5 trades" }));
+      await waitFor(() => expect(toast.success).toHaveBeenCalled());
+      expect(db.matchCalls).toBe(0);
+    });
+  });
+
   describe("#16 Undo this import removes what that import saved, and nothing else", () => {
     /** Saves, then presses the toast's Undo. */
     async function saveThenUndo(saveButton: Promise<HTMLElement>) {
