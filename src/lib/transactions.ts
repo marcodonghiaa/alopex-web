@@ -7,6 +7,7 @@ export interface TransactionRow {
   booking_date: string | null;
   category: string | null;
   transaction_type: string | null;
+  transaction_type_source?: string | null; // 'manual' once you pick the type yourself
   creditor_name: string | null;
   currency: string | null;
   amount: number | null;

@@ -16,6 +16,7 @@ const tx = (over: Partial<TransactionRow> = {}): TransactionRow => ({
   booking_date: "2026-10-05",
   category: "Shopping",
   transaction_type: "One-time",
+  transaction_type_source: null,
   creditor_name: "Amazon",
   currency: "EUR",
   amount: 20,
@@ -94,6 +95,31 @@ describe("pickers", () => {
   it("CategoryPicker is disabled while saving", () => {
     render(<CategoryPicker tx={tx()} onSelect={vi.fn()} saving />);
     expect(screen.getByRole("button", { name: /Change category/ })).toBeDisabled();
+  });
+
+  // Type audit P1: a charge already showing One-time (from the AI) must be claimable as yours.
+  it("TypePicker lets you pick the type a charge already has when it isn't yours yet", async () => {
+    const onSelect = vi.fn();
+    render(
+      <TypePicker tx={tx({ transaction_type: "One-time" })} onSelect={onSelect} saving={false} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Change type/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "One-time" }));
+    expect(onSelect).toHaveBeenCalledWith("One-time");
+  });
+
+  it("TypePicker does nothing when you pick the type you already set", async () => {
+    const onSelect = vi.fn();
+    render(
+      <TypePicker
+        tx={tx({ transaction_type: "One-time", transaction_type_source: "manual" })}
+        onSelect={onSelect}
+        saving={false}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Change type/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "One-time" }));
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it("TypePicker shows a dash when the type is unset", () => {

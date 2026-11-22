@@ -103,6 +103,7 @@ const row = (account_uid: string, entry_reference: string): TransactionRow => ({
   booking_date: "2026-10-02",
   category: "Others",
   transaction_type: null,
+  transaction_type_source: null,
   creditor_name: "Shop",
   currency: "EUR",
   amount: 20,
@@ -161,6 +162,35 @@ describe("success toast action", () => {
       action: { label: "Make a rule", onClick },
       duration: 8000,
     });
+  });
+});
+
+// Type audit P1: picking a type marks it as yours, even the type the charge already has, so the
+// sync, rules and AI keep it and subscription detection honours it.
+describe("type saves", () => {
+  it("sends the type with source manual and marks the cached row", async () => {
+    const { queryClient, wrapper, cached } = setup();
+    const { result } = renderHook(
+      () =>
+        useTransactionFieldMutation(queryClient, MONTH, "transaction_type", {
+          errorMessage: "fail",
+        }),
+      { wrapper },
+    );
+    await act(() =>
+      result.current.mutateAsync({
+        tx: { account_uid: "a1", entry_reference: "r1" },
+        value: "One-time",
+      }),
+    );
+    expect(calls[0]?.update).toEqual({
+      transaction_type: "One-time",
+      transaction_type_source: "manual",
+    });
+    expect(cached().map((r) => [r.transaction_type, r.transaction_type_source])).toEqual([
+      ["One-time", "manual"],
+      [null, null],
+    ]);
   });
 });
 
