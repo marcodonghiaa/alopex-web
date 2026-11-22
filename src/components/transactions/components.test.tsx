@@ -120,6 +120,17 @@ describe("pickers", () => {
     expect(onSelect).toHaveBeenCalledWith("Subscription");
   });
 
+  // Re-audit F1b: a row that does carry the source as 'manual' (as the old optimistic cache did)
+  // still saves a re-pick; the old "already yours" skip swallowed it.
+  it("TypePicker saves a re-pick even on a row whose type is already yours", async () => {
+    const onSelect = vi.fn();
+    const mine = { ...tx({ transaction_type: "One-time" }), transaction_type_source: "manual" };
+    render(<TypePicker tx={mine as TransactionRow} onSelect={onSelect} saving={false} />);
+    await userEvent.click(screen.getByRole("button", { name: /Change type/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "One-time" }));
+    expect(onSelect).toHaveBeenCalledWith("One-time");
+  });
+
   // polish-3 F8: a slow type save locks the picker, so a second pick can't go out on top of it.
   it("TypePicker is locked while a type save is pending, and unlocks when it lands", async () => {
     const saves: Array<string> = [];
