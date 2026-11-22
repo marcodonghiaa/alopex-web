@@ -16,6 +16,7 @@ import {
   formatMoney,
   formatSignedMoney,
   isSplitwiseShare,
+  isPaidForOthers,
   isSplit,
   isWorthItEligible,
   myShare,
@@ -75,12 +76,14 @@ function WorthItHint({ tx }: { tx: TransactionRow }) {
 }
 
 /** Signed amount in the transaction's own currency, with the euro value under it if foreign.
- *  A split charge shows my share large and the whole charge under it. */
+ *  A split charge shows my share large and the whole charge under it; one paid entirely for
+ *  others shows the whole charge, which is what is owed. */
 function AmountText({ tx, large = false }: { tx: TransactionRow; large?: boolean }) {
   const native = nativeSignedAmount(tx);
   if (native == null) return <span className="text-sm text-muted-foreground">—</span>;
   const currency = tx.currency ?? "EUR";
-  const split = isSplit(tx);
+  // Paid entirely for others: its section already says so, so the row shows just what is owed.
+  const split = isSplit(tx) && !isPaidForOthers(tx);
   const shown = split ? Math.sign(native || -1) * myShare(tx) : native;
   const positive = shown > 0;
   // The euro value of what is shown: the share's part of the charge's euro value.
@@ -96,7 +99,7 @@ function AmountText({ tx, large = false }: { tx: TransactionRow; large?: boolean
           positive ? "text-positive" : "text-foreground"
         }`}
       >
-        {shown === 0 ? formatMoney(0, currency) : formatSignedMoney(shown, currency)}
+        {formatSignedMoney(shown, currency)}
       </div>
       {split && (
         <div className="font-figure text-xs whitespace-nowrap text-muted-foreground">

@@ -436,10 +436,12 @@ describe("Split charge amount", () => {
     expect(screen.queryByText("−€59.08")).toBeNull();
   });
 
-  it("shows a charge paid entirely for others as €0.00, not a plus", () => {
+  // Marco's review: the section already says it's for others, so show just the owed amount.
+  it("shows a charge paid entirely for others as just the owed amount", () => {
     inTable(bankProps({ personal_amount: 0 }));
-    expect(screen.getByText("€0.00")).toBeInTheDocument();
-    expect(screen.getByText("of €59.08")).toBeInTheDocument();
+    expect(screen.getByText("−€59.08")).toBeInTheDocument();
+    expect(screen.queryByText("€0.00")).toBeNull();
+    expect(screen.queryByText(/^of /)).toBeNull();
   });
 
   it("shows an unsplit charge as before, with no 'of' line", () => {
