@@ -125,7 +125,8 @@ function SubscriptionsPage() {
   // shortcut: a full detection per visit, cheap for one household: server-side a sign-in check,
   // the two-step check, a rate-limit read, the confirmed-streams read, the paged spend reads and
   // one upsert.
-  // No skip-if-recent on purpose: edit a transaction, then open this page, must show the edit.
+  // No client-side skip-if-recent: edit a transaction, then open this page, must show the edit. The server
+  // allows one run per 5 s (429 keeps the saved list), so an edit made inside that window shows next visit.
   useEffect(() => {
     void refreshRecurring()
       .then(async (ran) => {
