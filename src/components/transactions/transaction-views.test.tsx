@@ -444,6 +444,12 @@ describe("Split charge amount", () => {
     expect(screen.queryByText(/^of /)).toBeNull();
   });
 
+  // Re-audit gap on polish 1 #7: the row note's owed amount.
+  it("notes what others owe on a split row", () => {
+    inTable(bankProps({ amount: 20, signed_amount_eur: -20, personal_amount: 8 }));
+    expect(screen.getByText(/split, owed €12\.00/)).toBeInTheDocument();
+  });
+
   it("shows an unsplit charge as before, with no 'of' line", () => {
     inTable(bankProps());
     expect(screen.getByText("−€59.08")).toBeInTheDocument();
