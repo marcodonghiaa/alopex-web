@@ -117,6 +117,13 @@ describe("my share of a charge", () => {
     expect(isPaidForOthers(tx({ amount: 20, personal_amount: 5 }))).toBe(false);
     expect(isPaidForOthers(tx({ amount: 0, personal_amount: 0 }))).toBe(false);
   });
+
+  // Polish 1 #5: money in with a 0 share is not something others owe me.
+  it("is never money in, which others don't owe me", () => {
+    expect(
+      isPaidForOthers(tx({ credit_debit_indicator: "CRDT", amount: 20, personal_amount: 0 })),
+    ).toBe(false);
+  });
 });
 
 describe("money formatting", () => {

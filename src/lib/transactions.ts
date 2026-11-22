@@ -140,9 +140,10 @@ export const myShare = (tx: Pick<TransactionRow, "amount" | "personal_amount">):
 export const isSplit = (tx: Pick<TransactionRow, "amount" | "personal_amount">): boolean =>
   tx.personal_amount != null && myShare(tx) < Math.abs(tx.amount ?? 0);
 
-/** Paid entirely for others (my share is 0): counts nothing, listed apart. */
-export const isPaidForOthers = (tx: Pick<TransactionRow, "amount" | "personal_amount">): boolean =>
-  isSplit(tx) && myShare(tx) === 0;
+/** Money out paid entirely for others (my share is 0): counts nothing, listed apart. */
+export const isPaidForOthers = (
+  tx: Pick<TransactionRow, "amount" | "personal_amount" | "credit_debit_indicator">,
+): boolean => tx.credit_debit_indicator === "DBIT" && isSplit(tx) && myShare(tx) === 0;
 
 // Mirrors the allowlist in the backend's notify-worth-it.js — kept in sync by hand,
 // the two repos don't share code.
