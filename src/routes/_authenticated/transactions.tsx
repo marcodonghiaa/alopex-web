@@ -878,13 +878,26 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
             </Button>
           )}
           {forOthersOpen && (
-            <section className="mt-2 overflow-hidden rounded-lg bg-card md:hidden">
-              <div className="px-4 py-3">{forOthersHeading}</div>
-              <ul className="divide-y divide-hairline border-t">
-                {forOthers.map((tx) => (
-                  <TransactionCardView key={txId(tx)} {...viewProps(tx)} />
-                ))}
-              </ul>
+            <section
+              aria-labelledby="paid-for-others-phone"
+              className="mt-2 overflow-hidden rounded-lg bg-card md:hidden"
+            >
+              <div id="paid-for-others-phone" className="px-4 py-3">
+                {forOthersHeading}
+              </div>
+              {/* Cards carry no date, so they are grouped by day like the main list. */}
+              {groupByDay(forOthers).map((group) => (
+                <div key={group.day ?? "none"} className="border-t">
+                  <p className="px-4 pt-3 text-xs font-medium text-muted-foreground">
+                    {formatDayHeading(group.day)}
+                  </p>
+                  <ul className="divide-y divide-hairline">
+                    {group.rows.map((tx) => (
+                      <TransactionCardView key={txId(tx)} {...viewProps(tx)} />
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </section>
           )}
         </>

@@ -63,6 +63,7 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
 }));
 
 import { Route } from "./transactions";
+import { formatDayHeading } from "@/lib/transactions";
 
 const Page = Route.options.component as () => React.JSX.Element;
 const renderPage = (client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) =>
@@ -611,6 +612,18 @@ describe("Paid for others", () => {
       (await screen.findAllByRole("heading", { name: "Paid for others" })).length,
     ).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /paid for others/ })).toBeNull();
+  });
+
+  // Polish 1 #4: phone cards carry no date, so the section groups them by day like the main list.
+  it("groups the phone section by day", async () => {
+    tableData = {
+      v_transactions_eur: [row("1"), row("2", { personal_amount: 0, booking_date: thisMonth(3) })],
+    };
+    renderPage();
+    await screen.findAllByText("Shop 1");
+    await userEvent.click(screen.getByRole("button", { name: "Show 1 paid for others" }));
+    const phone = screen.getByRole("region", { name: /^Paid for others/ });
+    expect(within(phone).getByText(formatDayHeading(thisMonth(3)))).toBeInTheDocument();
   });
 
   it("shows them when a search matches", async () => {
