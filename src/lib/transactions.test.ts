@@ -15,7 +15,10 @@ import {
   formatMoney,
   isSplitwiseShare,
   isWorthItEligible,
+  isPaidForOthers,
+  isSplit,
   mergeShares,
+  myShare,
   shareToRow,
   type SplitwiseShare,
   listCategories,
@@ -85,6 +88,34 @@ describe("isWorthItEligible", () => {
 
   it("rejects a transaction without created_at", () => {
     expect(isWorthItEligible(tx({ created_at: null }))).toBe(false);
+  });
+
+  // protects=Worth it? weighs only my share; fails_when=a split or paid-for-others charge is asked on its full amount
+  it("judges the minimum on my share, and skips a charge paid entirely for others", () => {
+    expect(isWorthItEligible(tx({ amount: 40, personal_amount: 20 }))).toBe(true);
+    expect(isWorthItEligible(tx({ amount: 40, personal_amount: 10 }))).toBe(false);
+    expect(isWorthItEligible(tx({ amount: 40, personal_amount: 0 }))).toBe(false);
+  });
+});
+
+describe("my share of a charge", () => {
+  it("is the whole charge without a split", () => {
+    expect(myShare(tx({ amount: 20 }))).toBe(20);
+    expect(isSplit(tx())).toBe(false);
+    expect(isPaidForOthers(tx())).toBe(false);
+  });
+
+  it("is the split share when one is set, capped at the charge", () => {
+    expect(myShare(tx({ amount: 20, personal_amount: 5 }))).toBe(5);
+    expect(myShare(tx({ amount: 20, personal_amount: 30 }))).toBe(20);
+    expect(isSplit(tx({ amount: 20, personal_amount: 5 }))).toBe(true);
+    expect(isSplit(tx({ amount: 20, personal_amount: 20 }))).toBe(false);
+  });
+
+  it("is paid for others only when my share is zero", () => {
+    expect(isPaidForOthers(tx({ amount: 20, personal_amount: 0 }))).toBe(true);
+    expect(isPaidForOthers(tx({ amount: 20, personal_amount: 5 }))).toBe(false);
+    expect(isPaidForOthers(tx({ amount: 0, personal_amount: 0 }))).toBe(false);
   });
 });
 

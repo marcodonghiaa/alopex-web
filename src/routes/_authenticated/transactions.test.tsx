@@ -570,3 +570,43 @@ describe("Transactions page tag filter", () => {
     await waitFor(() => expect(screen.queryAllByText("Hotel Alpha")).toHaveLength(0));
   });
 });
+
+// protects=charges paid entirely for others sit in a collapsed "Paid for others" section, still
+// found by search; fails_when=they stay in the main list, vanish, or search can't find them
+describe("Paid for others", () => {
+  afterEach(() => {
+    tableData = {};
+  });
+
+  it("keeps them out of the main list until shown", async () => {
+    tableData = {
+      v_transactions_eur: [row("1"), row("2", { personal_amount: 0, amount: 49.02 })],
+    };
+    renderPage();
+    await screen.findAllByText("Shop 1");
+    expect(screen.queryByText("Shop 2")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Show 1 paid for others" }));
+    expect(screen.getAllByRole("heading", { name: "Paid for others" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Shop 2").length).toBeGreaterThan(0);
+    await userEvent.click(screen.getByRole("button", { name: "Hide 1 paid for others" }));
+    expect(screen.queryByText("Shop 2")).toBeNull();
+  });
+
+  it("shows them when a search matches", async () => {
+    tableData = {
+      v_transactions_eur: [row("1"), row("2", { personal_amount: 0, creditor_name: "Fresh" })],
+    };
+    renderPage();
+    await screen.findAllByText("Shop 1");
+    await userEvent.type(screen.getByLabelText("Search by merchant or note"), "Fresh");
+    expect(screen.getAllByRole("heading", { name: "Paid for others" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Fresh").length).toBeGreaterThan(0);
+  });
+
+  it("shows no section when nothing was paid for others", async () => {
+    tableData = { v_transactions_eur: [row("1", { personal_amount: 4 })] };
+    renderPage();
+    await screen.findAllByText("Shop 1");
+    expect(screen.queryByRole("button", { name: /paid for others/ })).toBeNull();
+  });
+});

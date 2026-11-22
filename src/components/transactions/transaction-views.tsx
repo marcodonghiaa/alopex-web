@@ -16,7 +16,9 @@ import {
   formatMoney,
   formatSignedMoney,
   isSplitwiseShare,
+  isSplit,
   isWorthItEligible,
+  myShare,
   nativeSignedAmount,
   type TransactionRow,
 } from "@/lib/transactions";
@@ -66,22 +68,27 @@ export interface TransactionViewProps {
 /** "#trip #work", or "" without tags. */
 const tagLine = (tx: TransactionRow): string => (tx.tags ?? []).map((t) => `#${t}`).join(" ");
 
-const isSplit = (tx: TransactionRow): boolean =>
-  tx.personal_amount != null && tx.personal_amount < Math.abs(tx.amount ?? 0);
-
 /** An open "worth it?" question: a hint on the row, answered in the row's sheet. */
 function WorthItHint({ tx }: { tx: TransactionRow }) {
   if (isSplitwiseShare(tx) || !isWorthItEligible(tx)) return null;
   return <span className="shrink-0 font-medium text-primary">Worth it?</span>;
 }
 
-/** Signed amount in the transaction's own currency, with the euro value under it if foreign. */
+/** Signed amount in the transaction's own currency, with the euro value under it if foreign.
+ *  A split charge shows my share large and the whole charge under it. */
 function AmountText({ tx, large = false }: { tx: TransactionRow; large?: boolean }) {
   const native = nativeSignedAmount(tx);
   if (native == null) return <span className="text-sm text-muted-foreground">—</span>;
   const currency = tx.currency ?? "EUR";
-  const positive = native >= 0;
-  const eur = tx.signed_amount_eur;
+  const split = isSplit(tx);
+  const shown = split ? Math.sign(native || -1) * myShare(tx) : native;
+  const positive = shown > 0;
+  // The euro value of what is shown: the share's part of the charge's euro value.
+  const total = Math.abs(tx.amount ?? 0);
+  const eur =
+    tx.signed_amount_eur == null || total === 0
+      ? null
+      : (tx.signed_amount_eur * Math.abs(shown)) / total;
   return (
     <div className={large ? "text-center" : "shrink-0 text-right"}>
       <div
@@ -89,8 +96,13 @@ function AmountText({ tx, large = false }: { tx: TransactionRow; large?: boolean
           positive ? "text-positive" : "text-foreground"
         }`}
       >
-        {formatSignedMoney(native, currency)}
+        {shown === 0 ? formatMoney(0, currency) : formatSignedMoney(shown, currency)}
       </div>
+      {split && (
+        <div className="font-figure text-xs whitespace-nowrap text-muted-foreground">
+          of {formatMoney(total, currency)}
+        </div>
+      )}
       {currency !== "EUR" && eur != null && (
         <div className="font-figure text-xs whitespace-nowrap text-muted-foreground">
           ≈ {formatMoney(Math.abs(eur), "EUR")}

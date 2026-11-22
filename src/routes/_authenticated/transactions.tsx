@@ -23,6 +23,7 @@ import {
   formatEur,
   groupByDay,
   selectedOnly,
+  isPaidForOthers,
   isSplitwiseShare,
   shareId,
   listCategories,
@@ -248,6 +249,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
   const restoreTransfer = useFlowMutation(queryClient, monthKey);
   const changeAmount = useManualAmountMutation(queryClient);
   const [showTransfers, setShowTransfers] = useState(false);
+  const [showForOthers, setShowForOthers] = useState(false);
 
   const bulkUpdateCategory = useBulkCategoryMutation(queryClient, monthKey, () =>
     setSelected(new Set()),
@@ -379,14 +381,37 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
     return transactions.filter((tx) => keep.has(tx) || txId(tx) === editing);
   }, [transactions, search, category, bank, bankFor, day, tag, editing]);
 
+  // Charges paid entirely for others count nothing, so they sit apart, below the list. The row
+  // being edited stays where it is until its sheet closes.
+  const forOthers = useMemo(
+    () => filtered.filter((tx) => isPaidForOthers(tx) && txId(tx) !== editing),
+    [filtered, editing],
+  );
+  const mine = useMemo(() => {
+    const apart = new Set(forOthers);
+    return filtered.filter((tx) => !apart.has(tx));
+  }, [filtered, forOthers]);
+  // A search shows them too, so it never comes up empty for something you paid.
+  const forOthersOpen =
+    forOthers.length > 0 && (showForOthers || search.trim() !== "" || mine.length === 0);
+  const visible = forOthersOpen ? filtered : mine;
+  const forOthersHeading = (
+    <>
+      <h2 className="text-lg font-semibold text-foreground">Paid for others</h2>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        Others owe you all of it. Not counted in your spending.
+      </p>
+    </>
+  );
+
   // Shares cannot be bulk edited or deleted: they are not rows of the transactions table.
   const filteredIds = useMemo(
-    () => filtered.filter((tx) => !isSplitwiseShare(tx)).map(txId),
-    [filtered],
+    () => visible.filter((tx) => !isSplitwiseShare(tx)).map(txId),
+    [visible],
   );
   const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selected.has(id));
   // Bulk actions touch only rows you can see: a row selected before a filter hid it stays out.
-  const selectedVisible = useMemo(() => selectedOnly(filtered, selected), [filtered, selected]);
+  const selectedVisible = useMemo(() => selectedOnly(visible, selected), [visible, selected]);
 
   function toggleOne(id: string) {
     setSelected((prev) => {
@@ -757,7 +782,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
           <div className="rounded-lg bg-card">{emptyList}</div>
         ) : (
           <div className="space-y-5">
-            {groupByDay(filtered).map((group) => (
+            {groupByDay(mine).map((group) => (
               <section key={group.day ?? "none"}>
                 <SectionTitle variant="label">{formatDayHeading(group.day)}</SectionTitle>
                 <ul className="divide-y divide-hairline overflow-hidden rounded-lg bg-card">
@@ -809,12 +834,53 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
                   <td colSpan={5}>{emptyList}</td>
                 </tr>
               ) : (
-                filtered.map((tx) => <TransactionRowView key={txId(tx)} {...viewProps(tx)} />)
+                <>
+                  {mine.map((tx) => (
+                    <TransactionRowView key={txId(tx)} {...viewProps(tx)} />
+                  ))}
+                  {/* In the same table so the columns line up with the rows above. */}
+                  {forOthersOpen && (
+                    <>
+                      <tr className="border-b bg-background/40">
+                        <td colSpan={5} className="px-4 pt-5 pb-3">
+                          {forOthersHeading}
+                        </td>
+                      </tr>
+                      {forOthers.map((tx) => (
+                        <TransactionRowView key={txId(tx)} {...viewProps(tx)} />
+                      ))}
+                    </>
+                  )}
+                </>
               )}
             </tbody>
           </table>
         </div>
       </section>
+
+      {forOthers.length > 0 && (
+        <>
+          <Button
+            variant="quiet"
+            size="sm"
+            onClick={() => setShowForOthers(!forOthersOpen)}
+            aria-expanded={forOthersOpen}
+            className="mt-4 px-4"
+          >
+            {forOthersOpen ? "Hide" : "Show"} {forOthers.length} paid for others
+          </Button>
+          {forOthersOpen && (
+            <section className="mt-2 overflow-hidden rounded-lg bg-card md:hidden">
+              <div className="px-4 py-3">{forOthersHeading}</div>
+              <ul className="divide-y divide-hairline border-t">
+                {forOthers.map((tx) => (
+                  <TransactionCardView key={txId(tx)} {...viewProps(tx)} />
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
+      )}
 
       {transfers.length > 0 && (
         <Button

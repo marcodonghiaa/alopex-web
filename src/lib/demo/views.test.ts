@@ -9,11 +9,13 @@ describe("demo v_transactions_eur", () => {
     const { data: all } = await client
       .from("v_transactions_eur")
       .select("*")
-      .eq("flow_type", "spend");
+      .eq("flow_type", "spend")
+      .is("personal_amount", null);
     const { data: mine } = await client
       .from("v_transactions_eur")
       .select("*")
       .eq("flow_type", "spend")
+      .is("personal_amount", null)
       .lt("personal_signed_amount_eur", 0);
     expect(all?.length).toBeGreaterThan(0);
     expect(mine?.length).toBe(all?.length);

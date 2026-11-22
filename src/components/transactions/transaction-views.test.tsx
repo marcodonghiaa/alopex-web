@@ -392,3 +392,66 @@ describe("notes and tags", () => {
     expect(screen.queryByRole("combobox")).toBeNull();
   });
 });
+
+const bankProps = (over: Partial<TransactionViewProps["tx"]> = {}): TransactionViewProps => ({
+  ...props(),
+  tx: {
+    entry_reference: "b1",
+    account_uid: "a1",
+    booking_date: "2026-10-04",
+    category: "Groceries",
+    transaction_type: "One-time",
+    creditor_name: "Market",
+    currency: "EUR",
+    amount: 59.08,
+    signed_amount_eur: -59.08,
+    credit_debit_indicator: "DBIT",
+    created_at: null,
+    worth_it: null,
+    personal_amount: null,
+    owed_by: null,
+    flow_type: "spend",
+    refund_of: null,
+    note: null,
+    tags: [],
+    ...over,
+  },
+});
+
+const inTable = (p: TransactionViewProps) =>
+  render(
+    <table>
+      <tbody>
+        <TransactionRowView {...p} />
+      </tbody>
+    </table>,
+  );
+
+// protects=a split charge shows my share as the big number; fails_when=the row leads with the whole charge
+describe("Split charge amount", () => {
+  it("shows my share large and the whole charge under it", () => {
+    inTable(bankProps({ personal_amount: 29.54 }));
+    expect(screen.getByText("−€29.54")).toBeInTheDocument();
+    expect(screen.getByText("of €59.08")).toBeInTheDocument();
+    expect(screen.queryByText("−€59.08")).toBeNull();
+  });
+
+  it("shows a charge paid entirely for others as €0.00, not a plus", () => {
+    inTable(bankProps({ personal_amount: 0 }));
+    expect(screen.getByText("€0.00")).toBeInTheDocument();
+    expect(screen.getByText("of €59.08")).toBeInTheDocument();
+  });
+
+  it("shows an unsplit charge as before, with no 'of' line", () => {
+    inTable(bankProps());
+    expect(screen.getByText("−€59.08")).toBeInTheDocument();
+    expect(screen.queryByText(/^of /)).toBeNull();
+  });
+
+  it("converts only my share to euros for a foreign charge", () => {
+    inTable(
+      bankProps({ currency: "USD", amount: 100, signed_amount_eur: -90, personal_amount: 50 }),
+    );
+    expect(screen.getByText("≈ €45.00")).toBeInTheDocument();
+  });
+});
