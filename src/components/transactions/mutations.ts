@@ -131,17 +131,7 @@ export function useTransactionFieldMutation<
         old
           ? toTransfer
             ? old.filter((row) => txId(row) !== txId(tx))
-            : old.map((row) =>
-                txId(row) === txId(tx)
-                  ? {
-                      ...row,
-                      [column]: value,
-                      ...(column === "transaction_type"
-                        ? { transaction_type_source: "manual" }
-                        : {}),
-                    }
-                  : row,
-              )
+            : old.map((row) => (txId(row) === txId(tx) ? { ...row, [column]: value } : row))
           : old,
       );
       return { previous };

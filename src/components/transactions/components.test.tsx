@@ -16,7 +16,6 @@ const tx = (over: Partial<TransactionRow> = {}): TransactionRow => ({
   booking_date: "2026-10-05",
   category: "Shopping",
   transaction_type: "One-time",
-  transaction_type_source: null,
   creditor_name: "Amazon",
   currency: "EUR",
   amount: 20,
@@ -108,18 +107,16 @@ describe("pickers", () => {
     expect(onSelect).toHaveBeenCalledWith("One-time");
   });
 
-  it("TypePicker does nothing when you pick the type you already set", async () => {
+  // A list row (v_transactions_eur) carries no type source, so re-picking its type always saves:
+  // that is how you claim a type the AI set.
+  it("TypePicker saves a re-pick of the same type on a list row", async () => {
     const onSelect = vi.fn();
-    render(
-      <TypePicker
-        tx={tx({ transaction_type: "One-time", transaction_type_source: "manual" })}
-        onSelect={onSelect}
-        saving={false}
-      />,
-    );
+    const listRow = tx({ transaction_type: "Subscription" });
+    expect(listRow).not.toHaveProperty("transaction_type_source");
+    render(<TypePicker tx={listRow} onSelect={onSelect} saving={false} />);
     await userEvent.click(screen.getByRole("button", { name: /Change type/ }));
-    await userEvent.click(await screen.findByRole("button", { name: "One-time" }));
-    expect(onSelect).not.toHaveBeenCalled();
+    await userEvent.click(await screen.findByRole("button", { name: "Subscription" }));
+    expect(onSelect).toHaveBeenCalledWith("Subscription");
   });
 
   it("TypePicker shows a dash when the type is unset", () => {

@@ -160,9 +160,8 @@ export function TypePicker({
               type="button"
               onClick={() => {
                 setOpen(false);
-                // The same type still saves while it isn't yours: picking it marks it as yours.
-                if (t !== tx.transaction_type || tx.transaction_type_source !== "manual")
-                  onSelect(t);
+                // Every pick saves, the same type too: that is how you claim a type the AI set.
+                onSelect(t);
               }}
               className={`block min-h-11 w-full rounded-sm px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-accent ${
                 t === tx.transaction_type ? "font-medium text-primary" : "text-foreground"
