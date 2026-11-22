@@ -603,6 +603,39 @@ describe("Paid for others", () => {
     expect(screen.getAllByText("Fresh").length).toBeGreaterThan(0);
   });
 
+  // Polish 1 #1: opening a row in the section moved it to the main list, closing its sheet.
+  it("opens a row in the section and keeps its sheet open", async () => {
+    tableData = {
+      v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })],
+    };
+    renderPage();
+    await screen.findAllByText("Shop 1");
+    await userEvent.click(screen.getByRole("button", { name: "Show 1 paid for others" }));
+    const [edit] = await screen.findAllByRole("button", { name: "Edit Shop 2" });
+    await userEvent.click(edit!);
+    await act(() => new Promise((r) => setTimeout(r, 100)));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  // Polish 1 #1, opposite state: a split set to 0 mid-edit stays put until the sheet closes.
+  it("keeps a row in the main list while its sheet is open, then moves it", async () => {
+    tableData = { v_transactions_eur: [row("1"), row("2")] };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderPage(client);
+    const [edit] = await screen.findAllByRole("button", { name: "Edit Shop 2" });
+    await userEvent.click(edit!);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+    await act(() => client.invalidateQueries({ queryKey: ["transactions"] }));
+    await act(() => new Promise((r) => setTimeout(r, 100)));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /paid for others/ })).toBeNull();
+    await userEvent.keyboard("{Escape}");
+    expect(
+      await screen.findByRole("button", { name: "Show 1 paid for others" }),
+    ).toBeInTheDocument();
+  });
+
   it("shows no section when nothing was paid for others", async () => {
     tableData = { v_transactions_eur: [row("1", { personal_amount: 4 })] };
     renderPage();

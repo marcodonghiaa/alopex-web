@@ -202,6 +202,8 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
   const [day, setDay] = useState("");
   // The row whose sheet is open stays listed until it closes, even if an edit stops it matching.
   const [editing, setEditing] = useState<string | null>(null);
+  // Whether the open row sat in "Paid for others" when its sheet opened: it stays there until it closes.
+  const [editingApart, setEditingApart] = useState(false);
   const [month, setMonth] = useState(() => monthFromParam(initialMonth));
   const monthKey = useMemo(() => formatISODate(month), [month]);
   const queryClient = useQueryClient();
@@ -384,8 +386,8 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
   // Charges paid entirely for others count nothing, so they sit apart, below the list. The row
   // being edited stays where it is until its sheet closes.
   const forOthers = useMemo(
-    () => filtered.filter((tx) => isPaidForOthers(tx) && txId(tx) !== editing),
-    [filtered, editing],
+    () => filtered.filter((tx) => (txId(tx) === editing ? editingApart : isPaidForOthers(tx))),
+    [filtered, editing, editingApart],
   );
   const mine = useMemo(() => {
     const apart = new Set(forOthers);
@@ -519,7 +521,10 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
       ),
     savingTags: updateTags.isPending && isSameTx(updateTags.variables?.tx, tx),
     tagSuggestions: tagsQuery.data ?? [],
-    onOpenChange: (open) => setEditing((now) => (open ? txId(tx) : now === txId(tx) ? null : now)),
+    onOpenChange: (open) => {
+      if (open) setEditingApart(isPaidForOthers(tx));
+      setEditing((now) => (open ? txId(tx) : now === txId(tx) ? null : now));
+    },
     ...(tx.account_uid && accounts[tx.account_uid]?.manual
       ? {
           onSaveAmount: (amount: number) => changeAmount.mutate({ tx, amount }),
