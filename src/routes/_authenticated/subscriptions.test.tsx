@@ -426,7 +426,7 @@ describe("Subscriptions page", () => {
     const resolvers: Array<() => void> = [];
     rpc.mockImplementation(() => new Promise((res) => resolvers.push(() => res({ error: null }))));
     db.rows = [stream({ id: "a", display_name: "Aaa" }), stream({ id: "b", display_name: "Bbb" })];
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const spy = vi.spyOn(client, "invalidateQueries");
     render(
       <QueryClientProvider client={client}>
