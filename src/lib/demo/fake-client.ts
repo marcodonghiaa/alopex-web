@@ -531,6 +531,28 @@ class Store {
     this.refresh();
     return count;
   }
+  // Each stream's status as generated, so one marked gone comes back when it is charged again.
+  private readonly detected = new Map<unknown, unknown>();
+  /** Like refresh-recurring's detector: it skips charges you set One-time yourself, so a stream
+   * left with none of its charges is gone. */
+  refreshStreams(): Result {
+    const txs = this.db["transactions"]!;
+    const streams = this.db["recurring_streams"]!;
+    for (const s of streams) {
+      if (!this.detected.has(s["id"])) this.detected.set(s["id"], s["detected_status"]);
+      const charges = txs.filter(
+        (t) => t["merchant_key"] === s["merchant_key"] && t["account_uid"] === s["account_uid"],
+      );
+      const allMine =
+        charges.length > 0 &&
+        charges.every(
+          (t) => t["transaction_type"] === "One-time" && t["transaction_type_source"] === "manual",
+        );
+      s["detected_status"] = allMine ? "gone" : this.detected.get(s["id"]);
+    }
+    const found = streams.filter((s) => s["detected_status"] !== "gone").length;
+    return { data: { streams: found }, error: null };
+  }
   /** Mirror of the database function stream_action: an {error} where the SQL raises. */
   streamAction(id: unknown, action: unknown, args: Row = {}): Result {
     const row = this.db["recurring_streams"]!.find((r) => r["id"] === id);
@@ -1160,7 +1182,7 @@ export function createFakeClient(now: Date = new Date()): SupabaseClient<Databas
               : name === "reapply-rules"
                 ? { data: { changes: 0, sample: [] }, error: null } // demo rows already follow its rules
                 : name === "refresh-recurring"
-                  ? { data: { streams: 0 }, error: null } // the demo's streams are fixed: nothing to re-check
+                  ? store.refreshStreams()
                   : // With a body, callers show "Disabled in the demo.", not their fallback (#148).
                     functionError(403, DISABLED.message),
     },

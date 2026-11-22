@@ -865,7 +865,65 @@ describe("fake client: refresh-recurring", () => {
       ) => Promise<{ data: unknown; error: unknown }>
     )("refresh-recurring", { body: {} });
     expect(error).toBeNull();
-    expect(data).toEqual({ streams: 0 });
+    expect(data).toEqual({ streams: expect.any(Number) }); // the streams it found
+  });
+
+  // polish-3 F7: like the detector, a stream whose charges you all marked One-time is gone.
+  type Invoke = (n: string, o: object) => Promise<unknown>;
+  const recheck = (c: ReturnType<typeof fresh>) =>
+    (c.functions.invoke as unknown as Invoke)("refresh-recurring", { body: {} });
+  const listed = async (c: ReturnType<typeof fresh>) => {
+    const g = groupStreams(
+      ((await c.from("recurring_streams").select("*")).data ?? []) as Array<
+        Tables<"recurring_streams">
+      >,
+      NOW,
+    );
+    return [...g.toReview, ...g.active, ...g.stopped, ...g.dismissed].map((s) => s.id);
+  };
+  const setup = async () => {
+    const c = fresh();
+    const { data } = await c.from("recurring_streams").select("*");
+    const s = groupStreams(data as Array<Tables<"recurring_streams">>, NOW).active[0]!;
+    const charges = () =>
+      c
+        .from("transactions")
+        .update({ transaction_type: "One-time", transaction_type_source: "manual" })
+        .eq("merchant_key", s.merchant_key!)
+        .eq("account_uid", s.account_uid!);
+    const { data: rows } = await c
+      .from("transactions")
+      .select("entry_reference")
+      .eq("merchant_key", s.merchant_key!)
+      .eq("account_uid", s.account_uid!);
+    expect(rows!.length).toBeGreaterThan(1);
+    return { c, s, charges, refs: rows!.map((r) => r.entry_reference) };
+  };
+
+  it("drops a stream once you mark all its charges One-time, and brings it back after", async () => {
+    const { c, s, charges } = await setup();
+    const others = (await listed(c)).filter((id) => id !== s.id);
+    await charges();
+    await recheck(c);
+    expect(await listed(c)).toEqual(others);
+
+    await c
+      .from("transactions")
+      .update({ transaction_type: "Subscription", transaction_type_source: "manual" })
+      .eq("merchant_key", s.merchant_key!);
+    await recheck(c);
+    expect(await listed(c)).toContain(s.id);
+  });
+
+  it("keeps a stream while one charge is still not your One-time", async () => {
+    const { c, s, charges, refs } = await setup();
+    await charges();
+    await c
+      .from("transactions")
+      .update({ transaction_type_source: null })
+      .eq("entry_reference", refs[0]!);
+    await recheck(c);
+    expect(await listed(c)).toContain(s.id);
   });
 });
 
