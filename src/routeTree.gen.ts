@@ -29,6 +29,12 @@ import { Route as AuthenticatedSpendingRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedSplitwiseRouteImport } from './routes/_authenticated/splitwise'
 import { Route as AuthenticatedSubscriptionsRouteImport } from './routes/_authenticated/subscriptions'
 import { Route as AuthenticatedTransactionsRouteImport } from './routes/_authenticated/transactions'
+import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
+import { Route as AuthenticatedSettingsAccountRouteImport } from './routes/_authenticated/settings/account'
+import { Route as AuthenticatedSettingsAppRouteImport } from './routes/_authenticated/settings/app'
+import { Route as AuthenticatedSettingsOverviewRouteImport } from './routes/_authenticated/settings/overview'
+import { Route as AuthenticatedSettingsPersonalizationRouteImport } from './routes/_authenticated/settings/personalization'
+import { Route as AuthenticatedSettingsSecurityRouteImport } from './routes/_authenticated/settings/security'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
@@ -131,6 +137,42 @@ const AuthenticatedTransactionsRoute =
     path: '/transactions',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedSettingsIndexRoute =
+  AuthenticatedSettingsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsAccountRoute =
+  AuthenticatedSettingsAccountRouteImport.update({
+    id: '/account',
+    path: '/account',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsAppRoute =
+  AuthenticatedSettingsAppRouteImport.update({
+    id: '/app',
+    path: '/app',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsOverviewRoute =
+  AuthenticatedSettingsOverviewRouteImport.update({
+    id: '/overview',
+    path: '/overview',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsPersonalizationRoute =
+  AuthenticatedSettingsPersonalizationRouteImport.update({
+    id: '/personalization',
+    path: '/personalization',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsSecurityRoute =
+  AuthenticatedSettingsSecurityRouteImport.update({
+    id: '/security',
+    path: '/security',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -147,11 +189,17 @@ export interface FileRoutesByFullPath {
   '/portfolio': typeof AuthenticatedPortfolioRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/rules': typeof AuthenticatedRulesRoute
-  '/settings': typeof AuthenticatedSettingsRoute
+  '/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/spending': typeof AuthenticatedSpendingRoute
   '/splitwise': typeof AuthenticatedSplitwiseRoute
   '/subscriptions': typeof AuthenticatedSubscriptionsRoute
   '/transactions': typeof AuthenticatedTransactionsRoute
+  '/settings/account': typeof AuthenticatedSettingsAccountRoute
+  '/settings/app': typeof AuthenticatedSettingsAppRoute
+  '/settings/overview': typeof AuthenticatedSettingsOverviewRoute
+  '/settings/personalization': typeof AuthenticatedSettingsPersonalizationRoute
+  '/settings/security': typeof AuthenticatedSettingsSecurityRoute
+  '/settings/': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
@@ -167,12 +215,17 @@ export interface FileRoutesByTo {
   '/portfolio': typeof AuthenticatedPortfolioRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/rules': typeof AuthenticatedRulesRoute
-  '/settings': typeof AuthenticatedSettingsRoute
   '/spending': typeof AuthenticatedSpendingRoute
   '/splitwise': typeof AuthenticatedSplitwiseRoute
   '/subscriptions': typeof AuthenticatedSubscriptionsRoute
   '/transactions': typeof AuthenticatedTransactionsRoute
   '/': typeof AuthenticatedIndexRoute
+  '/settings/account': typeof AuthenticatedSettingsAccountRoute
+  '/settings/app': typeof AuthenticatedSettingsAppRoute
+  '/settings/overview': typeof AuthenticatedSettingsOverviewRoute
+  '/settings/personalization': typeof AuthenticatedSettingsPersonalizationRoute
+  '/settings/security': typeof AuthenticatedSettingsSecurityRoute
+  '/settings': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -190,12 +243,18 @@ export interface FileRoutesById {
   '/_authenticated/portfolio': typeof AuthenticatedPortfolioRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
   '/_authenticated/rules': typeof AuthenticatedRulesRoute
-  '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/_authenticated/spending': typeof AuthenticatedSpendingRoute
   '/_authenticated/splitwise': typeof AuthenticatedSplitwiseRoute
   '/_authenticated/subscriptions': typeof AuthenticatedSubscriptionsRoute
   '/_authenticated/transactions': typeof AuthenticatedTransactionsRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/settings/account': typeof AuthenticatedSettingsAccountRoute
+  '/_authenticated/settings/app': typeof AuthenticatedSettingsAppRoute
+  '/_authenticated/settings/overview': typeof AuthenticatedSettingsOverviewRoute
+  '/_authenticated/settings/personalization': typeof AuthenticatedSettingsPersonalizationRoute
+  '/_authenticated/settings/security': typeof AuthenticatedSettingsSecurityRoute
+  '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -219,6 +278,12 @@ export interface FileRouteTypes {
     | '/splitwise'
     | '/subscriptions'
     | '/transactions'
+    | '/settings/account'
+    | '/settings/app'
+    | '/settings/overview'
+    | '/settings/personalization'
+    | '/settings/security'
+    | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
@@ -234,12 +299,17 @@ export interface FileRouteTypes {
     | '/portfolio'
     | '/reports'
     | '/rules'
-    | '/settings'
     | '/spending'
     | '/splitwise'
     | '/subscriptions'
     | '/transactions'
     | '/'
+    | '/settings/account'
+    | '/settings/app'
+    | '/settings/overview'
+    | '/settings/personalization'
+    | '/settings/security'
+    | '/settings'
   id:
     | '__root__'
     | '/_authenticated'
@@ -262,6 +332,12 @@ export interface FileRouteTypes {
     | '/_authenticated/subscriptions'
     | '/_authenticated/transactions'
     | '/_authenticated/'
+    | '/_authenticated/settings/account'
+    | '/_authenticated/settings/app'
+    | '/_authenticated/settings/overview'
+    | '/_authenticated/settings/personalization'
+    | '/_authenticated/settings/security'
+    | '/_authenticated/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -413,8 +489,74 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTransactionsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/settings/': {
+      id: '/_authenticated/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/account': {
+      id: '/_authenticated/settings/account'
+      path: '/account'
+      fullPath: '/settings/account'
+      preLoaderRoute: typeof AuthenticatedSettingsAccountRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/app': {
+      id: '/_authenticated/settings/app'
+      path: '/app'
+      fullPath: '/settings/app'
+      preLoaderRoute: typeof AuthenticatedSettingsAppRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/overview': {
+      id: '/_authenticated/settings/overview'
+      path: '/overview'
+      fullPath: '/settings/overview'
+      preLoaderRoute: typeof AuthenticatedSettingsOverviewRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/personalization': {
+      id: '/_authenticated/settings/personalization'
+      path: '/personalization'
+      fullPath: '/settings/personalization'
+      preLoaderRoute: typeof AuthenticatedSettingsPersonalizationRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/security': {
+      id: '/_authenticated/settings/security'
+      path: '/security'
+      fullPath: '/settings/security'
+      preLoaderRoute: typeof AuthenticatedSettingsSecurityRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
   }
 }
+
+interface AuthenticatedSettingsRouteChildren {
+  AuthenticatedSettingsAccountRoute: typeof AuthenticatedSettingsAccountRoute
+  AuthenticatedSettingsAppRoute: typeof AuthenticatedSettingsAppRoute
+  AuthenticatedSettingsOverviewRoute: typeof AuthenticatedSettingsOverviewRoute
+  AuthenticatedSettingsPersonalizationRoute: typeof AuthenticatedSettingsPersonalizationRoute
+  AuthenticatedSettingsSecurityRoute: typeof AuthenticatedSettingsSecurityRoute
+  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
+}
+
+const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
+  AuthenticatedSettingsAccountRoute: AuthenticatedSettingsAccountRoute,
+  AuthenticatedSettingsAppRoute: AuthenticatedSettingsAppRoute,
+  AuthenticatedSettingsOverviewRoute: AuthenticatedSettingsOverviewRoute,
+  AuthenticatedSettingsPersonalizationRoute:
+    AuthenticatedSettingsPersonalizationRoute,
+  AuthenticatedSettingsSecurityRoute: AuthenticatedSettingsSecurityRoute,
+  AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
+}
+
+const AuthenticatedSettingsRouteWithChildren =
+  AuthenticatedSettingsRoute._addFileChildren(
+    AuthenticatedSettingsRouteChildren,
+  )
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAccountsRoute: typeof AuthenticatedAccountsRoute
@@ -427,7 +569,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPortfolioRoute: typeof AuthenticatedPortfolioRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
   AuthenticatedRulesRoute: typeof AuthenticatedRulesRoute
-  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRouteWithChildren
   AuthenticatedSpendingRoute: typeof AuthenticatedSpendingRoute
   AuthenticatedSplitwiseRoute: typeof AuthenticatedSplitwiseRoute
   AuthenticatedSubscriptionsRoute: typeof AuthenticatedSubscriptionsRoute
@@ -446,7 +588,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPortfolioRoute: AuthenticatedPortfolioRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
   AuthenticatedRulesRoute: AuthenticatedRulesRoute,
-  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRouteWithChildren,
   AuthenticatedSpendingRoute: AuthenticatedSpendingRoute,
   AuthenticatedSplitwiseRoute: AuthenticatedSplitwiseRoute,
   AuthenticatedSubscriptionsRoute: AuthenticatedSubscriptionsRoute,

@@ -6,7 +6,10 @@ import { describe, it, expect } from "vitest";
 // fails_when=a route file exports its page component, which stops TanStack from splitting it out
 describe("route files", () => {
   const dir = join(__dirname, "_authenticated");
-  const files = readdirSync(dir).filter((f) => f.endsWith(".tsx"));
+  // Recursive: nested routes (settings/*.tsx) are route files too.
+  const files = readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) =>
+    f.endsWith(".tsx"),
+  );
 
   it.each(files)("%s does not export its page component", (file) => {
     const source = readFileSync(join(dir, file), "utf8");

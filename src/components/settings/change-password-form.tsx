@@ -76,7 +76,7 @@ export function ChangePasswordForm() {
   return (
     <section id="account" aria-labelledby="account-heading" className="scroll-mt-20 md:scroll-mt-6">
       <h2 id="account-heading" className="mb-4 text-lg font-semibold text-foreground">
-        Account
+        Password
       </h2>
       <form onSubmit={handleSubmit} className="max-w-sm space-y-4 rounded-lg bg-card p-5">
         <h3 className="text-[0.9375rem] font-medium text-foreground">Change password</h3>
