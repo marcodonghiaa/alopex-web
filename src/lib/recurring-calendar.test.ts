@@ -48,6 +48,7 @@ const charge = (date: string, over: Partial<ChargeTx> = {}): ChargeTx => ({
   amount: 12.99,
   currency: "EUR",
   transaction_type: null,
+  transaction_type_source: null,
   ...over,
 });
 const NOV = new Date(2026, 10, 1);
@@ -174,6 +175,20 @@ describe("billEntries", () => {
       TODAY,
     );
     expect(out.map((e) => `${e.date} ${e.status}`)).toEqual(["2026-11-05 late"]);
+  });
+  // Type audit P3: like the detector, a charge you marked One-time never pays a stream.
+  it("doesn't tick a charge you marked One-time, even at the usual amount", () => {
+    const s = stream({ merchant_key: "amazon", display_name: "Prime", typical_amount: 4.99 });
+    const mine = charge("2026-11-05", {
+      merchant_key: "amazon",
+      amount: 4.99,
+      transaction_type: "One-time",
+      transaction_type_source: "manual",
+    });
+    expect(billEntries([s], [mine], NOV, TODAY)[0]?.status).not.toBe("done");
+    expect(
+      billEntries([s], [{ ...mine, transaction_type_source: null }], NOV, TODAY)[0]?.status,
+    ).toBe("done");
   });
   it("ticks a charge tagged Subscription, or one within 10% of the usual amount", () => {
     const s = stream({ merchant_key: "amazon", display_name: "Prime", typical_amount: 4.99 });

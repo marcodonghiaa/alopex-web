@@ -32,6 +32,7 @@ export type ChargeTx = Pick<
   | "amount"
   | "currency"
   | "transaction_type"
+  | "transaction_type_source"
 >;
 
 // A charge belongs to a stream when it is tagged Subscription or costs within 10% of the usual
@@ -39,6 +40,8 @@ export type ChargeTx = Pick<
 const AMOUNT_BAND = 0.1;
 const belongs = (c: ChargeTx, s: Stream) => {
   if (c.transaction_type === "Subscription") return true;
+  // One-time you set yourself never pays a stream, like in the detector.
+  if (c.transaction_type === "One-time" && c.transaction_type_source === "manual") return false;
   const usual = Math.abs(s.typical_amount ?? 0);
   return Math.abs(Math.abs(c.amount) - usual) <= usual * AMOUNT_BAND;
 };
