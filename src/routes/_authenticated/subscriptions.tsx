@@ -122,7 +122,9 @@ function SubscriptionsPage() {
   const [checking, setChecking] = useState(true);
   // Opening the page re-checks your subscriptions, so a transaction you just renamed, marked
   // One-time or deleted shows here. The saved list shows meanwhile; an action in flight refetches itself.
-  // shortcut: a full detection per visit (two paged reads + one upsert), cheap for one household.
+  // shortcut: a full detection per visit, cheap for one household: server-side a sign-in check,
+  // the two-step check, a rate-limit read, the confirmed-streams read, the paged spend reads and
+  // one upsert.
   // No skip-if-recent on purpose: edit a transaction, then open this page, must show the edit.
   useEffect(() => {
     void refreshRecurring()
