@@ -26,7 +26,9 @@ export async function refreshRecurring(): Promise<boolean> {
     if (error) throw error;
     return true;
   } catch (error) {
-    console.warn("Couldn't re-check subscriptions", error);
+    // 429: re-checked moments ago (rate limited), nothing wrong.
+    if ((error as { context?: Response })?.context?.status !== 429)
+      console.warn("Couldn't re-check subscriptions", error);
     return false;
   }
 }

@@ -118,17 +118,22 @@ function SubscriptionsPage() {
   // One "today" per visit: a new Date each render would recompute the calendar every time.
   const [today] = useState(romeToday);
   const query = useRecurringStreams();
+  // While the re-check runs, rows can still move (a stream turns gone), so their actions wait.
+  const [checking, setChecking] = useState(true);
   // Opening the page re-checks your subscriptions, so a transaction you just renamed, marked
   // One-time or deleted shows here. The saved list shows meanwhile; an action in flight refetches itself.
   // shortcut: a full detection per visit (two paged reads + one upsert), cheap for one household.
   // No skip-if-recent on purpose: edit a transaction, then open this page, must show the edit.
   useEffect(() => {
-    void refreshRecurring().then(async (ran) => {
-      if (!ran || queryClient.isMutating({ mutationKey: MUTATION_KEY }) > 0) return;
-      // A read still in flight started before the re-check: drop it, or the refetch would reuse it.
-      await queryClient.cancelQueries({ queryKey: RECURRING_KEY });
-      void queryClient.invalidateQueries({ queryKey: RECURRING_KEY });
-    });
+    void refreshRecurring()
+      .then(async (ran) => {
+        if (!ran || queryClient.isMutating({ mutationKey: MUTATION_KEY }) > 0) return;
+        // A read still in flight started before the re-check: drop it, or the refetch would reuse it.
+        await queryClient.cancelQueries({ queryKey: RECURRING_KEY });
+        // Unlock only once the fresh list is on screen.
+        await queryClient.invalidateQueries({ queryKey: RECURRING_KEY });
+      })
+      .finally(() => setChecking(false));
   }, [queryClient]);
 
   const actionMutation = useMutation({
@@ -195,6 +200,7 @@ function SubscriptionsPage() {
     <SubscriptionCard
       key={s.id}
       sub={s}
+      locked={checking}
       onDismiss={() => actionMutation.mutate({ id: s.id, action: "dismiss" })}
       onSelectFrequency={(frequency) =>
         actionMutation.mutate({
@@ -217,8 +223,12 @@ function SubscriptionsPage() {
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8 md:py-12">
       <RevealDialog />
       {/* Titled like Net Worth (iOS view board). */}
-      <header className="mb-3">
+      <header className="mb-3 flex items-baseline justify-between gap-3">
         <h1 className="text-lg font-semibold text-foreground">Subscriptions</h1>
+        {/* Beside the title, so showing and hiding it moves no row. */}
+        <p aria-live="polite" className="text-[0.8125rem] text-muted-foreground">
+          {checking ? "Checking for changes…" : ""}
+        </p>
       </header>
 
       {query.isError && (
@@ -276,7 +286,7 @@ function SubscriptionsPage() {
           />
         )
       ) : (
-        <>
+        <div data-testid="subscriptions-content" aria-busy={checking}>
           {toReview.length > 0 && (
             <section aria-label="To review" className="mb-8">
               <SectionTitle>To review ({toReview.length})</SectionTitle>
@@ -286,6 +296,7 @@ function SubscriptionsPage() {
                     <ReviewRow
                       key={s.id}
                       stream={s}
+                      locked={checking}
                       onConfirm={() => actionMutation.mutate({ id: s.id, action: "confirm" })}
                       onDismiss={() => actionMutation.mutate({ id: s.id, action: "dismiss" })}
                     />
@@ -356,6 +367,7 @@ function SubscriptionsPage() {
                     <DismissedRow
                       key={s.id}
                       stream={s}
+                      locked={checking}
                       onRestore={() => actionMutation.mutate({ id: s.id, action: "undismiss" })}
                     />
                   ))}
@@ -363,13 +375,21 @@ function SubscriptionsPage() {
               </GroupedList>
             </details>
           )}
-        </>
+        </div>
       )}
     </div>
   );
 }
 
-function DismissedRow({ stream, onRestore }: { stream: Stream; onRestore: () => void }) {
+function DismissedRow({
+  stream,
+  locked,
+  onRestore,
+}: {
+  stream: Stream;
+  locked: boolean;
+  onRestore: () => void;
+}) {
   const name = cleanMerchantName(stream.display_name) ?? "—";
   const cadence = effectiveCadence(stream);
   const monthly = monthlyEur(stream);
@@ -386,7 +406,12 @@ function DismissedRow({ stream, onRestore }: { stream: Stream; onRestore: () => 
         {monthly != null && Math.abs(monthly) > 0 && <MonthlyAmount stream={stream} />}
       </div>
       <div className="mt-1 flex items-center gap-2 pl-[3.25rem]">
-        <Button variant="quiet" onClick={onRestore} aria-label={`Restore ${name}`}>
+        <Button
+          variant="quiet"
+          disabled={locked}
+          onClick={onRestore}
+          aria-label={`Restore ${name}`}
+        >
           Restore
         </Button>
       </div>
@@ -412,10 +437,12 @@ function MonthlyAmount({ stream }: { stream: Stream }) {
 
 function ReviewRow({
   stream,
+  locked,
   onConfirm,
   onDismiss,
 }: {
   stream: Stream;
+  locked: boolean;
   onConfirm: () => void;
   onDismiss: () => void;
 }) {
@@ -432,10 +459,15 @@ function ReviewRow({
         <MonthlyAmount stream={stream} />
       </div>
       <div className="mt-1 flex gap-2 pl-[3.25rem]">
-        <Button onClick={onConfirm} aria-label={`Confirm ${name}`}>
+        <Button disabled={locked} onClick={onConfirm} aria-label={`Confirm ${name}`}>
           Confirm
         </Button>
-        <Button variant="quiet" onClick={onDismiss} aria-label={`${name} is not a subscription`}>
+        <Button
+          variant="quiet"
+          disabled={locked}
+          onClick={onDismiss}
+          aria-label={`${name} is not a subscription`}
+        >
           Not a subscription
         </Button>
       </div>
@@ -445,11 +477,13 @@ function ReviewRow({
 
 function SubscriptionCard({
   sub,
+  locked,
   onDismiss,
   onSelectFrequency,
   onSelectCustom,
 }: {
   sub: Stream;
+  locked: boolean;
   onDismiss: () => void;
   onSelectFrequency: (frequency: string) => void;
   onSelectCustom: (value: number, unit: IntervalUnit) => void;
@@ -480,6 +514,7 @@ function SubscriptionCard({
           isManual={sub.user_cadence != null}
           customValue={sub.custom_interval_value}
           customUnit={sub.custom_interval_unit as IntervalUnit | null}
+          locked={locked}
           onSelect={onSelectFrequency}
           onSelectCustom={onSelectCustom}
         />
@@ -489,6 +524,7 @@ function SubscriptionCard({
         <Button
           variant="ghost"
           size="icon"
+          disabled={locked}
           onClick={onDismiss}
           aria-label={`Remove ${name}`}
           className="-my-2 -mr-3 hover:text-negative"
@@ -505,6 +541,7 @@ function FrequencyPicker({
   isManual,
   customValue,
   customUnit,
+  locked,
   onSelect,
   onSelectCustom,
 }: {
@@ -512,6 +549,7 @@ function FrequencyPicker({
   isManual: boolean;
   customValue: number | null;
   customUnit: IntervalUnit | null;
+  locked: boolean;
   onSelect: (frequency: string) => void;
   onSelectCustom: (value: number, unit: IntervalUnit) => void;
 }) {
@@ -551,6 +589,7 @@ function FrequencyPicker({
       <PopoverTrigger asChild>
         <button
           type="button"
+          disabled={locked}
           title={
             frequency
               ? isManual
@@ -558,7 +597,7 @@ function FrequencyPicker({
                 : `${label} — auto-detected`
               : "Not enough history to detect — set the billing frequency"
           }
-          className={`inline-flex min-h-11 w-full items-center justify-between gap-1 rounded-sm px-3 py-0.5 text-xs font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+          className={`inline-flex min-h-11 w-full items-center justify-between gap-1 rounded-sm px-3 disabled:opacity-50 py-0.5 text-xs font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
             frequency
               ? "bg-muted text-foreground hover:bg-accent"
               : "bg-warning/10 text-warning hover:bg-warning/20"

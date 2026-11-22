@@ -162,26 +162,90 @@ describe("Subscriptions page", () => {
   });
 
   it("leaves the refetch to an action still in flight when the re-check ends", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const page = (
+      <QueryClientProvider client={client}>
+        <Page />
+      </QueryClientProvider>
+    );
+    // Row actions wait for the re-check (polish-3 F2), so the action in flight is an Undo from
+    // an earlier visit: remove, leave, come back, tap Undo while the new re-check runs.
+    const first = render(page);
+    const remove = await screen.findByRole("button", { name: "Remove Streamflix" });
+    await waitFor(() => expect(remove).toBeEnabled());
+    fireEvent.click(remove);
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    const undo = (toast.success.mock.calls[0]![1] as { action: { onClick: () => void } }).action;
+    await waitFor(() => expect(client.isMutating()).toBe(0));
+    first.unmount();
+
     let finishCheck!: () => void;
     invoke.mockImplementation(
       () => new Promise((res) => (finishCheck = () => res({ data: { streams: 1 }, error: null }))),
     );
     let finishAction!: () => void;
     rpc.mockImplementation(() => new Promise((res) => (finishAction = () => res({ error: null }))));
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const spy = vi.spyOn(client, "invalidateQueries");
-    render(
-      <QueryClientProvider client={client}>
-        <Page />
-      </QueryClientProvider>,
-    );
-    fireEvent.click(await screen.findByRole("button", { name: "Remove Streamflix" }));
-    await waitFor(() => expect(rpc).toHaveBeenCalled());
+    render(page);
+    await screen.findByText("Checking for changes…");
+    undo.onClick();
+    await waitFor(() => expect(rpc).toHaveBeenCalledTimes(2));
     finishCheck();
     await new Promise((r) => setTimeout(r, 50));
     expect(spy).not.toHaveBeenCalled();
     finishAction();
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+  });
+
+  // polish-3 F2: rows can move when the re-check lands, so a tap mustn't hit the row below.
+  it("says it's checking and locks the row actions until the re-check lands", async () => {
+    let finishCheck!: () => void;
+    invoke.mockImplementation(
+      () => new Promise((res) => (finishCheck = () => res({ data: { streams: 2 }, error: null }))),
+    );
+    renderPage();
+    const remove = await screen.findByRole("button", { name: "Remove Streamflix" });
+    const confirm = screen.getByRole("button", { name: "Confirm Cloudbox" });
+    expect(screen.getByText("Checking for changes…")).toHaveAttribute("aria-live", "polite");
+    expect(screen.getByTestId("subscriptions-content")).toHaveAttribute("aria-busy", "true");
+    expect(remove).toBeDisabled();
+    expect(confirm).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cloudbox is not a subscription" })).toBeDisabled();
+    fireEvent.click(remove);
+    expect(rpc).not.toHaveBeenCalled();
+
+    finishCheck();
+    await waitFor(() =>
+      expect(screen.queryByText("Checking for changes…")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("subscriptions-content")).toHaveAttribute("aria-busy", "false");
+    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Confirm Cloudbox" })).toBeEnabled();
+  });
+
+  it("unlocks the row actions when the re-check fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    invoke.mockResolvedValue({ data: null, error: new Error("FunctionsFetchError") });
+    renderPage();
+    await screen.findByText("Streamflix");
+    await waitFor(() =>
+      expect(screen.queryByText("Checking for changes…")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+    warn.mockRestore();
+  });
+
+  it("a rate-limited re-check (429) keeps the list and unlocks without a warning", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    invoke.mockResolvedValue({ data: null, error: { context: { status: 429 } } });
+    renderPage();
+    await screen.findByText("Streamflix");
+    await waitFor(() =>
+      expect(screen.queryByText("Checking for changes…")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it("a stream no longer found (gone) is not listed", async () => {
