@@ -2,7 +2,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { formatAmountPlain, formatMoney, type TransactionRow } from "@/lib/transactions";
+import {
+  formatAmountPlain,
+  formatMoney,
+  isSplit,
+  myShare,
+  type TransactionRow,
+} from "@/lib/transactions";
 import { evenShare, joinNames, parseNames } from "@/lib/splits";
 import { parseOwed } from "@/lib/account-types";
 import { ambiguousNumberHint, numberFormat } from "@/lib/locale";
@@ -66,8 +72,8 @@ export function SplitEditor({
     ...people.filter((p) => !contacts.some((c) => c.toLowerCase() === p.toLowerCase())),
   ];
 
-  const isSplit = tx.personal_amount != null && tx.personal_amount < fullAmount;
-  const owed = isSplit ? fullAmount - (tx.personal_amount as number) : 0;
+  const split = isSplit(tx);
+  const owed = fullAmount - myShare(tx);
 
   return (
     <Popover
@@ -88,7 +94,7 @@ export function SplitEditor({
           disabled={saving}
           className="-m-2 inline-flex min-h-11 cursor-pointer items-center p-2 disabled:opacity-60"
         >
-          {isSplit ? (
+          {split ? (
             <span className="inline-flex min-w-24 justify-center rounded-sm border border-primary/25 bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20">
               Split · owed {formatMoney(owed, tx.currency ?? "EUR")}
             </span>
@@ -199,7 +205,7 @@ export function SplitEditor({
           </div>
         </div>
         <div className="flex gap-2 pt-1">
-          {isSplit && (
+          {split && (
             <Button
               variant="ghost"
               onClick={() => {
