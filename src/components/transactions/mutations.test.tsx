@@ -223,6 +223,8 @@ describe("note and tags saves", () => {
     expect(calls[0]?.update).toEqual({ note: "hi" });
     expect(calls[0]?.eq).toEqual({ account_uid: "a1", entry_reference: "r1" });
     expect(cached().map((r) => r.note)).toEqual(["hi", null]);
+    // polish-3 F5: a note save changes only the note in the cache, never the type or its source.
+    expect(cached()[0]).toEqual({ ...row("a1", "r1"), note: "hi" });
   });
 
   // polish-3 #1: two quick tag adds must reach the database in order, or the older list can land last
