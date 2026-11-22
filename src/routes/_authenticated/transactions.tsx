@@ -667,7 +667,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
             minDay={formatISODate(month)}
             maxDay={formatISODate(new Date(month.getFullYear(), month.getMonth() + 1, 0))}
             count={filterCount}
-            resultCount={filtered.length}
+            resultCount={visible.length}
             onClear={clearSheetFilters}
           />
         </div>

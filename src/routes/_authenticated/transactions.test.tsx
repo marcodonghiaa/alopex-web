@@ -626,6 +626,17 @@ describe("Paid for others", () => {
     expect(within(phone).getByText(formatDayHeading(thisMonth(3)))).toBeInTheDocument();
   });
 
+  // Polish 1 #8: the phone filter's count matches the rows you will see.
+  it("leaves collapsed rows out of the filter sheet's count", async () => {
+    tableData = {
+      v_transactions_eur: [row("1"), row("2"), row("3", { personal_amount: 0 })],
+    };
+    renderPage();
+    await screen.findAllByText("Shop 1");
+    await userEvent.click(screen.getByRole("button", { name: "Filter" }));
+    expect(await screen.findByText("Show 2 transactions")).toBeInTheDocument();
+  });
+
   it("shows them when a search matches", async () => {
     tableData = {
       v_transactions_eur: [row("1"), row("2", { personal_amount: 0, creditor_name: "Fresh" })],
