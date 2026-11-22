@@ -394,8 +394,9 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
     return filtered.filter((tx) => !apart.has(tx));
   }, [filtered, forOthers]);
   // A search shows them too, so it never comes up empty for something you paid.
-  const forOthersOpen =
-    forOthers.length > 0 && (showForOthers || search.trim() !== "" || mine.length === 0);
+  // Forced open (a search, or nothing else to list): then there is no toggle to offer.
+  const forOthersForced = search.trim() !== "" || mine.length === 0;
+  const forOthersOpen = forOthers.length > 0 && (showForOthers || forOthersForced);
   const visible = forOthersOpen ? filtered : mine;
   const forOthersHeading = (
     <>
@@ -865,15 +866,17 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
 
       {forOthers.length > 0 && (
         <>
-          <Button
-            variant="quiet"
-            size="sm"
-            onClick={() => setShowForOthers(!forOthersOpen)}
-            aria-expanded={forOthersOpen}
-            className="mt-4 px-4"
-          >
-            {forOthersOpen ? "Hide" : "Show"} {forOthers.length} paid for others
-          </Button>
+          {!forOthersForced && (
+            <Button
+              variant="quiet"
+              size="sm"
+              onClick={() => setShowForOthers(!forOthersOpen)}
+              aria-expanded={forOthersOpen}
+              className="mt-4 px-4"
+            >
+              {forOthersOpen ? "Hide" : "Show"} {forOthers.length} paid for others
+            </Button>
+          )}
           {forOthersOpen && (
             <section className="mt-2 overflow-hidden rounded-lg bg-card md:hidden">
               <div className="px-4 py-3">{forOthersHeading}</div>

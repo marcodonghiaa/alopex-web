@@ -592,6 +592,27 @@ describe("Paid for others", () => {
     expect(screen.queryByText("Shop 2")).toBeNull();
   });
 
+  // Polish 1 #3: a forced-open section offered a "Hide" button that did nothing.
+  it("offers no hide button while a search or an empty list keeps the section open", async () => {
+    tableData = {
+      v_transactions_eur: [row("1"), row("2", { personal_amount: 0, creditor_name: "Fresh" })],
+    };
+    renderPage();
+    await screen.findAllByText("Shop 1");
+    await userEvent.type(screen.getByLabelText("Search by merchant or note"), "Fresh");
+    expect(screen.getAllByRole("heading", { name: "Paid for others" }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /paid for others/ })).toBeNull();
+  });
+
+  it("opens the section when every row this month was paid for others", async () => {
+    tableData = { v_transactions_eur: [row("2", { personal_amount: 0 })] };
+    renderPage();
+    expect(
+      (await screen.findAllByRole("heading", { name: "Paid for others" })).length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /paid for others/ })).toBeNull();
+  });
+
   it("shows them when a search matches", async () => {
     tableData = {
       v_transactions_eur: [row("1"), row("2", { personal_amount: 0, creditor_name: "Fresh" })],
