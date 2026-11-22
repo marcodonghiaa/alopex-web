@@ -5,7 +5,12 @@ import { useSyncExternalStore } from "react";
 
 type Row = Record<string, unknown>;
 const { db, rpc, invoke, toast } = vi.hoisted(() => ({
-  db: { rows: [] as Array<Row>, error: null as Error | null },
+  db: {
+    rows: [] as Array<Row>,
+    error: null as Error | null,
+    // Set to hold the next reads back until it resolves.
+    gate: null as Promise<void> | null,
+  },
   rpc: vi.fn(),
   invoke: vi.fn(),
   toast: { success: vi.fn(), error: vi.fn() },
@@ -22,7 +27,12 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     rpc,
     functions: { invoke },
-    from: () => ({ select: () => Promise.resolve({ data: db.rows, error: db.error }) }),
+    from: () => ({
+      select: async () => {
+        if (db.gate) await db.gate;
+        return { data: db.rows, error: db.error };
+      },
+    }),
   },
 }));
 
@@ -90,6 +100,7 @@ beforeEach(() => {
   url.search = {};
   localStorage.setItem("mf.subscriptionsReveal.seen", "1"); // keep the one-time reveal out of these tests
   db.error = null;
+  db.gate = null;
   invoke.mockResolvedValue({ data: { streams: 2 }, error: null });
   db.rows = [
     stream({}),
@@ -203,9 +214,15 @@ describe("Subscriptions page", () => {
     invoke.mockImplementation(
       () => new Promise((res) => (finishCheck = () => res({ data: { streams: 2 }, error: null }))),
     );
+    db.rows.push(stream({ id: "s3", display_name: "Oldtube", user_status: "dismissed" }));
     renderPage();
     const remove = await screen.findByRole("button", { name: "Remove Streamflix" });
     const confirm = screen.getByRole("button", { name: "Confirm Cloudbox" });
+    // Re-audit F2b: every row action waits, Restore and the frequency picker too.
+    const restore = screen.getByRole("button", { name: "Restore Oldtube" });
+    const frequency = screen.getByTitle("Monthly — auto-detected");
+    expect(restore).toBeDisabled();
+    expect(frequency).toBeDisabled();
     expect(screen.getByText("Checking for changes…")).toHaveAttribute("aria-live", "polite");
     expect(screen.getByTestId("subscriptions-content")).toHaveAttribute("aria-busy", "true");
     expect(remove).toBeDisabled();
@@ -221,6 +238,32 @@ describe("Subscriptions page", () => {
     expect(screen.getByTestId("subscriptions-content")).toHaveAttribute("aria-busy", "false");
     expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Confirm Cloudbox" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Restore Oldtube" })).toBeEnabled();
+    expect(screen.getByTitle("Monthly — auto-detected")).toBeEnabled();
+  });
+
+  // Re-audit F2b: unlocking before the refetch lands would let the rows move under a tap.
+  it("keeps the row actions locked until the fresh list is on screen", async () => {
+    let finishCheck!: () => void;
+    invoke.mockImplementation(
+      () => new Promise((res) => (finishCheck = () => res({ data: { streams: 2 }, error: null }))),
+    );
+    renderPage();
+    await screen.findByText("Streamflix");
+    let openRead!: () => void;
+    db.gate = new Promise<void>((r) => (openRead = r));
+    db.rows = db.rows.map((r) => (r["id"] === "s1" ? { ...r, display_name: "iCloud" } : r));
+    finishCheck();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByText("Checking for changes…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeDisabled();
+
+    openRead();
+    expect(await screen.findByText("iCloud")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Remove iCloud" })).toBeEnabled(),
+    );
+    expect(screen.queryByText("Checking for changes…")).not.toBeInTheDocument();
   });
 
   it("unlocks the row actions when the re-check fails", async () => {
