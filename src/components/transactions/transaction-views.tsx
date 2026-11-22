@@ -84,7 +84,7 @@ function AmountText({ tx, large = false }: { tx: TransactionRow; large?: boolean
   const currency = tx.currency ?? "EUR";
   // Paid entirely for others: its section already says so, so the row shows just what is owed.
   const split = isSplit(tx) && !isPaidForOthers(tx);
-  const shown = split ? Math.sign(native || -1) * myShare(tx) : native;
+  const shown = split ? Math.sign(native) * myShare(tx) : native;
   const positive = shown > 0;
   // The euro value of what is shown: the share's part of the charge's euro value.
   const total = Math.abs(tx.amount ?? 0);
