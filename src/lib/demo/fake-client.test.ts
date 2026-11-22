@@ -1298,3 +1298,39 @@ describe("demo payerKey matches the database's payer_key", () => {
     expect([...(payerKey("𠀀".repeat(250)) ?? "")].length).toBe(200);
   });
 });
+
+// Demo mirror of move_category: deleting or renaming a category moves its transactions.
+describe("fake client: move_category", () => {
+  type Rpc = (
+    f: string,
+    a: object,
+  ) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
+  const move = (c: ReturnType<typeof fresh>, from: string, to: string) =>
+    (c.rpc as unknown as Rpc)("move_category", { p_from: from, p_to: to });
+  const count = async (c: ReturnType<typeof fresh>, category: string) =>
+    ((await c.from("transactions").select("category").eq("category", category)).data ?? []).length;
+
+  it("moves a category's transactions and deletes it; a new name keeps the look", async () => {
+    const c = fresh();
+    const groceries = await count(c, "Groceries");
+    expect(groceries).toBeGreaterThan(0);
+    const res = await move(c, "Groceries", "Food");
+    expect(res).toEqual({ data: groceries, error: null });
+    expect(await count(c, "Groceries")).toBe(0);
+    expect(await count(c, "Food")).toBe(groceries);
+    const { data: cats } = await c.from("user_categories").select("name,hidden");
+    expect(cats).toContainEqual(expect.objectContaining({ name: "Groceries", hidden: true }));
+    expect(cats).toContainEqual(expect.objectContaining({ name: "Food", hidden: false }));
+    // An own category goes away; its rows land on an existing one, matched without case.
+    expect((await move(c, "Pets", "others")).error).toBeNull();
+    const { data: after } = await c.from("user_categories").select("name");
+    expect(after!.map((r) => r.name)).not.toContain("Pets");
+  });
+
+  it("refuses what the database refuses", async () => {
+    const c = fresh();
+    expect((await move(c, "Transfer", "Others")).error?.message).toMatch(/Transfer and Income/);
+    expect((await move(c, "Pets", "Pets")).error?.message).toMatch(/different/);
+    expect((await move(c, "Pets", " ")).error?.message).toMatch(/Pick/);
+  });
+});

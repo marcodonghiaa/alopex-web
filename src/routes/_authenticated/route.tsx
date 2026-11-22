@@ -7,26 +7,9 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import {
-  Target,
-  TrendingUp,
-  Landmark,
-  Receipt,
-  Repeat,
-  PieChart,
-  Briefcase,
-  Bitcoin,
-  LogOut,
-  Download,
-  MoreHorizontal,
-  FileText,
-  ArrowDownLeft,
-  Users,
-  Settings,
-  Upload,
-  ChevronRight,
-  type LucideIcon,
-} from "lucide-react";
+import { LogOut, Download, MoreHorizontal, ChevronRight } from "lucide-react";
+import { Icon, iconOf, type IconComponent } from "@/components/icons/icon";
+import { useCategories } from "@/lib/use-categories";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { loadDemoClient, supabase } from "@/integrations/supabase/client";
 import { isDemoMode } from "@/lib/demo/mode";
@@ -83,7 +66,7 @@ export const GET_YOUR_OWN_URL = "https://alopex.finance/#how";
 
 interface NavItem {
   label: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   to: string;
 }
 
@@ -96,32 +79,32 @@ const NAV_GROUPS: Array<NavGroup> = [
   {
     label: "Overview",
     items: [
-      { label: "Net Worth", icon: TrendingUp, to: "/" },
-      { label: "Reports", icon: FileText, to: "/reports" },
+      { label: "Net Worth", icon: iconOf("net-worth"), to: "/" },
+      { label: "Reports", icon: iconOf("reports"), to: "/reports" },
     ],
   },
   {
     label: "Banking",
     items: [
-      { label: "Accounts", icon: Landmark, to: "/accounts" },
-      { label: "Transactions", icon: Receipt, to: "/transactions" },
-      { label: "Income", icon: ArrowDownLeft, to: "/income" },
-      { label: "Spending", icon: PieChart, to: "/spending" },
-      { label: "Budgets", icon: Target, to: "/budgets" },
-      { label: "Subscriptions", icon: Repeat, to: "/subscriptions" },
-      { label: "Who owes you", icon: Users, to: "/splitwise" },
+      { label: "Accounts", icon: iconOf("accounts"), to: "/accounts" },
+      { label: "Transactions", icon: iconOf("transactions"), to: "/transactions" },
+      { label: "Income", icon: iconOf("income"), to: "/income" },
+      { label: "Spending", icon: iconOf("spending"), to: "/spending" },
+      { label: "Budgets", icon: iconOf("budgets"), to: "/budgets" },
+      { label: "Subscriptions", icon: iconOf("subscriptions"), to: "/subscriptions" },
+      { label: "Who owes you", icon: iconOf("who-owes-you"), to: "/splitwise" },
     ],
   },
   {
     label: "Investing",
     items: [
-      { label: "Portfolio", icon: Briefcase, to: "/portfolio" },
-      { label: "Crypto", icon: Bitcoin, to: "/crypto" },
+      { label: "Portfolio", icon: iconOf("portfolio"), to: "/portfolio" },
+      { label: "Crypto", icon: iconOf("crypto"), to: "/crypto" },
     ],
   },
   {
     label: "Tools",
-    items: [{ label: "Import", icon: Upload, to: "/import" }],
+    items: [{ label: "Import", icon: iconOf("import"), to: "/import" }],
   },
 ];
 
@@ -130,14 +113,19 @@ const NAV_GROUPS: Array<NavGroup> = [
 // pages it owns (Investing covers Portfolio and Crypto, switched inside the page).
 export const TAB_BAR_ITEMS: Array<{
   label: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   to: string;
   owns: Array<string>;
 }> = [
-  { label: "Net Worth", icon: TrendingUp, to: "/", owns: ["/"] },
-  { label: "Activity", icon: Receipt, to: "/transactions", owns: ["/transactions"] },
-  { label: "Spending", icon: PieChart, to: "/spending", owns: ["/spending"] },
-  { label: "Investing", icon: Briefcase, to: "/portfolio", owns: ["/portfolio", "/crypto"] },
+  { label: "Net Worth", icon: iconOf("net-worth"), to: "/", owns: ["/"] },
+  { label: "Activity", icon: iconOf("transactions"), to: "/transactions", owns: ["/transactions"] },
+  { label: "Spending", icon: iconOf("spending"), to: "/spending", owns: ["/spending"] },
+  {
+    label: "Investing",
+    icon: iconOf("portfolio"),
+    to: "/portfolio",
+    owns: ["/portfolio", "/crypto"],
+  },
 ];
 
 const TAB_PATHS = new Set(TAB_BAR_ITEMS.flatMap((t) => t.owns));
@@ -205,6 +193,8 @@ function AuthenticatedLayout() {
   const [signingOut, setSigningOut] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = useRouterState({ select: (st) => st.location.pathname });
+  // Loaded once for every page: the icon and colour you picked per category.
+  useCategories();
   // Pages switched off in Settings › App drop out of the sidebar and More.
   const hidden = useHiddenPages();
   const shown = (items: Array<NavItem>) => items.filter((i) => !hidden.includes(i.to));
@@ -338,7 +328,7 @@ function AuthenticatedLayout() {
               Overview directly (phone /settings is the list), so focus lands on its link. */}
           {!inSettings && (
             <Link to="/settings/overview" className={SIDEBAR_LINK}>
-              <Settings className="size-[1.125rem] shrink-0" />
+              <Icon name="settings" className="size-[1.125rem] shrink-0" />
               Settings
             </Link>
           )}
@@ -456,7 +446,7 @@ function AuthenticatedLayout() {
                   aria-current={inSettings ? "page" : undefined}
                   className={inSettings ? SHEET_ROW_ACTIVE : SHEET_ROW}
                 >
-                  <Settings className="size-5 shrink-0" />
+                  <Icon name="settings" className="size-5 shrink-0" />
                   Settings
                   <ChevronRight
                     aria-hidden

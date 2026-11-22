@@ -2,18 +2,22 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { ALWAYS_SHOWN, CATEGORIES, categoryColor } from "@/lib/categories";
+import { ALWAYS_SHOWN, CATEGORIES } from "@/lib/categories";
 import { CATEGORIES_KEY, useCategories } from "@/lib/use-categories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { GroupedList } from "@/components/ui/grouped-list";
+import { CategoryAvatar } from "@/components/category-avatar";
+import { CategoryEditor, type EditTarget } from "./category-editor";
 
-// Your categories: add your own, hide built-in ones you don't use. Pickers everywhere and the AI
-// categorizer use the result. A hidden or deleted category stays on the transactions that have it.
+// Your categories: add your own, give any of them an icon and a colour, hide built-in ones you
+// don't use. Pickers everywhere and the AI categorizer use the result. A hidden category stays on
+// the transactions that have it; deleting one of yours moves them to a category you pick.
 export function CategoriesSection() {
   const queryClient = useQueryClient();
-  const { list, settings, available, isPending } = useCategories();
+  const { list, settings, available, looksAvailable, isPending } = useCategories();
   const [name, setName] = useState("");
+  const [editing, setEditing] = useState<EditTarget | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const done = () => void queryClient.invalidateQueries({ queryKey: CATEGORIES_KEY });
@@ -49,8 +53,15 @@ export function CategoriesSection() {
     const taken = [...builtIn, ...own].some((c) => c.toLowerCase() === next.toLowerCase());
     if (taken) return setError(`"${next}" is already in the list.`);
     setError(null);
+    // With icons available, Add opens the editor to pick the look; the category is saved there.
+    if (looksAvailable) {
+      setEditing({ kind: "new", name: next });
+      setName("");
+      return;
+    }
     save.mutate({ name: next, hidden: false }, { onSuccess: () => setName("") });
   }
+  const everyCategory = [...builtIn, ...own].map((c) => ({ name: c, hidden: hidden.has(c) }));
 
   return (
     <section
@@ -93,25 +104,23 @@ export function CategoriesSection() {
                 const isHidden = hidden.has(c);
                 return (
                   <li key={c} className="flex min-h-12 items-center gap-3 px-4 py-1">
-                    <span
-                      aria-hidden
-                      className="size-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: categoryColor(c) }}
-                    />
+                    <CategoryAvatar category={c} size="sm" />
                     <span
                       className={`min-w-0 flex-1 truncate text-sm ${isHidden ? "text-muted-foreground line-through" : "text-foreground"}`}
                     >
                       {c}
                     </span>
                     {isOwn ? (
-                      <Button
-                        variant="ghost"
-                        className="px-3"
-                        disabled={busy}
-                        onClick={() => remove.mutate(c)}
-                      >
-                        Delete
-                      </Button>
+                      looksAvailable ? null : (
+                        <Button
+                          variant="ghost"
+                          className="px-3"
+                          disabled={busy}
+                          onClick={() => remove.mutate(c)}
+                        >
+                          Delete
+                        </Button>
+                      )
                     ) : ALWAYS_SHOWN.includes(c) ? null : isHidden ? (
                       <Button
                         variant="ghost"
@@ -131,11 +140,36 @@ export function CategoriesSection() {
                         Hide
                       </Button>
                     )}
+                    {looksAvailable && (
+                      <Button
+                        variant="ghost"
+                        className="px-3"
+                        disabled={busy}
+                        aria-label={`Edit ${c}`}
+                        onClick={() => setEditing({ kind: "edit", name: c, hidden: isHidden })}
+                      >
+                        Edit
+                      </Button>
+                    )}
                   </li>
                 );
               })}
             </ul>
           </GroupedList>
+          {!isPending && !looksAvailable && (
+            <p className="text-sm text-muted-foreground">
+              Icons, colours and moving transactions when you delete a category need a database
+              update: run supabase db push --linked in the backend.
+            </p>
+          )}
+          {editing && (
+            <CategoryEditor
+              key={editing.kind + editing.name}
+              target={editing}
+              categories={everyCategory}
+              onClose={() => setEditing(null)}
+            />
+          )}
         </div>
       )}
     </section>

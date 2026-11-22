@@ -8,7 +8,7 @@ import { CATEGORIES_KEY, type CategorySetting } from "@/lib/use-categories";
  */
 export function queryWrapper(categories: Array<CategorySetting> = []) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  client.setQueryData(CATEGORIES_KEY, categories);
+  client.setQueryData(CATEGORIES_KEY, { rows: categories, looks: true });
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
