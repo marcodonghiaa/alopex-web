@@ -248,13 +248,14 @@ describe("Subscriptions page", () => {
     warn.mockRestore();
   });
 
+  // polish-3 F3: wait for the list itself, or the check runs before any row is drawn.
   it("a stream no longer found (gone) is not listed", async () => {
-    db.rows = [stream({ detected_status: "gone", user_status: "confirmed" })];
+    db.rows = [
+      stream({ detected_status: "gone", user_status: "confirmed" }),
+      stream({ id: "s2", display_name: "Cloudbox", user_status: "confirmed" }),
+    ];
     renderPage();
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "Subscriptions" }),
-    ).toBeInTheDocument();
-    await waitFor(() => expect(invoke).toHaveBeenCalled());
+    expect(await screen.findByText("Cloudbox")).toBeInTheDocument();
     expect(screen.queryByText("Streamflix")).not.toBeInTheDocument();
   });
 
