@@ -92,9 +92,16 @@ describe("pickers", () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
-  it("CategoryPicker is disabled while saving", () => {
-    render(<CategoryPicker tx={tx()} onSelect={vi.fn()} saving />);
-    expect(screen.getByRole("button", { name: /Change category/ })).toBeDisabled();
+  // polish-4 #3b: locked with aria-disabled (it keeps focus), not native disabled: a click opens
+  // nothing and picks nothing.
+  it("CategoryPicker is disabled while saving", async () => {
+    const onSelect = vi.fn();
+    render(<CategoryPicker tx={tx()} onSelect={onSelect} saving />);
+    const trigger = screen.getByRole("button", { name: /Change category/ });
+    expect(trigger).toHaveAttribute("aria-disabled", "true");
+    await userEvent.click(trigger);
+    expect(screen.queryByRole("button", { name: "Groceries" })).not.toBeInTheDocument();
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   // Type audit P1: a charge already showing One-time (from the AI) must be claimable as yours.
@@ -194,6 +201,31 @@ describe("pickers", () => {
     expect(screen.getByTestId("picker-spinner")).toBeInTheDocument();
     rerender(<TypePicker tx={tx()} onSelect={vi.fn()} saving={false} />);
     expect(screen.queryByTestId("picker-spinner")).not.toBeInTheDocument();
+  });
+
+  // polish-4 #3b (re-audit gap 1): the Category chip was still natively disabled while saving, so
+  // a keyboard pick dropped focus to <body>. fails_when=focus isn't on the category trigger after
+  // a keyboard pick and its save
+  it("CategoryPicker keeps focus on its trigger through a keyboard pick and the save", async () => {
+    let land = () => {};
+    function Row() {
+      const save = useMutation({
+        mutationFn: (_c: string) => new Promise<void>((r) => (land = r)),
+      });
+      return <CategoryPicker tx={tx()} onSelect={(c) => save.mutate(c)} saving={save.isPending} />;
+    }
+    render(<Row />);
+    const trigger = screen.getByRole("button", { name: /Change category/ });
+    trigger.focus();
+    await userEvent.keyboard("{Enter}");
+    (await screen.findByRole("button", { name: "Groceries" })).focus();
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => expect(document.activeElement?.tagName).toBe("BUTTON"));
+    expect(trigger).toHaveFocus();
+    expect(trigger).toHaveAttribute("aria-busy", "true");
+    land();
+    await waitFor(() => expect(trigger).not.toHaveAttribute("aria-busy"));
+    expect(trigger).toHaveFocus();
   });
 
   it("CategoryPicker shows the same spinner while saving, and none otherwise", () => {

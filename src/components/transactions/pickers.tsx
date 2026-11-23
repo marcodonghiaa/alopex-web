@@ -28,13 +28,15 @@ export function CategoryPicker({
   const categories = useCategories().list;
 
   return (
-    <Popover modal open={open} onOpenChange={setOpen}>
+    // Locked while saving like TypePicker: aria-disabled and this guard keep the trigger focusable.
+    <Popover modal open={open} onOpenChange={(next) => setOpen(next && saving ? false : next)}>
       <PopoverTrigger asChild>
         <button
           type="button"
           aria-label={`Change category for ${cleanMerchantName(tx.creditor_name) ?? "transaction"}`}
-          disabled={saving}
-          className="-m-2 inline-flex min-h-11 cursor-pointer items-center p-2 disabled:opacity-60"
+          aria-disabled={saving || undefined}
+          aria-busy={saving || undefined}
+          className="-m-2 inline-flex min-h-11 cursor-pointer items-center p-2 aria-disabled:cursor-default aria-disabled:opacity-60"
         >
           {variant === "icon" ? (
             <span className="rounded-sm transition-opacity hover:opacity-80">
