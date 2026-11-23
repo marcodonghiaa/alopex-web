@@ -49,7 +49,7 @@ async function fetchCharges(month: Date, keys: Array<string>): Promise<Array<Cha
     supabase
       .from("transactions")
       .select(
-        "account_uid,entry_reference,booking_date,merchant_key,amount,currency,transaction_type",
+        "account_uid,entry_reference,booking_date,merchant_key,amount,currency,transaction_type,transaction_type_source",
       )
       .eq("credit_debit_indicator", "DBIT")
       .eq("flow_type", "spend")

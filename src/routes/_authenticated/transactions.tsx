@@ -75,6 +75,7 @@ import {
 import { WorthItSpotlight } from "@/components/transactions/worth-it";
 import { MonthSwitcher } from "@/components/month-switcher";
 import { FilterSheet } from "@/components/transactions/filter-sheet";
+import { RECURRING_KEY, refreshRecurring } from "@/lib/use-recurring-streams";
 
 export const Route = createFileRoute("/_authenticated/transactions")({
   head: () => ({
@@ -221,9 +222,31 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
     successAction: ({ tx, value }) => ruleAction(tx.creditor_name, value),
   });
 
+  // A type decides what counts as a subscription: re-check them so the nav badge follows.
+  // The server allows one run per 5 s, so a 429 is retried once after that window, while the
+  // page is still open (as on the Subscriptions page). Every answer refetches, which is harmless.
+  const open = useRef(true);
+  const retry = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => {
+    open.current = true;
+    return () => {
+      open.current = false;
+      clearTimeout(retry.current);
+    };
+  }, []);
+  const recheck = (retryIfLimited: boolean): void =>
+    void refreshRecurring().then((result) => {
+      if (result === "limited" && retryIfLimited && open.current) {
+        clearTimeout(retry.current);
+        retry.current = setTimeout(() => recheck(false), 5_000);
+      }
+      return queryClient.invalidateQueries({ queryKey: RECURRING_KEY });
+    });
+
   const updateType = useTransactionFieldMutation(queryClient, monthKey, "transaction_type", {
     errorMessage: "Couldn't save type",
     successMessage: (value) => `Saved — ${value}`,
+    onSaved: () => recheck(true),
   });
 
   const answerWorthIt = useTransactionFieldMutation(queryClient, monthKey, "worth_it", {

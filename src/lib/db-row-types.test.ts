@@ -19,6 +19,7 @@ describe("row types", () => {
         | "amount"
         | "currency"
         | "transaction_type"
+        | "transaction_type_source"
       >
     >();
     expectTypeOf<IncomeTx>().toEqualTypeOf<

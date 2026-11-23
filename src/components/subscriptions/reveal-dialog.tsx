@@ -30,8 +30,11 @@ function claimReveal(): boolean {
   return true;
 }
 
-/** One-time "We found N subscriptions" summary, shown over the Subscriptions page. */
-export function RevealDialog() {
+/**
+ * One-time "We found N subscriptions" summary, shown over the Subscriptions page. Opens only once
+ * `ready` (the page's re-check has settled), so its figures don't change while you read them.
+ */
+export function RevealDialog({ ready = true }: { ready?: boolean }) {
   const { data } = useRecurringStreams();
   const [open, setOpen] = useState(false);
 
@@ -56,8 +59,8 @@ export function RevealDialog() {
     .slice(0, 5);
 
   useEffect(() => {
-    if (show > 0 && claimReveal()) setOpen(true);
-  }, [show]);
+    if (ready && show > 0 && claimReveal()) setOpen(true);
+  }, [ready, show]);
 
   const review = () => {
     setOpen(false);

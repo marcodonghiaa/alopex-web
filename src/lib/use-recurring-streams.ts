@@ -14,3 +14,22 @@ export const useRecurringStreams = () =>
       return data ?? [];
     },
   });
+
+/**
+ * Re-runs subscription detection for you (Edge Function refresh-recurring), so edits to your
+ * transactions show at once instead of after the 6-hour run. Says whether it ran, was rate
+ * limited, or failed; a failure (demo, offline, a backend without the function) only keeps the
+ * list as last saved.
+ */
+export async function refreshRecurring(): Promise<"ran" | "limited" | "failed"> {
+  try {
+    const { error } = await supabase.functions.invoke("refresh-recurring", { body: {} });
+    if (error) throw error;
+    return "ran";
+  } catch (error) {
+    // 429: re-checked moments ago (rate limited), nothing wrong.
+    if ((error as { context?: Response })?.context?.status === 429) return "limited";
+    console.warn("Couldn't re-check subscriptions", error);
+    return "failed";
+  }
+}

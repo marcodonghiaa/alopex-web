@@ -233,6 +233,8 @@ function AuthenticatedLayout() {
     if (to === pathname) e.preventDefault();
     setMenuOpen(false);
   };
+  // The Subscriptions badge follows transaction edits once Subscriptions is opened (it re-checks)
+  // or after the 6-hourly detection run, not at the moment of the edit.
   const streams = useRecurringStreams().data;
   // A head-only count under the To link list's key, so a link or a sync refreshes the badge too.
   // A failure leaves the badge off and doesn't retry: it's only a hint.

@@ -55,6 +55,8 @@ export function groupStreams(streams: Array<Stream>, today = new Date()) {
     dismissed: [] as Array<Stream>,
   };
   for (const s of streams) {
+    // No longer found by the detector (e.g. its charges marked One-time): kept for your choices, shown nowhere.
+    if (s.detected_status === "gone") continue;
     if (s.user_status === "dismissed") out.dismissed.push(s);
     else if (s.user_status === "confirmed" || s.detected_status === "active")
       (isStopped(asChargeable(s), today) ? out.stopped : out.active).push(s);

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, ChevronDown, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,7 +14,7 @@ import {
   monthlyTotal,
   romeToday,
 } from "@/lib/recurring";
-import { RECURRING_KEY, useRecurringStreams } from "@/lib/use-recurring-streams";
+import { RECURRING_KEY, refreshRecurring, useRecurringStreams } from "@/lib/use-recurring-streams";
 import { formatBookingDateShort, formatMoney } from "@/lib/transactions";
 import { CategoryAvatar } from "@/components/category-avatar";
 import { RevealDialog } from "@/components/subscriptions/reveal-dialog";
@@ -86,6 +86,15 @@ function applyAction(s: Stream, { action, args }: StreamAction): Stream {
   };
 }
 
+// The streams the page lists, by section: what a re-check can make jump.
+function listedIds(rows: Array<Stream> | undefined): string | null {
+  if (!rows) return null;
+  const g = groupStreams(rows, romeToday());
+  return [g.toReview, g.active, g.stopped, g.dismissed]
+    .map((list) => String(list.map((s) => s.id).sort()))
+    .join("|");
+}
+
 function customIntervalLabel(value: number, unit: IntervalUnit): string {
   const unitLabel = value === 1 ? unit.slice(0, -1) : unit;
   return `Every ${value} ${unitLabel}`;
@@ -118,6 +127,64 @@ function SubscriptionsPage() {
   // One "today" per visit: a new Date each render would recompute the calendar every time.
   const [today] = useState(romeToday);
   const query = useRecurringStreams();
+  // While the re-check runs, rows can still move (a stream turns gone), so their actions wait.
+  const [checking, setChecking] = useState(true);
+  // Most checks land in ~0.1 s: say so (and dim the locked actions) only once one runs longer.
+  const [slowCheck, setSlowCheck] = useState(false);
+  useEffect(() => {
+    if (!checking) return setSlowCheck(false);
+    const t = setTimeout(() => setSlowCheck(true), 300);
+    return () => clearTimeout(t);
+  }, [checking]);
+  // A re-check that changed the list says so for a moment, where "Checking…" was.
+  const [updated, setUpdated] = useState(false);
+  // When the re-check takes away the last active stream, the total stays (at €0) so the list
+  // doesn't jump up; a visit that never had one still leaves it out (e2e #13).
+  const [keepTotal, setKeepTotal] = useState(false);
+  useEffect(() => {
+    if (!updated) return;
+    const t = setTimeout(() => setUpdated(false), 3_000);
+    return () => clearTimeout(t);
+  }, [updated]);
+  // Opening the page re-checks your subscriptions, so a transaction you just renamed, marked
+  // One-time or deleted shows here. The saved list shows meanwhile; an action in flight refetches itself.
+  // shortcut: a full detection per visit, cheap for one household: server-side a sign-in check,
+  // the two-step check, a rate-limit read, the confirmed-streams read, the paged spend reads and
+  // one upsert.
+  // No client-side skip-if-recent: edit a transaction, then open this page, must show the edit. The server
+  // allows one run per 5 s (429 keeps the saved list meanwhile), so a 429 is retried once after that
+  // window, while the page is still open.
+  useEffect(() => {
+    let open = true;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const check = (retryIfLimited: boolean) =>
+      void refreshRecurring()
+        .then(async (result) => {
+          if (result === "limited" && retryIfLimited && open)
+            retry = setTimeout(() => {
+              setChecking(true);
+              check(false);
+            }, 5_000);
+          if (result !== "ran" || queryClient.isMutating({ mutationKey: MUTATION_KEY }) > 0) return;
+          const prev = queryClient.getQueryData<Array<Stream>>(RECURRING_KEY);
+          const before = listedIds(prev);
+          // A read still in flight started before the re-check: drop it, or the refetch would reuse it.
+          await queryClient.cancelQueries({ queryKey: RECURRING_KEY });
+          // Unlock only once the fresh list is on screen.
+          await queryClient.invalidateQueries({ queryKey: RECURRING_KEY });
+          const next = queryClient.getQueryData<Array<Stream>>(RECURRING_KEY);
+          if (!open || before == null || listedIds(next) === before) return;
+          setUpdated(true);
+          const activeIn = (rows?: Array<Stream>) => groupStreams(rows ?? [], romeToday()).active;
+          if (activeIn(prev).length > 0 && activeIn(next).length === 0) setKeepTotal(true);
+        })
+        .finally(() => setChecking(false));
+    check(true);
+    return () => {
+      open = false;
+      clearTimeout(retry);
+    };
+  }, [queryClient]);
 
   const actionMutation = useMutation({
     mutationKey: MUTATION_KEY,
@@ -183,6 +250,7 @@ function SubscriptionsPage() {
     <SubscriptionCard
       key={s.id}
       sub={s}
+      locked={checking}
       onDismiss={() => actionMutation.mutate({ id: s.id, action: "dismiss" })}
       onSelectFrequency={(frequency) =>
         actionMutation.mutate({
@@ -203,9 +271,9 @@ function SubscriptionsPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8 md:py-12">
-      <RevealDialog />
+      <RevealDialog ready={!checking} />
       {/* Titled like Net Worth (iOS view board). */}
-      <header className="mb-3">
+      <header className="mb-3 flex items-baseline justify-between gap-3">
         <h1 className="text-lg font-semibold text-foreground">Subscriptions</h1>
       </header>
 
@@ -214,15 +282,19 @@ function SubscriptionsPage() {
       )}
 
       {/* Estimated monthly cost: hidden with nothing active, where its dash read as a white bar (e2e #13). */}
-      {(query.isPending || active.length > 0) && (
+      {(query.isPending || active.length > 0 || keepTotal) && (
         <section aria-label="Estimated monthly cost" className="mb-5">
           <div className="min-h-12">
             {query.isPending ? (
               <Skeleton className="h-12 w-72" />
             ) : (
               <p className="figure-display">
-                {total.known === 0 ? "—" : `~${formatMoney(total.sum, "EUR")}`}
-                {total.known > 0 && (
+                {active.length === 0
+                  ? formatMoney(0, "EUR")
+                  : total.known === 0
+                    ? "—"
+                    : `~${formatMoney(total.sum, "EUR")}`}
+                {(total.known > 0 || active.length === 0) && (
                   <span className="text-[0.4em] tracking-normal text-muted-foreground">
                     {" "}
                     /month
@@ -239,32 +311,43 @@ function SubscriptionsPage() {
         </section>
       )}
 
-      <div className="mb-8 max-w-xs">
+      <div className="mb-1.5 max-w-xs">
         <SegmentedControl label="View" options={[...VIEWS]} value={view} onChange={setView} />
       </div>
+      {/* Under the switch, next to what it locks; its slot keeps the height, so nothing moves. */}
+      <p className="mb-1.5 min-h-5 text-[0.8125rem] text-muted-foreground">
+        {slowCheck ? "Checking your transactions…" : updated ? "Updated" : ""}
+      </p>
 
       {view === "calendar" ? (
-        query.isPending ? (
-          <Skeleton className="h-96" />
-        ) : (
-          <RecurringCalendar
-            streams={active}
-            today={today}
-            initialMonth={calendarMonth}
-            onMonthChange={(m) =>
-              void navigate({
-                search: (s: SubscriptionsSearch) => ({
-                  ...s,
-                  month: `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`,
-                }),
-                // Paging months isn't worth a Back step each.
-                replace: true,
-              })
-            }
-          />
-        )
+        <div data-testid="subscriptions-calendar" aria-busy={checking}>
+          {query.isPending ? (
+            <Skeleton className="h-96" />
+          ) : (
+            <RecurringCalendar
+              streams={active}
+              today={today}
+              initialMonth={calendarMonth}
+              onMonthChange={(m) =>
+                void navigate({
+                  search: (s: SubscriptionsSearch) => ({
+                    ...s,
+                    month: `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`,
+                  }),
+                  // Paging months isn't worth a Back step each.
+                  replace: true,
+                })
+              }
+            />
+          )}
+        </div>
       ) : (
-        <>
+        <div
+          data-testid="subscriptions-content"
+          aria-busy={checking}
+          // Locked from the start; dimmed only once the check runs long enough to say so.
+          className={checking && !slowCheck ? "[&_:disabled]:!opacity-100" : undefined}
+        >
           {toReview.length > 0 && (
             <section aria-label="To review" className="mb-8">
               <SectionTitle>To review ({toReview.length})</SectionTitle>
@@ -274,6 +357,7 @@ function SubscriptionsPage() {
                     <ReviewRow
                       key={s.id}
                       stream={s}
+                      locked={checking}
                       onConfirm={() => actionMutation.mutate({ id: s.id, action: "confirm" })}
                       onDismiss={() => actionMutation.mutate({ id: s.id, action: "dismiss" })}
                     />
@@ -306,13 +390,20 @@ function SubscriptionsPage() {
             )
           )}
 
-          {!query.isPending && active.length === 0 && (
-            <EmptyState
-              className="mt-8 rounded-lg bg-card"
-              title="No subscription charges found yet."
-              hint="Recurring charges show up here once a few months of transactions are in."
-            />
-          )}
+          {/* The first-run empty state only when nothing at all is listed; otherwise a plain line. */}
+          {!query.isPending &&
+            active.length === 0 &&
+            (toReview.length + stopped.length + dismissed.length === 0 ? (
+              <EmptyState
+                className="mt-8 rounded-lg bg-card"
+                title="No subscription charges found yet."
+                hint="Recurring charges show up here once a few months of transactions are in."
+              />
+            ) : (
+              <p className="rounded-lg bg-card px-4 py-3 text-sm text-muted-foreground">
+                No active subscriptions right now.
+              </p>
+            ))}
 
           {stopped.length > 0 && (
             <details className="group mt-8">
@@ -321,7 +412,7 @@ function SubscriptionsPage() {
                 Stopped ({stopped.length})
               </summary>
               <p className="mb-3 px-4 text-[0.8125rem] text-muted-foreground">
-                No recent charge. Not counted.
+                No recent subscription charge. Not counted.
               </p>
               <GroupedList>
                 <ul className="divide-y divide-hairline">{stopped.map(renderCard)}</ul>
@@ -344,6 +435,7 @@ function SubscriptionsPage() {
                     <DismissedRow
                       key={s.id}
                       stream={s}
+                      locked={checking}
                       onRestore={() => actionMutation.mutate({ id: s.id, action: "undismiss" })}
                     />
                   ))}
@@ -351,13 +443,21 @@ function SubscriptionsPage() {
               </GroupedList>
             </details>
           )}
-        </>
+        </div>
       )}
     </div>
   );
 }
 
-function DismissedRow({ stream, onRestore }: { stream: Stream; onRestore: () => void }) {
+function DismissedRow({
+  stream,
+  locked,
+  onRestore,
+}: {
+  stream: Stream;
+  locked: boolean;
+  onRestore: () => void;
+}) {
   const name = cleanMerchantName(stream.display_name) ?? "—";
   const cadence = effectiveCadence(stream);
   const monthly = monthlyEur(stream);
@@ -374,7 +474,12 @@ function DismissedRow({ stream, onRestore }: { stream: Stream; onRestore: () => 
         {monthly != null && Math.abs(monthly) > 0 && <MonthlyAmount stream={stream} />}
       </div>
       <div className="mt-1 flex items-center gap-2 pl-[3.25rem]">
-        <Button variant="quiet" onClick={onRestore} aria-label={`Restore ${name}`}>
+        <Button
+          variant="quiet"
+          disabled={locked}
+          onClick={onRestore}
+          aria-label={`Restore ${name}`}
+        >
           Restore
         </Button>
       </div>
@@ -400,10 +505,12 @@ function MonthlyAmount({ stream }: { stream: Stream }) {
 
 function ReviewRow({
   stream,
+  locked,
   onConfirm,
   onDismiss,
 }: {
   stream: Stream;
+  locked: boolean;
   onConfirm: () => void;
   onDismiss: () => void;
 }) {
@@ -420,10 +527,15 @@ function ReviewRow({
         <MonthlyAmount stream={stream} />
       </div>
       <div className="mt-1 flex gap-2 pl-[3.25rem]">
-        <Button onClick={onConfirm} aria-label={`Confirm ${name}`}>
+        <Button disabled={locked} onClick={onConfirm} aria-label={`Confirm ${name}`}>
           Confirm
         </Button>
-        <Button variant="quiet" onClick={onDismiss} aria-label={`${name} is not a subscription`}>
+        <Button
+          variant="quiet"
+          disabled={locked}
+          onClick={onDismiss}
+          aria-label={`${name} is not a subscription`}
+        >
           Not a subscription
         </Button>
       </div>
@@ -433,11 +545,13 @@ function ReviewRow({
 
 function SubscriptionCard({
   sub,
+  locked,
   onDismiss,
   onSelectFrequency,
   onSelectCustom,
 }: {
   sub: Stream;
+  locked: boolean;
   onDismiss: () => void;
   onSelectFrequency: (frequency: string) => void;
   onSelectCustom: (value: number, unit: IntervalUnit) => void;
@@ -468,6 +582,7 @@ function SubscriptionCard({
           isManual={sub.user_cadence != null}
           customValue={sub.custom_interval_value}
           customUnit={sub.custom_interval_unit as IntervalUnit | null}
+          locked={locked}
           onSelect={onSelectFrequency}
           onSelectCustom={onSelectCustom}
         />
@@ -477,6 +592,7 @@ function SubscriptionCard({
         <Button
           variant="ghost"
           size="icon"
+          disabled={locked}
           onClick={onDismiss}
           aria-label={`Remove ${name}`}
           className="-my-2 -mr-3 hover:text-negative"
@@ -493,6 +609,7 @@ function FrequencyPicker({
   isManual,
   customValue,
   customUnit,
+  locked,
   onSelect,
   onSelectCustom,
 }: {
@@ -500,6 +617,7 @@ function FrequencyPicker({
   isManual: boolean;
   customValue: number | null;
   customUnit: IntervalUnit | null;
+  locked: boolean;
   onSelect: (frequency: string) => void;
   onSelectCustom: (value: number, unit: IntervalUnit) => void;
 }) {
@@ -539,6 +657,7 @@ function FrequencyPicker({
       <PopoverTrigger asChild>
         <button
           type="button"
+          disabled={locked}
           title={
             frequency
               ? isManual
@@ -546,7 +665,7 @@ function FrequencyPicker({
                 : `${label} — auto-detected`
               : "Not enough history to detect — set the billing frequency"
           }
-          className={`inline-flex min-h-11 w-full items-center justify-between gap-1 rounded-sm px-3 py-0.5 text-xs font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+          className={`inline-flex min-h-11 w-full items-center justify-between gap-1 rounded-sm px-3 disabled:pointer-events-none disabled:opacity-50 py-0.5 text-xs font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
             frequency
               ? "bg-muted text-foreground hover:bg-accent"
               : "bg-warning/10 text-warning hover:bg-warning/20"

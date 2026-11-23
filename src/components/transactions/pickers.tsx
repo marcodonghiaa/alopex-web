@@ -1,10 +1,16 @@
 import { useState } from "react";
+import { Check, Loader2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TRANSACTION_TYPES, categoryColor } from "@/lib/categories";
 import { useCategories } from "@/lib/use-categories";
 import type { TransactionRow } from "@/lib/transactions";
 import { CategoryAvatar } from "@/components/category-avatar";
 import { cleanMerchantName } from "@/lib/merchant-name";
+
+// A save in flight: a small spinner inside the chip, so a dimmed chip reads as "saving".
+const SavingSpinner = () => (
+  <Loader2 data-testid="picker-spinner" aria-hidden className="size-3 shrink-0 animate-spin" />
+);
 
 export function CategoryPicker({
   tx,
@@ -22,17 +28,25 @@ export function CategoryPicker({
   const categories = useCategories().list;
 
   return (
-    <Popover modal open={open} onOpenChange={setOpen}>
+    // Locked while saving like TypePicker: aria-disabled and this guard keep the trigger focusable.
+    <Popover modal open={open} onOpenChange={(next) => setOpen(next && saving ? false : next)}>
       <PopoverTrigger asChild>
         <button
           type="button"
           aria-label={`Change category for ${cleanMerchantName(tx.creditor_name) ?? "transaction"}`}
-          disabled={saving}
-          className="-m-2 inline-flex min-h-11 cursor-pointer items-center p-2 disabled:opacity-60"
+          aria-disabled={saving || undefined}
+          aria-busy={saving || undefined}
+          className="-m-2 inline-flex min-h-11 cursor-pointer items-center p-2 aria-disabled:cursor-default aria-disabled:opacity-60"
         >
           {variant === "icon" ? (
-            <span className="rounded-sm transition-opacity hover:opacity-80">
+            <span className="relative rounded-sm transition-opacity [:not([aria-disabled])>&]:hover:opacity-80">
               <CategoryAvatar category={tx.category} />
+              {/* Over the icon, so the chip keeps its size. */}
+              {saving && (
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <SavingSpinner />
+                </span>
+              )}
             </span>
           ) : tx.category ? (
             <span
@@ -48,10 +62,12 @@ export function CategoryPicker({
                 style={{ backgroundColor: categoryColor(tx.category) }}
               />
               {tx.category}
+              {saving && <SavingSpinner />}
             </span>
           ) : (
-            <span className="inline-flex min-w-24 justify-center rounded-sm border border-dashed px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent">
+            <span className="inline-flex min-w-24 items-center justify-center gap-1.5 rounded-sm border border-dashed px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent">
               Uncategorized
+              {saving && <SavingSpinner />}
             </span>
           )}
         </button>
@@ -133,21 +149,25 @@ export function TypePicker({
   const [open, setOpen] = useState(false);
 
   return (
-    <Popover modal open={open} onOpenChange={setOpen}>
+    // Locked while a save is pending (polish-3 F8), but with aria-disabled and this guard instead
+    // of native disabled: a disabled trigger can't take focus back, so it fell to <body>.
+    <Popover modal open={open} onOpenChange={(next) => setOpen(next && saving ? false : next)}>
       <PopoverTrigger asChild>
         <button
           type="button"
           aria-label={`Change type for ${cleanMerchantName(tx.creditor_name) ?? "transaction"}`}
-          disabled={saving}
-          className="-m-2 inline-flex min-h-11 cursor-pointer items-center p-2 disabled:opacity-60"
+          aria-disabled={saving || undefined}
+          aria-busy={saving || undefined}
+          className="-m-2 inline-flex min-h-11 cursor-pointer items-center p-2 aria-disabled:cursor-default aria-disabled:opacity-60"
         >
           {tx.transaction_type ? (
-            <span className="inline-flex min-w-24 justify-center rounded-sm border border-border bg-card px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent">
+            <span className="inline-flex min-w-24 items-center justify-center gap-1.5 rounded-sm border border-border bg-card px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent">
               {tx.transaction_type}
+              {saving && <SavingSpinner />}
             </span>
           ) : (
-            <span className="inline-flex min-w-24 justify-center rounded-sm border border-dashed px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent">
-              —
+            <span className="inline-flex min-w-24 items-center justify-center gap-1.5 rounded-sm border border-dashed px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent">
+              —{saving && <SavingSpinner />}
             </span>
           )}
         </button>
@@ -160,13 +180,17 @@ export function TypePicker({
               type="button"
               onClick={() => {
                 setOpen(false);
-                if (t !== tx.transaction_type) onSelect(t);
+                // Every pick saves, the same type too: that is how you claim a type the AI set.
+                onSelect(t);
               }}
-              className={`block min-h-11 w-full rounded-sm px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-accent ${
+              // The current type: a check like the frequency picker's, and a state screen readers hear.
+              aria-pressed={t === tx.transaction_type}
+              className={`flex min-h-11 w-full items-center justify-between rounded-sm px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-accent ${
                 t === tx.transaction_type ? "font-medium text-primary" : "text-foreground"
               }`}
             >
               {t}
+              {t === tx.transaction_type && <Check className="size-4 text-primary" />}
             </button>
           ))}
         </div>

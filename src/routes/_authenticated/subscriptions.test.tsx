@@ -1,12 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 
 type Row = Record<string, unknown>;
-const { db, rpc, toast } = vi.hoisted(() => ({
-  db: { rows: [] as Array<Row>, error: null as Error | null },
+const { db, rpc, invoke, toast } = vi.hoisted(() => ({
+  db: {
+    rows: [] as Array<Row>,
+    error: null as Error | null,
+    // Set to hold the next reads back until it resolves.
+    gate: null as Promise<void> | null,
+  },
   rpc: vi.fn(),
+  invoke: vi.fn(),
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
@@ -20,7 +26,13 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     rpc,
-    from: () => ({ select: () => Promise.resolve({ data: db.rows, error: db.error }) }),
+    functions: { invoke },
+    from: () => ({
+      select: async () => {
+        if (db.gate) await db.gate;
+        return { data: db.rows, error: db.error };
+      },
+    }),
   },
 }));
 
@@ -88,6 +100,8 @@ beforeEach(() => {
   url.search = {};
   localStorage.setItem("mf.subscriptionsReveal.seen", "1"); // keep the one-time reveal out of these tests
   db.error = null;
+  db.gate = null;
+  invoke.mockResolvedValue({ data: { streams: 2 }, error: null });
   db.rows = [
     stream({}),
     stream({
@@ -116,6 +130,179 @@ beforeEach(() => {
 });
 
 describe("Subscriptions page", () => {
+  // Thread "Sync transaction edits to subscriptions": a transaction renamed (or marked One-time)
+  // still showed its old subscription until the 6-hour detection run.
+  it("re-checks your subscriptions when it opens, so transaction edits show at once", async () => {
+    invoke.mockImplementation(async () => {
+      db.rows = db.rows.map((r) => (r["id"] === "s1" ? { ...r, display_name: "iCloud" } : r));
+      return { data: { streams: 2 }, error: null };
+    });
+    renderPage();
+    expect(await screen.findByText("iCloud")).toBeInTheDocument();
+    expect(screen.queryByText("Streamflix")).not.toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledWith("refresh-recurring", { body: {} });
+  });
+
+  it("keeps the saved list, with no error, when the re-check fails (demo, offline, older backend)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    invoke.mockResolvedValue({ data: null, error: new Error("FunctionsFetchError") });
+    renderPage();
+    expect(await screen.findByText("Streamflix")).toBeInTheDocument();
+    await waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(toast.error).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  // Polish 1 #5: neither guard on the re-check's refetch had a test.
+  it("does not refetch when the re-check didn't run", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    invoke.mockResolvedValue({ data: null, error: new Error("FunctionsFetchError") });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = vi.spyOn(client, "invalidateQueries");
+    render(
+      <QueryClientProvider client={client}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    await screen.findByText("Streamflix");
+    await waitFor(() => expect(warn).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(spy).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("leaves the refetch to an action still in flight when the re-check ends", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const page = (
+      <QueryClientProvider client={client}>
+        <Page />
+      </QueryClientProvider>
+    );
+    // Row actions wait for the re-check (polish-3 F2), so the action in flight is an Undo from
+    // an earlier visit: remove, leave, come back, tap Undo while the new re-check runs.
+    const first = render(page);
+    const remove = await screen.findByRole("button", { name: "Remove Streamflix" });
+    await waitFor(() => expect(remove).toBeEnabled());
+    fireEvent.click(remove);
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    const undo = (toast.success.mock.calls[0]![1] as { action: { onClick: () => void } }).action;
+    await waitFor(() => expect(client.isMutating()).toBe(0));
+    first.unmount();
+
+    let finishCheck!: () => void;
+    invoke.mockImplementation(
+      () => new Promise((res) => (finishCheck = () => res({ data: { streams: 1 }, error: null }))),
+    );
+    let finishAction!: () => void;
+    rpc.mockImplementation(() => new Promise((res) => (finishAction = () => res({ error: null }))));
+    const spy = vi.spyOn(client, "invalidateQueries");
+    render(page);
+    await screen.findByText("Checking your transactions…");
+    undo.onClick();
+    await waitFor(() => expect(rpc).toHaveBeenCalledTimes(2));
+    finishCheck();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(spy).not.toHaveBeenCalled();
+    finishAction();
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+  });
+
+  // polish-3 F2: rows can move when the re-check lands, so a tap mustn't hit the row below.
+  it("says it's checking and locks the row actions until the re-check lands", async () => {
+    let finishCheck!: () => void;
+    invoke.mockImplementation(
+      () => new Promise((res) => (finishCheck = () => res({ data: { streams: 2 }, error: null }))),
+    );
+    db.rows.push(stream({ id: "s3", display_name: "Oldtube", user_status: "dismissed" }));
+    renderPage();
+    const remove = await screen.findByRole("button", { name: "Remove Streamflix" });
+    const confirm = screen.getByRole("button", { name: "Confirm Cloudbox" });
+    // Re-audit F2b: every row action waits, Restore and the frequency picker too.
+    const restore = screen.getByRole("button", { name: "Restore Oldtube" });
+    const frequency = screen.getByTitle("Monthly — auto-detected");
+    expect(restore).toBeDisabled();
+    expect(frequency).toBeDisabled();
+    // polish-4 #1: no live region (it was never announced); aria-busy says it instead.
+    expect(await screen.findByText("Checking your transactions…")).not.toHaveAttribute("aria-live");
+    expect(screen.getByTestId("subscriptions-content")).toHaveAttribute("aria-busy", "true");
+    expect(remove).toBeDisabled();
+    expect(confirm).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cloudbox is not a subscription" })).toBeDisabled();
+    fireEvent.click(remove);
+    expect(rpc).not.toHaveBeenCalled();
+
+    finishCheck();
+    await waitFor(() =>
+      expect(screen.queryByText("Checking your transactions…")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("subscriptions-content")).toHaveAttribute("aria-busy", "false");
+    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Confirm Cloudbox" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Restore Oldtube" })).toBeEnabled();
+    expect(screen.getByTitle("Monthly — auto-detected")).toBeEnabled();
+  });
+
+  // Re-audit F2b: unlocking before the refetch lands would let the rows move under a tap.
+  it("keeps the row actions locked until the fresh list is on screen", async () => {
+    let finishCheck!: () => void;
+    invoke.mockImplementation(
+      () => new Promise((res) => (finishCheck = () => res({ data: { streams: 2 }, error: null }))),
+    );
+    renderPage();
+    await screen.findByText("Streamflix");
+    let openRead!: () => void;
+    db.gate = new Promise<void>((r) => (openRead = r));
+    db.rows = db.rows.map((r) => (r["id"] === "s1" ? { ...r, display_name: "iCloud" } : r));
+    finishCheck();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await screen.findByText("Checking your transactions…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeDisabled();
+
+    openRead();
+    expect(await screen.findByText("iCloud")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Remove iCloud" })).toBeEnabled(),
+    );
+    expect(screen.queryByText("Checking your transactions…")).not.toBeInTheDocument();
+  });
+
+  it("unlocks the row actions when the re-check fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    invoke.mockResolvedValue({ data: null, error: new Error("FunctionsFetchError") });
+    renderPage();
+    await screen.findByText("Streamflix");
+    await waitFor(() =>
+      expect(screen.queryByText("Checking your transactions…")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+    warn.mockRestore();
+  });
+
+  it("a rate-limited re-check (429) keeps the list and unlocks without a warning", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    invoke.mockResolvedValue({ data: null, error: { context: { status: 429 } } });
+    renderPage();
+    await screen.findByText("Streamflix");
+    await waitFor(() =>
+      expect(screen.queryByText("Checking your transactions…")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  // polish-3 F3: wait for the list itself, or the check runs before any row is drawn.
+  it("a stream no longer found (gone) is not listed", async () => {
+    db.rows = [
+      stream({ detected_status: "gone", user_status: "confirmed" }),
+      stream({ id: "s2", display_name: "Cloudbox", user_status: "confirmed" }),
+    ];
+    renderPage();
+    expect(await screen.findByText("Cloudbox")).toBeInTheDocument();
+    expect(screen.queryByText("Streamflix")).not.toBeInTheDocument();
+  });
+
   // iOS view board: page titles read like Net Worth's (white semibold), not a grey label.
   it("titles the page like Net Worth", async () => {
     renderPage();
@@ -241,6 +428,17 @@ describe("Subscriptions page", () => {
     expect(screen.queryByLabelText("Estimated monthly cost")).toBeNull();
   });
 
+  // polish-4 #7: charges marked One-time move a stream to Stopped, where "No recent charge." was
+  // untrue. fails_when=the hint claims there was no recent charge at all
+  it("explains Stopped as no recent subscription charge", async () => {
+    db.rows = [stream({ last_charged: "2020-01-01", next_expected: "2020-02-01" })];
+    renderPage();
+    expect(
+      await screen.findByText("No recent subscription charge. Not counted."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("No recent charge. Not counted.")).toBeNull();
+  });
+
   it("shows the native amount for a non-EUR stream and a dash without a monthly amount", async () => {
     db.rows = [
       stream({ currency: "USD", typical_amount: 12, typical_amount_eur: 11 }),
@@ -283,13 +481,15 @@ describe("Subscriptions page", () => {
     const resolvers: Array<() => void> = [];
     rpc.mockImplementation(() => new Promise((res) => resolvers.push(() => res({ error: null }))));
     db.rows = [stream({ id: "a", display_name: "Aaa" }), stream({ id: "b", display_name: "Bbb" })];
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const spy = vi.spyOn(client, "invalidateQueries");
     render(
       <QueryClientProvider client={client}>
         <Page />
       </QueryClientProvider>,
     );
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1)); // the re-check on open
+    spy.mockClear();
     fireEvent.click(await screen.findByRole("button", { name: "Remove Aaa" }));
     fireEvent.click(await screen.findByRole("button", { name: "Remove Bbb" }));
     await waitFor(() => expect(resolvers).toHaveLength(2));
@@ -494,5 +694,286 @@ describe("List / Calendar", () => {
     expect(cell.getAttribute("aria-label")).not.toMatch(/Cloudbox|Gonebox/);
     const grid = screen.getByRole("table");
     expect(grid.innerHTML).not.toMatch(/Cloudbox|Gonebox/);
+  });
+});
+
+// polish-4 #1: the status line flashed on every open (~125 ms) and dimmed every action. Now the
+// lock starts at once but the text and the dim wait ~300 ms. fails_when=the text shows (or the
+// actions unlock) before 300 ms, or the text stays after the check settles
+describe("Checking status", () => {
+  afterEach(() => vi.useRealTimers());
+  const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+  const CHECKING = "Checking your transactions…";
+  const holdCheck = () => {
+    let finish!: () => void;
+    invoke.mockImplementation(
+      () => new Promise((res) => (finish = () => res({ data: { streams: 2 }, error: null }))),
+    );
+    return () => finish();
+  };
+
+  it("under 300 ms: no text, no dim, but the actions are already locked", async () => {
+    vi.useFakeTimers();
+    holdCheck();
+    renderPage();
+    await advance(0);
+    const content = screen.getByTestId("subscriptions-content");
+    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Confirm Cloudbox" })).toBeDisabled();
+    expect(content).toHaveAttribute("aria-busy", "true");
+    await advance(290);
+    expect(screen.queryByText(CHECKING)).not.toBeInTheDocument();
+    expect(content).toHaveClass("[&_:disabled]:!opacity-100");
+  });
+
+  it("from 300 ms: says it's checking your transactions and dims the locked actions", async () => {
+    vi.useFakeTimers();
+    holdCheck();
+    renderPage();
+    await advance(300);
+    const line = screen.getByText(CHECKING);
+    expect(line).not.toHaveAttribute("aria-live");
+    expect(screen.getByTestId("subscriptions-content")).not.toHaveClass(
+      "[&_:disabled]:!opacity-100",
+    );
+    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeDisabled();
+  });
+
+  it("sits under the List/Calendar switch, next to what it blocks", async () => {
+    vi.useFakeTimers();
+    holdCheck();
+    renderPage();
+    await advance(300);
+    const view = screen.getByRole("radiogroup", { name: "View" });
+    const line = screen.getByText(CHECKING);
+    expect(view.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("banner")).not.toContainElement(line);
+  });
+
+  it("is gone, and the actions unlock, once the check settles", async () => {
+    vi.useFakeTimers();
+    const finish = holdCheck();
+    renderPage();
+    await advance(400);
+    expect(screen.getByText(CHECKING)).toBeInTheDocument();
+    finish();
+    await advance(50);
+    expect(screen.queryByText(CHECKING)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+    expect(screen.getByTestId("subscriptions-content")).toHaveAttribute("aria-busy", "false");
+    // #1b: outside a check, controls a later action disables dim as usual (no override).
+    expect(screen.getByTestId("subscriptions-content")).not.toHaveClass(
+      "[&_:disabled]:!opacity-100",
+    );
+  });
+
+  it("a check that settles under 300 ms never shows the text", async () => {
+    vi.useFakeTimers();
+    const finish = holdCheck();
+    renderPage();
+    await advance(100);
+    finish();
+    await advance(500);
+    expect(screen.queryByText(CHECKING)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+    expect(screen.getByTestId("subscriptions-content")).not.toHaveClass(
+      "[&_:disabled]:!opacity-100",
+    );
+  });
+
+  it("marks the calendar busy too while checking, and not once settled", async () => {
+    vi.useFakeTimers();
+    url.search = { view: "calendar" };
+    const finish = holdCheck();
+    renderPage();
+    await advance(0);
+    const cal = screen.getByTestId("subscriptions-calendar");
+    expect(cal).toHaveAttribute("aria-busy", "true");
+    finish();
+    await advance(50);
+    expect(cal).toHaveAttribute("aria-busy", "false");
+  });
+});
+
+// polish-4 #2: a locked frequency picker still lit up on hover and showed its tooltip, so it looked
+// clickable. fails_when=the locked picker still takes the pointer, like the shared Button doesn't
+describe("Locked frequency picker", () => {
+  it("takes no pointer while disabled, like the shared Button", async () => {
+    invoke.mockImplementation(() => new Promise(() => {}));
+    renderPage();
+    const picker = await screen.findByTitle("Monthly — auto-detected");
+    expect(picker).toBeDisabled();
+    expect(picker).toHaveClass("disabled:pointer-events-none");
+  });
+});
+
+// polish-4 #8: inside the server's 5 s window (429) the list kept the saved data while the
+// calendar already showed the change. fails_when=a 429 isn't retried once after the window, or the
+// retry still goes out after the page has closed
+describe("Re-check after a rate limit", () => {
+  // Drop any once-answers a test left unused (clearAllMocks keeps them).
+  beforeEach(() => {
+    invoke.mockReset();
+    invoke.mockResolvedValue({ data: { streams: 2 }, error: null });
+  });
+  afterEach(() => vi.useRealTimers());
+  const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+  const limitedThenRenamed = () =>
+    invoke
+      .mockResolvedValueOnce({ data: null, error: { context: { status: 429 } } })
+      .mockImplementationOnce(async () => {
+        db.rows = db.rows.map((r) => (r["id"] === "s1" ? { ...r, display_name: "iCloud" } : r));
+        return { data: { streams: 2 }, error: null };
+      });
+
+  it("retries once after the window and shows the fresh list", async () => {
+    vi.useFakeTimers();
+    limitedThenRenamed();
+    renderPage();
+    await advance(100);
+    expect(screen.getByText("Streamflix")).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledTimes(1);
+    await advance(5_000);
+    await advance(100);
+    expect(invoke).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("iCloud")).toBeInTheDocument();
+    await advance(10_000);
+    expect(invoke).toHaveBeenCalledTimes(2);
+  });
+
+  it("sends no retry once the page has closed", async () => {
+    vi.useFakeTimers();
+    limitedThenRenamed();
+    const { unmount } = renderPage();
+    await advance(100);
+    unmount();
+    await advance(10_000);
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends no retry when the page closes before the 429 comes back", async () => {
+    vi.useFakeTimers();
+    let answer!: () => void;
+    invoke.mockImplementationOnce(
+      () =>
+        new Promise((res) => {
+          answer = () => res({ data: null, error: { context: { status: 429 } } });
+        }),
+    );
+    const { unmount } = renderPage();
+    await advance(10);
+    unmount();
+    answer();
+    await advance(10_000);
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("doesn't retry a check that ran, or one that failed for another reason", async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    invoke.mockResolvedValueOnce({ data: null, error: new Error("FunctionsFetchError") });
+    renderPage();
+    await advance(10_000);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+});
+
+// polish-4 #9: when the re-check removed a row it vanished with no word, and removing the last
+// active stream also dropped the total block (~125 px jump). fails_when=a changed list gets no
+// "Updated" note (or an unchanged one does), the note never goes, or the total block disappears
+// mid-visit
+describe("After a re-check that changed the list", () => {
+  afterEach(() => vi.useRealTimers());
+  const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+  const checkRemoves = (id: string) =>
+    invoke.mockImplementation(async () => {
+      db.rows = db.rows.filter((r) => r["id"] !== id);
+      return { data: { streams: 1 }, error: null };
+    });
+
+  it("says Updated for about 3 s", async () => {
+    vi.useFakeTimers();
+    let finish!: () => void;
+    invoke.mockImplementation(
+      () =>
+        new Promise((res) => {
+          finish = () => {
+            db.rows = db.rows.filter((r) => r["id"] !== "s2");
+            res({ data: { streams: 1 }, error: null });
+          };
+        }),
+    );
+    renderPage();
+    await advance(50);
+    expect(screen.getByText("Cloudbox")).toBeInTheDocument();
+    finish();
+    await advance(50);
+    expect(screen.queryByText("Cloudbox")).not.toBeInTheDocument();
+    expect(screen.getByText("Updated")).toBeInTheDocument();
+    await advance(2_900);
+    expect(screen.getByText("Updated")).toBeInTheDocument();
+    await advance(200);
+    expect(screen.queryByText("Updated")).not.toBeInTheDocument();
+  });
+
+  it("says nothing when the check changed nothing", async () => {
+    vi.useFakeTimers();
+    renderPage();
+    await advance(100);
+    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+    expect(screen.queryByText("Updated")).not.toBeInTheDocument();
+  });
+
+  it("keeps the total block, at €0, when the last active stream goes", async () => {
+    db.rows = [stream({ user_status: "confirmed" })];
+    db.rows.push(stream({ id: "s3", display_name: "Oldtube", user_status: "dismissed" }));
+    let finish!: () => void;
+    invoke.mockImplementation(
+      () =>
+        new Promise((res) => {
+          finish = () => {
+            db.rows = db.rows.filter((r) => r["id"] !== "s1");
+            res({ data: { streams: 1 }, error: null });
+          };
+        }),
+    );
+    renderPage();
+    expect(await screen.findByText("~€10.00")).toBeInTheDocument();
+    finish();
+    await waitFor(() => expect(screen.queryByText("Streamflix")).not.toBeInTheDocument());
+    const total = screen.getByLabelText("Estimated monthly cost");
+    expect(total).toHaveTextContent("€0.00");
+    expect(total).not.toHaveTextContent("—");
+  });
+
+  it("still leaves the total out on a visit that never had an active stream", async () => {
+    db.rows = [stream({ id: "s3", display_name: "Oldtube", user_status: "dismissed" })];
+    checkRemoves("none");
+    renderPage();
+    await screen.findByText("Dismissed (1)");
+    expect(screen.queryByLabelText("Estimated monthly cost")).toBeNull();
+  });
+});
+
+// polish-4 #10: "No subscription charges found yet." showed while To review or Dismissed still
+// had rows. fails_when=the first-run empty state shows beside other groups, or an empty active
+// list says nothing
+describe("Empty active list", () => {
+  it("says no active subscriptions when other groups still have rows", async () => {
+    db.rows = [
+      stream({ id: "s2", display_name: "Cloudbox", detected_status: "suggested" }),
+      stream({ id: "s3", display_name: "Oldtube", user_status: "dismissed" }),
+    ];
+    renderPage();
+    expect(await screen.findByText("No active subscriptions right now.")).toBeInTheDocument();
+    expect(screen.queryByText("No subscription charges found yet.")).toBeNull();
+  });
+
+  it("keeps the first-run empty state when every group is empty", async () => {
+    db.rows = [];
+    renderPage();
+    expect(await screen.findByText("No subscription charges found yet.")).toBeInTheDocument();
+    expect(screen.queryByText("No active subscriptions right now.")).toBeNull();
   });
 });

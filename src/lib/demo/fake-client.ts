@@ -1,7 +1,7 @@
-import { formatISODate } from "@/lib/date";
+import { addDays, formatISODate } from "@/lib/date";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
-import { DEMO_USER_ID, generateDemoData, type DemoDb } from "./generate";
+import { DEMO_USER_ID, PERIOD_DAYS, generateDemoData, type DemoDb } from "./generate";
 import { demoHoldingPerformance } from "./performance";
 import { deriveViews } from "./views";
 import { onDemoExit } from "./mode";
@@ -571,6 +571,38 @@ class Store {
     }
     this.refresh();
     return count;
+  }
+  // Each stream's status as generated, so one marked gone comes back when it is charged again.
+  private readonly detected = new Map<unknown, unknown>();
+  /** Like refresh-recurring's detector: it skips charges you set One-time yourself, so a stream
+   * left with none of its charges is gone, and one left with some is dated and rated from those. */
+  refreshStreams(): Result {
+    const txs = this.db["transactions"]!;
+    const streams = this.db["recurring_streams"]!;
+    for (const s of streams) {
+      if (!this.detected.has(s["id"])) this.detected.set(s["id"], s["detected_status"]);
+      const charges = txs.filter(
+        (t) => t["merchant_key"] === s["merchant_key"] && t["account_uid"] === s["account_uid"],
+      );
+      const counted = charges.filter(
+        (t) => !(t["transaction_type"] === "One-time" && t["transaction_type_source"] === "manual"),
+      );
+      const allMine = charges.length > 0 && counted.length === 0;
+      // One charge left has no rhythm, so the detector only suggests it (your own choice is kept).
+      const days = new Set(counted.map((t) => t["booking_date"])).size;
+      s["detected_status"] = allMine
+        ? "gone"
+        : days === 1
+          ? "suggested"
+          : this.detected.get(s["id"]);
+      if (counted.length === 0) continue;
+      // As the demo seeds it: the newest charge left, plus one period of the stream's cadence.
+      const last = counted.map((t) => t["booking_date"] as string).sort()[counted.length - 1]!;
+      s["last_charged"] = last;
+      s["next_expected"] = addDays(last, PERIOD_DAYS[s["cadence"] as string] ?? 30);
+    }
+    const found = streams.filter((s) => s["detected_status"] !== "gone").length;
+    return { data: { streams: found }, error: null };
   }
   /** Mirror of the database function stream_action: an {error} where the SQL raises. */
   streamAction(id: unknown, action: unknown, args: Row = {}): Result {
@@ -1206,8 +1238,10 @@ export function createFakeClient(now: Date = new Date()): SupabaseClient<Databas
               ? { data: { rows: demoStatementRows(now) }, error: null }
               : name === "reapply-rules"
                 ? { data: { changes: 0, sample: [] }, error: null } // demo rows already follow its rules
-                : // With a body, callers show "Disabled in the demo.", not their fallback (#148).
-                  functionError(403, DISABLED.message),
+                : name === "refresh-recurring"
+                  ? store.refreshStreams()
+                  : // With a body, callers show "Disabled in the demo.", not their fallback (#148).
+                    functionError(403, DISABLED.message),
     },
     auth: {
       getSession: async () => ({ data: { session }, error: null }),

@@ -97,6 +97,7 @@ function tx(
     settled_by_account: null,
     settled_by_ref: null,
     transaction_type: "One-time",
+    transaction_type_source: null,
     user_id: DEMO_USER_ID,
     value_date: p.booking_date,
     worth_it: null,

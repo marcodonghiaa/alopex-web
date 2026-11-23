@@ -152,3 +152,20 @@ describe("Sheet focus", () => {
     await waitFor(() => expect(open).toHaveFocus());
   });
 });
+
+// polish-4 X1: a `relative` SheetHeader comes later in the DOM and paints over the absolute X, so
+// a click or tap lands on the header. fails_when=the X isn't stacked above the sheet's content
+describe("Sheet close button", () => {
+  it("sits above the sheet's content", () => {
+    render(<Page />);
+    fireEvent.click(screen.getByText("Open"));
+    expect(screen.getByRole("button", { name: "Close" })).toHaveClass("z-10");
+  });
+
+  it("closes the sheet when clicked", async () => {
+    render(<Page />);
+    fireEvent.click(screen.getByText("Open"));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+});

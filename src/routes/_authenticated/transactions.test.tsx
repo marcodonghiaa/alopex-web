@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -10,9 +10,11 @@ let tableData: Record<string, unknown> = {};
 // Every select the page sends, to check which columns each query asks for.
 const selects: Array<{ table: string; cols: string }> = [];
 let rpcResult: { data: unknown; error: { message: string } | null } = { data: [], error: null };
+const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     rpc: () => Promise.resolve(rpcResult),
+    functions: { invoke },
     from: (table: string) => {
       const q: Record<string, unknown> = {};
       for (const m of [
@@ -950,5 +952,154 @@ describe("Paid for others", () => {
     renderPage();
     await screen.findAllByText("Shop 1");
     expect(screen.queryByRole("button", { name: /paid for others/ })).toBeNull();
+  });
+});
+
+// polish-4 #5: after a type save the nav badge ("Subscriptions 1 to review") stayed stale until
+// Subscriptions was opened. fails_when=a type save doesn't re-check subscriptions and refetch them
+describe("Type save and subscriptions", () => {
+  const bankRow = {
+    entry_reference: "e1",
+    account_uid: "a1",
+    booking_date: new Date().toISOString().slice(0, 10),
+    category: "Entertainment",
+    transaction_type: "Subscription",
+    creditor_name: "Streamflix",
+    currency: "EUR",
+    amount: 9.99,
+    signed_amount_eur: -9.99,
+    credit_debit_indicator: "DBIT",
+    flow_type: "spend",
+  };
+  const saveType = async (client: QueryClient) => {
+    rows["v_transactions_eur"] = [bankRow];
+    renderPage(client);
+    const [card] = await screen.findAllByRole("button", { name: /Streamflix/ });
+    await userEvent.click(card!);
+    const sheet = await screen.findByRole("dialog");
+    await userEvent.click(within(sheet).getByRole("button", { name: /Change type/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "One-time" }));
+  };
+  afterEach(() => invoke.mockReset());
+
+  it("re-checks subscriptions, then refetches the recurring streams", async () => {
+    const order: Array<string> = [];
+    invoke.mockImplementation(async (fn: string) => {
+      order.push(`invoke ${fn}`);
+      return { data: { streams: 1 }, error: null };
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = vi.spyOn(client, "invalidateQueries").mockImplementation(async (f) => {
+      if (JSON.stringify(f?.queryKey) === JSON.stringify(["recurring_streams"]))
+        order.push("refetch recurring_streams");
+    });
+    await saveType(client);
+    await waitFor(() =>
+      expect(order).toEqual(["invoke refresh-recurring", "refetch recurring_streams"]),
+    );
+    spy.mockRestore();
+  });
+
+  it("doesn't re-check when the type save fails", async () => {
+    failTable = "transactions";
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    try {
+      await saveType(client);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(invoke).not.toHaveBeenCalled();
+    } finally {
+      failTable = null;
+    }
+  });
+
+  it("still refetches when the re-check is rate limited (429)", async () => {
+    invoke.mockResolvedValue({ data: null, error: { context: { status: 429 } } });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = vi.spyOn(client, "invalidateQueries");
+    await saveType(client);
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ["recurring_streams"] }));
+  });
+
+  // polish-5 E3: a 429 (server allows one re-check per 5 s) was never retried, so the nav badge
+  // stayed stale. fails_when=no second re-check after the window, a ran/failed check is retried,
+  // or a retry fires after the page closed
+  describe("re-check after a rate limit", () => {
+    afterEach(() => vi.useRealTimers());
+    const LIMITED = { data: null, error: { context: { status: 429 } } };
+    // Save with real timers, then switch to fake ones before the first answer comes back.
+    const saveThenAnswer = async (first: unknown) => {
+      let answer!: () => void;
+      invoke.mockImplementationOnce(() => new Promise((res) => (answer = () => res(first))));
+      invoke.mockResolvedValue({ data: { streams: 1 }, error: null });
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const spy = vi.spyOn(client, "invalidateQueries");
+      await saveType(client);
+      await waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
+      vi.useFakeTimers();
+      return { spy, answer };
+    };
+    const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+    const recurringRefetches = (spy: { mock: { calls: Array<Array<unknown>> } }) =>
+      spy.mock.calls.filter(
+        ([f]) =>
+          JSON.stringify((f as { queryKey?: unknown })?.queryKey) === '["recurring_streams"]',
+      ).length;
+
+    it("retries once after 5 s, then refetches the recurring streams", async () => {
+      const { spy, answer } = await saveThenAnswer(LIMITED);
+      answer();
+      await advance(4_900);
+      expect(invoke).toHaveBeenCalledTimes(1);
+      const before = recurringRefetches(spy);
+      await advance(200);
+      expect(invoke).toHaveBeenCalledTimes(2);
+      expect(recurringRefetches(spy)).toBe(before + 1);
+      await advance(10_000);
+      expect(invoke).toHaveBeenCalledTimes(2);
+    });
+
+    it("stops after one retry, even when the retry is rate limited too", async () => {
+      const { answer } = await saveThenAnswer(LIMITED);
+      invoke.mockResolvedValue(LIMITED);
+      answer();
+      await advance(5_100);
+      expect(invoke).toHaveBeenCalledTimes(2);
+      await advance(30_000);
+      expect(invoke).toHaveBeenCalledTimes(2);
+    });
+
+    it("doesn't retry a check that ran", async () => {
+      const { answer } = await saveThenAnswer({ data: { streams: 1 }, error: null });
+      answer();
+      await advance(10_000);
+      expect(invoke).toHaveBeenCalledTimes(1);
+    });
+
+    it("doesn't retry a check that failed for another reason", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const { answer } = await saveThenAnswer({ data: null, error: new Error("Load failed") });
+      answer();
+      await advance(10_000);
+      expect(invoke).toHaveBeenCalledTimes(1);
+      warn.mockRestore();
+    });
+
+    it("sends no retry once the page has closed", async () => {
+      const { answer } = await saveThenAnswer(LIMITED);
+      answer();
+      await advance(100);
+      cleanup();
+      await advance(10_000);
+      expect(invoke).toHaveBeenCalledTimes(1);
+    });
+
+    it("sends no retry when the page closes before the 429 comes back", async () => {
+      await saveThenAnswer(LIMITED).then(({ answer }) => {
+        cleanup();
+        answer();
+      });
+      await advance(10_000);
+      expect(invoke).toHaveBeenCalledTimes(1);
+    });
   });
 });

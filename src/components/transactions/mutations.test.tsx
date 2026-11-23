@@ -164,6 +164,32 @@ describe("success toast action", () => {
   });
 });
 
+// Type audit P1: picking a type marks it as yours, even the type the charge already has, so the
+// sync, rules and AI keep it and subscription detection honours it.
+describe("type saves", () => {
+  it("sends the type with source manual and updates the cached row", async () => {
+    const { queryClient, wrapper, cached } = setup();
+    const { result } = renderHook(
+      () =>
+        useTransactionFieldMutation(queryClient, MONTH, "transaction_type", {
+          errorMessage: "fail",
+        }),
+      { wrapper },
+    );
+    await act(() =>
+      result.current.mutateAsync({
+        tx: { account_uid: "a1", entry_reference: "r1" },
+        value: "One-time",
+      }),
+    );
+    expect(calls[0]?.update).toEqual({
+      transaction_type: "One-time",
+      transaction_type_source: "manual",
+    });
+    expect(cached().map((r) => r.transaction_type)).toEqual(["One-time", null]);
+  });
+});
+
 // protects=a note or tags save sends only that column for that one row, rolls back on failure and
 // then reloads the month so a save made just before isn't lost;
 // fails_when=the patch carries other columns, or a failed save leaves the month unreloaded
@@ -197,6 +223,8 @@ describe("note and tags saves", () => {
     expect(calls[0]?.update).toEqual({ note: "hi" });
     expect(calls[0]?.eq).toEqual({ account_uid: "a1", entry_reference: "r1" });
     expect(cached().map((r) => r.note)).toEqual(["hi", null]);
+    // polish-3 F5: a note save changes only the note in the cache, never the type or its source.
+    expect(cached()[0]).toEqual({ ...row("a1", "r1"), note: "hi" });
   });
 
   // polish-3 #1: two quick tag adds must reach the database in order, or the older list can land last

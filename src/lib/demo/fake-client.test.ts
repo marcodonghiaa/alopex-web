@@ -4,6 +4,24 @@ import { DEMO_USER_ID } from "./generate";
 import { functionErrorMessage } from "@/lib/function-error";
 import { groupStreams } from "@/lib/recurring";
 import type { Tables } from "@/integrations/supabase/types";
+import { billEntries, monthBounds, type ChargeTx } from "@/lib/recurring-calendar";
+import { addDays } from "@/lib/date";
+
+// Lets one test change the generated demo data (e.g. a stream's cadence) before the client loads it.
+const seed = vi.hoisted(() => ({
+  hook: undefined as undefined | ((db: Record<string, Array<Record<string, unknown>>>) => void),
+}));
+vi.mock("./generate", async (orig) => {
+  const m = await orig<typeof import("./generate")>();
+  return {
+    ...m,
+    generateDemoData: (...a: Parameters<typeof m.generateDemoData>) => {
+      const db = m.generateDemoData(...a);
+      seed.hook?.(db as unknown as Record<string, Array<Record<string, unknown>>>);
+      return db;
+    },
+  };
+});
 
 const NOW = new Date(2026, 9, 19, 12);
 const fresh = () => createFakeClient(NOW);
@@ -852,6 +870,218 @@ describe("fake client: reapply-rules", () => {
     )("reapply-rules", { body: { apply: false } });
     expect(error).toBeNull();
     expect(data).toEqual({ changes: 0, sample: [] });
+  });
+});
+
+// Polish 1 #7: every Subscriptions visit in the demo logged a refresh-recurring 403.
+describe("fake client: refresh-recurring", () => {
+  it("answers the Subscriptions page's re-check without an error", async () => {
+    const { data, error } = await (
+      fresh().functions.invoke as unknown as (
+        n: string,
+        o: object,
+      ) => Promise<{ data: unknown; error: unknown }>
+    )("refresh-recurring", { body: {} });
+    expect(error).toBeNull();
+    expect(data).toEqual({ streams: expect.any(Number) }); // the streams it found
+  });
+
+  // polish-3 F7: like the detector, a stream whose charges you all marked One-time is gone.
+  type Invoke = (n: string, o: object) => Promise<unknown>;
+  const recheck = (c: ReturnType<typeof fresh>) =>
+    (c.functions.invoke as unknown as Invoke)("refresh-recurring", { body: {} });
+  const listed = async (c: ReturnType<typeof fresh>) => {
+    const g = groupStreams(
+      ((await c.from("recurring_streams").select("*")).data ?? []) as Array<
+        Tables<"recurring_streams">
+      >,
+      NOW,
+    );
+    return [...g.toReview, ...g.active, ...g.stopped, ...g.dismissed].map((s) => s.id);
+  };
+  const setup = async () => {
+    const c = fresh();
+    const { data } = await c.from("recurring_streams").select("*");
+    const s = groupStreams(data as Array<Tables<"recurring_streams">>, NOW).active[0]!;
+    const charges = () =>
+      c
+        .from("transactions")
+        .update({ transaction_type: "One-time", transaction_type_source: "manual" })
+        .eq("merchant_key", s.merchant_key!)
+        .eq("account_uid", s.account_uid!);
+    const { data: rows } = await c
+      .from("transactions")
+      .select("entry_reference")
+      .eq("merchant_key", s.merchant_key!)
+      .eq("account_uid", s.account_uid!);
+    expect(rows!.length).toBeGreaterThan(1);
+    return { c, s, charges, refs: rows!.map((r) => r.entry_reference) };
+  };
+
+  it("drops a stream once you mark all its charges One-time, and brings it back after", async () => {
+    const { c, s, charges } = await setup();
+    const others = (await listed(c)).filter((id) => id !== s.id);
+    await charges();
+    await recheck(c);
+    expect(await listed(c)).toEqual(others);
+
+    await c
+      .from("transactions")
+      .update({ transaction_type: "Subscription", transaction_type_source: "manual" })
+      .eq("merchant_key", s.merchant_key!);
+    await recheck(c);
+    expect(await listed(c)).toContain(s.id);
+  });
+
+  it("keeps a stream while one charge is still not your One-time", async () => {
+    const { c, s, charges, refs } = await setup();
+    await charges();
+    await c
+      .from("transactions")
+      .update({ transaction_type_source: null })
+      .eq("entry_reference", refs[0]!);
+    await recheck(c);
+    expect(await listed(c)).toContain(s.id);
+  });
+
+  // polish-5 B2: a gone stream charged again came back Active in the demo; the server's detector
+  // re-detects it from the charges left: one charge has no rhythm, so it is a suggestion (To review),
+  // while your own choice (confirmed) is kept. fails_when=one charge back reads Active when
+  // undecided, all back doesn't read Active, or a confirmed stream loses its choice
+  describe("a gone stream charged again", () => {
+    const comeBack = async (confirm: boolean, back: "one" | "two" | "all") => {
+      const { c, s, charges, refs } = await setup();
+      if (confirm)
+        await c.rpc("stream_action", { p_stream: s.id, p_action: "confirm", p_args: {} });
+      await charges();
+      await recheck(c);
+      const update = c
+        .from("transactions")
+        .update({ transaction_type: "Subscription", transaction_type_source: "manual" });
+      await (back === "all"
+        ? update.eq("merchant_key", s.merchant_key!)
+        : update.in("entry_reference", refs.slice(0, back === "one" ? 1 : 2)));
+      await recheck(c);
+      const g = groupStreams(
+        ((await c.from("recurring_streams").select("*")).data ?? []) as Array<
+          Tables<"recurring_streams">
+        >,
+        NOW,
+      );
+      return { toReview: g.toReview.map((r) => r.id), active: g.active.map((r) => r.id), id: s.id };
+    };
+
+    it("comes back To review when one undecided charge is back", async () => {
+      const r = await comeBack(false, "one");
+      expect(r.toReview).toContain(r.id);
+      expect(r.active).not.toContain(r.id);
+    });
+
+    it("comes back Active when its charges with a rhythm are back", async () => {
+      const r = await comeBack(false, "all");
+      expect(r.active).toContain(r.id);
+    });
+
+    it("comes back Active when two charges on different dates are back", async () => {
+      const r = await comeBack(false, "two");
+      expect(r.active).toContain(r.id);
+      expect(r.toReview).not.toContain(r.id);
+    });
+
+    it("keeps your confirmed choice when one charge is back", async () => {
+      const r = await comeBack(true, "one");
+      expect(r.active).toContain(r.id);
+    });
+  });
+
+  // polish-5 E4: one bill charge set One-time vanished from the demo calendar (5 of 5 -> 4 of 4),
+  // while the server re-dates the stream from the charges left, so the bill reads "not seen yet".
+  // fails_when=the stream keeps the One-time charge's dates, or the calendar loses the bill
+  it("re-dates a stream from the charges left, so the calendar shows its bill not seen yet", async () => {
+    const c = fresh();
+    const month = new Date(NOW.getFullYear(), NOW.getMonth(), 1);
+    const { start, end } = monthBounds(month);
+    const streams = async () =>
+      ((await c.from("recurring_streams").select("*")).data ?? []) as Array<
+        Tables<"recurring_streams">
+      >;
+    const bills = async () => {
+      const active = groupStreams(await streams(), NOW).active;
+      const { data } = await c
+        .from("transactions")
+        .select("*")
+        .gte("booking_date", start)
+        .lt("booking_date", end);
+      return billEntries(active, (data ?? []) as Array<ChargeTx>, month, NOW);
+    };
+    // An active monthly bill already paid this month, with earlier charges.
+    const s = groupStreams(await streams(), NOW).active.find(
+      (r) => r.cadence === "monthly" && r.last_charged! >= start && r.charge_count! >= 2,
+    )!;
+    const before = await bills();
+    expect(before.filter((e) => e.name === s.display_name).map((e) => e.status)).toEqual(["done"]);
+    const { data: own } = await c
+      .from("transactions")
+      .select("booking_date")
+      .eq("merchant_key", s.merchant_key!)
+      .eq("account_uid", s.account_uid!);
+    const dates = [...new Set(own!.map((t) => t.booking_date!))].sort();
+    const prev = dates[dates.length - 2]!;
+
+    await c
+      .from("transactions")
+      .update({ transaction_type: "One-time", transaction_type_source: "manual" })
+      .eq("merchant_key", s.merchant_key!)
+      .eq("booking_date", s.last_charged!);
+    await recheck(c);
+
+    const row = (await streams()).find((r) => r.id === s.id)!;
+    expect(row.last_charged).toBe(prev);
+    expect(row.next_expected).toBe(addDays(prev, 30)); // as the demo seeds a monthly stream
+    const after = await bills();
+    expect(after.length).toBe(before.length);
+    expect(after.filter((e) => e.name === s.display_name).map((e) => e.status)).toEqual(["late"]);
+  });
+
+  it("re-dates by the stream's own cadence, not always a month", async () => {
+    seed.hook = (db) => {
+      for (const r of db["recurring_streams"] ?? []) r["cadence"] = "quarterly";
+    };
+    const c = fresh();
+    seed.hook = undefined;
+    const rows = ((await c.from("recurring_streams").select("*")).data ?? []) as Array<
+      Tables<"recurring_streams">
+    >;
+    const { data: txs } = await c.from("transactions").select("merchant_key,booking_date");
+    const datesOf = (r: Tables<"recurring_streams">) =>
+      [
+        ...new Set(
+          (txs ?? []).filter((t) => t.merchant_key === r.merchant_key).map((t) => t.booking_date!),
+        ),
+      ].sort();
+    const s = rows.find((r) => r.cadence === "quarterly" && datesOf(r).length >= 2)!;
+    const dates = datesOf(s);
+    const prev = dates[dates.length - 2]!;
+    await c
+      .from("transactions")
+      .update({ transaction_type: "One-time", transaction_type_source: "manual" })
+      .eq("merchant_key", s.merchant_key!)
+      .eq("booking_date", dates[dates.length - 1]!);
+    await recheck(c);
+    const row = ((await c.from("recurring_streams").select("*")).data ?? []).find(
+      (r: { id: string }) => r.id === s.id,
+    ) as Tables<"recurring_streams">;
+    expect(row.last_charged).toBe(prev);
+    expect(row.next_expected).toBe(addDays(prev, 91));
+  });
+
+  it("leaves every stream's dates as generated when no charge changed", async () => {
+    const c = fresh();
+    const dates = async () =>
+      (await c.from("recurring_streams").select("id,last_charged,next_expected")).data ?? [];
+    const before = await dates();
+    await recheck(c);
+    expect(await dates()).toEqual(before);
   });
 });
 

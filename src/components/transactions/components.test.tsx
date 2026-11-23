@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render as rtlRender, screen } from "@testing-library/react";
+import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import { queryWrapper } from "@/test/query-wrapper";
 import userEvent from "@testing-library/user-event";
+import { useMutation } from "@tanstack/react-query";
 import type { TransactionRow } from "@/lib/transactions";
 import { CategoryPicker, TypePicker } from "./pickers";
 import { SplitEditor } from "./split-editor";
@@ -91,9 +92,192 @@ describe("pickers", () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
-  it("CategoryPicker is disabled while saving", () => {
-    render(<CategoryPicker tx={tx()} onSelect={vi.fn()} saving />);
-    expect(screen.getByRole("button", { name: /Change category/ })).toBeDisabled();
+  // polish-4 #3b: locked with aria-disabled (it keeps focus), not native disabled: a click opens
+  // nothing and picks nothing.
+  it("CategoryPicker is disabled while saving", async () => {
+    const onSelect = vi.fn();
+    render(<CategoryPicker tx={tx()} onSelect={onSelect} saving />);
+    const trigger = screen.getByRole("button", { name: /Change category/ });
+    expect(trigger).toHaveAttribute("aria-disabled", "true");
+    await userEvent.click(trigger);
+    expect(screen.queryByRole("button", { name: "Groceries" })).not.toBeInTheDocument();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  // Type audit P1: a charge already showing One-time (from the AI) must be claimable as yours.
+  it("TypePicker lets you pick the type a charge already has when it isn't yours yet", async () => {
+    const onSelect = vi.fn();
+    render(
+      <TypePicker tx={tx({ transaction_type: "One-time" })} onSelect={onSelect} saving={false} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Change type/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "One-time" }));
+    expect(onSelect).toHaveBeenCalledWith("One-time");
+  });
+
+  // A list row (v_transactions_eur) carries no type source, so re-picking its type always saves:
+  // that is how you claim a type the AI set.
+  it("TypePicker saves a re-pick of the same type on a list row", async () => {
+    const onSelect = vi.fn();
+    const listRow = tx({ transaction_type: "Subscription" });
+    expect(listRow).not.toHaveProperty("transaction_type_source");
+    render(<TypePicker tx={listRow} onSelect={onSelect} saving={false} />);
+    await userEvent.click(screen.getByRole("button", { name: /Change type/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "Subscription" }));
+    expect(onSelect).toHaveBeenCalledWith("Subscription");
+  });
+
+  // Re-audit F1b: a row that does carry the source as 'manual' (as the old optimistic cache did)
+  // still saves a re-pick; the old "already yours" skip swallowed it.
+  it("TypePicker saves a re-pick even on a row whose type is already yours", async () => {
+    const onSelect = vi.fn();
+    const mine = { ...tx({ transaction_type: "One-time" }), transaction_type_source: "manual" };
+    render(<TypePicker tx={mine as TransactionRow} onSelect={onSelect} saving={false} />);
+    await userEvent.click(screen.getByRole("button", { name: /Change type/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "One-time" }));
+    expect(onSelect).toHaveBeenCalledWith("One-time");
+  });
+
+  // polish-3 F8: a slow type save locks the picker, so a second pick can't go out on top of it.
+  it("TypePicker is locked while a type save is pending, and unlocks when it lands", async () => {
+    const saves: Array<string> = [];
+    let land = () => {};
+    function Row() {
+      const save = useMutation({
+        mutationFn: (type: string) => {
+          saves.push(type);
+          return new Promise<void>((r) => (land = r));
+        },
+      });
+      return <TypePicker tx={tx()} onSelect={(t) => save.mutate(t)} saving={save.isPending} />;
+    }
+    render(<Row />);
+    const trigger = screen.getByRole("button", { name: /Change type/ });
+    await userEvent.click(trigger);
+    await userEvent.click(await screen.findByRole("button", { name: "Subscription" }));
+    // polish-4 #3: locked with aria-disabled (it keeps focus), not native disabled.
+    await waitFor(() => expect(trigger).toHaveAttribute("aria-disabled", "true"));
+    await userEvent.click(trigger);
+    expect(screen.queryByRole("button", { name: "One-time" })).not.toBeInTheDocument();
+    expect(saves).toEqual(["Subscription"]);
+
+    land();
+    await waitFor(() => expect(trigger).not.toHaveAttribute("aria-disabled"));
+    await userEvent.click(trigger);
+    await userEvent.click(await screen.findByRole("button", { name: "One-time" }));
+    expect(saves).toEqual(["Subscription", "One-time"]);
+  });
+
+  // polish-4 #3: the trigger was natively disabled while saving, so after a keyboard pick Radix
+  // handed focus back to a disabled button and it fell to <body>. fails_when=focus isn't on the
+  // trigger after a keyboard pick and its save
+  it("TypePicker keeps focus on its trigger through a keyboard pick and the save", async () => {
+    let land = () => {};
+    function Row() {
+      const save = useMutation({
+        mutationFn: (_t: string) => new Promise<void>((r) => (land = r)),
+      });
+      return <TypePicker tx={tx()} onSelect={(t) => save.mutate(t)} saving={save.isPending} />;
+    }
+    render(<Row />);
+    const trigger = screen.getByRole("button", { name: /Change type/ });
+    trigger.focus();
+    await userEvent.keyboard("{Enter}");
+    (await screen.findByRole("button", { name: "Subscription" })).focus();
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => expect(trigger).toHaveAttribute("aria-disabled", "true"));
+    expect(trigger).toHaveFocus();
+    land();
+    await waitFor(() => expect(trigger).not.toHaveAttribute("aria-disabled"));
+    expect(trigger).toHaveFocus();
+  });
+
+  it("TypePicker shows a spinner while its save is pending, and none otherwise", () => {
+    const { rerender } = render(<TypePicker tx={tx()} onSelect={vi.fn()} saving />);
+    expect(screen.getByRole("button", { name: /Change type/ })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    expect(screen.getByTestId("picker-spinner")).toBeInTheDocument();
+    rerender(<TypePicker tx={tx()} onSelect={vi.fn()} saving={false} />);
+    expect(screen.queryByTestId("picker-spinner")).not.toBeInTheDocument();
+  });
+
+  // polish-4 #3b (re-audit gap 1): the Category chip was still natively disabled while saving, so
+  // a keyboard pick dropped focus to <body>. fails_when=focus isn't on the category trigger after
+  // a keyboard pick and its save
+  it("CategoryPicker keeps focus on its trigger through a keyboard pick and the save", async () => {
+    let land = () => {};
+    function Row() {
+      const save = useMutation({
+        mutationFn: (_c: string) => new Promise<void>((r) => (land = r)),
+      });
+      return <CategoryPicker tx={tx()} onSelect={(c) => save.mutate(c)} saving={save.isPending} />;
+    }
+    render(<Row />);
+    const trigger = screen.getByRole("button", { name: /Change category/ });
+    trigger.focus();
+    await userEvent.keyboard("{Enter}");
+    (await screen.findByRole("button", { name: "Groceries" })).focus();
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => expect(document.activeElement?.tagName).toBe("BUTTON"));
+    expect(trigger).toHaveFocus();
+    expect(trigger).toHaveAttribute("aria-busy", "true");
+    land();
+    await waitFor(() => expect(trigger).not.toHaveAttribute("aria-busy"));
+    expect(trigger).toHaveFocus();
+  });
+
+  it("CategoryPicker shows the same spinner while saving, and none otherwise", () => {
+    const { rerender } = render(<CategoryPicker tx={tx()} onSelect={vi.fn()} saving />);
+    expect(screen.getByTestId("picker-spinner")).toBeInTheDocument();
+    rerender(<CategoryPicker tx={tx()} onSelect={vi.fn()} saving={false} />);
+    expect(screen.queryByTestId("picker-spinner")).not.toBeInTheDocument();
+  });
+
+  // polish-5 B1: the icon chip (desktop table rows) showed no spinner while saving.
+  // fails_when=no spinner on the icon chip while saving, one when idle, or the icon is dropped
+  it("CategoryPicker's icon chip shows the spinner over its icon while saving, and none otherwise", () => {
+    const { rerender } = render(
+      <CategoryPicker tx={tx()} onSelect={vi.fn()} saving variant="icon" />,
+    );
+    const trigger = screen.getByRole("button", { name: /Change category/ });
+    expect(within(trigger).getByTestId("picker-spinner")).toBeInTheDocument();
+    expect(trigger.querySelector("[data-category]")).not.toBeNull();
+    rerender(<CategoryPicker tx={tx()} onSelect={vi.fn()} saving={false} variant="icon" />);
+    expect(screen.queryByTestId("picker-spinner")).not.toBeInTheDocument();
+    expect(trigger.querySelector("[data-category]")).not.toBeNull();
+  });
+
+  // polish-5 B1 note: the locked icon chip still faded on hover. jsdom has no CSS, so this checks
+  // the hover fade is scoped to an unlocked trigger. fails_when=an unscoped hover:opacity class
+  it("CategoryPicker's icon chip only fades on hover while unlocked", () => {
+    render(<CategoryPicker tx={tx()} onSelect={vi.fn()} saving variant="icon" />);
+    const trigger = screen.getByRole("button", { name: /Change category/ });
+    const classes = [...trigger.querySelectorAll("*")].flatMap((el) => [...el.classList]);
+    expect(classes.filter((c) => /(^|:)hover:opacity/.test(c))).toEqual([
+      "[:not([aria-disabled])>&]:hover:opacity-80",
+    ]);
+  });
+
+  // polish-4 #4: the current type showed only by font weight, and screen readers got no state.
+  // fails_when=the current type has no check mark or no pressed state
+  it("TypePicker marks the current type with a check and a pressed state", async () => {
+    render(
+      <TypePicker tx={tx({ transaction_type: "One-time" })} onSelect={vi.fn()} saving={false} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Change type/ }));
+    const current = await screen.findByRole("button", { name: "One-time", pressed: true });
+    const other = screen.getByRole("button", { name: "Subscription", pressed: false });
+    expect(current.querySelector("svg")).not.toBeNull();
+    expect(other.querySelector("svg")).toBeNull();
+  });
+
+  it("TypePicker marks no type when none is set", async () => {
+    render(<TypePicker tx={tx({ transaction_type: null })} onSelect={vi.fn()} saving={false} />);
+    await userEvent.click(screen.getByRole("button", { name: /Change type/ }));
+    await screen.findByRole("button", { name: "One-time" });
+    expect(screen.queryByRole("button", { pressed: true })).toBeNull();
   });
 
   it("TypePicker shows a dash when the type is unset", () => {

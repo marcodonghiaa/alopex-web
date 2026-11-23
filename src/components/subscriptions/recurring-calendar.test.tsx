@@ -12,6 +12,7 @@ const db = vi.hoisted(() => ({
   rulesError: null as { message: string } | null,
   windowError: null as { message: string } | null,
   chargeReads: 0,
+  selects: [] as Array<string>,
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -23,7 +24,9 @@ vi.mock("@/integrations/supabase/client", () => ({
       let broken = false;
       let gte = "";
       let lt = "\uffff";
-      for (const m of ["select", "order", "is", "or"]) q[m] = () => q;
+      for (const m of ["order", "is", "or"]) q[m] = () => q;
+      let cols = "";
+      q["select"] = (c: string) => ((cols = c), q);
       q["gte"] = (_col: string, v: string) => ((gte = v), q);
       q["lt"] = (_col: string, v: string) => ((lt = v), q);
       // postgrest-js never escapes `"` in an in() value, so PostgREST rejects the request.
@@ -46,7 +49,7 @@ vi.mock("@/integrations/supabase/client", () => ({
         }
         if (side === "CRDT" && db.windowError)
           return resolve({ data: null, error: db.windowError });
-        if (side === "DBIT") db.chargeReads++;
+        if (side === "DBIT") (db.chargeReads++, db.selects.push(cols));
         if (db.error) return resolve({ data: null, error: db.error });
         if (broken) return resolve({ data: null, error: { message: "failed to parse filter" } });
         const rows = (side === "DBIT" ? db.charges : db.income).filter(
@@ -123,9 +126,20 @@ beforeEach(() => {
   db.rulesError = null;
   db.windowError = null;
   db.chargeReads = 0;
+  db.selects = [];
 });
 
 describe("RecurringCalendar", () => {
+  // Type audit round 2: the database returns only the columns asked for, so the "you marked it
+  // One-time" check needs the marker in the charges read.
+  it("reads charges with who set their type", async () => {
+    renderCal([stream({})]);
+    await screen.findByText(summary("Bills 0 of 1 paid · Income 0 of 1 received"));
+    expect(db.selects.length).toBeGreaterThan(0);
+    for (const cols of db.selects)
+      expect(cols.split(",").map((c) => c.trim())).toContain("transaction_type_source");
+  });
+
   it("ticks paid bills, expects the rest, and expects regular income on its usual day", async () => {
     db.charges = [
       {
