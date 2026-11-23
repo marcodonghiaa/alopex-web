@@ -4,21 +4,22 @@ import { createFakeClient } from "./fake-client";
 const NOW = new Date("2026-10-20T12:00:00Z");
 
 describe("demo v_transactions_eur", () => {
-  it("counts an unsplit purchase as fully mine, like the real view", async () => {
+  // Polish 3 #4: split purchases count as mine too (my share, still money out); only one paid
+  // entirely for others has nothing of mine.
+  it("counts an unsplit or split purchase as mine, like the real view", async () => {
     const client = createFakeClient(NOW);
     const { data: all } = await client
       .from("v_transactions_eur")
       .select("*")
-      .eq("flow_type", "spend")
-      .is("personal_amount", null);
+      .eq("flow_type", "spend");
     const { data: mine } = await client
       .from("v_transactions_eur")
       .select("*")
       .eq("flow_type", "spend")
-      .is("personal_amount", null)
       .lt("personal_signed_amount_eur", 0);
-    expect(all?.length).toBeGreaterThan(0);
-    expect(mine?.length).toBe(all?.length);
+    const withShare = (all ?? []).filter((r) => r.personal_amount !== 0);
+    expect(withShare.some((r) => r.personal_amount != null)).toBe(true); // a split row is checked
+    expect(mine?.length).toBe(withShare.length);
   });
 
   // Polish 1 #2: like the real view's payer_name (custom name, else the bank's debtor name).
