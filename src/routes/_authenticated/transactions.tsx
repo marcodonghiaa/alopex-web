@@ -912,7 +912,8 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
               aria-expanded={forOthersOpen}
               className="mt-4 min-h-11 px-4"
             >
-              {forOthersOpen ? "Hide" : "Show"} {forOthers.length} paid for others
+              {forOthersOpen ? "Hide" : "Show"} {forOthers.length} charge
+              {forOthers.length === 1 ? "" : "s"} paid for others
             </Button>
           )}
           {forOthersOpen && (

@@ -586,11 +586,26 @@ describe("Paid for others", () => {
     renderPage();
     await screen.findAllByText("Shop 1");
     expect(screen.queryByText("Shop 2")).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Show 1 paid for others" }));
+    await userEvent.click(screen.getByRole("button", { name: "Show 1 charge paid for others" }));
     expect(screen.getAllByRole("heading", { name: "Paid for others" }).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Shop 2").length).toBeGreaterThan(0);
-    await userEvent.click(screen.getByRole("button", { name: "Hide 1 paid for others" }));
+    await userEvent.click(screen.getByRole("button", { name: "Hide 1 charge paid for others" }));
     expect(screen.queryByText("Shop 2")).toBeNull();
+  });
+
+  // Polish 4 #6: "Show 1 paid for others" had no noun. fails_when=the label drops "charge(s)"
+  it("names the rows it shows: charge, or charges", async () => {
+    tableData = {
+      v_transactions_eur: [
+        row("1"),
+        row("2", { personal_amount: 0 }),
+        row("3", { personal_amount: 0 }),
+      ],
+    };
+    renderPage();
+    expect(
+      await screen.findByRole("button", { name: "Show 2 charges paid for others" }),
+    ).toBeInTheDocument();
   });
 
   // Polish 4 #4: both toggles under the list were 36px, under the 44px tap minimum.
@@ -611,7 +626,9 @@ describe("Paid for others", () => {
   it("moves focus to the section's heading when shown", async () => {
     tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
     renderPage();
-    await userEvent.click(await screen.findByRole("button", { name: "Show 1 paid for others" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Show 1 charge paid for others" }),
+    );
     await waitFor(() =>
       expect(document.activeElement).toBe(
         screen.getAllByRole("heading", { name: "Paid for others" })[0],
@@ -648,7 +665,7 @@ describe("Paid for others", () => {
     };
     renderPage();
     await screen.findAllByText("Shop 1");
-    await userEvent.click(screen.getByRole("button", { name: "Show 1 paid for others" }));
+    await userEvent.click(screen.getByRole("button", { name: "Show 1 charge paid for others" }));
     const phone = screen.getByRole("region", { name: "Paid for others" });
     expect(within(phone).getByText(formatDayHeading(thisMonth(3)))).toBeInTheDocument();
   });
@@ -682,7 +699,7 @@ describe("Paid for others", () => {
     };
     renderPage();
     await screen.findAllByText("Shop 1");
-    await userEvent.click(screen.getByRole("button", { name: "Show 1 paid for others" }));
+    await userEvent.click(screen.getByRole("button", { name: "Show 1 charge paid for others" }));
     const [edit] = await screen.findAllByRole("button", { name: "Edit Shop 2" });
     await userEvent.click(edit!);
     await act(() => new Promise((r) => setTimeout(r, 100)));
@@ -704,7 +721,7 @@ describe("Paid for others", () => {
     expect(screen.queryByRole("button", { name: /paid for others/ })).toBeNull();
     await userEvent.keyboard("{Escape}");
     expect(
-      await screen.findByRole("button", { name: "Show 1 paid for others" }),
+      await screen.findByRole("button", { name: "Show 1 charge paid for others" }),
     ).toBeInTheDocument();
   });
 
@@ -714,7 +731,7 @@ describe("Paid for others", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     renderPage(client);
     expect(
-      await screen.findByRole("button", { name: "Show 1 paid for others" }),
+      await screen.findByRole("button", { name: "Show 1 charge paid for others" }),
     ).toBeInTheDocument();
     failTable = "v_transactions_eur";
     try {
@@ -739,7 +756,7 @@ describe("Paid for others", () => {
     tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
     await act(() => client.invalidateQueries({ queryKey: ["transactions"] }));
     await userEvent.keyboard("{Escape}");
-    const toggle = await screen.findByRole("button", { name: "Show 1 paid for others" });
+    const toggle = await screen.findByRole("button", { name: "Show 1 charge paid for others" });
     await waitFor(() => expect(document.activeElement).toBe(toggle));
   });
 
@@ -747,7 +764,9 @@ describe("Paid for others", () => {
     tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     renderPage(client);
-    await userEvent.click(await screen.findByRole("button", { name: "Show 1 paid for others" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Show 1 charge paid for others" }),
+    );
     const [edit] = await screen.findAllByRole("button", { name: "Edit Shop 2" });
     await userEvent.click(edit!);
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -768,7 +787,7 @@ describe("Paid for others", () => {
     await screen.findAllByText("Shop 1");
     const table = screen.getByRole("table");
     expect(within(table).queryByText("Shop 2")).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Show 1 paid for others" }));
+    await userEvent.click(screen.getByRole("button", { name: "Show 1 charge paid for others" }));
     expect(within(table).getByRole("heading", { name: "Paid for others" })).toBeInTheDocument();
     expect(within(table).getByText("Shop 2")).toBeInTheDocument();
   });
