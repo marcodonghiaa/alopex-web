@@ -776,3 +776,15 @@ describe("Checking status", () => {
     expect(cal).toHaveAttribute("aria-busy", "false");
   });
 });
+
+// polish-4 #2: a locked frequency picker still lit up on hover and showed its tooltip, so it looked
+// clickable. fails_when=the locked picker still takes the pointer, like the shared Button doesn't
+describe("Locked frequency picker", () => {
+  it("takes no pointer while disabled, like the shared Button", async () => {
+    invoke.mockImplementation(() => new Promise(() => {}));
+    renderPage();
+    const picker = await screen.findByTitle("Monthly — auto-detected");
+    expect(picker).toBeDisabled();
+    expect(picker).toHaveClass("disabled:pointer-events-none");
+  });
+});

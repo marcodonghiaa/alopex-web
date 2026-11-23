@@ -614,7 +614,7 @@ function FrequencyPicker({
                 : `${label} — auto-detected`
               : "Not enough history to detect — set the billing frequency"
           }
-          className={`inline-flex min-h-11 w-full items-center justify-between gap-1 rounded-sm px-3 disabled:opacity-50 py-0.5 text-xs font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+          className={`inline-flex min-h-11 w-full items-center justify-between gap-1 rounded-sm px-3 disabled:pointer-events-none disabled:opacity-50 py-0.5 text-xs font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
             frequency
               ? "bg-muted text-foreground hover:bg-accent"
               : "bg-warning/10 text-warning hover:bg-warning/20"
