@@ -477,7 +477,8 @@ class Store {
     return { data: null, error: null };
   }
   /** Mirror of the database function resolve_transfer_pair: keep makes both sides a transfer the
-   * user decided; not keeping puts each back by its direction. */
+   * user decided; not keeping puts each paired side back by its direction (a bank-coded side,
+   * EXCHANGE or TOPUP, stays a transfer). */
   resolveTransferPair(id: unknown, keep: boolean): Result {
     const pair = this.db["transfer_pairs"]!.find((p) => p["id"] === id);
     if (!pair || pair["status"] !== "suggested")
@@ -497,6 +498,7 @@ class Store {
       return { data: null, error: { message: "pair is stale" } };
     pair["status"] = keep ? "confirmed" : "rejected";
     for (const r of rows) {
+      if (!keep && r["flow_source"] !== "pair") continue;
       r["flow_source"] = "user";
       if (!keep) r["flow_type"] = r["credit_debit_indicator"] === "DBIT" ? "spend" : "income";
     }
