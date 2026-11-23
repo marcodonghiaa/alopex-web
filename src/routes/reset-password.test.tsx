@@ -137,7 +137,10 @@ describe("ResetPasswordPage", () => {
     fireEvent.change(await screen.findByLabelText("New password"), {
       target: { value: "correct horse" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save and sign in" }));
+    // The button stays disabled until the MFA check answers: on a slow runner a click before that is lost.
+    const save = screen.getByRole("button", { name: "Save and sign in" });
+    await waitFor(() => expect(save).toHaveProperty("disabled", false));
+    fireEvent.click(save);
     await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: "/", replace: true }));
     expect(updateUser).toHaveBeenCalledWith({ password: "correct horse" });
   });
@@ -149,7 +152,10 @@ describe("ResetPasswordPage", () => {
     fireEvent.change(await screen.findByLabelText("New password"), {
       target: { value: "correct horse" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save and sign in" }));
+    // The button stays disabled until the MFA check answers: on a slow runner a click before that is lost.
+    const save = screen.getByRole("button", { name: "Save and sign in" });
+    await waitFor(() => expect(save).toHaveProperty("disabled", false));
+    fireEvent.click(save);
     expect((await screen.findByRole("alert")).textContent).toBe(
       "Password should be different from the old password.",
     );
