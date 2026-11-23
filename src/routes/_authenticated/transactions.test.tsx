@@ -681,6 +681,25 @@ describe("Paid for others", () => {
     ).toBeInTheDocument();
   });
 
+  // Polish 3 #2: a failed reload hides the list, so it must not offer the section either.
+  it("offers no paid-for-others toggle after the month fails to reload", async () => {
+    tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderPage(client);
+    expect(
+      await screen.findByRole("button", { name: "Show 1 paid for others" }),
+    ).toBeInTheDocument();
+    failTable = "v_transactions_eur";
+    try {
+      await act(() => client.invalidateQueries({ queryKey: ["transactions"] }));
+      await waitFor(() =>
+        expect(screen.queryByRole("button", { name: /paid for others/ })).toBeNull(),
+      );
+    } finally {
+      failTable = null;
+    }
+  });
+
   it("shows no section when nothing was paid for others", async () => {
     tableData = { v_transactions_eur: [row("1", { personal_amount: 4 })] };
     renderPage();

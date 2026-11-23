@@ -864,7 +864,8 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
         </div>
       </section>
 
-      {forOthers.length > 0 && (
+      {/* A failed load hides the list, so the section goes with it. */}
+      {!txQuery.isError && forOthers.length > 0 && (
         <>
           {!forOthersForced && (
             <Button
