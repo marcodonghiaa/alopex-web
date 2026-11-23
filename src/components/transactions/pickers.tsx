@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TRANSACTION_TYPES, categoryColor } from "@/lib/categories";
 import { useCategories } from "@/lib/use-categories";
@@ -175,11 +175,14 @@ export function TypePicker({
                 // Every pick saves, the same type too: that is how you claim a type the AI set.
                 onSelect(t);
               }}
-              className={`block min-h-11 w-full rounded-sm px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-accent ${
+              // The current type: a check like the frequency picker's, and a state screen readers hear.
+              aria-pressed={t === tx.transaction_type}
+              className={`flex min-h-11 w-full items-center justify-between rounded-sm px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-accent ${
                 t === tx.transaction_type ? "font-medium text-primary" : "text-foreground"
               }`}
             >
               {t}
+              {t === tx.transaction_type && <Check className="size-4 text-primary" />}
             </button>
           ))}
         </div>

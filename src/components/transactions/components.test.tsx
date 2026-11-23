@@ -203,6 +203,26 @@ describe("pickers", () => {
     expect(screen.queryByTestId("picker-spinner")).not.toBeInTheDocument();
   });
 
+  // polish-4 #4: the current type showed only by font weight, and screen readers got no state.
+  // fails_when=the current type has no check mark or no pressed state
+  it("TypePicker marks the current type with a check and a pressed state", async () => {
+    render(
+      <TypePicker tx={tx({ transaction_type: "One-time" })} onSelect={vi.fn()} saving={false} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Change type/ }));
+    const current = await screen.findByRole("button", { name: "One-time", pressed: true });
+    const other = screen.getByRole("button", { name: "Subscription", pressed: false });
+    expect(current.querySelector("svg")).not.toBeNull();
+    expect(other.querySelector("svg")).toBeNull();
+  });
+
+  it("TypePicker marks no type when none is set", async () => {
+    render(<TypePicker tx={tx({ transaction_type: null })} onSelect={vi.fn()} saving={false} />);
+    await userEvent.click(screen.getByRole("button", { name: /Change type/ }));
+    await screen.findByRole("button", { name: "One-time" });
+    expect(screen.queryByRole("button", { pressed: true })).toBeNull();
+  });
+
   it("TypePicker shows a dash when the type is unset", () => {
     render(<TypePicker tx={tx({ transaction_type: null })} onSelect={vi.fn()} saving={false} />);
     expect(screen.getByRole("button", { name: /Change type/ })).toHaveTextContent("—");
