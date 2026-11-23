@@ -367,8 +367,8 @@ export function buildSubscriptions(
   });
 }
 
-// Like the real views: my Splitwise shares count as spend, and imported history only fills the
-// months that have no live bank spend.
+// Like the real views: my Splitwise shares count as spend, imported history only fills the
+// months that have no live bank spend, and a month's expenses are its category spend.
 export function buildMonthly(
   view: DemoDb["v_transactions_eur"],
   shares: DemoDb["v_splitwise_eur"],
@@ -382,7 +382,6 @@ export function buildMonthly(
     if (t.flow_type === "income") cell.income += Math.abs(t.signed_amount_eur!);
     if (t.flow_type === "spend") {
       const mine = Math.abs(t.personal_signed_amount_eur ?? t.signed_amount_eur!);
-      cell.expenses += mine;
       const key = `${month}|${t.category}`;
       const row = spendByKey.get(key) ?? { month, category: t.category!, spend: 0 };
       row.spend += mine;
@@ -399,24 +398,24 @@ export function buildMonthly(
     row.spend += amount;
     spendByKey.set(key, row);
   };
-  for (const s of shares) {
-    const month = monthStart(s.booking_date!);
-    const amount = s.amount_eur!;
-    const cell = byMonth.get(month) ?? { income: 0, expenses: 0 };
-    cell.expenses += amount;
-    byMonth.set(month, cell);
-    addSpend(month, s.category ?? "Uncategorized", amount);
-  }
+  for (const s of shares)
+    addSpend(monthStart(s.booking_date!), s.category ?? "Uncategorized", s.amount_eur!);
   for (const h of history) {
     if (!spendMonths.has(h.month)) addSpend(h.month, h.category, h.spend_eur);
   }
+  const categoryRows = [...spendByKey.values()].map((s) => ({
+    category: s.category,
+    month: s.month,
+    spend_eur: round2(s.spend),
+    user_id: DEMO_USER_ID,
+  }));
+  for (const r of categoryRows) {
+    const cell = byMonth.get(r.month) ?? { income: 0, expenses: 0 };
+    cell.expenses += r.spend_eur;
+    byMonth.set(r.month, cell);
+  }
   return {
-    v_spend_by_category_monthly: [...spendByKey.values()].map((s) => ({
-      category: s.category,
-      month: s.month,
-      spend_eur: round2(s.spend),
-      user_id: DEMO_USER_ID,
-    })),
+    v_spend_by_category_monthly: categoryRows,
     v_income_vs_expenses_monthly: [...byMonth.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([month, c]) => ({

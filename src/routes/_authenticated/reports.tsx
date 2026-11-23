@@ -224,7 +224,7 @@ function ReportsPage() {
             to="/cash-flow"
             search={{ month: monthParam(month) }}
             pending={incomeExpensesQuery.isPending}
-            // No row: nothing was recorded that month (or only imported totals), not a net of zero.
+            // No row: nothing was recorded that month, not a net of zero.
             value={net == null ? "—" : formatSignedEur(net)}
             tone={net == null ? "neutral" : toneOf(net)}
           />

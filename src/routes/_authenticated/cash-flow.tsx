@@ -137,14 +137,11 @@ function CashFlowPage() {
   const canGoPrev = earliest != null && from > earliest;
   const canGoNext = start < current;
 
-  const monthTotals = new Map(
-    monthly.filter((r) => r.month).map((r) => [r.month as string, r.expenses_eur ?? 0]),
-  );
   const graph = buildFlow({
     income: summary.income,
     spending: summary.spending,
     sources: incomeBySource(incomeQuery.data ?? []),
-    categories: spendByCategory(spendQuery.data ?? [], monthTotals),
+    categories: spendByCategory(spendQuery.data ?? []),
   });
 
   const count = TREND_COUNT[period];

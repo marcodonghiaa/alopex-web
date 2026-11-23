@@ -210,48 +210,24 @@ describe("incomeBySource", () => {
   });
 });
 
+// protects=imported spend history counts on Cash flow, as in the monthly totals (which now add it
+// up too); fails_when=a month of imported history is dropped from the categories
 describe("spendByCategory", () => {
-  it("sums the range per category and skips months without live spending", () => {
-    const totals = new Map([
-      ["2026-09-01", 300],
-      ["2026-10-01", 250],
-    ]);
+  it("sums the range per category, imported history months included", () => {
     expect(
-      spendByCategory(
-        [
-          { month: "2026-09-01", category: "Groceries", spend_eur: 300 },
-          { month: "2026-10-01", category: "Groceries", spend_eur: 200 },
-          { month: "2026-10-01", category: null, spend_eur: 50 },
-          { month: "2026-10-01", category: "Health", spend_eur: null },
-          { month: "2026-08-01", category: "Housing", spend_eur: 900 }, // imported history month
-          { month: null, category: "Housing", spend_eur: 900 },
-        ],
-        totals,
-      ),
+      spendByCategory([
+        { month: "2026-09-01", category: "Groceries", spend_eur: 300 },
+        { month: "2026-10-01", category: "Groceries", spend_eur: 200 },
+        { month: "2026-10-01", category: null, spend_eur: 50 },
+        { month: "2026-10-01", category: "Health", spend_eur: null },
+        { month: "2026-08-01", category: "Housing", spend_eur: 900 }, // imported history month
+        { month: null, category: "Housing", spend_eur: 900 },
+      ]),
     ).toEqual([
+      { name: "Housing", value: 900 },
       { name: "Groceries", value: 500 },
       { name: "Uncategorized", value: 50 },
     ]);
-  });
-
-  // Polish 1 #1: a Splitwise share makes the month count, but the category view also adds the
-  // imported history there (no bank spend), so its rows outgrow the month's total.
-  it("leaves out a month whose categories don't add up to its total", () => {
-    const totals = new Map([
-      ["2026-03-01", 300],
-      ["2026-04-01", 100],
-    ]);
-    expect(
-      spendByCategory(
-        [
-          { month: "2026-03-01", category: "Groceries", spend_eur: 1500 },
-          { month: "2026-03-01", category: "Housing", spend_eur: 750 },
-          { month: "2026-03-01", category: "Dine Out", spend_eur: 300 },
-          { month: "2026-04-01", category: "Dine Out", spend_eur: 100.004 },
-        ],
-        totals,
-      ),
-    ).toEqual([{ name: "Dine Out", value: 100.004 }]);
   });
 });
 
