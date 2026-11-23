@@ -538,6 +538,25 @@ describe("Split charge amount", () => {
     expect(screen.queryByText(/^of /)).toBeNull();
   });
 
+  // Polish 5 #9: no euro value to scale (none from the bank, or a 0 amount) shows no ≈ line.
+  // fails_when=the ≈ line shows €0.00 or NaN
+  it("shows no euro line when there is no euro value or the amount is 0", () => {
+    const { unmount } = inTable(
+      bankProps({ currency: "USD", amount: 20, signed_amount_eur: null, personal_amount: 8 }),
+    );
+    expect(screen.queryByText(/≈/)).toBeNull();
+    unmount();
+    inTable(bankProps({ currency: "USD", amount: 0, signed_amount_eur: 0 }));
+    expect(screen.queryByText(/≈/)).toBeNull();
+  });
+
+  it("scales the euro line to my share", () => {
+    inTable(
+      bankProps({ currency: "USD", amount: 20, signed_amount_eur: -18, personal_amount: 10 }),
+    );
+    expect(screen.getByText("≈ €9.00")).toBeInTheDocument();
+  });
+
   it("shows an unsplit charge as before, with no 'of' line", () => {
     inTable(bankProps());
     expect(screen.getByText("−€59.08")).toBeInTheDocument();

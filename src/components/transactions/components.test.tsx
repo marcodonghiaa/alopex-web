@@ -107,6 +107,26 @@ describe("SplitEditor", () => {
     await userEvent.click(screen.getByRole("button", { name: /Split Amazon/ }));
   }
 
+  // Polish 5 #9: Clear is offered only on a split row, and saves it as all mine.
+  // fails_when=Clear shows on an unsplit row, or doesn't reset share and owed-by
+  it("offers Clear only on a split row, and clearing makes it all mine", async () => {
+    const onSave = vi.fn();
+    const { unmount } = render(<SplitEditor tx={tx()} onSave={onSave} saving={false} />);
+    await open();
+    expect(screen.queryByRole("button", { name: "Clear" })).toBeNull();
+    unmount();
+    render(
+      <SplitEditor
+        tx={tx({ personal_amount: 5, owed_by: "Sam" })}
+        onSave={onSave}
+        saving={false}
+      />,
+    );
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: "Clear" }));
+    expect(onSave).toHaveBeenCalledWith(null, null);
+  });
+
   // Polish 4 #5: money in can't be owed to me. fails_when=the chip says "owed" on money in
   it("says 'not mine', not 'owed', on split money in", () => {
     render(

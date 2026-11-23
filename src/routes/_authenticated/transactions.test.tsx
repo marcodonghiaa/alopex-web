@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -778,6 +778,55 @@ describe("Paid for others", () => {
         document.activeElement?.closest("[data-entry-ref]")?.getAttribute("data-entry-ref"),
       ).toBe("2"),
     );
+  });
+
+  // Polish 5 #9: jsdom renders nothing, so the tests above only ever take the fallbacks
+  // (first copy). These make one copy "on screen" to cover the pick itself.
+  // fails_when=focus goes to the hidden copy of the moved row, or the hidden heading
+  describe("with only one copy on screen", () => {
+    let onScreen: "phone" | "desktop" = "phone";
+    let rects: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+      rects = vi.spyOn(Element.prototype, "getClientRects").mockImplementation(function (
+        this: Element,
+      ) {
+        const phone = this.closest("li") != null || this.id === "paid-for-others-phone";
+        return (phone === (onScreen === "phone") ? [{}] : []) as unknown as DOMRectList;
+      });
+    });
+    afterEach(() => {
+      rects.mockRestore();
+      onScreen = "phone";
+    });
+
+    // The phone card comes first in the page, so the desktop copy is the one to pick.
+    it("focuses the moved row's desktop copy", async () => {
+      onScreen = "desktop";
+      tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      renderPage(client);
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Show 1 charge paid for others" }),
+      );
+      const [edit] = await screen.findAllByRole("button", { name: "Edit Shop 2" });
+      await userEvent.click(edit!);
+      expect(await screen.findByRole("dialog")).toBeInTheDocument();
+      tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 4 })] };
+      await act(() => client.invalidateQueries({ queryKey: ["transactions"] }));
+      await userEvent.keyboard("{Escape}");
+      await waitFor(() =>
+        expect(document.activeElement?.closest("[data-entry-ref]")?.tagName).toBe("TR"),
+      );
+    });
+
+    it("focuses the phone section's heading when shown", async () => {
+      tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+      renderPage();
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Show 1 charge paid for others" }),
+      );
+      await waitFor(() => expect(document.activeElement?.id).toBe("paid-for-others-phone"));
+    });
   });
 
   // Polish 3 #5: on desktop the section lives in the same table, under its own heading row.
