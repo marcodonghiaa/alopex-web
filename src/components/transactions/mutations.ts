@@ -64,6 +64,8 @@ const FLOW_KEYS = [
   "category-transactions",
   "transfer-review",
   "cash-flow",
+  // The month In/Out header on the Transactions page.
+  "income-vs-expenses",
 ];
 function refetchFlows(queryClient: QueryClient) {
   for (const k of FLOW_KEYS) void queryClient.invalidateQueries({ queryKey: [k] });
@@ -248,10 +250,12 @@ export function useSplitMutation(queryClient: QueryClient, monthKey: string) {
       saveFailed("Couldn't save split", error);
     },
     onSuccess: () => toast.success("Split saved"),
-    // A new name becomes a saved contact; the Splitwise page's owed totals change too.
+    // A new name becomes a saved contact; the Splitwise page's owed totals change too, and
+    // every total that counts my share (month In/Out, spending, cash flow).
     onSettled: () => {
       for (const k of ["split-contacts", "splits"])
         void queryClient.invalidateQueries({ queryKey: [k] });
+      refetchFlows(queryClient);
     },
   });
 }

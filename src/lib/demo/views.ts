@@ -42,8 +42,8 @@ export function deriveViews(db: DemoDb): Derived {
     owed_by: t.owed_by,
     owed_settled: t.owed_settled,
     personal_amount: t.personal_amount,
-    // Unsplit: the whole charge is mine.
-    personal_signed_amount_eur: t.personal_amount == null ? signedEur(t) : -t.personal_amount,
+    // Like the real view: my share (unsplit: all of it), signed by direction.
+    personal_signed_amount_eur: signedEur({ ...t, amount: t.personal_amount ?? t.amount }),
     refund_of: t.refund_of,
     // Like the real view: who paid, or the name the user gave the row.
     payer_name: t.custom_name ?? t.debtor_name,
