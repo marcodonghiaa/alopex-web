@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SegmentedControl } from "@/components/segmented-control";
 
@@ -23,6 +23,7 @@ export function NameEditor({
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState(name ?? "");
   const [scope, setScope] = useState<Scope>("all");
+  const nameId = useId();
 
   function save() {
     const next = input.trim();
@@ -52,22 +53,36 @@ export function NameEditor({
           {name ?? "—"}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-64 space-y-2.5 p-3">
-        <label className="block text-xs font-medium text-muted-foreground">
-          Name
+      <PopoverContent align="start" className="w-64 space-y-4 p-3">
+        <div>
+          <label htmlFor={nameId} className="mb-1 block text-xs font-medium text-muted-foreground">
+            Name
+          </label>
           <Input
+            id={nameId}
             type="text"
             value={input}
             maxLength={100}
+            aria-describedby={`${nameId}-hint`}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && save()}
-            className="mt-1"
           />
-        </label>
+          <p id={`${nameId}-hint`} className="mt-1.5 text-xs text-muted-foreground">
+            Leave empty to use the bank's name.
+          </p>
+        </div>
         {scoped && (
-          <>
+          <div>
+            <span
+              id={`${nameId}-scope`}
+              className="mb-1 block text-xs font-medium text-muted-foreground"
+            >
+              Rename
+            </span>
             <SegmentedControl
+              compact
               label="Rename"
+              labelledBy={`${nameId}-scope`}
               options={[
                 { value: "all", label: "All like this" },
                 { value: "one", label: "Only this one" },
@@ -75,14 +90,13 @@ export function NameEditor({
               value={scope}
               onChange={setScope}
             />
-            <p className="text-xs text-muted-foreground">
+            <p aria-live="polite" className="mt-1.5 text-xs text-muted-foreground">
               {scope === "all"
-                ? "Past and future ones from this merchant. Apple, PayPal and Google: same price only."
-                : "Just this transaction. Others keep their name."}
+                ? "This merchant, past and future. Apple, PayPal, Google: same price only."
+                : "Just this one. Others keep their name."}
             </p>
-          </>
+          </div>
         )}
-        <p className="text-xs text-muted-foreground">Leave empty to use the bank's name.</p>
         <Button onClick={save} className="w-full px-3">
           Save
         </Button>

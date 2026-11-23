@@ -12,17 +12,20 @@ interface SegmentedControlProps<T extends string> {
   options: Array<Option<T>>;
   value: T;
   onChange: (value: T) => void;
+  /** Inside a popover or form: 32px segments (36px on phones, hit area kept at 44px). */
+  compact?: boolean;
 }
 
 // Same-surface choice (DESIGN.md "Segmented Control"): a Fill pill track, sans labels, one ink pill
 // slides under the selected option. 44px tall on phones (thumb targets, often right under a
-// touch-scrubbed chart), 36px from md up.
+// touch-scrubbed chart), 36px from md up. `compact` is for small surfaces like a popover.
 export function SegmentedControl<T extends string>({
   label,
   labelledBy,
   options,
   value,
   onChange,
+  compact = false,
 }: SegmentedControlProps<T>) {
   const index = Math.max(
     0,
@@ -78,8 +81,12 @@ export function SegmentedControl<T extends string>({
             aria-checked={selected}
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(option.value)}
-            className={`relative z-10 min-h-11 rounded-full px-3 text-[0.8125rem] font-medium transition-colors md:min-h-9 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+            className={`relative z-10 rounded-full px-3 text-[0.8125rem] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
               selected ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+            } ${
+              compact
+                ? "min-h-9 after:absolute after:inset-x-0 after:-inset-y-1 after:content-[''] md:min-h-8 md:after:hidden"
+                : "min-h-11 md:min-h-9"
             }`}
           >
             {option.label}

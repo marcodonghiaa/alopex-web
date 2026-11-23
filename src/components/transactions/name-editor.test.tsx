@@ -62,4 +62,18 @@ describe("NameEditor", () => {
     await userEvent.click(screen.getByRole("button", { name: "Rename Dinner" }));
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
   });
+
+  // protects=the hints sit with the control they explain; fails_when=the empty-name hint is not
+  // tied to the field or the scope group loses its visible "Rename" label
+  it("ties the empty-name hint to the field and labels the scope choice", async () => {
+    render(<NameEditor name="iCloud" onSave={vi.fn()} saving={false} scoped />);
+    await userEvent.click(screen.getByRole("button", { name: "Rename iCloud" }));
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveAccessibleDescription(
+      "Leave empty to use the bank's name.",
+    );
+    expect(screen.getByRole("radiogroup", { name: "Rename" })).toBeInTheDocument();
+    expect(screen.getByText(/same price only/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "Only this one" }));
+    expect(screen.getByText("Just this one. Others keep their name.")).toBeInTheDocument();
+  });
 });
