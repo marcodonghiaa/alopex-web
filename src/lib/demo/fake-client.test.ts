@@ -1296,6 +1296,28 @@ describe("fake client: resolve_transfer_pair", () => {
     expect(again.error).toBeTruthy();
   });
 
+  // protects=rejecting a pair with a bank-coded side (EXCHANGE, TOPUP) keeps that side a transfer,
+  // like the database; fails_when=the bank side becomes spend or income
+  it("not keeping leaves a bank-coded side a transfer", async () => {
+    const c = fresh();
+    const { pair } = await sides(c);
+    await c
+      .from("transactions")
+      .update({ flow_source: "bank" })
+      .eq("entry_reference", pair.out_ref);
+    await c.rpc("resolve_transfer_pair", { p_pair: pair.id, p_keep: false });
+    const { data: rows } = await c
+      .from("transactions")
+      .select("*")
+      .in("entry_reference", [pair.out_ref, pair.in_ref]);
+    expect(rows!.map((r) => [r.credit_debit_indicator, r.flow_type, r.flow_source]).sort()).toEqual(
+      [
+        ["CRDT", "income", "user"],
+        ["DBIT", "transfer", "bank"],
+      ],
+    );
+  });
+
   it("refuses Keep once a side changed since the pairing", async () => {
     const c = fresh();
     const { pair } = await sides(c);
