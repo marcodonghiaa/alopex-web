@@ -355,10 +355,17 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
   const scrolledLink = useRef<string | null>(null);
   useEffect(() => {
     if (!highlightRef || txQuery.isPending || scrolledLink.current === highlightRef) return;
-    const el = document.querySelector(`[data-entry-ref="${CSS.escape(highlightRef)}"]`);
+    // Each row has a desktop and a phone copy, one of them hidden: scroll to the one on screen.
+    const el = [
+      ...document.querySelectorAll(`[data-entry-ref="${CSS.escape(highlightRef)}"]`),
+    ].find((e) => e.getClientRects().length > 0);
     if (!el) return;
-    scrolledLink.current = highlightRef;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    // After the router's scroll restoration, which jumps to the top just after the page renders.
+    const timer = setTimeout(() => {
+      scrolledLink.current = highlightRef;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+    return () => clearTimeout(timer);
   }, [highlightRef, txQuery.isPending, transactions, showForOthers]);
   useEffect(() => {
     if (!highlightRef || txQuery.isPending) return;

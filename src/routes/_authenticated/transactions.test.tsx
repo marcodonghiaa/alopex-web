@@ -812,6 +812,24 @@ describe("Paid for others", () => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
 
+    // Polish 5 #1: querySelector took the first copy of the row, the hidden desktop one on phone.
+    // fails_when=the link scrolls to a copy of the row that isn't rendered
+    it("scrolls to the copy of the row that is on screen", async () => {
+      const scroll = vi.fn();
+      Element.prototype.scrollIntoView = scroll;
+      const rects = vi.spyOn(Element.prototype, "getClientRects").mockImplementation(function (
+        this: Element,
+      ) {
+        return (this.tagName === "LI" ? [{}] : []) as unknown as DOMRectList;
+      });
+      window.history.replaceState(null, "", "/transactions?highlight=2");
+      tableData = { v_transactions_eur: [row("1"), row("2", { ...eligible, personal_amount: 0 })] };
+      renderPage();
+      await waitFor(() => expect(scroll).toHaveBeenCalled());
+      expect(scroll.mock.contexts.map((el) => (el as Element).tagName)).toEqual(["LI"]);
+      rects.mockRestore();
+    });
+
     it("to a split row asks about my share", async () => {
       Element.prototype.scrollIntoView = vi.fn();
       window.history.replaceState(null, "", "/transactions?highlight=2");
