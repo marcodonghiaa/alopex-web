@@ -450,6 +450,20 @@ describe("Split charge amount", () => {
     expect(screen.getByText(/split, owed €12\.00/)).toBeInTheDocument();
   });
 
+  // Polish 4 #5: money in can't be owed to me. fails_when=the row note says "owed" on money in
+  it("notes 'not mine', not 'owed', on split money in", () => {
+    inTable(
+      bankProps({
+        credit_debit_indicator: "CRDT",
+        amount: 20,
+        signed_amount_eur: 20,
+        personal_amount: 0,
+      }),
+    );
+    expect(screen.getByText(/split, not mine €20\.00/)).toBeInTheDocument();
+    expect(screen.queryByText(/owed/)).toBeNull();
+  });
+
   // Polish 3 #6: money in with a 0 share showed "+€0.00 of €20.00".
   it("shows money in with a 0 share as the whole amount", () => {
     inTable(

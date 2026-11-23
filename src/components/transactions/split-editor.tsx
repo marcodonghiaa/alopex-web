@@ -96,7 +96,9 @@ export function SplitEditor({
         >
           {split ? (
             <span className="inline-flex min-w-24 justify-center rounded-sm border border-primary/25 bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20">
-              Split · owed {formatMoney(owed, tx.currency ?? "EUR")}
+              {/* Money in can't be owed to me: only part of it is mine. */}
+              Split · {tx.credit_debit_indicator === "CRDT" ? "not mine" : "owed"}{" "}
+              {formatMoney(owed, tx.currency ?? "EUR")}
             </span>
           ) : (
             <span className="inline-flex min-w-24 justify-center rounded-sm border border-dashed px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent">

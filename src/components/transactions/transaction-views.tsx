@@ -336,7 +336,7 @@ export function TransactionRowView(props: TransactionViewProps) {
     tx.category ?? "Uncategorized",
     tx.transaction_type,
     isSplit(tx)
-      ? `split, owed ${formatMoney(Math.abs(tx.amount ?? 0) - myShare(tx), tx.currency ?? "EUR")}`
+      ? `split, ${tx.credit_debit_indicator === "CRDT" ? "not mine" : "owed"} ${formatMoney(Math.abs(tx.amount ?? 0) - myShare(tx), tx.currency ?? "EUR")}`
       : null,
     tagLine(tx) || null,
   ].filter(Boolean);
