@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Tables } from "@/integrations/supabase/types";
-import { effectiveCadence, groupStreams, monthlyEur, romeToday } from "./recurring";
+import { effectiveCadence, groupStreams, monthlyEur, monthlyTotal, romeToday } from "./recurring";
 
 type Stream = Tables<"recurring_streams">;
 
@@ -179,5 +179,18 @@ describe("romeToday", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-11-08T12:00:00Z"));
     expect(romeToday()).toEqual(new Date("2026-11-08T00:00:00"));
+  });
+});
+
+// Regression: a charge with no recognised frequency was priced as monthly.
+describe("monthlyTotal", () => {
+  it("sums known monthly costs and counts a stream without a frequency as unknown", () => {
+    expect(
+      monthlyTotal([
+        stream({ typical_amount_eur: -10 }),
+        stream({ typical_amount_eur: -5.5 }),
+        stream({ cadence: null, typical_amount_eur: -10 }),
+      ]),
+    ).toEqual({ sum: 15.5, known: 2, unknown: 1 });
   });
 });

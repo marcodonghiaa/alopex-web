@@ -15,9 +15,6 @@ export const effectiveCadence = (s: Stream): string | null => {
 
 // Adapter so periodDays/isStopped from subscriptions.ts can be reused as-is.
 const asChargeable = (s: Stream) => ({
-  charge_count: s.charge_count,
-  billing_frequency_is_manual: s.user_status === "confirmed",
-  monthly_equivalent_eur: null,
   last_charged: s.last_charged,
   billing_frequency: effectiveCadence(s),
   custom_interval_value: s.custom_interval_value,

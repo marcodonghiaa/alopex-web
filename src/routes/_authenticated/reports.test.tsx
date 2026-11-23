@@ -2,26 +2,31 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-const subscriptions = [
-  {
-    monthly_equivalent_eur: -10,
-    charge_count: 3,
-    billing_frequency_is_manual: false,
-    billing_frequency: "Monthly",
-  },
-  {
-    monthly_equivalent_eur: -5,
-    charge_count: 2,
-    billing_frequency_is_manual: false,
-    billing_frequency: "Monthly",
-  },
-  {
-    monthly_equivalent_eur: -4,
-    charge_count: 1,
-    billing_frequency_is_manual: true,
-    billing_frequency: "Monthly",
-  },
-  { monthly_equivalent_eur: -1000, charge_count: 1, billing_frequency_is_manual: false },
+// Charged a week ago, so none of them counts as stopped whatever day the suite runs.
+const lastCharged = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+const stream = (over: Record<string, unknown>) => ({
+  cadence: "monthly",
+  user_cadence: null,
+  custom_interval_value: null,
+  custom_interval_unit: null,
+  charge_count: 3,
+  last_charged: lastCharged,
+  next_expected: null,
+  detected_status: "active",
+  user_status: null,
+  ...over,
+});
+const streams = [
+  stream({ id: "a", typical_amount_eur: -10 }),
+  stream({
+    id: "b",
+    typical_amount_eur: -5,
+    user_status: "confirmed",
+    detected_status: "suggested",
+  }),
+  stream({ id: "c", typical_amount_eur: -100, user_status: "dismissed" }),
+  stream({ id: "d", typical_amount_eur: -40, detected_status: "gone" }),
+  stream({ id: "e", typical_amount_eur: -7, cadence: null }), // no frequency: not priced
 ];
 
 let failTable: string | null = null;
@@ -41,8 +46,8 @@ vi.mock("@/integrations/supabase/client", () => ({
             : {
                 // maybeSingle() gives null when the month has no row.
                 data:
-                  table === "v_subscriptions"
-                    ? subscriptions
+                  table === "recurring_streams"
+                    ? streams
                     : table === "v_income_vs_expenses_monthly"
                       ? null
                       : table === "v_transactions_eur"
@@ -79,20 +84,28 @@ vi.mock("recharts", async (importOriginal) => ({
 }));
 
 import { Route } from "./reports";
+import { groupStreams, monthlyTotal, romeToday } from "@/lib/recurring";
+import { RECURRING_KEY } from "@/lib/use-recurring-streams";
 
 const Page = Route.options.component as () => React.JSX.Element;
 
 describe("Reports subscriptions total", () => {
   // protects=Reports shows the same monthly subscription figure as the Subscriptions page;
-  // fails_when=one-off single charges are added to the monthly total
-  it("counts only recurring subscriptions", async () => {
+  // fails_when=Reports reads another source, or counts dismissed/gone/unpriced streams
+  it("matches the Subscriptions page total", async () => {
+    const client = new QueryClient();
     render(
-      <QueryClientProvider client={new QueryClient()}>
+      <QueryClientProvider client={client}>
         <Page />
       </QueryClientProvider>,
     );
     const card = (await screen.findByText("Subscriptions")).closest("section") as HTMLElement;
-    expect(await within(card).findByText("€19.00")).toBeTruthy();
+    // The Subscriptions page's own computation, on the same rows.
+    const pageTotal = monthlyTotal(groupStreams(streams as never, romeToday()).active).sum;
+    expect(pageTotal).toBe(15);
+    expect(await within(card).findByText("€15.00")).toBeTruthy();
+    // Same cache entry as the Subscriptions page and the nav badge.
+    expect(client.getQueryData(RECURRING_KEY)).toBe(streams);
   });
 });
 
@@ -100,7 +113,7 @@ describe("Reports when a figure fails to load", () => {
   // protects=a failed query shows an error instead of a quiet zero;
   // fails_when=the page ignores the error state of its queries
   it("tells the user some figures could not load", async () => {
-    failTable = "v_subscriptions";
+    failTable = "recurring_streams";
     render(
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -121,7 +134,7 @@ describe("Reports when a figure fails to load", () => {
       </QueryClientProvider>,
     );
     const card = (await screen.findByText("Subscriptions")).closest("section") as HTMLElement;
-    await within(card).findByText("€19.00");
+    await within(card).findByText("€15.00");
     expect(screen.queryByRole("alert")).toBeNull();
   });
 

@@ -5,7 +5,8 @@ import { useMemo, useState, type ReactNode } from "react";
 import { TrendingUp, TrendingDown, ArrowLeftRight, ThumbsDown, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatISODate } from "@/lib/date";
-import { estimatedMonthlyEur, splitSubscriptions } from "@/lib/subscriptions";
+import { groupStreams, monthlyTotal, romeToday } from "@/lib/recurring";
+import { useRecurringStreams } from "@/lib/use-recurring-streams";
 import {
   formatEur,
   formatSignedEur,
@@ -61,32 +62,6 @@ async function fetchSpendByCategory(monthISO: string): Promise<Array<MonthlySpen
     .eq("month", monthISO);
   if (error) throw error;
   return (data ?? []) as Array<MonthlySpendRow>;
-}
-
-interface SubscriptionTotalRow {
-  monthly_equivalent_eur: number | null;
-  charge_count: number | null;
-  billing_frequency_is_manual: boolean | null;
-  billing_frequency: string | null;
-  last_charged: string | null;
-  custom_interval_value: number | null;
-  custom_interval_unit: string | null;
-}
-
-// Current subscriptions, not historized -- v_subscriptions reflects today's
-// state regardless of which month is selected. Labeled "current" in the UI
-// rather than implied to be that month's actual figure.
-async function fetchSubscriptionsTotal(): Promise<number> {
-  const { data, error } = await supabase
-    .from("v_subscriptions")
-    .select(
-      "monthly_equivalent_eur,charge_count,billing_frequency_is_manual,billing_frequency,last_charged,custom_interval_value,custom_interval_unit",
-    );
-  if (error) throw error;
-  // Same recurring-only total as the Subscriptions page; one-off charges are not a monthly cost.
-  return estimatedMonthlyEur(
-    splitSubscriptions((data ?? []) as Array<SubscriptionTotalRow>).recurring,
-  );
 }
 
 interface WorthItTxRow {
@@ -157,10 +132,13 @@ function ReportsPage() {
     queryKey: ["reports-spend", prevMonthISO],
     queryFn: () => fetchSpendByCategory(prevMonthISO),
   });
-  const subscriptionsQuery = useQuery({
-    queryKey: ["reports-subscriptions-total"],
-    queryFn: fetchSubscriptionsTotal,
-  });
+  // Current subscriptions (today's state, whatever month is selected), from the same cache entry
+  // and computation as the Subscriptions page, so both show the same figure.
+  const subscriptionsQuery = useRecurringStreams();
+  const subscriptionsTotal = useMemo(
+    () => monthlyTotal(groupStreams(subscriptionsQuery.data ?? [], romeToday()).active).sum,
+    [subscriptionsQuery.data],
+  );
   const worthItQuery = useQuery({
     queryKey: ["reports-worth-it", monthISO],
     queryFn: () => fetchWorthItForMonth(monthISO, nextMonthStartISO),
@@ -315,7 +293,7 @@ function ReportsPage() {
               <p className="mt-0.5 text-xs text-muted-foreground">Current, per month</p>
             </div>
             <span className="font-figure text-sm text-foreground">
-              {subscriptionsQuery.isPending ? "…" : formatEur(subscriptionsQuery.data ?? 0)}
+              {subscriptionsQuery.isPending ? "…" : formatEur(subscriptionsTotal)}
             </span>
             <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground" />
           </Link>
