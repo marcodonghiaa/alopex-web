@@ -68,6 +68,7 @@ export function TradesDialog({
   quantity,
   trades,
   label,
+  triggerClassName = "-my-2.5 inline-flex min-h-11 items-center underline-offset-2 hover:underline",
 }: {
   kind: "stock" | "crypto";
   holdingKey: string;
@@ -75,6 +76,7 @@ export function TradesDialog({
   quantity: number;
   trades: Array<SavedTrade>;
   label: React.ReactNode;
+  triggerClassName?: string;
 }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<Form>(blank);
@@ -166,10 +168,7 @@ export function TradesDialog({
         }
       }}
     >
-      <DialogTrigger
-        title={`Trades for ${name}`}
-        className="-my-2.5 inline-flex min-h-11 items-center underline-offset-2 hover:underline"
-      >
+      <DialogTrigger title={`Trades for ${name}`} className={triggerClassName}>
         {label}
       </DialogTrigger>
       <DialogContent>

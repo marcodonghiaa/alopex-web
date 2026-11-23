@@ -26,7 +26,9 @@ import { InvestmentIncome } from "@/components/holdings/investment-income";
 import {
   PerformanceNotice,
   ReturnCell,
+  ReturnDetail,
   ReturnText,
+  TradesButton,
   TradesImport,
 } from "@/components/performance/performance-section";
 import { formatDay } from "@/lib/date";
@@ -333,7 +335,7 @@ function CryptoPage() {
                   <span className="font-figure">{formatPrice(asset)}</span>
                 </DetailRow>
                 <DetailRow label="Return">
-                  <ReturnCell
+                  <ReturnDetail
                     perf={perf}
                     holdingKey={asset.symbol}
                     name={asset.name}
@@ -366,6 +368,15 @@ function CryptoPage() {
                       />
                     </div>
                   ))}
+                {/* Empty when the return itself still opens the trades. */}
+                <div className="flex py-1 empty:hidden">
+                  <TradesButton
+                    perf={perf}
+                    holdingKey={asset.symbol}
+                    name={asset.name}
+                    quantity={asset.amount}
+                  />
+                </div>
               </HoldingRow>
             ))}
           </GroupedList>
