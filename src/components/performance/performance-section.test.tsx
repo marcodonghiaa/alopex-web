@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { Measured, MeasuredRow } from "@/lib/trades";
 import { summarizeTrades } from "@/lib/trades";
 import type { PerformanceRow } from "@/lib/performance";
@@ -12,7 +12,10 @@ import {
   ReturnText,
   TradesButton,
   TradesImport,
+  resetReturnsView,
 } from "./performance-section";
+
+afterEach(resetReturnsView);
 
 const row = (key: string): PerformanceRow => ({
   kind: "stock",
@@ -258,6 +261,45 @@ describe("ReturnDetail", () => {
     expect(toggle).toHaveTextContent("+20.00%");
   });
 
+  // protects=Marco 2026-11-23 "on phone as well": the closed phone row and every other holding
+  // follow one tap; fails_when=each return keeps its own % / € choice
+  it("one tap switches every return on the page, closed phone rows too", () => {
+    const p = perf([
+      { row: row("K"), measured: ok(200, 1000) },
+      { row: row("L"), measured: ok(-30, 600) },
+    ]);
+    renderWith(
+      <>
+        <ReturnDetail perf={p} holdingKey="K" name="K" quantity={10} />
+        <ReturnDetail perf={p} holdingKey="L" name="L" quantity={10} />
+        <ReturnText perf={p} holdingKey="L" />
+      </>,
+    );
+    expect(screen.getAllByText("−5.00%")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: /\+20\.00%/ }));
+    expect(screen.getByRole("button", { name: /\+€200\.00/ })).toBeInTheDocument();
+    expect(screen.getAllByText("−€30.00")).toHaveLength(2);
+    expect(screen.getAllByText("−€30.00")[1]).toHaveClass("text-negative");
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+  });
+
+  it("a closed row with a flagged return keeps its percent and flag in amount mode", () => {
+    const free = { ...trade, price_eur: 0 };
+    const p = perf([{ row: row("K"), measured: ok(200, 1000) }], {
+      tradesByKey: new Map([["K", [trade, free]]]),
+    });
+    const clean = perf([{ row: row("M"), measured: ok(10, 100) }]);
+    renderWith(
+      <>
+        <ReturnDetail perf={clean} holdingKey="M" name="M" quantity={1} />
+        <ReturnText perf={p} holdingKey="K" />
+      </>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Show as amount/ }));
+    expect(screen.getByText("price missing")).toBeInTheDocument();
+    expect(screen.getByText("+20.00%")).toBeInTheDocument();
+  });
+
   it("a loss reads with a real minus, in the loss colour", () => {
     detail(ok(-50, 1000));
     const toggle = screen.getByRole("button", { name: /Show as amount/ });
@@ -309,6 +351,19 @@ describe("TradesButton", () => {
         quantity={10}
       />,
     );
+
+  it("as an icon (desktop row), still says what it opens", () => {
+    renderWith(
+      <TradesButton
+        perf={perf([{ row: row("K"), measured: ok(200, 1000) }])}
+        holdingKey="K"
+        name="Holding"
+        quantity={10}
+        iconOnly
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Trades for Holding" })).toHaveClass("size-11");
+  });
 
   it("opens the trades once the return toggles instead", async () => {
     button(ok(200, 1000));
