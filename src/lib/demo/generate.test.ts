@@ -278,10 +278,16 @@ describe("generateDemoData: the dashboard tells one story", () => {
     expect(new Set(db.net_worth_history.map((h) => share(h).toFixed(3))).size).toBeGreaterThan(3);
   });
 
+  // protects=the demo year reads like a person who saves; fails_when=imported history (spending
+  // only) lands in the months Cash flow's Year and 12-month trend show, as a loss
   it("income beats spending in every full month, like a person who saves", () => {
-    // Imported history months have spending only: no income was imported for them.
-    const imported = new Set(db.spend_history.map((h) => h.month));
-    const months = db.v_income_vs_expenses_monthly.filter((m) => !imported.has(m.month!)).slice(1);
+    const now = new Date();
+    const yearAgo = new Date(Date.UTC(now.getFullYear() - 1, now.getMonth(), 1))
+      .toISOString()
+      .slice(0, 10);
+    // Imported history (spending only, no income imported) stays out of the shown year and trend.
+    for (const h of db.spend_history) expect(h.month < yearAgo).toBe(true);
+    const months = db.v_income_vs_expenses_monthly.filter((m) => m.month! >= yearAgo).slice(1);
     expect(months.length).toBeGreaterThanOrEqual(2);
     for (const m of months) expect(m.income_eur!).toBeGreaterThan(m.expenses_eur!);
   });
