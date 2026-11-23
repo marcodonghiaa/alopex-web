@@ -148,16 +148,59 @@ describe("pickers", () => {
     const trigger = screen.getByRole("button", { name: /Change type/ });
     await userEvent.click(trigger);
     await userEvent.click(await screen.findByRole("button", { name: "Subscription" }));
-    await waitFor(() => expect(trigger).toBeDisabled());
+    // polish-4 #3: locked with aria-disabled (it keeps focus), not native disabled.
+    await waitFor(() => expect(trigger).toHaveAttribute("aria-disabled", "true"));
     await userEvent.click(trigger);
     expect(screen.queryByRole("button", { name: "One-time" })).not.toBeInTheDocument();
     expect(saves).toEqual(["Subscription"]);
 
     land();
-    await waitFor(() => expect(trigger).toBeEnabled());
+    await waitFor(() => expect(trigger).not.toHaveAttribute("aria-disabled"));
     await userEvent.click(trigger);
     await userEvent.click(await screen.findByRole("button", { name: "One-time" }));
     expect(saves).toEqual(["Subscription", "One-time"]);
+  });
+
+  // polish-4 #3: the trigger was natively disabled while saving, so after a keyboard pick Radix
+  // handed focus back to a disabled button and it fell to <body>. fails_when=focus isn't on the
+  // trigger after a keyboard pick and its save
+  it("TypePicker keeps focus on its trigger through a keyboard pick and the save", async () => {
+    let land = () => {};
+    function Row() {
+      const save = useMutation({
+        mutationFn: (_t: string) => new Promise<void>((r) => (land = r)),
+      });
+      return <TypePicker tx={tx()} onSelect={(t) => save.mutate(t)} saving={save.isPending} />;
+    }
+    render(<Row />);
+    const trigger = screen.getByRole("button", { name: /Change type/ });
+    trigger.focus();
+    await userEvent.keyboard("{Enter}");
+    (await screen.findByRole("button", { name: "Subscription" })).focus();
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => expect(trigger).toHaveAttribute("aria-disabled", "true"));
+    expect(trigger).toHaveFocus();
+    land();
+    await waitFor(() => expect(trigger).not.toHaveAttribute("aria-disabled"));
+    expect(trigger).toHaveFocus();
+  });
+
+  it("TypePicker shows a spinner while its save is pending, and none otherwise", () => {
+    const { rerender } = render(<TypePicker tx={tx()} onSelect={vi.fn()} saving />);
+    expect(screen.getByRole("button", { name: /Change type/ })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    expect(screen.getByTestId("picker-spinner")).toBeInTheDocument();
+    rerender(<TypePicker tx={tx()} onSelect={vi.fn()} saving={false} />);
+    expect(screen.queryByTestId("picker-spinner")).not.toBeInTheDocument();
+  });
+
+  it("CategoryPicker shows the same spinner while saving, and none otherwise", () => {
+    const { rerender } = render(<CategoryPicker tx={tx()} onSelect={vi.fn()} saving />);
+    expect(screen.getByTestId("picker-spinner")).toBeInTheDocument();
+    rerender(<CategoryPicker tx={tx()} onSelect={vi.fn()} saving={false} />);
+    expect(screen.queryByTestId("picker-spinner")).not.toBeInTheDocument();
   });
 
   it("TypePicker shows a dash when the type is unset", () => {
