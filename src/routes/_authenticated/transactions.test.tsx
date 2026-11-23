@@ -676,6 +676,16 @@ describe("Type save and subscriptions", () => {
       expect(invoke).toHaveBeenCalledTimes(2);
     });
 
+    it("stops after one retry, even when the retry is rate limited too", async () => {
+      const { answer } = await saveThenAnswer(LIMITED);
+      invoke.mockResolvedValue(LIMITED);
+      answer();
+      await advance(5_100);
+      expect(invoke).toHaveBeenCalledTimes(2);
+      await advance(30_000);
+      expect(invoke).toHaveBeenCalledTimes(2);
+    });
+
     it("doesn't retry a check that ran", async () => {
       const { answer } = await saveThenAnswer({ data: { streams: 1 }, error: null });
       answer();

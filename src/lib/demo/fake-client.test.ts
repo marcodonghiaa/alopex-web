@@ -7,6 +7,22 @@ import type { Tables } from "@/integrations/supabase/types";
 import { billEntries, monthBounds, type ChargeTx } from "@/lib/recurring-calendar";
 import { addDays } from "@/lib/date";
 
+// Lets one test change the generated demo data (e.g. a stream's cadence) before the client loads it.
+const seed = vi.hoisted(() => ({
+  hook: undefined as undefined | ((db: Record<string, Array<Record<string, unknown>>>) => void),
+}));
+vi.mock("./generate", async (orig) => {
+  const m = await orig<typeof import("./generate")>();
+  return {
+    ...m,
+    generateDemoData: (...a: Parameters<typeof m.generateDemoData>) => {
+      const db = m.generateDemoData(...a);
+      seed.hook?.(db as unknown as Record<string, Array<Record<string, unknown>>>);
+      return db;
+    },
+  };
+});
+
 const NOW = new Date(2026, 9, 19, 12);
 const fresh = () => createFakeClient(NOW);
 
@@ -933,16 +949,18 @@ describe("fake client: refresh-recurring", () => {
   // while your own choice (confirmed) is kept. fails_when=one charge back reads Active when
   // undecided, all back doesn't read Active, or a confirmed stream loses its choice
   describe("a gone stream charged again", () => {
-    const comeBack = async (confirm: boolean, all: boolean) => {
+    const comeBack = async (confirm: boolean, back: "one" | "two" | "all") => {
       const { c, s, charges, refs } = await setup();
       if (confirm)
         await c.rpc("stream_action", { p_stream: s.id, p_action: "confirm", p_args: {} });
       await charges();
       await recheck(c);
-      const back = c
+      const update = c
         .from("transactions")
         .update({ transaction_type: "Subscription", transaction_type_source: "manual" });
-      await (all ? back.eq("merchant_key", s.merchant_key!) : back.eq("entry_reference", refs[0]!));
+      await (back === "all"
+        ? update.eq("merchant_key", s.merchant_key!)
+        : update.in("entry_reference", refs.slice(0, back === "one" ? 1 : 2)));
       await recheck(c);
       const g = groupStreams(
         ((await c.from("recurring_streams").select("*")).data ?? []) as Array<
@@ -954,18 +972,24 @@ describe("fake client: refresh-recurring", () => {
     };
 
     it("comes back To review when one undecided charge is back", async () => {
-      const r = await comeBack(false, false);
+      const r = await comeBack(false, "one");
       expect(r.toReview).toContain(r.id);
       expect(r.active).not.toContain(r.id);
     });
 
     it("comes back Active when its charges with a rhythm are back", async () => {
-      const r = await comeBack(false, true);
+      const r = await comeBack(false, "all");
       expect(r.active).toContain(r.id);
     });
 
+    it("comes back Active when two charges on different dates are back", async () => {
+      const r = await comeBack(false, "two");
+      expect(r.active).toContain(r.id);
+      expect(r.toReview).not.toContain(r.id);
+    });
+
     it("keeps your confirmed choice when one charge is back", async () => {
-      const r = await comeBack(true, false);
+      const r = await comeBack(true, "one");
       expect(r.active).toContain(r.id);
     });
   });
@@ -1017,6 +1041,38 @@ describe("fake client: refresh-recurring", () => {
     const after = await bills();
     expect(after.length).toBe(before.length);
     expect(after.filter((e) => e.name === s.display_name).map((e) => e.status)).toEqual(["late"]);
+  });
+
+  it("re-dates by the stream's own cadence, not always a month", async () => {
+    seed.hook = (db) => {
+      for (const r of db["recurring_streams"] ?? []) r["cadence"] = "quarterly";
+    };
+    const c = fresh();
+    seed.hook = undefined;
+    const rows = ((await c.from("recurring_streams").select("*")).data ?? []) as Array<
+      Tables<"recurring_streams">
+    >;
+    const { data: txs } = await c.from("transactions").select("merchant_key,booking_date");
+    const datesOf = (r: Tables<"recurring_streams">) =>
+      [
+        ...new Set(
+          (txs ?? []).filter((t) => t.merchant_key === r.merchant_key).map((t) => t.booking_date!),
+        ),
+      ].sort();
+    const s = rows.find((r) => r.cadence === "quarterly" && datesOf(r).length >= 2)!;
+    const dates = datesOf(s);
+    const prev = dates[dates.length - 2]!;
+    await c
+      .from("transactions")
+      .update({ transaction_type: "One-time", transaction_type_source: "manual" })
+      .eq("merchant_key", s.merchant_key!)
+      .eq("booking_date", dates[dates.length - 1]!);
+    await recheck(c);
+    const row = ((await c.from("recurring_streams").select("*")).data ?? []).find(
+      (r: { id: string }) => r.id === s.id,
+    ) as Tables<"recurring_streams">;
+    expect(row.last_charged).toBe(prev);
+    expect(row.next_expected).toBe(addDays(prev, 91));
   });
 
   it("leaves every stream's dates as generated when no charge changed", async () => {
