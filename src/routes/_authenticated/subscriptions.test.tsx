@@ -799,3 +799,75 @@ describe("Locked frequency picker", () => {
     expect(picker).toHaveClass("disabled:pointer-events-none");
   });
 });
+
+// polish-4 #8: inside the server's 5 s window (429) the list kept the saved data while the
+// calendar already showed the change. fails_when=a 429 isn't retried once after the window, or the
+// retry still goes out after the page has closed
+describe("Re-check after a rate limit", () => {
+  // Drop any once-answers a test left unused (clearAllMocks keeps them).
+  beforeEach(() => {
+    invoke.mockReset();
+    invoke.mockResolvedValue({ data: { streams: 2 }, error: null });
+  });
+  afterEach(() => vi.useRealTimers());
+  const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+  const limitedThenRenamed = () =>
+    invoke
+      .mockResolvedValueOnce({ data: null, error: { context: { status: 429 } } })
+      .mockImplementationOnce(async () => {
+        db.rows = db.rows.map((r) => (r["id"] === "s1" ? { ...r, display_name: "iCloud" } : r));
+        return { data: { streams: 2 }, error: null };
+      });
+
+  it("retries once after the window and shows the fresh list", async () => {
+    vi.useFakeTimers();
+    limitedThenRenamed();
+    renderPage();
+    await advance(100);
+    expect(screen.getByText("Streamflix")).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledTimes(1);
+    await advance(5_000);
+    await advance(100);
+    expect(invoke).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("iCloud")).toBeInTheDocument();
+    await advance(10_000);
+    expect(invoke).toHaveBeenCalledTimes(2);
+  });
+
+  it("sends no retry once the page has closed", async () => {
+    vi.useFakeTimers();
+    limitedThenRenamed();
+    const { unmount } = renderPage();
+    await advance(100);
+    unmount();
+    await advance(10_000);
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends no retry when the page closes before the 429 comes back", async () => {
+    vi.useFakeTimers();
+    let answer!: () => void;
+    invoke.mockImplementationOnce(
+      () =>
+        new Promise((res) => {
+          answer = () => res({ data: null, error: { context: { status: 429 } } });
+        }),
+    );
+    const { unmount } = renderPage();
+    await advance(10);
+    unmount();
+    answer();
+    await advance(10_000);
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("doesn't retry a check that ran, or one that failed for another reason", async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    invoke.mockResolvedValueOnce({ data: null, error: new Error("FunctionsFetchError") });
+    renderPage();
+    await advance(10_000);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+});

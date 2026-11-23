@@ -133,17 +133,31 @@ function SubscriptionsPage() {
   // the two-step check, a rate-limit read, the confirmed-streams read, the paged spend reads and
   // one upsert.
   // No client-side skip-if-recent: edit a transaction, then open this page, must show the edit. The server
-  // allows one run per 5 s (429 keeps the saved list), so an edit made inside that window shows next visit.
+  // allows one run per 5 s (429 keeps the saved list meanwhile), so a 429 is retried once after that
+  // window, while the page is still open.
   useEffect(() => {
-    void refreshRecurring()
-      .then(async (ran) => {
-        if (!ran || queryClient.isMutating({ mutationKey: MUTATION_KEY }) > 0) return;
-        // A read still in flight started before the re-check: drop it, or the refetch would reuse it.
-        await queryClient.cancelQueries({ queryKey: RECURRING_KEY });
-        // Unlock only once the fresh list is on screen.
-        await queryClient.invalidateQueries({ queryKey: RECURRING_KEY });
-      })
-      .finally(() => setChecking(false));
+    let open = true;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const check = (retryIfLimited: boolean) =>
+      void refreshRecurring()
+        .then(async (result) => {
+          if (result === "limited" && retryIfLimited && open)
+            retry = setTimeout(() => {
+              setChecking(true);
+              check(false);
+            }, 5_000);
+          if (result !== "ran" || queryClient.isMutating({ mutationKey: MUTATION_KEY }) > 0) return;
+          // A read still in flight started before the re-check: drop it, or the refetch would reuse it.
+          await queryClient.cancelQueries({ queryKey: RECURRING_KEY });
+          // Unlock only once the fresh list is on screen.
+          await queryClient.invalidateQueries({ queryKey: RECURRING_KEY });
+        })
+        .finally(() => setChecking(false));
+    check(true);
+    return () => {
+      open = false;
+      clearTimeout(retry);
+    };
   }, [queryClient]);
 
   const actionMutation = useMutation({
