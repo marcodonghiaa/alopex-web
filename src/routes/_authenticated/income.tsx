@@ -67,6 +67,8 @@ interface IncomeRow {
   payer_name: string | null;
   currency: string | null;
   amount: number | null;
+  /** My share in the credit's currency, when split. */
+  personal_amount: number | null;
   personal_signed_amount_eur: number | null;
 }
 
@@ -80,7 +82,7 @@ async function fetchIncomeForMonth(month: Date): Promise<Array<IncomeRow>> {
   const { data, error } = await supabase
     .from("v_transactions_eur")
     .select(
-      "entry_reference,account_uid,booking_date,category,creditor_name,payer_name,currency,amount,personal_signed_amount_eur",
+      "entry_reference,account_uid,booking_date,category,creditor_name,payer_name,currency,amount,personal_amount,personal_signed_amount_eur",
     )
     .eq("flow_type", "income")
     .gte("booking_date", start)
@@ -109,6 +111,9 @@ function IncomeList({ rows, mark }: { rows: Array<IncomeRow>; mark?: MarkProps }
     <ul className="divide-y divide-hairline">
       {rows.map((r) => {
         const bankRow = mark?.bank.get(txKey(r));
+        const currency = r.currency ?? "EUR";
+        const full = Math.abs(r.amount ?? 0);
+        const share = Math.abs(r.personal_amount ?? full);
         return (
           <li
             key={`${r.account_uid}:${r.entry_reference}`}
@@ -153,10 +158,18 @@ function IncomeList({ rows, mark }: { rows: Array<IncomeRow>; mark?: MarkProps }
                 )}
               </div>
             </div>
-            <span className="inline-flex shrink-0 items-center gap-1 font-figure text-foreground">
-              <ArrowDownLeft className="size-3.5" />
-              {formatMoney(Math.abs(r.amount ?? 0), r.currency ?? "EUR")}
-            </span>
+            {/* As on Transactions: a split credit shows my share (what Received counts), the whole under it. */}
+            <div className="shrink-0 text-right">
+              <span className="inline-flex items-center gap-1 font-figure text-foreground">
+                <ArrowDownLeft className="size-3.5" />
+                {formatMoney(share, currency)}
+              </span>
+              {share !== full && (
+                <div className="font-figure text-xs whitespace-nowrap text-muted-foreground">
+                  of {formatMoney(full, currency)}
+                </div>
+              )}
+            </div>
           </li>
         );
       })}

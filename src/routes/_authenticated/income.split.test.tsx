@@ -39,6 +39,7 @@ const view = (ref: string, name: string, eur: number, mine = eur) => ({
   currency: "EUR",
   amount: eur,
   signed_amount_eur: eur,
+  personal_amount: mine === eur ? null : mine,
   personal_signed_amount_eur: mine,
 });
 const month = { rows: null as Array<ReturnType<typeof view>> | null };
@@ -141,6 +142,26 @@ describe("Income: my share only", () => {
         .textContent,
     ).toBe("Regular €1,500.00 · One-off €50.00");
     expect(screen.getByRole("region", { name: /^Received in / }).textContent).toContain("1,550.00");
+  });
+
+  // fails_when=a split row shows the full credit while Received counts only my share
+  it("shows my share on a split row, with the whole credit under it", async () => {
+    month.rows = [
+      view("e1", "ACME Ltd", 2000, 1500),
+      view("e2", "Aunt May", 50),
+      view("e3", "Flatmate", 300, 0),
+    ];
+    renderPage();
+    const acme = (await screen.findByText("ACME Ltd")).closest("li") as HTMLElement;
+    expect(acme.textContent).toContain("€1,500.00");
+    expect(acme.textContent).toContain("of €2,000.00");
+    const may = screen.getByText("Aunt May").closest("li") as HTMLElement;
+    expect(may.textContent).toContain("€50.00");
+    expect(may.textContent).not.toContain("of ");
+    // All someone else's: Received counts 0 of it, and so does the row.
+    const flatmate = screen.getByText("Flatmate").closest("li") as HTMLElement;
+    expect(flatmate.textContent).toContain("€0.00");
+    expect(flatmate.textContent).toContain("of €300.00");
   });
 });
 
