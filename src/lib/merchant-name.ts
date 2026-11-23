@@ -48,6 +48,17 @@ export function cleanMerchantName(raw: string | null | undefined): string | null
     .trim();
 
   if (!name) return raw;
-  // Capitalise only what was cut ("Tst*zuckers" -> "Zuckers"); "eBay" stays as typed.
-  return name === input ? name : name.charAt(0).toUpperCase() + name.slice(1);
+  return capitaliseName(name);
+}
+
+/**
+ * Every name shown starts with a capital, however it arrived ("netflix" -> "Netflix",
+ * "über eats" -> "Über eats"). Left alone: a brand written with a capital inside its first word
+ * ("eBay", "iPhone case", "easyJet") and a name that starts with a number ("7eleven").
+ */
+export function capitaliseName(name: string): string {
+  const [, lead = "", first = "", rest = ""] = /^([^\p{L}\p{N}\s]*)(\p{Ll})(\S*)/u.exec(name) ?? [];
+  const upper = first.toUpperCase();
+  if (!first || /\p{Lu}/u.test(rest) || upper.length !== first.length) return name;
+  return lead + upper + name.slice(lead.length + first.length);
 }

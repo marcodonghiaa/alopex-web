@@ -1,5 +1,5 @@
 import { dateLocale, numberFormat } from "@/lib/locale";
-import { cleanMerchantName } from "@/lib/merchant-name";
+import { capitaliseName, cleanMerchantName } from "@/lib/merchant-name";
 
 export interface TransactionRow {
   entry_reference: string;
@@ -47,7 +47,7 @@ export const isSameTx = (a: TxKey | undefined, b: TxKey): boolean => !!a && txId
 export const incomeTitle = (
   tx: Pick<TransactionRow, "creditor_name" | "category"> & { payer_name?: string | null },
 ): string =>
-  tx.payer_name?.trim() ||
+  capitaliseName(tx.payer_name?.trim() ?? "") ||
   cleanMerchantName(tx.creditor_name?.trim() || null) ||
   tx.category?.trim() ||
   "Unlabelled income";

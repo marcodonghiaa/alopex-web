@@ -10,6 +10,12 @@ describe("incomeTitle", () => {
     expect(incomeTitle({ creditor_name: "PAYPAL *ACME", category: "Services" })).toBe("ACME");
   });
 
+  it("starts the payer's name with a capital, as every name shown does", () => {
+    expect(
+      incomeTitle({ payer_name: "mario rossi", creditor_name: null, category: "Income" }),
+    ).toBe("Mario rossi");
+  });
+
   it("falls back to the category when the name is missing or blank", () => {
     expect(incomeTitle({ creditor_name: null, category: "Services" })).toBe("Services");
     expect(incomeTitle({ creditor_name: "  ", category: "Income" })).toBe("Income");

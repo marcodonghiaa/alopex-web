@@ -35,7 +35,16 @@
     ["GOOGLE *ADS1234567890", "GOOGLE"],
     ["AMAZON EU SARL", "Amazon"],
     ["Amazon Payments Europe S.C.A.", "Amazon"],
-    ["DEBIT CARD PAYMENT TO TESCO", "TESCO"]
+    ["DEBIT CARD PAYMENT TO TESCO", "TESCO"],
+    ["netflix", "Netflix"],
+    ["  spotify ", "Spotify"],
+    ["mario rossi", "Mario rossi"],
+    ["über eats", "Über eats"],
+    ["élite bar", "Élite bar"],
+    ["москва такси", "Москва такси"],
+    ["(netflix)", "(Netflix)"],
+    ["PAYPAL *eBay", "eBay"],
+    ["sq *blue bottle", "Blue bottle"]
   ],
   "keep": [
     "Esselunga",
@@ -68,6 +77,11 @@
     "PAGAMENTO POS 12/03/2024 ORE 12:30 CARTA 1234 ESSELUNGA",
     "H & M",
     "C & A",
-    "B & B"
+    "B & B",
+    "7eleven",
+    "1password",
+    "ßtudio",
+    "iCloud+",
+    "Netflix"
   ]
 }
