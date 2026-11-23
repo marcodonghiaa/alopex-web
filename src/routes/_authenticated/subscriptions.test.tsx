@@ -428,6 +428,17 @@ describe("Subscriptions page", () => {
     expect(screen.queryByLabelText("Estimated monthly cost")).toBeNull();
   });
 
+  // polish-4 #7: charges marked One-time move a stream to Stopped, where "No recent charge." was
+  // untrue. fails_when=the hint claims there was no recent charge at all
+  it("explains Stopped as no recent subscription charge", async () => {
+    db.rows = [stream({ last_charged: "2020-01-01", next_expected: "2020-02-01" })];
+    renderPage();
+    expect(
+      await screen.findByText("No recent subscription charge. Not counted."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("No recent charge. Not counted.")).toBeNull();
+  });
+
   it("shows the native amount for a non-EUR stream and a dash without a monthly amount", async () => {
     db.rows = [
       stream({ currency: "USD", typical_amount: 12, typical_amount_eur: 11 }),

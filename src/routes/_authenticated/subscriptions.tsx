@@ -361,7 +361,7 @@ function SubscriptionsPage() {
                 Stopped ({stopped.length})
               </summary>
               <p className="mb-3 px-4 text-[0.8125rem] text-muted-foreground">
-                No recent charge. Not counted.
+                No recent subscription charge. Not counted.
               </p>
               <GroupedList>
                 <ul className="divide-y divide-hairline">{stopped.map(renderCard)}</ul>
