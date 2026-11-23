@@ -306,6 +306,31 @@ describe("Activity page", () => {
     expect(sections.map((h) => h.textContent)).toHaveLength(2);
   });
 
+  // protects=desktop rows sit under day headings like the phone list (Marco 2026-11-23);
+  // fails_when=the table is flat again or keeps a Date column the headings make redundant
+  it("groups the desktop table by day, with no Date column", async () => {
+    tableData = {
+      v_transactions_eur: [row("1", { booking_date: thisMonth(2) }), row("2"), row("3")],
+    };
+    renderPage();
+    await screen.findAllByText("Shop 1");
+    const table = screen.getByRole("table");
+    const days = within(table)
+      .getAllByRole("columnheader")
+      .filter((th) => th.getAttribute("scope") === "colgroup");
+    expect(days).toHaveLength(2);
+    expect(within(table).queryByRole("columnheader", { name: "Date" })).toBeNull();
+    // Day 2 heading comes first, then its one row, then day 1's heading and its two rows.
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows.map((r) => r.textContent?.match(/Shop \d/)?.[0] ?? "day")).toEqual([
+      "day",
+      "Shop 1",
+      "day",
+      "Shop 2",
+      "Shop 3",
+    ]);
+  });
+
   it("says when a search finds nothing, and clears it", async () => {
     tableData = { v_transactions_eur: [row("1")] };
     renderPage();

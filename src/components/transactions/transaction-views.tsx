@@ -12,7 +12,7 @@ import { RefundedBadge } from "@/components/refunded-badge";
 import { CategoryAvatar } from "@/components/category-avatar";
 import {
   formatBookingDate,
-  formatBookingDateShort,
+  formatDayHeading,
   formatMoney,
   formatSignedMoney,
   isSplitwiseShare,
@@ -333,7 +333,22 @@ function splitNote(tx: TransactionRow): string | null {
   return `split, ${tx.credit_debit_indicator === "CRDT" ? "not mine" : "owed"} ${rest}`;
 }
 
-/** Desktop row: date, merchant (its category icon opens the category picker), amount with its account. Type, split and the rest sit behind ›. */
+/** Desktop day heading: a full-width row in the table, so rows under it keep the table's columns. */
+export function DayHeaderRow({ day, colSpan }: { day: string | null; colSpan: number }) {
+  return (
+    <tr className="border-b bg-background/40">
+      <th
+        scope="colgroup"
+        colSpan={colSpan}
+        className="px-4 pt-4 pb-2 text-left text-[0.8125rem] leading-tight font-medium text-muted-foreground"
+      >
+        {formatDayHeading(day)}
+      </th>
+    </tr>
+  );
+}
+
+/** Desktop row (under its day heading): merchant (its category icon opens the category picker), amount with its account. Type, split and the rest sit behind ›. */
 export function TransactionRowView(props: TransactionViewProps) {
   const { tx, accountLabel, selected, onToggleSelect, highlighted, showAccount = true } = props;
   const [open, setOpen] = useState(false);
@@ -367,9 +382,6 @@ export function TransactionRowView(props: TransactionViewProps) {
             />
           </label>
         )}
-      </td>
-      <td className="px-2 py-3 whitespace-nowrap text-muted-foreground lg:px-4">
-        {formatBookingDateShort(tx.booking_date)}
       </td>
       <td className="w-full max-w-0 px-2 py-3 lg:px-4">
         <div className="flex items-center gap-3">

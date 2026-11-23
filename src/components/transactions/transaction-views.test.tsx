@@ -4,6 +4,7 @@ import { queryWrapper } from "@/test/query-wrapper";
 import userEvent from "@testing-library/user-event";
 import { shareToRow } from "@/lib/transactions";
 import {
+  DayHeaderRow,
   TransactionCardView,
   TransactionRowView,
   type TransactionViewProps,
@@ -428,11 +429,11 @@ const inTable = (p: TransactionViewProps) =>
   );
 
 // Polish 4 #8: at 768px, with the sidebar open, 16px paddings left merchant names ~6 characters.
-// fails_when=the date, merchant or amount cell keeps 16px side padding below lg
+// fails_when=the merchant or amount cell keeps 16px side padding below lg
 describe("Table row at tablet width", () => {
   it("uses tight side padding below lg so the merchant name has room", () => {
     inTable(bankProps());
-    const cells = screen.getAllByRole("cell").slice(1, 4);
+    const cells = screen.getAllByRole("cell").slice(1, 3);
     for (const cell of cells) expect(cell).toHaveClass("px-2", "lg:px-4");
   });
 });
@@ -568,5 +569,22 @@ describe("Split charge amount", () => {
       bankProps({ currency: "USD", amount: 100, signed_amount_eur: -90, personal_amount: 50 }),
     );
     expect(screen.getByText("≈ €45.00")).toBeInTheDocument();
+  });
+});
+
+// protects=desktop day headings span the whole row and read like the phone's;
+// fails_when=the heading leaves cells empty beside it or shows a raw ISO date
+describe("Desktop day heading row", () => {
+  it("spans every column and names the day", () => {
+    render(
+      <table>
+        <tbody>
+          <DayHeaderRow day={null} colSpan={4} />
+        </tbody>
+      </table>,
+    );
+    const th = screen.getByRole("columnheader", { name: "No date" });
+    expect(th).toHaveAttribute("colspan", "4");
+    expect(th).toHaveAttribute("scope", "colgroup");
   });
 });

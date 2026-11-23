@@ -6,7 +6,7 @@ import { makeRuleAction } from "@/lib/rules";
 import { rulesQuery } from "@/lib/rules-query";
 import { accountName, bankOf } from "@/components/bank-badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/field";
@@ -70,6 +70,7 @@ import {
 import {
   TransactionCardView,
   TransactionRowView,
+  DayHeaderRow,
   type TransactionViewProps,
 } from "@/components/transactions/transaction-views";
 import { WorthItSpotlight } from "@/components/transactions/worth-it";
@@ -895,7 +896,6 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
                     />
                   </label>
                 </th>
-                <th className="px-2 py-3 font-medium lg:px-4">Date</th>
                 <th className="px-2 py-3 font-medium lg:px-4">Merchant</th>
                 <th className="px-2 py-3 text-right font-medium lg:px-4">Amount</th>
                 <th className="w-12 px-2 py-3">
@@ -907,30 +907,40 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
               {txQuery.isPending ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i} className="border-b last:border-0">
-                    <td colSpan={5} className="px-4 py-3">
+                    <td colSpan={4} className="px-4 py-3">
                       <Skeleton className="h-5" />
                     </td>
                   </tr>
                 ))
               ) : txQuery.isError ? null : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5}>{emptyList}</td>
+                  <td colSpan={4}>{emptyList}</td>
                 </tr>
               ) : (
                 <>
-                  {mine.map((tx) => (
-                    <TransactionRowView key={txId(tx)} {...viewProps(tx)} />
+                  {groupByDay(mine).map((group) => (
+                    <Fragment key={group.day ?? "none"}>
+                      <DayHeaderRow day={group.day} colSpan={4} />
+                      {group.rows.map((tx) => (
+                        <TransactionRowView key={txId(tx)} {...viewProps(tx)} />
+                      ))}
+                    </Fragment>
                   ))}
                   {/* In the same table so the columns line up with the rows above. */}
                   {forOthersOpen && (
                     <>
                       <tr className="border-b bg-background/40">
-                        <td colSpan={5} className="px-4 pt-5 pb-3">
+                        <td colSpan={4} className="px-4 pt-5 pb-3">
                           {forOthersHeading("paid-for-others-desktop")}
                         </td>
                       </tr>
-                      {forOthers.map((tx) => (
-                        <TransactionRowView key={txId(tx)} {...viewProps(tx)} />
+                      {groupByDay(forOthers).map((group) => (
+                        <Fragment key={group.day ?? "none"}>
+                          <DayHeaderRow day={group.day} colSpan={4} />
+                          {group.rows.map((tx) => (
+                            <TransactionRowView key={txId(tx)} {...viewProps(tx)} />
+                          ))}
+                        </Fragment>
                       ))}
                     </>
                   )}
