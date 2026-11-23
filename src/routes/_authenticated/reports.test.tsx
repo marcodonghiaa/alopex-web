@@ -29,6 +29,7 @@ const streams = [
   stream({ id: "e", typical_amount_eur: -7, cadence: null }), // no frequency: not priced
 ];
 
+let streamRows: Array<Record<string, unknown>> = streams;
 let failTable: string | null = null;
 let txRows: Array<Record<string, unknown>> = [];
 
@@ -47,7 +48,7 @@ vi.mock("@/integrations/supabase/client", () => ({
                 // maybeSingle() gives null when the month has no row.
                 data:
                   table === "recurring_streams"
-                    ? streams
+                    ? streamRows
                     : table === "v_income_vs_expenses_monthly"
                       ? null
                       : table === "v_transactions_eur"
@@ -103,9 +104,59 @@ describe("Reports subscriptions total", () => {
     // The Subscriptions page's own computation, on the same rows.
     const pageTotal = monthlyTotal(groupStreams(streams as never, romeToday()).active).sum;
     expect(pageTotal).toBe(15);
-    expect(await within(card).findByText("€15.00")).toBeTruthy();
+    // As the Subscriptions page writes it: an estimate, and the streams it couldn't price.
+    expect(await within(card).findByText("~€15.00")).toBeTruthy();
+    expect(within(card).getByText("+ 1 without a frequency")).toBeTruthy();
     // Same cache entry as the Subscriptions page and the nav badge.
     expect(client.getQueryData(RECURRING_KEY)).toBe(streams);
+  });
+});
+
+// protects=Reports never shows a quiet €0 the Subscriptions page wouldn't; fails_when=streams
+// without a frequency, or a failed read, read as "€0.00"
+describe("Reports subscriptions without a figure", () => {
+  afterEach(() => {
+    streamRows = streams;
+    failTable = null;
+  });
+  const subscriptionsRow = async () =>
+    (await screen.findByText("Subscriptions")).closest("section") as HTMLElement;
+  it("shows a dash when no active stream has a frequency", async () => {
+    streamRows = [stream({ id: "e", typical_amount_eur: -7, cadence: null })];
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    const card = await subscriptionsRow();
+    await waitFor(() => expect(card).toHaveTextContent("—"));
+    expect(card).not.toHaveTextContent("€0.00");
+  });
+
+  it("shows a dash when the subscriptions can't load", async () => {
+    failTable = "recurring_streams";
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <Page />
+      </QueryClientProvider>,
+    );
+    const card = await subscriptionsRow();
+    await waitFor(() => expect(card).toHaveTextContent("—"));
+    expect(card).not.toHaveTextContent("€0.00");
+  });
+
+  it("shows €0.00 when nothing is active", async () => {
+    streamRows = [];
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    const card = await subscriptionsRow();
+    await waitFor(() => expect(card).toHaveTextContent("€0.00"));
+    expect(card).not.toHaveTextContent("~");
   });
 });
 
@@ -134,7 +185,7 @@ describe("Reports when a figure fails to load", () => {
       </QueryClientProvider>,
     );
     const card = (await screen.findByText("Subscriptions")).closest("section") as HTMLElement;
-    await within(card).findByText("€15.00");
+    await within(card).findByText("~€15.00");
     expect(screen.queryByRole("alert")).toBeNull();
   });
 

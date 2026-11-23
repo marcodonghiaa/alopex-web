@@ -135,10 +135,10 @@ function ReportsPage() {
   // Current subscriptions (today's state, whatever month is selected), from the same cache entry
   // and computation as the Subscriptions page, so both show the same figure.
   const subscriptionsQuery = useRecurringStreams();
-  const subscriptionsTotal = useMemo(
-    () => monthlyTotal(groupStreams(subscriptionsQuery.data ?? [], romeToday()).active).sum,
-    [subscriptionsQuery.data],
-  );
+  const subscriptions = useMemo(() => {
+    const active = groupStreams(subscriptionsQuery.data ?? [], romeToday()).active;
+    return { active: active.length, ...monthlyTotal(active) };
+  }, [subscriptionsQuery.data]);
   const worthItQuery = useQuery({
     queryKey: ["reports-worth-it", monthISO],
     queryFn: () => fetchWorthItForMonth(monthISO, nextMonthStartISO),
@@ -290,10 +290,24 @@ function ReportsPage() {
           <Link to="/subscriptions" className={ROW_LINK}>
             <div className="min-w-0 flex-1">
               <h2 className="text-[0.9375rem] font-medium text-foreground">Subscriptions</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">Current, per month</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Current, per month
+                {subscriptions.known > 0 && subscriptions.unknown > 0 && (
+                  <span className="block">+ {subscriptions.unknown} without a frequency</span>
+                )}
+              </p>
             </div>
+            {/* Written as on the Subscriptions page: an estimate, or a dash when there is none. */}
             <span className="font-figure text-sm text-foreground">
-              {subscriptionsQuery.isPending ? "…" : formatEur(subscriptionsTotal)}
+              {subscriptionsQuery.isPending
+                ? "…"
+                : subscriptionsQuery.isError
+                  ? "—"
+                  : subscriptions.active === 0
+                    ? formatEur(0)
+                    : subscriptions.known === 0
+                      ? "—"
+                      : `~${formatEur(subscriptions.sum)}`}
             </span>
             <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground" />
           </Link>
