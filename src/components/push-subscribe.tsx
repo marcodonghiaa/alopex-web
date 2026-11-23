@@ -43,16 +43,23 @@ function urlBase64ToUint8Array(base64: string) {
  * doesn't get the previous one's alerts. Runs while still signed in (RLS). Never throws.
  */
 export async function forgetThisBrowserPush() {
-  try {
-    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+  // The demo's fake client can't remove the real row, so it must not unsubscribe either.
+  if (isDemoMode() || typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+  const cleanup = async () => {
     const reg = await navigator.serviceWorker.getRegistration();
     const sub = await reg?.pushManager.getSubscription();
     if (!sub) return;
-    await supabase
+    const { error } = await supabase
       .from("push_subscriptions" as never)
       .delete()
       .eq("endpoint", sub.endpoint);
+    // Row still there: keep the browser subscribed so the row stays deliverable.
+    if (error) throw error;
     await sub.unsubscribe();
+  };
+  try {
+    // A stalled network must not keep the user stuck on "Signing out".
+    await Promise.race([cleanup(), new Promise((r) => setTimeout(r, 3000))]);
   } catch (err) {
     console.error("Push cleanup on sign-out failed:", err);
   }

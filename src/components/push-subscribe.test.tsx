@@ -16,7 +16,8 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock("@/lib/demo/mode", () => ({ isDemoMode: () => false }));
+const demo = vi.hoisted(() => ({ on: false }));
+vi.mock("@/lib/demo/mode", () => ({ isDemoMode: () => demo.on }));
 
 import { PushSubscribeButton, forgetThisBrowserPush } from "./push-subscribe";
 
@@ -40,6 +41,7 @@ beforeEach(() => {
   eq.mockResolvedValue({ error: null });
   unsubscribe.mockClear();
   current = null;
+  demo.on = false;
   vi.stubGlobal("matchMedia", () => ({ matches: true }));
   Object.defineProperty(navigator, "serviceWorker", {
     configurable: true,
@@ -93,6 +95,32 @@ describe("forgetThisBrowserPush", () => {
   it("does nothing when this browser has no subscription", async () => {
     await forgetThisBrowserPush();
     expect(eq).not.toHaveBeenCalled();
+  });
+
+  it("keeps the browser subscribed when the row could not be removed", async () => {
+    current = fresh;
+    eq.mockResolvedValue({ error: { message: "offline" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await forgetThisBrowserPush();
+    expect(unsubscribe).not.toHaveBeenCalled();
+  });
+
+  it("leaves the real account's subscription alone when leaving the demo", async () => {
+    current = fresh;
+    demo.on = true;
+    await forgetThisBrowserPush();
+    expect(eq).not.toHaveBeenCalled();
+    expect(unsubscribe).not.toHaveBeenCalled();
+  });
+
+  it("gives up after a few seconds so sign-out can't hang", async () => {
+    vi.useFakeTimers();
+    current = fresh;
+    eq.mockReturnValue(new Promise(() => {}));
+    const done = forgetThisBrowserPush();
+    await vi.advanceTimersByTimeAsync(3000);
+    await expect(done).resolves.toBeUndefined();
+    vi.useRealTimers();
   });
 
   it("never blocks sign-out when the cleanup fails", async () => {
