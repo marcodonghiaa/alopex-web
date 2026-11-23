@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { cappedClient } from "@/test/capped-client";
 
 // The demo client mirrors the real tables and views, and the demo data holds one split (Giulia).
 vi.mock("@/integrations/supabase/client", async () => {
@@ -114,6 +115,32 @@ describe("fetching splits", () => {
     const refs = (await fetchSplits()).map((r) => r.entry_reference);
     expect(refs).not.toContain(first!.entry_reference);
     expect(refs).not.toContain(second!.entry_reference);
+  });
+});
+
+describe("fetching splits past the 1000-row cap", () => {
+  // protects=no split dropped and no Splitwise charge counted twice on a long history;
+  // fails_when=either read stops at the server's row cap
+  it("reads every split and every Splitwise match", async () => {
+    const { supabase } = await import("@/integrations/supabase/client");
+    // 1100 open splits, one a day; the 50 newest are bank charges matched to Splitwise. The
+    // transactions table hands them out last, so an unpaged read would miss those matches.
+    const rows = Array.from({ length: 1100 }, (_, i) => ({
+      account_uid: "acc",
+      entry_reference: `r${String(i).padStart(4, "0")}`,
+      booking_date: new Date(Date.UTC(2023, 0, 1 + i)).toISOString().slice(0, 10),
+      signed_amount_eur: -20,
+      personal_signed_amount_eur: -10,
+      flow_type: "spend",
+      import_batch_id: i >= 1050 ? "batch-1" : null,
+    }));
+    const fake = cappedClient({ v_transactions_eur: rows, transactions: rows });
+    const spy = vi.spyOn(supabase, "from").mockImplementation(fake.client.from as never);
+    const refs = (await fetchSplits()).map((r) => r.entry_reference);
+    spy.mockRestore();
+    expect(refs).toHaveLength(1050);
+    expect(refs).toContain("r0000");
+    expect(refs).not.toContain("r1050");
   });
 });
 

@@ -1,5 +1,6 @@
 import { numberFormat } from "@/lib/locale";
 import { supabase } from "@/integrations/supabase/client";
+import { readPages } from "@/lib/read-pages";
 import { formatMoney, txId, type TxKey } from "@/lib/transactions";
 
 export const money = (value: number, currency: string) => {
@@ -66,27 +67,37 @@ export const owedEur = (r: SplitRow): number =>
 const SKIPPED_FLOWS = new Set(["refunded", "transfer"]);
 
 export async function fetchSplits(): Promise<Array<SplitRow>> {
+  // Both are paged in a total order (account_uid, entry_reference is the key), so past the
+  // server's row cap no split is dropped and no Splitwise match is missed.
   const [view, imported] = await Promise.all([
-    supabase
-      .from("v_transactions_eur")
-      .select(
-        "entry_reference, account_uid, booking_date, creditor_name, owed_by, owed_settled, signed_amount_eur, personal_signed_amount_eur, flow_type",
-      )
-      .gte("personal_amount", 0)
-      .order("booking_date", { ascending: false }),
+    readPages<SplitRow & { flow_type: string | null }>((from, to) =>
+      supabase
+        .from("v_transactions_eur")
+        .select(
+          "entry_reference, account_uid, booking_date, creditor_name, owed_by, owed_settled, signed_amount_eur, personal_signed_amount_eur, flow_type",
+        )
+        .gte("personal_amount", 0)
+        .order("booking_date", { ascending: false })
+        .order("account_uid", { ascending: true })
+        .order("entry_reference", { ascending: true })
+        .range(from, to),
+    ),
     // A bank charge matched to a Splitwise expense gets my share as personal_amount, but who owes
     // me the rest is already in the Splitwise balances: listing it here would count it twice.
-    supabase
-      .from("transactions")
-      .select("entry_reference, account_uid, import_batch_id")
-      .gte("personal_amount", 0),
+    readPages<TxKey & { import_batch_id: string | null }>((from, to) =>
+      supabase
+        .from("transactions")
+        .select("entry_reference, account_uid, import_batch_id")
+        .gte("personal_amount", 0)
+        .order("account_uid", { ascending: true })
+        .order("entry_reference", { ascending: true })
+        .range(from, to),
+    ),
   ]);
-  if (view.error) throw view.error;
-  if (imported.error) throw imported.error;
   const fromSplitwise = new Set(
-    (imported.data ?? []).filter((t) => t.import_batch_id != null).map((t) => txId(t)),
+    imported.filter((t) => t.import_batch_id != null).map((t) => txId(t)),
   );
-  return ((view.data ?? []) as Array<SplitRow & { flow_type: string | null }>).filter(
+  return view.filter(
     (r) => owedEur(r) !== 0 && !SKIPPED_FLOWS.has(r.flow_type ?? "") && !fromSplitwise.has(txId(r)),
   );
 }
