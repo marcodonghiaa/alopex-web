@@ -6,7 +6,7 @@ import { makeRuleAction } from "@/lib/rules";
 import { rulesQuery } from "@/lib/rules-query";
 import { accountName, bankOf } from "@/components/bank-badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/field";
@@ -398,6 +398,23 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
   const forOthersForced = search.trim() !== "" || mine.length === 0;
   const forOthersOpen = forOthers.length > 0 && (showForOthers || forOthersForced);
   const visible = forOthersOpen ? filtered : mine;
+  // A row whose share crossed 0 while its sheet was open moves list as the sheet closes, taking
+  // the sheet's trigger with it: focus its new Edit button, or the toggle if it went out of sight.
+  const forOthersToggle = useRef<HTMLButtonElement>(null);
+  function focusAfterMove(ref: string) {
+    setTimeout(() => {
+      const rows = [...document.querySelectorAll(`[data-entry-ref="${CSS.escape(ref)}"]`)];
+      const targets = rows
+        .map((el) =>
+          el.matches("li")
+            ? el.querySelector<HTMLElement>(":scope > button")
+            : el.querySelector<HTMLElement>('button[aria-label^="Edit"]'),
+        )
+        .filter((el): el is HTMLElement => el != null);
+      const shown = targets.find((el) => el.getClientRects().length > 0) ?? targets[0];
+      (shown ?? forOthersToggle.current)?.focus();
+    }, 0);
+  }
   const forOthersHeading = (
     <>
       <h2 className="text-lg font-semibold text-foreground">Paid for others</h2>
@@ -524,6 +541,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
     tagSuggestions: tagsQuery.data ?? [],
     onOpenChange: (open) => {
       if (open) setEditingApart(isPaidForOthers(tx));
+      else if (isPaidForOthers(tx) !== editingApart) focusAfterMove(tx.entry_reference);
       setEditing((now) => (open ? txId(tx) : now === txId(tx) ? null : now));
     },
     ...(tx.account_uid && accounts[tx.account_uid]?.manual
@@ -869,6 +887,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
         <>
           {!forOthersForced && (
             <Button
+              ref={forOthersToggle}
               variant="quiet"
               size="sm"
               onClick={() => setShowForOthers(!forOthersOpen)}

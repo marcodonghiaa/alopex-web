@@ -700,6 +700,40 @@ describe("Paid for others", () => {
     }
   });
 
+  // Polish 3 #1: the sheet's trigger is gone when its row moves list, so focus must land
+  // somewhere useful, not on the page body.
+  it("moves focus to the section toggle when the edited row moves into the collapsed section", async () => {
+    tableData = { v_transactions_eur: [row("1"), row("2")] };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderPage(client);
+    const [edit] = await screen.findAllByRole("button", { name: "Edit Shop 2" });
+    await userEvent.click(edit!);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+    await act(() => client.invalidateQueries({ queryKey: ["transactions"] }));
+    await userEvent.keyboard("{Escape}");
+    const toggle = await screen.findByRole("button", { name: "Show 1 paid for others" });
+    await waitFor(() => expect(document.activeElement).toBe(toggle));
+  });
+
+  it("moves focus to the row's new place when it leaves the section", async () => {
+    tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderPage(client);
+    await userEvent.click(await screen.findByRole("button", { name: "Show 1 paid for others" }));
+    const [edit] = await screen.findAllByRole("button", { name: "Edit Shop 2" });
+    await userEvent.click(edit!);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 4 })] };
+    await act(() => client.invalidateQueries({ queryKey: ["transactions"] }));
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() =>
+      expect(
+        document.activeElement?.closest("[data-entry-ref]")?.getAttribute("data-entry-ref"),
+      ).toBe("2"),
+    );
+  });
+
   it("shows no section when nothing was paid for others", async () => {
     tableData = { v_transactions_eur: [row("1", { personal_amount: 4 })] };
     renderPage();
