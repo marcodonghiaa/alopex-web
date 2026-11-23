@@ -10,9 +10,11 @@ let tableData: Record<string, unknown> = {};
 // Every select the page sends, to check which columns each query asks for.
 const selects: Array<{ table: string; cols: string }> = [];
 let rpcResult: { data: unknown; error: { message: string } | null } = { data: [], error: null };
+const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     rpc: () => Promise.resolve(rpcResult),
+    functions: { invoke },
     from: (table: string) => {
       const q: Record<string, unknown> = {};
       for (const m of [
@@ -568,5 +570,71 @@ describe("Transactions page tag filter", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryAllByText("Hotel Alpha")).toHaveLength(0));
+  });
+});
+
+// polish-4 #5: after a type save the nav badge ("Subscriptions 1 to review") stayed stale until
+// Subscriptions was opened. fails_when=a type save doesn't re-check subscriptions and refetch them
+describe("Type save and subscriptions", () => {
+  const bankRow = {
+    entry_reference: "e1",
+    account_uid: "a1",
+    booking_date: new Date().toISOString().slice(0, 10),
+    category: "Entertainment",
+    transaction_type: "Subscription",
+    creditor_name: "Streamflix",
+    currency: "EUR",
+    amount: 9.99,
+    signed_amount_eur: -9.99,
+    credit_debit_indicator: "DBIT",
+    flow_type: "spend",
+  };
+  const saveType = async (client: QueryClient) => {
+    rows["v_transactions_eur"] = [bankRow];
+    renderPage(client);
+    const [card] = await screen.findAllByRole("button", { name: /Streamflix/ });
+    await userEvent.click(card!);
+    const sheet = await screen.findByRole("dialog");
+    await userEvent.click(within(sheet).getByRole("button", { name: /Change type/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "One-time" }));
+  };
+  afterEach(() => invoke.mockReset());
+
+  it("re-checks subscriptions, then refetches the recurring streams", async () => {
+    const order: Array<string> = [];
+    invoke.mockImplementation(async (fn: string) => {
+      order.push(`invoke ${fn}`);
+      return { data: { streams: 1 }, error: null };
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = vi.spyOn(client, "invalidateQueries").mockImplementation(async (f) => {
+      if (JSON.stringify(f?.queryKey) === JSON.stringify(["recurring_streams"]))
+        order.push("refetch recurring_streams");
+    });
+    await saveType(client);
+    await waitFor(() =>
+      expect(order).toEqual(["invoke refresh-recurring", "refetch recurring_streams"]),
+    );
+    spy.mockRestore();
+  });
+
+  it("doesn't re-check when the type save fails", async () => {
+    failTable = "transactions";
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    try {
+      await saveType(client);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(invoke).not.toHaveBeenCalled();
+    } finally {
+      failTable = null;
+    }
+  });
+
+  it("still refetches when the re-check is rate limited (429)", async () => {
+    invoke.mockResolvedValue({ data: null, error: { context: { status: 429 } } });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = vi.spyOn(client, "invalidateQueries");
+    await saveType(client);
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ["recurring_streams"] }));
   });
 });

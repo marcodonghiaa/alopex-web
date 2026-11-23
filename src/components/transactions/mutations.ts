@@ -102,6 +102,8 @@ export function useTransactionFieldMutation<
       tx: MutatedTx;
       value: TransactionRow[K];
     }) => { label: string; onClick: () => void } | undefined;
+    // Runs after a save lands, e.g. to re-check what depends on the field.
+    onSaved?: () => void;
   },
 ) {
   // noAction: leave successAction off this toast (e.g. the change came from a sheet that covers it).
@@ -151,6 +153,7 @@ export function useTransactionFieldMutation<
       saveFailed(opts.errorMessage, error);
     },
     onSuccess: (_data, vars) => {
+      opts.onSaved?.();
       if (opts.successMessage) {
         const action = vars.noAction ? undefined : opts.successAction?.(vars);
         // A toast with a button stays twice as long, so there's time to reach it.

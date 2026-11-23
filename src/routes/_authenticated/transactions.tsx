@@ -73,6 +73,7 @@ import {
 import { WorthItSpotlight } from "@/components/transactions/worth-it";
 import { MonthSwitcher } from "@/components/month-switcher";
 import { FilterSheet } from "@/components/transactions/filter-sheet";
+import { RECURRING_KEY, refreshRecurring } from "@/lib/use-recurring-streams";
 
 export const Route = createFileRoute("/_authenticated/transactions")({
   head: () => ({
@@ -220,6 +221,12 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
   const updateType = useTransactionFieldMutation(queryClient, monthKey, "transaction_type", {
     errorMessage: "Couldn't save type",
     successMessage: (value) => `Saved — ${value}`,
+    // A type decides what counts as a subscription: re-check them so the nav badge follows.
+    // A 429 (re-checked moments ago) still refetches, which is harmless.
+    onSaved: () =>
+      void refreshRecurring().then(() =>
+        queryClient.invalidateQueries({ queryKey: RECURRING_KEY }),
+      ),
   });
 
   const answerWorthIt = useTransactionFieldMutation(queryClient, monthKey, "worth_it", {
