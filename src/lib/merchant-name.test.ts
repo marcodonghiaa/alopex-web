@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanMerchantName } from "./merchant-name";
+import { capitaliseName, cleanMerchantName } from "./merchant-name";
 import cases from "./merchant-name.cases.json";
 
 // Card statements read "Amazon Mark* E46na7fw3" or "Tst*zuckers Bagels & S": show the merchant instead.
@@ -33,4 +33,20 @@ it("cleans a 50k-character name in well under a second", () => {
   cleanMerchantName("AMAZON" + " EUROPE".repeat(30) + "!");
   cleanMerchantName("AMAZON" + " MARKETPLACE".repeat(30) + "!");
   expect(performance.now() - start).toBeLessThan(100);
+});
+
+// Every name shown starts with a capital, from any source: bank sync, a file import, Splitwise, typed.
+describe("capitaliseName", () => {
+  it.each([
+    ["netflix", "Netflix"],
+    ["über eats", "Über eats"],
+    ["(netflix)", "(Netflix)"],
+    ["Netflix", "Netflix"],
+    ["eBay", "eBay"],
+    ["easyJet", "easyJet"],
+    ["7eleven", "7eleven"],
+    ["ßtudio", "ßtudio"],
+    ["", ""],
+    ["  ", "  "],
+  ])("%s -> %s", (name, shown) => expect(capitaliseName(name)).toBe(shown));
 });
