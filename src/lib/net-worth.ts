@@ -1,4 +1,5 @@
 import { isDemoMode } from "./demo/mode";
+import { formatISODate } from "./date";
 
 // The stocks_eur class holds ETFs too; every screen names it the same way.
 export const STOCKS_LABEL = "Stocks";
@@ -250,19 +251,23 @@ function weekBase(iso: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Points from `range` before the last one; "YTD" starts at the last day of the previous year,
- * "WTD" at the Sunday before the week, "ALL" keeps everything. */
+/** Points from `range` before the user's day; "YTD" starts at the last day of the previous year,
+ * "WTD" at the Sunday before the week, "ALL" keeps everything. The day is the browser's local
+ * `today`, or the last snapshot if that is older (sync behind): snapshots are dated by the
+ * server's UTC day, which can already be the user's tomorrow. */
 export function inRange<T extends { snapshot_date: string }>(
   points: Array<T>,
   range: ChartRange,
+  today: string = formatISODate(new Date()),
 ): Array<T> {
   const lastIso = points.at(-1)?.snapshot_date;
   if (lastIso == null || range === "ALL") return points;
+  const anchor = lastIso < today ? lastIso : today;
   const start =
     range === "YTD"
-      ? `${Number(lastIso.slice(0, 4)) - 1}-12-31`
+      ? `${Number(anchor.slice(0, 4)) - 1}-12-31`
       : range === "WTD"
-        ? weekBase(lastIso)
-        : monthAgo(lastIso, RANGE_MONTHS[range]);
+        ? weekBase(anchor)
+        : monthAgo(anchor, RANGE_MONTHS[range]);
   return points.filter((p) => p.snapshot_date >= start);
 }

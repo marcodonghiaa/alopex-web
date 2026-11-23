@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   CHART_RANGES,
   RANGE_LABEL,
@@ -147,6 +147,32 @@ describe("period targets", () => {
     // On a Sunday the week is Monday to that Sunday, based on the Sunday before.
     const sunday = [snap("2026-11-08", 1), snap("2026-11-12", 2), snap("2026-11-15", 3)];
     expect(inRange(sunday, "WTD").map((p) => p.total_eur)).toEqual([1, 2, 3]);
+  });
+
+  // The newest snapshot is dated by the server's UTC day, which can be the user's tomorrow
+  // (Sunday 23:55 in Los Angeles is already Monday in UTC). The range follows the user's day.
+  it("inRange anchors on the user's local day when the last snapshot is ahead of it", () => {
+    const pts = [
+      snap("2026-11-14", 1), // Sat
+      snap("2026-11-15", 2), // Sun: the base
+      snap("2026-11-18", 3), // Wed
+      snap("2026-11-22", 4), // Sun: the user's today
+      snap("2026-11-23", 5), // Mon in UTC
+    ];
+    expect(inRange(pts, "WTD", "2026-11-22").map((p) => p.total_eur)).toEqual([2, 3, 4, 5]);
+    expect(inRange(pts, "1M", "2026-11-22").map((p) => p.total_eur)).toEqual([1, 2, 3, 4, 5]);
+    const newYear = [snap("2025-12-30", 1), snap("2025-12-31", 2), snap("2026-01-01", 3)];
+    expect(inRange(newYear, "YTD", "2025-12-31").map((p) => p.total_eur)).toEqual([1, 2, 3]);
+    // Sync behind today: anchor stays on the last snapshot so the chart is not empty.
+    expect(inRange(pts, "WTD", "2026-12-10").map((p) => p.total_eur)).toEqual([4, 5]);
+  });
+
+  it("inRange defaults to the browser's local day", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 10, 22, 23, 55)); // local Sunday night
+    const pts = [snap("2026-11-15", 1), snap("2026-11-22", 2), snap("2026-11-23", 3)];
+    expect(inRange(pts, "WTD").map((p) => p.total_eur)).toEqual([1, 2, 3]);
+    vi.useRealTimers();
   });
 
   it("offers WTD instead of 2Y", () => {
