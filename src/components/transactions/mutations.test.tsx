@@ -705,8 +705,27 @@ describe("transaction mutations are scoped to one account", () => {
       p_entry_reference: "r1",
       p_account_uid: "a1",
       p_name: "Wash machine",
+      p_only_this: false,
     });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["transactions"] });
+  });
+
+  it("rename passes only this one through", async () => {
+    rpc.mockResolvedValue({ data: 1, error: null });
+    const { queryClient, wrapper } = setup();
+    const { result } = renderHook(() => useRenameMerchantMutation(queryClient), { wrapper });
+    act(() =>
+      result.current.mutate({
+        tx: { account_uid: "a1", entry_reference: "r1" },
+        name: "X",
+        onlyThis: true,
+      }),
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(rpc).toHaveBeenCalledWith(
+      "rename_merchant",
+      expect.objectContaining({ p_only_this: true }),
+    );
   });
 
   it("rename surfaces an rpc error", async () => {

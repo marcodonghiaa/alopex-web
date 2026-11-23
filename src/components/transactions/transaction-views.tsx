@@ -45,7 +45,8 @@ export interface TransactionViewProps {
   onSaveSplit: (personalAmount: number | null, owedBy: string | null) => void;
   /** Names used on past splits, offered as pills in the split editor. */
   splitContacts?: Array<string>;
-  onRename: (name: string | null) => void;
+  /** onlyThis: rename just this row, not every one from its merchant. */
+  onRename: (name: string | null, onlyThis: boolean) => void;
   savingRename: boolean;
   /** Only for transactions added by hand: bank amounts can't change. */
   onSaveAmount?: (amount: number) => void;
@@ -196,6 +197,7 @@ function TransactionEditSheet({
                 name={name === "—" ? null : name}
                 onSave={p.onRename}
                 saving={p.savingRename}
+                scoped={!share}
               />
             </Field>
             {p.onSaveAmount && (
@@ -397,6 +399,7 @@ export function TransactionRowView(props: TransactionViewProps) {
                 name={cleanMerchantName(tx.creditor_name)}
                 onSave={props.onRename}
                 saving={props.savingRename}
+                scoped={!share}
               />
             </div>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

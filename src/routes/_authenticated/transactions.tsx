@@ -577,10 +577,10 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
     savingRename: isSplitwiseShare(tx)
       ? savingShare(tx)
       : renameTx.isPending && isSameTx(renameTx.variables?.tx, tx),
-    onRename: (name) =>
+    onRename: (name, onlyThis) =>
       isSplitwiseShare(tx)
         ? name && updateShare.mutate({ id: shareId(tx), patch: { description: name } })
-        : renameTx.mutate({ tx, name }),
+        : renameTx.mutate({ tx, name, onlyThis }),
     highlighted: tx.entry_reference === highlightRef,
     // In the sheet too: on a phone the open sheet covers the toast's button.
     makeRule: isSplitwiseShare(tx) ? undefined : ruleAction(tx.creditor_name, tx.category),

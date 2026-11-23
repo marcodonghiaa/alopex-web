@@ -69,4 +69,24 @@ describe("SegmentedControl focus", () => {
     fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
     expect(screen.getByRole("radio", { name: "GBP" })).toHaveFocus();
   });
+
+  // protects=a small control inside a popover keeps a 44px phone hit area; fails_when=compact drops
+  // the hit-area extension or the default loses its 44px height
+  it("compact segments are shorter but keep the hit area; default stays 44px", () => {
+    const { rerender } = render(
+      <SegmentedControl
+        label="Currency"
+        options={options}
+        value="EUR"
+        onChange={() => {}}
+        compact
+      />,
+    );
+    expect(screen.getByRole("radio", { name: "EUR" })).toHaveClass("min-h-9", "after:-inset-y-1");
+    rerender(
+      <SegmentedControl label="Currency" options={options} value="EUR" onChange={() => {}} />,
+    );
+    expect(screen.getByRole("radio", { name: "EUR" })).toHaveClass("min-h-11");
+    expect(screen.getByRole("radio", { name: "EUR" })).not.toHaveClass("min-h-9");
+  });
 });

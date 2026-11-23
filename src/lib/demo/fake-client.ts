@@ -202,7 +202,7 @@ class Store {
   }
   private readonly aliases = new Map<string, string>();
   /** Mirror of the database function rename_merchant: returns how many rows changed. */
-  renameMerchant(ref: string, account: unknown, name: string | null): number {
+  renameMerchant(ref: string, account: unknown, name: string | null, onlyThis = false): number {
     const txs = this.db["transactions"]!;
     const isTarget = (r: Row) =>
       r["entry_reference"] === ref && (r["account_uid"] ?? null) === (account ?? null);
@@ -210,19 +210,27 @@ class Store {
     const clean = name?.trim() || null;
     const source = target?.["creditor_name"] as string | null | undefined;
     const rawKey = target?.["merchant_key"] as string | null | undefined;
-    // Aggregators (PayPal, ...) say nothing about the real merchant, so they never group rows.
-    const key = rawKey && !["paypal", "apple", "google"].includes(rawKey) ? rawKey : null;
+    // Aggregators (PayPal, ...) say nothing about the real merchant: they group by name and price.
+    const aggregator = !!rawKey && ["paypal", "apple", "google"].includes(rawKey);
+    const key = rawKey && !aggregator ? rawKey : null;
+    const price = aggregator ? Math.abs(Number(target?.["amount"])) : null;
+    const nearPrice = (r: Row) =>
+      price === null || Math.abs(Math.abs(Number(r["amount"])) - price) <= price * 0.1;
     let changed: Array<Row>;
-    if (!source) {
+    if (!source || onlyThis) {
       changed = txs.filter(isTarget);
     } else {
-      const old = this.aliases.get(source);
-      if (clean) this.aliases.set(source, clean);
-      else this.aliases.delete(source);
+      const aliasKey = price === null ? source : `${source}|${price.toFixed(2)}`;
+      const old = this.aliases.get(aliasKey) ?? this.aliases.get(source);
+      if (clean) this.aliases.set(aliasKey, clean);
+      else this.aliases.delete(aliasKey);
       changed = txs.filter(
         (r) =>
-          ((key !== null && r["merchant_key"] === key) || r["creditor_name"] === source) &&
-          (r["custom_name"] == null || r["custom_name"] === old || isTarget(r)),
+          isTarget(r) ||
+          (key !== null && r["merchant_key"] === key && r["custom_name"] == null) ||
+          (r["creditor_name"] === source &&
+            nearPrice(r) &&
+            (r["custom_name"] == null || r["custom_name"] === old)),
       );
     }
     for (const r of changed) r["custom_name"] = clean;
@@ -1172,6 +1180,7 @@ export function createFakeClient(now: Date = new Date()): SupabaseClient<Databas
                         args["p_entry_reference"] as string,
                         args["p_account_uid"],
                         (args["p_name"] as string | null) ?? null,
+                        args["p_only_this"] === true,
                       ),
                       error: null,
                     }
