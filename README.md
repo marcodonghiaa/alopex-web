@@ -43,24 +43,9 @@ npx create-alopex
 
 It creates your Supabase project, tables, Edge Functions and login, turns on the scheduled sync inside Supabase, walks you through Enable Banking and puts this dashboard online on Vercel. About 30 minutes the first time. To update, run `npx create-alopex@latest` from the same place, or inside the install folder (`@latest` so npx doesn't reuse an older cached installer). See [the installer guide](https://github.com/marcodonghiaa/alopex/blob/main/installer/README.md).
 
-<details>
-<summary>Older path: the backend's <code>setup.sh</code> plus a Vercel button</summary>
-
-Start from the backend: [alopex → Getting started](https://github.com/marcodonghiaa/alopex#-getting-started). Its `setup.sh` creates the Supabase project, can run the sync on GitHub Actions, and prints the three values the dashboard needs. About 30 minutes the first time, nothing to install if you use Codespaces.
-
-Then put the dashboard online:
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fmarcodonghiaa%2Falopex-web&project-name=alopex&repository-name=alopex-web&env=VITE_SUPABASE_URL%2CVITE_SUPABASE_PUBLISHABLE_KEY%2CVITE_VAPID_PUBLIC_KEY&envDescription=Printed+at+the+end+of+the+backend%27s+setup.sh&envLink=https%3A%2F%2Fgithub.com%2Fmarcodonghiaa%2Falopex%23-getting-started)
-
-Vercel copies this repo to your GitHub, asks for `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` and `VITE_VAPID_PUBLIC_KEY` (paste the values setup printed) and gives you an HTTPS address. Open the address under **Domains** on the Vercel project page (not a per-deployment address) and sign in. On that first sign-in the dashboard tells your database its own address, so bank linking sends you back to it: there is nothing to copy back and no second `./setup.sh` run (the backend's setup waits for it and prints your link). Free on Vercel's Hobby plan; phone and push notifications work because it is HTTPS.
-
-Prefer your own server? `docker compose` in the backend repo runs both apps instead.
-
-</details>
-
 ## Develop
 
-Needs [Bun](https://bun.sh) and a `.env` (written by the backend's `setup.sh`, or `cp .env.example .env` and fill in your Supabase URL and publishable key).
+Needs [Bun](https://bun.sh) and a `.env` (written by `npx create-alopex`, or `cp .env.example .env` and fill in your Supabase URL and publishable key).
 
 ```sh
 bun install
@@ -80,21 +65,19 @@ Open **Import data** (a link on the Accounts page, also offered on a new empty d
 
 ## Deploy on Vercel
 
-Use the Deploy button under **Older path** in [Self-host it](#self-host-it), or import the repo in Vercel yourself (framework: Other, defaults for build). Vercel sets `VERCEL=1`, which switches the Nitro preset to `vercel` in `vite.config.ts`. Add `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (and `VITE_VAPID_PUBLIC_KEY` for push) as environment variables, then add the Vercel domain under Supabase → Authentication → URL Configuration so login redirects work: set it as Site URL and add `https://<your-domain>/reset-password` to the Redirect URLs, or the "Forgot password?" email links back to the wrong address. Every merge to `main` deploys; every PR gets a preview URL. The Vercel button copies the code into a new repo that is not a fork, so GitHub's "Sync fork" does not exist for it: see [Keeping your dashboard up to date](#keeping-your-dashboard-up-to-date).
+`npx create-alopex` deploys it for you. By hand: import the repo in Vercel (framework: Other, defaults for build). Vercel sets `VERCEL=1`, which switches the Nitro preset to `vercel` in `vite.config.ts`. Add `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (and `VITE_VAPID_PUBLIC_KEY` for push) as environment variables, then add the Vercel domain under Supabase → Authentication → URL Configuration so login redirects work: set it as Site URL and add `https://<your-domain>/reset-password` to the Redirect URLs, or the "Forgot password?" email links back to the wrong address. Every merge to `main` deploys; every PR gets a preview URL.
 
 ## Keeping your dashboard up to date
 
-Installed with `npx create-alopex`? Run `npx create-alopex@latest` again from the same place, or inside the install folder; the rest of this section is for the older setup.
+Installed with `npx create-alopex`? Run `npx create-alopex@latest` again from the same place, or inside the install folder; the rest of this section is for a dashboard you deployed from your own GitHub copy of this repo.
 
-Your Vercel copy never receives upstream fixes by itself. It ships a workflow, **update-from-upstream**, that does it as a pull request:
+A GitHub copy never receives upstream fixes by itself. It ships a workflow, **update-from-upstream**, that does it as a pull request:
 
 - Runs every Monday and on demand: **Actions** tab → **update-from-upstream** → **Run workflow**.
 - Fetches the latest `main` of this repo and opens a PR titled "Update Alopex dashboard to <sha>" with the upstream commit list. If one is still open it updates that PR instead of opening another.
 - Never pushes to your default branch. Review the PR and merge it; Vercel redeploys.
 - Copies over the files upstream has, leaving alone `.env*`, `vercel.json`, `.vercel/`, anything your `.gitignore` matches and `.github/workflows/` (GitHub does not let a workflow change workflows). Files only in your copy are kept; edits you made to files upstream also has are overwritten, so keep customisations in new files.
 - First time only: Settings → Actions → General → enable **Allow GitHub Actions to create and approve pull requests**, or the run stops after pushing the branch `update-from-upstream` and you open the PR from it by hand.
-
-The backend repo ([alopex](https://github.com/marcodonghiaa/alopex)) is a real fork: use **Sync fork** on GitHub. Run `./setup.sh` again only when the release notes say a database change is needed.
 
 ## Scripts
 
