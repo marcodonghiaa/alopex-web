@@ -879,6 +879,23 @@ describe("Paid for others", () => {
       rects.mockRestore();
     });
 
+    // Polish 5 re-audit: the router's scroll restoration jumps to the top just after render,
+    // cancelling a scroll made right away. fails_when=the link scrolls as soon as the row renders
+    it("scrolls only after the page has settled, not as the row renders", async () => {
+      const scroll = vi.fn();
+      Element.prototype.scrollIntoView = scroll;
+      const rects = vi
+        .spyOn(Element.prototype, "getClientRects")
+        .mockImplementation(() => [{}] as unknown as DOMRectList);
+      window.history.replaceState(null, "", "/transactions?highlight=2");
+      tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+      renderPage();
+      await screen.findAllByText("Shop 2");
+      expect(scroll).not.toHaveBeenCalled();
+      await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+      rects.mockRestore();
+    });
+
     it("to a split row asks about my share", async () => {
       Element.prototype.scrollIntoView = vi.fn();
       window.history.replaceState(null, "", "/transactions?highlight=2");
