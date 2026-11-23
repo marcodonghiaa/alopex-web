@@ -948,3 +948,25 @@ describe("After a re-check that changed the list", () => {
     expect(screen.queryByLabelText("Estimated monthly cost")).toBeNull();
   });
 });
+
+// polish-4 #10: "No subscription charges found yet." showed while To review or Dismissed still
+// had rows. fails_when=the first-run empty state shows beside other groups, or an empty active
+// list says nothing
+describe("Empty active list", () => {
+  it("says no active subscriptions when other groups still have rows", async () => {
+    db.rows = [
+      stream({ id: "s2", display_name: "Cloudbox", detected_status: "suggested" }),
+      stream({ id: "s3", display_name: "Oldtube", user_status: "dismissed" }),
+    ];
+    renderPage();
+    expect(await screen.findByText("No active subscriptions right now.")).toBeInTheDocument();
+    expect(screen.queryByText("No subscription charges found yet.")).toBeNull();
+  });
+
+  it("keeps the first-run empty state when every group is empty", async () => {
+    db.rows = [];
+    renderPage();
+    expect(await screen.findByText("No subscription charges found yet.")).toBeInTheDocument();
+    expect(screen.queryByText("No active subscriptions right now.")).toBeNull();
+  });
+});

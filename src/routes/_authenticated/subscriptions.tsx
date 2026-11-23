@@ -390,13 +390,20 @@ function SubscriptionsPage() {
             )
           )}
 
-          {!query.isPending && active.length === 0 && (
-            <EmptyState
-              className="mt-8 rounded-lg bg-card"
-              title="No subscription charges found yet."
-              hint="Recurring charges show up here once a few months of transactions are in."
-            />
-          )}
+          {/* The first-run empty state only when nothing at all is listed; otherwise a plain line. */}
+          {!query.isPending &&
+            active.length === 0 &&
+            (toReview.length + stopped.length + dismissed.length === 0 ? (
+              <EmptyState
+                className="mt-8 rounded-lg bg-card"
+                title="No subscription charges found yet."
+                hint="Recurring charges show up here once a few months of transactions are in."
+              />
+            ) : (
+              <p className="rounded-lg bg-card px-4 py-3 text-sm text-muted-foreground">
+                No active subscriptions right now.
+              </p>
+            ))}
 
           {stopped.length > 0 && (
             <details className="group mt-8">
