@@ -16,7 +16,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useCategories } from "@/lib/use-categories";
 import { parseQuantity } from "@/lib/holdings";
-import { ADDED_TRANSACTION_QUERIES } from "@/lib/transactions";
+import { TRANSACTION_QUERIES } from "@/lib/transactions";
 import { MAX_AMOUNT } from "@/lib/import/statement";
 import { ambiguousNumberHint, numberFormat } from "@/lib/locale";
 
@@ -81,7 +81,7 @@ export function AddTransaction({ today }: { today: string }) {
     mutationFn: addTransaction,
     onSuccess: (_data, tx) => {
       toast.success(`${tx.description} added`);
-      for (const k of ADDED_TRANSACTION_QUERIES)
+      for (const k of TRANSACTION_QUERIES)
         void queryClient.invalidateQueries({ queryKey: [k] });
       setOpen(false);
       reset();

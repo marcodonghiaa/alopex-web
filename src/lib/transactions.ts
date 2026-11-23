@@ -349,15 +349,22 @@ export function selectedOnly(
   return shown.filter((tx) => !isSplitwiseShare(tx) && selected.has(txId(tx)));
 }
 
-/** Queries to refresh after adding transactions: a new source is also a new account. */
-export const ADDED_TRANSACTION_QUERIES = [
+/**
+ * Every list and total built from transactions: refreshed after any add, import, edit or move into
+ * or out of the transfers. One list, so a new screen can't be missed by one of them.
+ */
+export const TRANSACTION_QUERIES = [
   "transactions",
   "transfers",
   "income",
   "spend-by-category",
   "category-transactions",
-  "accounts",
+  "transfer-review",
   "cash-flow",
+  // The month In/Out header on the Transactions page.
+  "income-vs-expenses",
+  // A new source is also a new account.
+  "accounts",
 ] as const;
 /** Rows in their given order, cut into runs that share a booking date (the phone list's day groups). */
 export function groupByDay(

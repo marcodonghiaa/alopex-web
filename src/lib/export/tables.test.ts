@@ -8,7 +8,9 @@ describe("EXPORT_TABLES", () => {
   const names: Array<string> = EXPORT_TABLES.map((t) => t.name);
 
   it("includes custom categories, merchant renames and transfer pairs", () => {
-    expect(names).toEqual(expect.arrayContaining(["user_categories", "merchant_aliases", "transfer_pairs"]));
+    expect(names).toEqual(
+      expect.arrayContaining(["user_categories", "merchant_aliases", "transfer_pairs"]),
+    );
   });
 
   it("lists each table once", () => {

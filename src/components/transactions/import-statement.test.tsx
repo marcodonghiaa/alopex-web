@@ -76,6 +76,8 @@ describe("ImportStatement", () => {
       }),
     );
     await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ["transactions"] }));
+    // H033: the month In/Out header on the Transactions page kept its old totals.
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["income-vs-expenses"] });
   });
 
   it("leaves out what is already in the app", async () => {

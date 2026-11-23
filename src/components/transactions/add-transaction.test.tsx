@@ -53,6 +53,8 @@ describe("AddTransaction", () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["accounts"] });
     // Polish 3 #5: the cash flow page reads the same rows.
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["cash-flow"] });
+    // H033: the month In/Out header on the Transactions page kept its old totals.
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["income-vs-expenses"] });
   });
 
   it("sends money in with its category", async () => {
