@@ -8,6 +8,7 @@ import type { ReviewGroup, ReviewRow } from "@/lib/transfer-review";
 import { MAX_MATCH_TEXT } from "@/lib/rules";
 import {
   restoredFlow,
+  TRANSACTION_QUERIES,
   txId,
   type SplitwiseShare,
   type TransactionRow,
@@ -56,19 +57,8 @@ export function categoryPatch(category: string | null): TablesUpdate<"transactio
 }
 
 // Lists and totals a move into or out of the transfers changes.
-const FLOW_KEYS = [
-  "transactions",
-  "transfers",
-  "income",
-  "spend-by-category",
-  "category-transactions",
-  "transfer-review",
-  "cash-flow",
-  // The month In/Out header on the Transactions page.
-  "income-vs-expenses",
-];
 function refetchFlows(queryClient: QueryClient) {
-  for (const k of FLOW_KEYS) void queryClient.invalidateQueries({ queryKey: [k] });
+  for (const k of TRANSACTION_QUERIES) void queryClient.invalidateQueries({ queryKey: [k] });
 }
 // A new category can put a row on the "To review" list or take it off.
 const refetchReview = (queryClient: QueryClient) =>

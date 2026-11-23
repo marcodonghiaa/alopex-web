@@ -12,6 +12,15 @@ const { rows, review, reviewCalls, reviewError, path, search } = vi.hoisted(() =
   path: { current: "/" },
   search: { current: {} as Record<string, unknown> },
 }));
+// H018: what sign-out did, in order.
+const signOutSteps = vi.hoisted(() => [] as string[]);
+vi.mock("@/components/push-subscribe", () => ({
+  PushSubscribeButton: () => null,
+  pushSupport: () => "unsupported",
+  forgetThisBrowserPush: async () => {
+    signOutSteps.push("forget push");
+  },
+}));
 
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => (options: Record<string, unknown>) => ({
@@ -54,7 +63,12 @@ vi.mock("@tanstack/react-router", () => ({
 vi.mock("@/integrations/supabase/client", () => ({
   loadDemoClient: vi.fn(),
   supabase: {
-    auth: { onAuthStateChange: () => ({ data: { subscription: { unsubscribe: vi.fn() } } }) },
+    auth: {
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: vi.fn() } } }),
+      signOut: async () => {
+        signOutSteps.push("sign out");
+      },
+    },
     rpc: () => Promise.resolve({ error: null }),
     from: (table: string) =>
       table === "splitwise_review"
@@ -188,6 +202,16 @@ describe("sidebar icons", () => {
       b.textContent?.includes("Sign out"),
     )!;
     expect(signOut.querySelector("svg")).not.toBeNull();
+  });
+});
+
+describe("sign out", () => {
+  it("H018 removes this browser's notifications before signing out", async () => {
+    rows.current = [];
+    renderLayout();
+    const aside = document.querySelector("aside")!;
+    fireEvent.click(within(aside).getByRole("button", { name: /Sign out/ }));
+    await waitFor(() => expect(signOutSteps).toEqual(["forget push", "sign out"]));
   });
 });
 

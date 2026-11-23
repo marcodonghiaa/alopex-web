@@ -21,6 +21,9 @@ export const EXPORT_TABLES = [
   { name: "recurring_streams", order: ["stream_key"] },
   { name: "subscription_billing_overrides", order: ["creditor_name"] },
   { name: "payer_links", order: ["payer_key"] },
+  { name: "user_categories", order: ["name"] },
+  { name: "merchant_aliases", order: ["source_name", "amount"] },
+  { name: "transfer_pairs", order: ["id"] },
 ] as const;
 
 export type ExportTableName = (typeof EXPORT_TABLES)[number]["name"];

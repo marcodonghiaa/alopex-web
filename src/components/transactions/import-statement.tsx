@@ -27,7 +27,7 @@ import { decodeCsv, parseCsv, MAX_CHARS } from "@/lib/import/parse-csv";
 import { formatDay } from "@/lib/date";
 import { importStatement, newRows, type StatementClient } from "@/lib/import/statement-commit";
 import { readStatementPdf } from "@/lib/import/statement-pdf";
-import { ADDED_TRANSACTION_QUERIES, formatMoney } from "@/lib/transactions";
+import { TRANSACTION_QUERIES, formatMoney } from "@/lib/transactions";
 
 const client = supabase as unknown as StatementClient;
 
@@ -203,7 +203,7 @@ export function ImportStatement({ label }: { label?: string } = {}) {
       }
     } finally {
       // Rows saved before an error are in the app too, maybe on a new account.
-      for (const k of ADDED_TRANSACTION_QUERIES)
+      for (const k of TRANSACTION_QUERIES)
         void queryClient.invalidateQueries({ queryKey: [k] });
     }
   }
