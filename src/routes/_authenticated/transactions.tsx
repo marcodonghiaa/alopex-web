@@ -415,9 +415,11 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
       (shown ?? forOthersToggle.current)?.focus();
     }, 0);
   }
-  const forOthersHeading = (
+  const forOthersHeading = (id?: string) => (
     <>
-      <h2 className="text-lg font-semibold text-foreground">Paid for others</h2>
+      <SectionTitle {...(id ? { id } : {})} className="pb-0">
+        Paid for others
+      </SectionTitle>
       <p className="mt-0.5 text-xs text-muted-foreground">
         Others owe you all of it. Not counted in your spending.
       </p>
@@ -867,7 +869,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
                     <>
                       <tr className="border-b bg-background/40">
                         <td colSpan={5} className="px-4 pt-5 pb-3">
-                          {forOthersHeading}
+                          {forOthersHeading()}
                         </td>
                       </tr>
                       {forOthers.map((tx) => (
@@ -902,9 +904,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
               aria-labelledby="paid-for-others-phone"
               className="mt-2 overflow-hidden rounded-lg bg-card md:hidden"
             >
-              <div id="paid-for-others-phone" className="px-4 py-3">
-                {forOthersHeading}
-              </div>
+              <div className="px-4 py-3">{forOthersHeading("paid-for-others-phone")}</div>
               {/* Cards carry no date, so they are grouped by day like the main list. */}
               {groupByDay(forOthers).map((group) => (
                 <div key={group.day ?? "none"} className="border-t">
