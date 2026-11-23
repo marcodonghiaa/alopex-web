@@ -6,6 +6,7 @@ import { demoHoldingPerformance } from "./performance";
 import { deriveViews } from "./views";
 import { onDemoExit } from "./mode";
 import { ACCOUNT_TYPES, isDebt } from "@/lib/account-types";
+import { CATEGORIES } from "@/lib/categories";
 
 // A stand-in for the Supabase client that answers from generated, in-memory data. It makes no
 // network calls at all, and every write lives only in this object: a reload starts over.
@@ -227,6 +228,46 @@ class Store {
     for (const r of changed) r["custom_name"] = clean;
     this.refresh();
     return changed.length;
+  }
+  /** Mirror of the database function move_category: what was filed under `from` moves to `to`
+   * (created with `from`'s look when new), then `from` goes (own: deleted, built-in: hidden). */
+  moveCategory(fromArg: unknown, toArg: unknown): Result {
+    const from = String(fromArg ?? "").trim();
+    const to = String(toArg ?? "")
+      .trim()
+      .replace(/\s+/g, " ");
+    if (!from || !to) return { data: null, error: { message: "Pick the category to move to" } };
+    if (from === to) return { data: null, error: { message: "Pick a different category" } };
+    if (from === "Transfer" || from === "Income")
+      return { data: null, error: { message: "Transfer and Income can't be removed" } };
+    const own = this.db["user_categories"]!;
+    const src = own.find((r) => r["name"] === from);
+    const builtIn = (CATEGORIES as ReadonlyArray<string>).includes(from);
+    const known = [...CATEGORIES, ...own.map((r) => r["name"] as string)];
+    const target = known.find((c) => c !== from && c.toLowerCase() === to.toLowerCase()) ?? to;
+    if (!known.includes(target))
+      own.push({
+        user_id: DEMO_USER_ID,
+        name: target,
+        hidden: false,
+        icon: src?.["icon"] ?? (builtIn ? from.toLowerCase().replace(/ /g, "-") : null),
+        color: src?.["color"] ?? null,
+        created_at: this.now.toISOString(),
+      });
+    let moved = 0;
+    for (const t of this.db["transactions"]!)
+      if (t["category"] === from) {
+        t["category"] = target;
+        moved += 1;
+      }
+    for (const b of this.db["category_budgets"]!)
+      if (b["category"] === from) b["category"] = target;
+    if (builtIn) {
+      if (src) src["hidden"] = true;
+      else own.push({ user_id: DEMO_USER_ID, name: from, hidden: true, icon: null, color: null });
+    } else own.splice(own.indexOf(src!), 1);
+    this.refresh();
+    return { data: moved, error: null };
   }
   /** Mirror of the database function add_manual_transaction: returns the new row's key. */
   addManualTransaction(args: Record<string, unknown>): {
@@ -1080,67 +1121,73 @@ export function createFakeClient(now: Date = new Date()): SupabaseClient<Databas
   const client = {
     from: (table: string) => new Query(store, table),
     rpc: async (fn: string, args: Record<string, unknown> = {}) =>
-      fn === "payback_candidates"
-        ? store.paybackCandidates(args["p_days"])
-        : fn === "record_payback"
-          ? store.recordPayback(args)
-          : fn === "undo_payback"
-            ? store.undoPayback(args)
-            : fn === "holding_performance"
-              ? {
-                  data: demoHoldingPerformance(store.db, args["p_from"] as string | undefined),
-                  error: null,
-                }
-              : fn === "rename_merchant"
+      fn === "move_category"
+        ? store.moveCategory(args["p_from"], args["p_to"])
+        : fn === "payback_candidates"
+          ? store.paybackCandidates(args["p_days"])
+          : fn === "record_payback"
+            ? store.recordPayback(args)
+            : fn === "undo_payback"
+              ? store.undoPayback(args)
+              : fn === "holding_performance"
                 ? {
-                    data: store.renameMerchant(
-                      args["p_entry_reference"] as string,
-                      args["p_account_uid"],
-                      (args["p_name"] as string | null) ?? null,
-                    ),
+                    data: demoHoldingPerformance(store.db, args["p_from"] as string | undefined),
                     error: null,
                   }
-                : fn === "resolve_transfer_pair"
-                  ? store.resolveTransferPair(args["p_pair"], args["p_keep"] === true)
-                  : fn === "stream_action"
-                    ? store.streamAction(args["p_stream"], args["p_action"], args["p_args"] as Row)
-                    : fn === "add_manual_transaction"
-                      ? store.addManualTransaction(args)
-                      : fn === "set_account_type"
-                        ? store.setAccountType(args["p_account"], args["p_type"] ?? null)
-                        : fn === "add_manual_debt"
-                          ? store.addManualDebt(args)
-                          : fn === "set_manual_balance"
-                            ? store.setManualBalance(args["p_account"], args["p_amount"])
-                            : fn === "delete_manual_debt"
-                              ? store.deleteManualDebt(args["p_account"])
-                              : fn === "set_holding_quantity"
-                                ? {
-                                    data: store.setHoldingQuantity(
-                                      args["p_kind"],
-                                      args["p_key"],
-                                      args["p_quantity"],
-                                      args["p_source"],
-                                    ),
-                                    error: null,
-                                  }
-                                : fn === "delete_holding"
+                : fn === "rename_merchant"
+                  ? {
+                      data: store.renameMerchant(
+                        args["p_entry_reference"] as string,
+                        args["p_account_uid"],
+                        (args["p_name"] as string | null) ?? null,
+                      ),
+                      error: null,
+                    }
+                  : fn === "resolve_transfer_pair"
+                    ? store.resolveTransferPair(args["p_pair"], args["p_keep"] === true)
+                    : fn === "stream_action"
+                      ? store.streamAction(
+                          args["p_stream"],
+                          args["p_action"],
+                          args["p_args"] as Row,
+                        )
+                      : fn === "add_manual_transaction"
+                        ? store.addManualTransaction(args)
+                        : fn === "set_account_type"
+                          ? store.setAccountType(args["p_account"], args["p_type"] ?? null)
+                          : fn === "add_manual_debt"
+                            ? store.addManualDebt(args)
+                            : fn === "set_manual_balance"
+                              ? store.setManualBalance(args["p_account"], args["p_amount"])
+                              : fn === "delete_manual_debt"
+                                ? store.deleteManualDebt(args["p_account"])
+                                : fn === "set_holding_quantity"
                                   ? {
-                                      data: store.deleteHolding(
+                                      data: store.setHoldingQuantity(
                                         args["p_kind"],
                                         args["p_key"],
+                                        args["p_quantity"],
                                         args["p_source"],
                                       ),
                                       error: null,
                                     }
-                                  : fn === "my_transaction_tags"
+                                  : fn === "delete_holding"
                                     ? {
-                                        data: demoTagCounts(store.db["transactions"] ?? []),
+                                        data: store.deleteHolding(
+                                          args["p_kind"],
+                                          args["p_key"],
+                                          args["p_source"],
+                                        ),
                                         error: null,
                                       }
-                                    : fn === "get_splitwise_connection"
-                                      ? { data: [demoSplitwiseConnection(now)], error: null }
-                                      : { data: null, error: DISABLED },
+                                    : fn === "my_transaction_tags"
+                                      ? {
+                                          data: demoTagCounts(store.db["transactions"] ?? []),
+                                          error: null,
+                                        }
+                                      : fn === "get_splitwise_connection"
+                                        ? { data: [demoSplitwiseConnection(now)], error: null }
+                                        : { data: null, error: DISABLED },
     functions: {
       invoke: async (name: string, opts?: { body?: Record<string, unknown> }) =>
         name === "add-holding"

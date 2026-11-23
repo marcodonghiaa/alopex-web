@@ -864,9 +864,30 @@ export type Database = {
         Relationships: [];
       };
       user_categories: {
-        Row: { user_id: string; name: string; hidden: boolean; created_at: string };
-        Insert: { user_id?: string; name: string; hidden?: boolean; created_at?: string };
-        Update: { user_id?: string; name?: string; hidden?: boolean; created_at?: string };
+        Row: {
+          user_id: string;
+          name: string;
+          hidden: boolean;
+          icon: string | null;
+          color: string | null;
+          created_at: string;
+        };
+        Insert: {
+          user_id?: string;
+          name: string;
+          hidden?: boolean;
+          icon?: string | null;
+          color?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          name?: string;
+          hidden?: boolean;
+          icon?: string | null;
+          color?: string | null;
+          created_at?: string;
+        };
         Relationships: [];
       };
       recurring_streams: {
@@ -1447,6 +1468,10 @@ export type Database = {
           payer: string | null;
           linked_contact: string | null;
         }>;
+      };
+      move_category: {
+        Args: { p_from: string; p_to: string };
+        Returns: number;
       };
       record_payback: {
         Args: { p_account: string; p_ref: string; p_contact: string; p_remember?: boolean };

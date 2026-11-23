@@ -1,58 +1,51 @@
+import { Icon, isIconName } from "@/components/icons/icon";
 import {
-  ArrowDownLeft,
-  ArrowLeftRight,
-  CircleDashed,
-  Clapperboard,
-  HeartPulse,
-  House,
-  Landmark,
-  Shapes,
-  ShoppingBag,
-  ShoppingCart,
-  Ticket,
-  TramFront,
-  UtensilsCrossed,
-  Wrench,
-  type LucideIcon,
-} from "lucide-react";
-import { categoryCode, categoryColor } from "@/lib/categories";
-
-const ICONS: Record<string, LucideIcon> = {
-  Shopping: ShoppingBag,
-  Entertainment: Clapperboard,
-  Groceries: ShoppingCart,
-  "Dine Out": UtensilsCrossed,
-  Services: Wrench,
-  Housing: House,
-  Transports: TramFront,
-  Experiences: Ticket,
-  Income: ArrowDownLeft,
-  Health: HeartPulse,
-  Transfer: ArrowLeftRight,
-  Taxes: Landmark,
-  Others: Shapes,
-};
+  CATEGORY_PALETTE,
+  categoryCode,
+  categoryColor,
+  categoryIconName,
+  isPaletteColor,
+  type CategoryLook,
+} from "@/lib/categories";
 
 /**
  * 40px circle with the category's line icon, tinted in the category colour, so rows scan by
- * what the money went on.
- * Your own categories show their initial; no category shows a dashed circle.
+ * what the money went on. The icon and colour are the ones picked in Settings › Categories, else
+ * the built-in ones; a category with no icon shows its initial; no category shows a dashed circle.
  */
-export function CategoryAvatar({ category }: { category: string | null }) {
+export function CategoryAvatar({
+  category,
+  size = "md",
+  look,
+}: {
+  category: string | null;
+  size?: "sm" | "md" | "lg";
+  /** Draw this icon and colour instead of the saved ones (the editor's preview). */
+  look?: CategoryLook;
+}) {
   const missing = !category || category === "Uncategorized";
-  const Icon = missing ? CircleDashed : ICONS[category];
-  const color = categoryColor(category);
+  const name = missing ? "uncategorized" : look ? (look.icon ?? null) : categoryIconName(category);
+  const color = isPaletteColor(look?.color)
+    ? CATEGORY_PALETTE[look.color]
+    : categoryColor(category);
   return (
     <span
       aria-hidden
       data-category={category ?? ""}
-      className="flex size-10 shrink-0 items-center justify-center rounded-full"
+      className={`flex shrink-0 items-center justify-center rounded-full ${size === "sm" ? "size-8" : size === "lg" ? "size-14" : "size-10"}`}
       style={{ color, backgroundColor: `color-mix(in oklab, ${color} 16%, var(--color-card))` }}
     >
-      {Icon ? (
-        <Icon className="size-[18px]" strokeWidth={1.75} />
+      {isIconName(name) ? (
+        <Icon
+          name={name}
+          className={size === "sm" ? "size-4" : size === "lg" ? "size-7" : "size-5"}
+        />
       ) : (
-        <span className="text-[0.9375rem] font-semibold">{categoryCode(category).charAt(0)}</span>
+        <span
+          className={`font-semibold ${size === "sm" ? "text-[0.8125rem]" : size === "lg" ? "text-xl" : "text-[0.9375rem]"}`}
+        >
+          {categoryCode(category).charAt(0)}
+        </span>
       )}
     </span>
   );
