@@ -34,6 +34,7 @@ import { saveQuantity } from "@/lib/holding-quantity";
 import type { HoldingTarget } from "@/lib/holding-quantity";
 import { callAddHolding } from "@/lib/add-holding";
 import { cutChars } from "@/lib/transactions";
+import { BANK_MATCHED_BROKERS, matchBrokerRows, matchSummary } from "@/lib/broker-matching";
 import { loadRates, rateLookup } from "@/lib/brokers/rates";
 import {
   detectBroker,
@@ -327,13 +328,18 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
         })),
         counts: [],
       };
-      const done = (events: number) => ({
+      // The broker's bank rows (a date and an amount) get the rows just saved: a buy stops counting
+      // as spending. Best effort: the import is saved either way.
+      const matches = BANK_MATCHED_BROKERS.has(fileBroker?.id ?? "");
+      const done = async (events: number) => ({
         trades: trades.length,
         events,
         counts: updates.length,
         added: added.length,
         missedNames,
         undo,
+        matches,
+        match: matches && trades.length + events > 0 ? await matchBrokerRows() : null,
       });
       // One insert is one statement: all the rows land, or none do.
       if (trades.length > 0) {
@@ -390,7 +396,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     },
     // Counts come from the save itself: the dialog may have been cleared while it ran.
     // Worded as the sibling CSV import's "Imported 3 rows".
-    onSuccess: ({ trades, events, counts, added, missedNames, undo }) => {
+    onSuccess: ({ trades, events, counts, added, missedNames, undo, matches, match }) => {
       const imported = [
         trades > 0 && plural(trades, "trade"),
         events > 0 && plural(events, "income and cash row"),
@@ -413,14 +419,20 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
               : "Nothing new imported",
         imported || changed
           ? {
+              description: matchSummary(match),
               // Long enough to reach Undo from the keyboard (sonner pauses it on hover and focus).
               duration: 10_000,
               action: {
                 label: "Undo this import",
                 onClick: () =>
                   void undoImport(undo)
+                    // The bank rows matched to what's undone go back to spend and income.
+                    .then(() => (matches ? matchBrokerRows() : null))
                     .then(
-                      () => toast.success("Import undone"),
+                      (m) => {
+                        if (m?.cleared) bankRowsChanged();
+                        toast.success("Import undone");
+                      },
                       (e: Error) => toast.error("Couldn't undo", { description: e.message }),
                     )
                     .finally(refresh),
@@ -428,6 +440,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             }
           : undefined,
       );
+      if (match?.matched) bankRowsChanged();
       // One line for all of them, however many.
       if (missedNames.length > 0)
         toast.error(
@@ -443,6 +456,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       refresh();
     },
   });
+  // Matched bank rows change name, type and category on every money page.
+  const bankRowsChanged = () => void queryClient.invalidateQueries();
   function refresh() {
     void queryClient.invalidateQueries({ queryKey: ["holding-trades"] });
     void queryClient.invalidateQueries({ queryKey: ["investment-events"] });
