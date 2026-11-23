@@ -47,6 +47,30 @@ describe("demo v_transactions_eur", () => {
   });
 });
 
+// Polish 5 #7: a split money-in row got -share, while the real view signs it by direction (+).
+// fails_when=split money in counts as money out in the demo totals
+describe("demo split money in", () => {
+  it("keeps my share of money in positive, like the real view", async () => {
+    const client = createFakeClient(NOW);
+    const { data: credits } = await client
+      .from("v_transactions_eur")
+      .select("*")
+      .eq("credit_debit_indicator", "CRDT");
+    const t = (credits ?? []).find((r) => (r.amount ?? 0) > 10);
+    expect(t).toBeDefined();
+    await client
+      .from("transactions")
+      .update({ personal_amount: 10 })
+      .eq("account_uid", t!.account_uid ?? "")
+      .eq("entry_reference", t!.entry_reference ?? "");
+    const { data } = await client
+      .from("v_transactions_eur")
+      .select("*")
+      .eq("entry_reference", t!.entry_reference ?? "");
+    expect(data?.[0]?.personal_signed_amount_eur).toBeCloseTo(10);
+  });
+});
+
 describe("demo views match the real ones", () => {
   // protects=the demo shows subscriptions as costs (negative), like the real view;
   // fails_when=the monthly equivalent is stored as a positive number
