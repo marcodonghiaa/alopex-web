@@ -593,6 +593,19 @@ describe("Paid for others", () => {
     expect(screen.queryByText("Shop 2")).toBeNull();
   });
 
+  // Polish 4 #4: both toggles under the list were 36px, under the 44px tap minimum.
+  // fails_when=either toggle loses its 44px minimum height
+  it("gives the toggles under the list a 44px tap height", async () => {
+    tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+    renderPage();
+    expect(await screen.findByRole("button", { name: /^Show 1 .*paid for others$/ })).toHaveClass(
+      "min-h-11",
+    );
+    expect(await screen.findByRole("button", { name: /^Show \d+ transfers?$/ })).toHaveClass(
+      "min-h-11",
+    );
+  });
+
   // Polish 4 #3: on desktop the rows open above the toggle, so the next Tab went past them.
   // fails_when=focus stays on the toggle after "Show"
   it("moves focus to the section's heading when shown", async () => {

@@ -910,7 +910,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
                 if (!forOthersOpen) focusForOthersHeading();
               }}
               aria-expanded={forOthersOpen}
-              className="mt-4 px-4"
+              className="mt-4 min-h-11 px-4"
             >
               {forOthersOpen ? "Hide" : "Show"} {forOthers.length} paid for others
             </Button>
@@ -944,7 +944,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
           variant="quiet"
           size="sm"
           onClick={() => setShowTransfers((v) => !v)}
-          className="mt-4 px-4"
+          className="mt-4 min-h-11 px-4"
         >
           {showTransfers ? "Hide" : "Show"} {transfers.length} transfer
           {transfers.length === 1 ? "" : "s"}
