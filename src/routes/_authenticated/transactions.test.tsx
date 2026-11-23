@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -636,5 +636,78 @@ describe("Type save and subscriptions", () => {
     const spy = vi.spyOn(client, "invalidateQueries");
     await saveType(client);
     await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ["recurring_streams"] }));
+  });
+
+  // polish-5 E3: a 429 (server allows one re-check per 5 s) was never retried, so the nav badge
+  // stayed stale. fails_when=no second re-check after the window, a ran/failed check is retried,
+  // or a retry fires after the page closed
+  describe("re-check after a rate limit", () => {
+    afterEach(() => vi.useRealTimers());
+    const LIMITED = { data: null, error: { context: { status: 429 } } };
+    // Save with real timers, then switch to fake ones before the first answer comes back.
+    const saveThenAnswer = async (first: unknown) => {
+      let answer!: () => void;
+      invoke.mockImplementationOnce(() => new Promise((res) => (answer = () => res(first))));
+      invoke.mockResolvedValue({ data: { streams: 1 }, error: null });
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const spy = vi.spyOn(client, "invalidateQueries");
+      await saveType(client);
+      await waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
+      vi.useFakeTimers();
+      return { spy, answer };
+    };
+    const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+    const recurringRefetches = (spy: { mock: { calls: Array<Array<unknown>> } }) =>
+      spy.mock.calls.filter(
+        ([f]) =>
+          JSON.stringify((f as { queryKey?: unknown })?.queryKey) === '["recurring_streams"]',
+      ).length;
+
+    it("retries once after 5 s, then refetches the recurring streams", async () => {
+      const { spy, answer } = await saveThenAnswer(LIMITED);
+      answer();
+      await advance(4_900);
+      expect(invoke).toHaveBeenCalledTimes(1);
+      const before = recurringRefetches(spy);
+      await advance(200);
+      expect(invoke).toHaveBeenCalledTimes(2);
+      expect(recurringRefetches(spy)).toBe(before + 1);
+      await advance(10_000);
+      expect(invoke).toHaveBeenCalledTimes(2);
+    });
+
+    it("doesn't retry a check that ran", async () => {
+      const { answer } = await saveThenAnswer({ data: { streams: 1 }, error: null });
+      answer();
+      await advance(10_000);
+      expect(invoke).toHaveBeenCalledTimes(1);
+    });
+
+    it("doesn't retry a check that failed for another reason", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const { answer } = await saveThenAnswer({ data: null, error: new Error("Load failed") });
+      answer();
+      await advance(10_000);
+      expect(invoke).toHaveBeenCalledTimes(1);
+      warn.mockRestore();
+    });
+
+    it("sends no retry once the page has closed", async () => {
+      const { answer } = await saveThenAnswer(LIMITED);
+      answer();
+      await advance(100);
+      cleanup();
+      await advance(10_000);
+      expect(invoke).toHaveBeenCalledTimes(1);
+    });
+
+    it("sends no retry when the page closes before the 429 comes back", async () => {
+      await saveThenAnswer(LIMITED).then(({ answer }) => {
+        cleanup();
+        answer();
+      });
+      await advance(10_000);
+      expect(invoke).toHaveBeenCalledTimes(1);
+    });
   });
 });
