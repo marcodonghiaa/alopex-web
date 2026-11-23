@@ -120,6 +120,13 @@ function SubscriptionsPage() {
   const query = useRecurringStreams();
   // While the re-check runs, rows can still move (a stream turns gone), so their actions wait.
   const [checking, setChecking] = useState(true);
+  // Most checks land in ~0.1 s: say so (and dim the locked actions) only once one runs longer.
+  const [slowCheck, setSlowCheck] = useState(false);
+  useEffect(() => {
+    if (!checking) return setSlowCheck(false);
+    const t = setTimeout(() => setSlowCheck(true), 300);
+    return () => clearTimeout(t);
+  }, [checking]);
   // Opening the page re-checks your subscriptions, so a transaction you just renamed, marked
   // One-time or deleted shows here. The saved list shows meanwhile; an action in flight refetches itself.
   // shortcut: a full detection per visit, cheap for one household: server-side a sign-in check,
@@ -228,10 +235,6 @@ function SubscriptionsPage() {
       {/* Titled like Net Worth (iOS view board). */}
       <header className="mb-3 flex items-baseline justify-between gap-3">
         <h1 className="text-lg font-semibold text-foreground">Subscriptions</h1>
-        {/* Beside the title, so showing and hiding it moves no row. */}
-        <p aria-live="polite" className="text-[0.8125rem] text-muted-foreground">
-          {checking ? "Checking for changes…" : ""}
-        </p>
       </header>
 
       {query.isError && (
@@ -264,32 +267,43 @@ function SubscriptionsPage() {
         </section>
       )}
 
-      <div className="mb-8 max-w-xs">
+      <div className="mb-1.5 max-w-xs">
         <SegmentedControl label="View" options={[...VIEWS]} value={view} onChange={setView} />
       </div>
+      {/* Under the switch, next to what it locks; its slot keeps the height, so nothing moves. */}
+      <p className="mb-1.5 min-h-5 text-[0.8125rem] text-muted-foreground">
+        {slowCheck ? "Checking your transactions…" : ""}
+      </p>
 
       {view === "calendar" ? (
-        query.isPending ? (
-          <Skeleton className="h-96" />
-        ) : (
-          <RecurringCalendar
-            streams={active}
-            today={today}
-            initialMonth={calendarMonth}
-            onMonthChange={(m) =>
-              void navigate({
-                search: (s: SubscriptionsSearch) => ({
-                  ...s,
-                  month: `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`,
-                }),
-                // Paging months isn't worth a Back step each.
-                replace: true,
-              })
-            }
-          />
-        )
+        <div data-testid="subscriptions-calendar" aria-busy={checking}>
+          {query.isPending ? (
+            <Skeleton className="h-96" />
+          ) : (
+            <RecurringCalendar
+              streams={active}
+              today={today}
+              initialMonth={calendarMonth}
+              onMonthChange={(m) =>
+                void navigate({
+                  search: (s: SubscriptionsSearch) => ({
+                    ...s,
+                    month: `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`,
+                  }),
+                  // Paging months isn't worth a Back step each.
+                  replace: true,
+                })
+              }
+            />
+          )}
+        </div>
       ) : (
-        <div data-testid="subscriptions-content" aria-busy={checking}>
+        <div
+          data-testid="subscriptions-content"
+          aria-busy={checking}
+          // Locked from the start; dimmed only once the check runs long enough to say so.
+          className={checking && !slowCheck ? "[&_:disabled]:!opacity-100" : undefined}
+        >
           {toReview.length > 0 && (
             <section aria-label="To review" className="mb-8">
               <SectionTitle>To review ({toReview.length})</SectionTitle>

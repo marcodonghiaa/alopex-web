@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 
@@ -198,7 +198,7 @@ describe("Subscriptions page", () => {
     rpc.mockImplementation(() => new Promise((res) => (finishAction = () => res({ error: null }))));
     const spy = vi.spyOn(client, "invalidateQueries");
     render(page);
-    await screen.findByText("Checking for changes…");
+    await screen.findByText("Checking your transactions…");
     undo.onClick();
     await waitFor(() => expect(rpc).toHaveBeenCalledTimes(2));
     finishCheck();
@@ -223,7 +223,8 @@ describe("Subscriptions page", () => {
     const frequency = screen.getByTitle("Monthly — auto-detected");
     expect(restore).toBeDisabled();
     expect(frequency).toBeDisabled();
-    expect(screen.getByText("Checking for changes…")).toHaveAttribute("aria-live", "polite");
+    // polish-4 #1: no live region (it was never announced); aria-busy says it instead.
+    expect(await screen.findByText("Checking your transactions…")).not.toHaveAttribute("aria-live");
     expect(screen.getByTestId("subscriptions-content")).toHaveAttribute("aria-busy", "true");
     expect(remove).toBeDisabled();
     expect(confirm).toBeDisabled();
@@ -233,7 +234,7 @@ describe("Subscriptions page", () => {
 
     finishCheck();
     await waitFor(() =>
-      expect(screen.queryByText("Checking for changes…")).not.toBeInTheDocument(),
+      expect(screen.queryByText("Checking your transactions…")).not.toBeInTheDocument(),
     );
     expect(screen.getByTestId("subscriptions-content")).toHaveAttribute("aria-busy", "false");
     expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
@@ -255,7 +256,7 @@ describe("Subscriptions page", () => {
     db.rows = db.rows.map((r) => (r["id"] === "s1" ? { ...r, display_name: "iCloud" } : r));
     finishCheck();
     await new Promise((r) => setTimeout(r, 50));
-    expect(screen.getByText("Checking for changes…")).toBeInTheDocument();
+    expect(await screen.findByText("Checking your transactions…")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeDisabled();
 
     openRead();
@@ -263,7 +264,7 @@ describe("Subscriptions page", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Remove iCloud" })).toBeEnabled(),
     );
-    expect(screen.queryByText("Checking for changes…")).not.toBeInTheDocument();
+    expect(screen.queryByText("Checking your transactions…")).not.toBeInTheDocument();
   });
 
   it("unlocks the row actions when the re-check fails", async () => {
@@ -272,7 +273,7 @@ describe("Subscriptions page", () => {
     renderPage();
     await screen.findByText("Streamflix");
     await waitFor(() =>
-      expect(screen.queryByText("Checking for changes…")).not.toBeInTheDocument(),
+      expect(screen.queryByText("Checking your transactions…")).not.toBeInTheDocument(),
     );
     expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
     warn.mockRestore();
@@ -284,7 +285,7 @@ describe("Subscriptions page", () => {
     renderPage();
     await screen.findByText("Streamflix");
     await waitFor(() =>
-      expect(screen.queryByText("Checking for changes…")).not.toBeInTheDocument(),
+      expect(screen.queryByText("Checking your transactions…")).not.toBeInTheDocument(),
     );
     expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
     expect(warn).not.toHaveBeenCalled();
@@ -682,5 +683,96 @@ describe("List / Calendar", () => {
     expect(cell.getAttribute("aria-label")).not.toMatch(/Cloudbox|Gonebox/);
     const grid = screen.getByRole("table");
     expect(grid.innerHTML).not.toMatch(/Cloudbox|Gonebox/);
+  });
+});
+
+// polish-4 #1: the status line flashed on every open (~125 ms) and dimmed every action. Now the
+// lock starts at once but the text and the dim wait ~300 ms. fails_when=the text shows (or the
+// actions unlock) before 300 ms, or the text stays after the check settles
+describe("Checking status", () => {
+  afterEach(() => vi.useRealTimers());
+  const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+  const CHECKING = "Checking your transactions…";
+  const holdCheck = () => {
+    let finish!: () => void;
+    invoke.mockImplementation(
+      () => new Promise((res) => (finish = () => res({ data: { streams: 2 }, error: null }))),
+    );
+    return () => finish();
+  };
+
+  it("under 300 ms: no text, no dim, but the actions are already locked", async () => {
+    vi.useFakeTimers();
+    holdCheck();
+    renderPage();
+    await advance(0);
+    const content = screen.getByTestId("subscriptions-content");
+    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Confirm Cloudbox" })).toBeDisabled();
+    expect(content).toHaveAttribute("aria-busy", "true");
+    await advance(290);
+    expect(screen.queryByText(CHECKING)).not.toBeInTheDocument();
+    expect(content).toHaveClass("[&_:disabled]:!opacity-100");
+  });
+
+  it("from 300 ms: says it's checking your transactions and dims the locked actions", async () => {
+    vi.useFakeTimers();
+    holdCheck();
+    renderPage();
+    await advance(300);
+    const line = screen.getByText(CHECKING);
+    expect(line).not.toHaveAttribute("aria-live");
+    expect(screen.getByTestId("subscriptions-content")).not.toHaveClass(
+      "[&_:disabled]:!opacity-100",
+    );
+    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeDisabled();
+  });
+
+  it("sits under the List/Calendar switch, next to what it blocks", async () => {
+    vi.useFakeTimers();
+    holdCheck();
+    renderPage();
+    await advance(300);
+    const view = screen.getByRole("radiogroup", { name: "View" });
+    const line = screen.getByText(CHECKING);
+    expect(view.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("banner")).not.toContainElement(line);
+  });
+
+  it("is gone, and the actions unlock, once the check settles", async () => {
+    vi.useFakeTimers();
+    const finish = holdCheck();
+    renderPage();
+    await advance(400);
+    expect(screen.getByText(CHECKING)).toBeInTheDocument();
+    finish();
+    await advance(50);
+    expect(screen.queryByText(CHECKING)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+    expect(screen.getByTestId("subscriptions-content")).toHaveAttribute("aria-busy", "false");
+  });
+
+  it("a check that settles under 300 ms never shows the text", async () => {
+    vi.useFakeTimers();
+    const finish = holdCheck();
+    renderPage();
+    await advance(100);
+    finish();
+    await advance(500);
+    expect(screen.queryByText(CHECKING)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+  });
+
+  it("marks the calendar busy too while checking, and not once settled", async () => {
+    vi.useFakeTimers();
+    url.search = { view: "calendar" };
+    const finish = holdCheck();
+    renderPage();
+    await advance(0);
+    const cal = screen.getByTestId("subscriptions-calendar");
+    expect(cal).toHaveAttribute("aria-busy", "true");
+    finish();
+    await advance(50);
+    expect(cal).toHaveAttribute("aria-busy", "false");
   });
 });
