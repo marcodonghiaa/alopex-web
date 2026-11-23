@@ -593,6 +593,19 @@ describe("Paid for others", () => {
     expect(screen.queryByText("Shop 2")).toBeNull();
   });
 
+  // Polish 4 #3: on desktop the rows open above the toggle, so the next Tab went past them.
+  // fails_when=focus stays on the toggle after "Show"
+  it("moves focus to the section's heading when shown", async () => {
+    tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Show 1 paid for others" }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getAllByRole("heading", { name: "Paid for others" })[0],
+      ),
+    );
+  });
+
   // Polish 1 #3: a forced-open section offered a "Hide" button that did nothing.
   it("offers no hide button while a search or an empty list keeps the section open", async () => {
     tableData = {

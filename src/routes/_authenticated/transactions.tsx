@@ -419,9 +419,18 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
       (shown ?? forOthersToggle.current)?.focus();
     }, 0);
   }
-  const forOthersHeading = (id?: string) => (
+  // Desktop opens the rows above the toggle, so the next Tab would skip them: start at the heading.
+  function focusForOthersHeading() {
+    setTimeout(() => {
+      const headings = ["paid-for-others-desktop", "paid-for-others-phone"]
+        .map((id) => document.getElementById(id))
+        .filter((el): el is HTMLElement => el != null);
+      (headings.find((el) => el.getClientRects().length > 0) ?? headings[0])?.focus();
+    }, 0);
+  }
+  const forOthersHeading = (id: string) => (
     <>
-      <SectionTitle {...(id ? { id } : {})} className="pb-0">
+      <SectionTitle id={id} focusable className="pb-0">
         Paid for others
       </SectionTitle>
       <p className="mt-0.5 text-xs text-muted-foreground">
@@ -873,7 +882,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
                     <>
                       <tr className="border-b bg-background/40">
                         <td colSpan={5} className="px-4 pt-5 pb-3">
-                          {forOthersHeading()}
+                          {forOthersHeading("paid-for-others-desktop")}
                         </td>
                       </tr>
                       {forOthers.map((tx) => (
@@ -896,7 +905,10 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
               ref={forOthersToggle}
               variant="quiet"
               size="sm"
-              onClick={() => setShowForOthers(!forOthersOpen)}
+              onClick={() => {
+                setShowForOthers(!forOthersOpen);
+                if (!forOthersOpen) focusForOthersHeading();
+              }}
               aria-expanded={forOthersOpen}
               className="mt-4 px-4"
             >
