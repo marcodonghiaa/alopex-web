@@ -513,7 +513,7 @@ describe("Cash flow with imported spending", () => {
     expect(row("Savings rate")).toHaveTextContent("—");
     const chart = await screen.findByRole("img", { name: /^Imported spending for/ });
     expect(within(chart).getByText("Housing")).toBeInTheDocument();
-    expect(within(chart).getAllByText("Imported spending").length).toBeGreaterThan(0);
+    expect(within(chart).getAllByText("Imported").length).toBeGreaterThan(0);
     expect(within(chart).queryByText("From savings")).toBeNull();
   });
 

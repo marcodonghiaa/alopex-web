@@ -338,7 +338,7 @@ export const OTHER_INCOME = "Other income";
 export const OTHER_SPENDING = "Other spending";
 export const SAVED = "Saved";
 export const FROM_SAVINGS = "From savings";
-export const IMPORTED_SPENDING = "Imported spending";
+export const IMPORTED_SPENDING = "Imported";
 const HUB = "Income";
 
 // Green only for what was kept (gains); payers are a neutral ink tone, so "Saved" stands out.
