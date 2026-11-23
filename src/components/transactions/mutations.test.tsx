@@ -386,6 +386,24 @@ describe("transaction mutations are scoped to one account", () => {
     expect(cached().map((r) => r.owed_by)).toEqual([null, "Sam"]);
   });
 
+  // Polish 5 #2: the month In/Out header (and Spending, Cash flow) kept the old share until reload.
+  // fails_when=a split save leaves the month totals or the per-category figures cached
+  it("split save reloads the month totals that count my share", async () => {
+    const { queryClient, wrapper } = setup();
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const { result } = renderHook(() => useSplitMutation(queryClient, MONTH), { wrapper });
+    await act(() =>
+      result.current.mutateAsync({
+        tx: { account_uid: "a1", entry_reference: "r1" },
+        personalAmount: 0,
+        owedBy: "Sam",
+      }),
+    );
+    const keys = invalidate.mock.calls.map(([f]) => f?.queryKey?.[0]);
+    for (const k of ["income-vs-expenses", "spend-by-category", "cash-flow", "splits"])
+      expect(keys).toContain(k);
+  });
+
   // protects=the Settle button; fails_when=it writes the wrong row or leaves settled_at stale
   it("settling a split marks that row settled with a date, and unsettling clears it", async () => {
     const { queryClient, wrapper } = setup();
