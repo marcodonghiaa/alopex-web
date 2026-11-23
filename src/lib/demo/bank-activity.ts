@@ -294,6 +294,20 @@ export function dailyTransactions(n: number, todayNum: number): Array<Tx> {
       }),
     );
   }
+  // Paid entirely for a friend: listed under "Paid for others", counted nowhere.
+  if (n % 17 === 9) {
+    out.push(
+      tx({
+        entry_reference: `demo-${date}-tickets`,
+        booking_date: date,
+        amount: 18,
+        personal_amount: 0,
+        owed_by: "Luca",
+        category: "Experiences",
+        creditor_name: "Teatro Demo",
+      }),
+    );
+  }
   return out;
 }
 

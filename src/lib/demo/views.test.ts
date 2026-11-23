@@ -4,7 +4,9 @@ import { createFakeClient } from "./fake-client";
 const NOW = new Date("2026-10-20T12:00:00Z");
 
 describe("demo v_transactions_eur", () => {
-  it("counts an unsplit purchase as fully mine, like the real view", async () => {
+  // Polish 3 #4: split purchases count as mine too (my share, still money out); only one paid
+  // entirely for others has nothing of mine.
+  it("counts an unsplit or split purchase as mine, like the real view", async () => {
     const client = createFakeClient(NOW);
     const { data: all } = await client
       .from("v_transactions_eur")
@@ -15,8 +17,9 @@ describe("demo v_transactions_eur", () => {
       .select("*")
       .eq("flow_type", "spend")
       .lt("personal_signed_amount_eur", 0);
-    expect(all?.length).toBeGreaterThan(0);
-    expect(mine?.length).toBe(all?.length);
+    const withShare = (all ?? []).filter((r) => r.personal_amount !== 0);
+    expect(withShare.some((r) => r.personal_amount != null)).toBe(true); // a split row is checked
+    expect(mine?.length).toBe(withShare.length);
   });
 
   // Polish 1 #2: like the real view's payer_name (custom name, else the bank's debtor name).
@@ -41,6 +44,30 @@ describe("demo v_transactions_eur", () => {
     expect(data?.length).toBeGreaterThan(0);
     for (const t of data ?? [])
       expect(t.personal_signed_amount_eur).toBe(-(t.personal_amount ?? 0));
+  });
+});
+
+// Polish 5 #7: a split money-in row got -share, while the real view signs it by direction (+).
+// fails_when=split money in counts as money out in the demo totals
+describe("demo split money in", () => {
+  it("keeps my share of money in positive, like the real view", async () => {
+    const client = createFakeClient(NOW);
+    const { data: credits } = await client
+      .from("v_transactions_eur")
+      .select("*")
+      .eq("credit_debit_indicator", "CRDT");
+    const t = (credits ?? []).find((r) => (r.amount ?? 0) > 10);
+    expect(t).toBeDefined();
+    await client
+      .from("transactions")
+      .update({ personal_amount: 10 })
+      .eq("account_uid", t!.account_uid ?? "")
+      .eq("entry_reference", t!.entry_reference ?? "");
+    const { data } = await client
+      .from("v_transactions_eur")
+      .select("*")
+      .eq("entry_reference", t!.entry_reference ?? "");
+    expect(data?.[0]?.personal_signed_amount_eur).toBeCloseTo(10);
   });
 });
 

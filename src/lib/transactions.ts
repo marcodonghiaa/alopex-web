@@ -130,8 +130,23 @@ export interface AccountRow {
   manual?: boolean; // transactions added by hand; absent before the backend migration
 }
 
-// Mirrors the allowlist in the backend's notify-worth-it.js — kept in sync by hand,
-// the two repos don't share code.
+/** My part of a charge in its own currency, positive: the split share if one is set, else all of it. */
+export const myShare = (tx: Pick<TransactionRow, "amount" | "personal_amount">): number => {
+  const total = Math.abs(tx.amount ?? 0);
+  return tx.personal_amount == null ? total : Math.min(total, Math.abs(tx.personal_amount));
+};
+
+/** Split so that others owe part of it: my share is less than the charge. */
+export const isSplit = (tx: Pick<TransactionRow, "amount" | "personal_amount">): boolean =>
+  tx.personal_amount != null && myShare(tx) < Math.abs(tx.amount ?? 0);
+
+/** Money out paid entirely for others (my share is 0): counts nothing, listed apart. */
+export const isPaidForOthers = (
+  tx: Pick<TransactionRow, "amount" | "personal_amount" | "credit_debit_indicator">,
+): boolean => tx.credit_debit_indicator === "DBIT" && isSplit(tx) && myShare(tx) === 0;
+
+// Mirrors the allowlist, the refunded/transfer skip and the share rule in the backend's notify-worth-it.js and notify.ts, kept
+// in sync by hand: the two repos don't share code.
 const WORTH_IT_CATEGORIES = ["Shopping", "Entertainment", "Dine Out", "Experiences"];
 const WORTH_IT_MIN_AMOUNT = 15;
 const WORTH_IT_MIN_AGE_HOURS = 3;
@@ -139,10 +154,12 @@ const WORTH_IT_MIN_AGE_HOURS = 3;
 export function isWorthItEligible(tx: TransactionRow): boolean {
   return (
     tx.credit_debit_indicator === "DBIT" &&
+    tx.flow_type !== "refunded" &&
+    tx.flow_type !== "transfer" &&
     tx.worth_it == null &&
     tx.category != null &&
     WORTH_IT_CATEGORIES.includes(tx.category) &&
-    (tx.amount ?? 0) >= WORTH_IT_MIN_AMOUNT &&
+    myShare(tx) >= WORTH_IT_MIN_AMOUNT &&
     tx.created_at != null &&
     Date.now() - new Date(tx.created_at).getTime() >= WORTH_IT_MIN_AGE_HOURS * 3600_000
   );

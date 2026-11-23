@@ -113,7 +113,8 @@ async function fetchWorthItForMonth(
     .gte("booking_date", startISO)
     .lt("booking_date", endExclusiveISO);
   if (error) throw error;
-  const rows = (data ?? []) as Array<WorthItTxRow>;
+  // A charge paid entirely for others (my share 0) isn't one of my purchases.
+  const rows = ((data ?? []) as Array<WorthItTxRow>).filter((r) => personalAmountEur(r) !== 0);
   return {
     yes: rows.filter((r) => r.worth_it === "yes").length,
     no: rows.filter((r) => r.worth_it === "no").length,

@@ -6,7 +6,7 @@ import { makeRuleAction } from "@/lib/rules";
 import { rulesQuery } from "@/lib/rules-query";
 import { accountName, bankOf } from "@/components/bank-badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/field";
@@ -23,6 +23,8 @@ import {
   formatEur,
   groupByDay,
   selectedOnly,
+  isPaidForOthers,
+  isWorthItEligible,
   isSplitwiseShare,
   shareId,
   listCategories,
@@ -201,6 +203,8 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
   const [day, setDay] = useState("");
   // The row whose sheet is open stays listed until it closes, even if an edit stops it matching.
   const [editing, setEditing] = useState<string | null>(null);
+  // Whether the open row sat in "Paid for others" when its sheet opened: it stays there until it closes.
+  const [editingApart, setEditingApart] = useState(false);
   const [month, setMonth] = useState(() => monthFromParam(initialMonth));
   const monthKey = useMemo(() => formatISODate(month), [month]);
   const queryClient = useQueryClient();
@@ -248,6 +252,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
   const restoreTransfer = useFlowMutation(queryClient, monthKey);
   const changeAmount = useManualAmountMutation(queryClient);
   const [showTransfers, setShowTransfers] = useState(false);
+  const [showForOthers, setShowForOthers] = useState(false);
 
   const bulkUpdateCategory = useBulkCategoryMutation(queryClient, monthKey, () =>
     setSelected(new Set()),
@@ -334,15 +339,39 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
 
   const [spotlightTx, setSpotlightTx] = useState<TransactionRow | null>(null);
 
+  // Act on a link once (it can take a refetch to find its row), so later toggles don't redo it.
+  const handledLink = useRef<string | null>(null);
+  useEffect(() => {
+    if (!highlightRef || txQuery.isPending || handledLink.current === highlightRef) return;
+    const tx = transactions.find((t) => t.entry_reference === highlightRef);
+    if (!tx) return;
+    handledLink.current = highlightRef;
+    // A row others owe all of isn't my spending: open its section, ask nothing.
+    if (isPaidForOthers(tx)) setShowForOthers(true);
+    else if (isWorthItEligible(tx)) setSpotlightTx(tx);
+  }, [highlightRef, txQuery.isPending, transactions]);
+
+  // Scroll once the row is on screen (an opened section renders it a beat later), then unring it.
+  const scrolledLink = useRef<string | null>(null);
+  useEffect(() => {
+    if (!highlightRef || txQuery.isPending || scrolledLink.current === highlightRef) return;
+    // Each row has a desktop and a phone copy, one of them hidden: scroll to the one on screen.
+    const el = [
+      ...document.querySelectorAll(`[data-entry-ref="${CSS.escape(highlightRef)}"]`),
+    ].find((e) => e.getClientRects().length > 0);
+    if (!el) return;
+    // After the router's scroll restoration, which jumps to the top just after the page renders.
+    const timer = setTimeout(() => {
+      scrolledLink.current = highlightRef;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [highlightRef, txQuery.isPending, transactions, showForOthers]);
   useEffect(() => {
     if (!highlightRef || txQuery.isPending) return;
-    const el = document.querySelector(`[data-entry-ref="${CSS.escape(highlightRef)}"]`);
-    el?.scrollIntoView({ behavior: "smooth", block: "center" });
-    const tx = transactions.find((t) => t.entry_reference === highlightRef);
-    if (tx && tx.worth_it == null) setSpotlightTx(tx);
     const timer = setTimeout(() => setHighlightRef(null), 3000);
     return () => clearTimeout(timer);
-  }, [highlightRef, txQuery.isPending, transactions]);
+  }, [highlightRef, txQuery.isPending]);
 
   const categories = useMemo(() => listCategories(transactions), [transactions]);
   // Only tags on this month's rows, so every option matches something.
@@ -379,14 +408,66 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
     return transactions.filter((tx) => keep.has(tx) || txId(tx) === editing);
   }, [transactions, search, category, bank, bankFor, day, tag, editing]);
 
+  // Charges paid entirely for others count nothing, so they sit apart, below the list. The row
+  // being edited stays where it is until its sheet closes.
+  const forOthers = useMemo(
+    () => filtered.filter((tx) => (txId(tx) === editing ? editingApart : isPaidForOthers(tx))),
+    [filtered, editing, editingApart],
+  );
+  const mine = useMemo(() => {
+    const apart = new Set(forOthers);
+    return filtered.filter((tx) => !apart.has(tx));
+  }, [filtered, forOthers]);
+  // A search shows them too, so it never comes up empty for something you paid.
+  // Forced open (a search, or nothing else to list): then there is no toggle to offer.
+  const forOthersForced = search.trim() !== "" || mine.length === 0;
+  const forOthersOpen = forOthers.length > 0 && (showForOthers || forOthersForced);
+  const visible = forOthersOpen ? filtered : mine;
+  // A row whose share crossed 0 while its sheet was open moves list as the sheet closes, taking
+  // the sheet's trigger with it: focus its new Edit button, or the toggle if it went out of sight.
+  const forOthersToggle = useRef<HTMLButtonElement>(null);
+  function focusAfterMove(ref: string) {
+    setTimeout(() => {
+      const rows = [...document.querySelectorAll(`[data-entry-ref="${CSS.escape(ref)}"]`)];
+      const targets = rows
+        .map((el) =>
+          el.matches("li")
+            ? el.querySelector<HTMLElement>(":scope > button")
+            : el.querySelector<HTMLElement>('button[aria-label^="Edit"]'),
+        )
+        .filter((el): el is HTMLElement => el != null);
+      const shown = targets.find((el) => el.getClientRects().length > 0) ?? targets[0];
+      (shown ?? forOthersToggle.current)?.focus();
+    }, 0);
+  }
+  // Desktop opens the rows above the toggle, so the next Tab would skip them: start at the heading.
+  function focusForOthersHeading() {
+    setTimeout(() => {
+      const headings = ["paid-for-others-desktop", "paid-for-others-phone"]
+        .map((id) => document.getElementById(id))
+        .filter((el): el is HTMLElement => el != null);
+      (headings.find((el) => el.getClientRects().length > 0) ?? headings[0])?.focus();
+    }, 0);
+  }
+  const forOthersHeading = (id: string) => (
+    <>
+      <SectionTitle id={id} focusable className="pb-0">
+        Paid for others
+      </SectionTitle>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        Others owe you all of it. Not counted in your spending.
+      </p>
+    </>
+  );
+
   // Shares cannot be bulk edited or deleted: they are not rows of the transactions table.
   const filteredIds = useMemo(
-    () => filtered.filter((tx) => !isSplitwiseShare(tx)).map(txId),
-    [filtered],
+    () => visible.filter((tx) => !isSplitwiseShare(tx)).map(txId),
+    [visible],
   );
   const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selected.has(id));
   // Bulk actions touch only rows you can see: a row selected before a filter hid it stays out.
-  const selectedVisible = useMemo(() => selectedOnly(filtered, selected), [filtered, selected]);
+  const selectedVisible = useMemo(() => selectedOnly(visible, selected), [visible, selected]);
 
   function toggleOne(id: string) {
     setSelected((prev) => {
@@ -494,7 +575,11 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
       ),
     savingTags: updateTags.isPending && isSameTx(updateTags.variables?.tx, tx),
     tagSuggestions: tagsQuery.data ?? [],
-    onOpenChange: (open) => setEditing((now) => (open ? txId(tx) : now === txId(tx) ? null : now)),
+    onOpenChange: (open) => {
+      if (open) setEditingApart(isPaidForOthers(tx));
+      else if (isPaidForOthers(tx) !== editingApart) focusAfterMove(tx.entry_reference);
+      setEditing((now) => (open ? txId(tx) : now === txId(tx) ? null : now));
+    },
     ...(tx.account_uid && accounts[tx.account_uid]?.manual
       ? {
           onSaveAmount: (amount: number) => changeAmount.mutate({ tx, amount }),
@@ -636,7 +721,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
             minDay={formatISODate(month)}
             maxDay={formatISODate(new Date(month.getFullYear(), month.getMonth() + 1, 0))}
             count={filterCount}
-            resultCount={filtered.length}
+            resultCount={visible.length}
             onClear={clearSheetFilters}
           />
         </div>
@@ -757,7 +842,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
           <div className="rounded-lg bg-card">{emptyList}</div>
         ) : (
           <div className="space-y-5">
-            {groupByDay(filtered).map((group) => (
+            {groupByDay(mine).map((group) => (
               <section key={group.day ?? "none"}>
                 <SectionTitle variant="label">{formatDayHeading(group.day)}</SectionTitle>
                 <ul className="divide-y divide-hairline overflow-hidden rounded-lg bg-card">
@@ -787,9 +872,9 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
                     />
                   </label>
                 </th>
-                <th className="px-4 py-3 font-medium">Date</th>
-                <th className="px-4 py-3 font-medium">Merchant</th>
-                <th className="px-4 py-3 text-right font-medium">Amount</th>
+                <th className="px-2 py-3 font-medium lg:px-4">Date</th>
+                <th className="px-2 py-3 font-medium lg:px-4">Merchant</th>
+                <th className="px-2 py-3 text-right font-medium lg:px-4">Amount</th>
                 <th className="w-12 px-2 py-3">
                   <span className="sr-only">Edit</span>
                 </th>
@@ -809,19 +894,79 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
                   <td colSpan={5}>{emptyList}</td>
                 </tr>
               ) : (
-                filtered.map((tx) => <TransactionRowView key={txId(tx)} {...viewProps(tx)} />)
+                <>
+                  {mine.map((tx) => (
+                    <TransactionRowView key={txId(tx)} {...viewProps(tx)} />
+                  ))}
+                  {/* In the same table so the columns line up with the rows above. */}
+                  {forOthersOpen && (
+                    <>
+                      <tr className="border-b bg-background/40">
+                        <td colSpan={5} className="px-4 pt-5 pb-3">
+                          {forOthersHeading("paid-for-others-desktop")}
+                        </td>
+                      </tr>
+                      {forOthers.map((tx) => (
+                        <TransactionRowView key={txId(tx)} {...viewProps(tx)} />
+                      ))}
+                    </>
+                  )}
+                </>
               )}
             </tbody>
           </table>
         </div>
       </section>
 
+      {/* A failed load hides the list, so the section goes with it. */}
+      {!txQuery.isError && forOthers.length > 0 && (
+        <>
+          {!forOthersForced && (
+            <Button
+              ref={forOthersToggle}
+              variant="quiet"
+              size="sm"
+              onClick={() => {
+                setShowForOthers(!forOthersOpen);
+                if (!forOthersOpen) focusForOthersHeading();
+              }}
+              aria-expanded={forOthersOpen}
+              className="mt-4 min-h-11 px-4"
+            >
+              {forOthersOpen ? "Hide" : "Show"} {forOthers.length} charge
+              {forOthers.length === 1 ? "" : "s"} paid for others
+            </Button>
+          )}
+          {forOthersOpen && (
+            <section
+              aria-labelledby="paid-for-others-phone"
+              className="mt-2 overflow-hidden rounded-lg bg-card md:hidden"
+            >
+              <div className="px-4 py-3">{forOthersHeading("paid-for-others-phone")}</div>
+              {/* Cards carry no date, so they are grouped by day like the main list. */}
+              {groupByDay(forOthers).map((group) => (
+                <div key={group.day ?? "none"} className="border-t">
+                  <p className="px-4 pt-3 text-xs font-medium text-muted-foreground">
+                    {formatDayHeading(group.day)}
+                  </p>
+                  <ul className="divide-y divide-hairline">
+                    {group.rows.map((tx) => (
+                      <TransactionCardView key={txId(tx)} {...viewProps(tx)} />
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </section>
+          )}
+        </>
+      )}
+
       {transfers.length > 0 && (
         <Button
           variant="quiet"
           size="sm"
           onClick={() => setShowTransfers((v) => !v)}
-          className="mt-4 px-4"
+          className="mt-4 min-h-11 px-4"
         >
           {showTransfers ? "Hide" : "Show"} {transfers.length} transfer
           {transfers.length === 1 ? "" : "s"}

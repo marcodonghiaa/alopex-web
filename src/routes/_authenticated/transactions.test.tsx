@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -63,6 +63,7 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
 }));
 
 import { Route } from "./transactions";
+import { formatDayHeading } from "@/lib/transactions";
 
 const Page = Route.options.component as () => React.JSX.Element;
 const renderPage = (client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) =>
@@ -568,5 +569,386 @@ describe("Transactions page tag filter", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryAllByText("Hotel Alpha")).toHaveLength(0));
+  });
+});
+
+// protects=charges paid entirely for others sit in a collapsed "Paid for others" section, still
+// found by search; fails_when=they stay in the main list, vanish, or search can't find them
+describe("Paid for others", () => {
+  afterEach(() => {
+    tableData = {};
+  });
+
+  it("keeps them out of the main list until shown", async () => {
+    tableData = {
+      v_transactions_eur: [row("1"), row("2", { personal_amount: 0, amount: 49.02 })],
+    };
+    renderPage();
+    await screen.findAllByText("Shop 1");
+    expect(screen.queryByText("Shop 2")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Show 1 charge paid for others" }));
+    expect(screen.getAllByRole("heading", { name: "Paid for others" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Shop 2").length).toBeGreaterThan(0);
+    await userEvent.click(screen.getByRole("button", { name: "Hide 1 charge paid for others" }));
+    expect(screen.queryByText("Shop 2")).toBeNull();
+  });
+
+  // Polish 4 #6: "Show 1 paid for others" had no noun. fails_when=the label drops "charge(s)"
+  it("names the rows it shows: charge, or charges", async () => {
+    tableData = {
+      v_transactions_eur: [
+        row("1"),
+        row("2", { personal_amount: 0 }),
+        row("3", { personal_amount: 0 }),
+      ],
+    };
+    renderPage();
+    expect(
+      await screen.findByRole("button", { name: "Show 2 charges paid for others" }),
+    ).toBeInTheDocument();
+  });
+
+  // Polish 4 #4: both toggles under the list were 36px, under the 44px tap minimum.
+  // fails_when=either toggle loses its 44px minimum height
+  it("gives the toggles under the list a 44px tap height", async () => {
+    tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+    renderPage();
+    expect(await screen.findByRole("button", { name: /^Show 1 .*paid for others$/ })).toHaveClass(
+      "min-h-11",
+    );
+    expect(await screen.findByRole("button", { name: /^Show \d+ transfers?$/ })).toHaveClass(
+      "min-h-11",
+    );
+  });
+
+  // Polish 4 #3: on desktop the rows open above the toggle, so the next Tab went past them.
+  // fails_when=focus stays on the toggle after "Show"
+  it("moves focus to the section's heading when shown", async () => {
+    tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+    renderPage();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Show 1 charge paid for others" }),
+    );
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getAllByRole("heading", { name: "Paid for others" })[0],
+      ),
+    );
+  });
+
+  // Polish 1 #3: a forced-open section offered a "Hide" button that did nothing.
+  it("offers no hide button while a search or an empty list keeps the section open", async () => {
+    tableData = {
+      v_transactions_eur: [row("1"), row("2", { personal_amount: 0, creditor_name: "Fresh" })],
+    };
+    renderPage();
+    await screen.findAllByText("Shop 1");
+    await userEvent.type(screen.getByLabelText("Search by merchant or note"), "Fresh");
+    expect(screen.getAllByRole("heading", { name: "Paid for others" }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /paid for others/ })).toBeNull();
+  });
+
+  it("opens the section when every row this month was paid for others", async () => {
+    tableData = { v_transactions_eur: [row("2", { personal_amount: 0 })] };
+    renderPage();
+    expect(
+      (await screen.findAllByRole("heading", { name: "Paid for others" })).length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /paid for others/ })).toBeNull();
+  });
+
+  // Polish 1 #4: phone cards carry no date, so the section groups them by day like the main list.
+  // Polish 3 #3: the region is named by its heading alone.
+  it("groups the phone section by day", async () => {
+    tableData = {
+      v_transactions_eur: [row("1"), row("2", { personal_amount: 0, booking_date: thisMonth(3) })],
+    };
+    renderPage();
+    await screen.findAllByText("Shop 1");
+    await userEvent.click(screen.getByRole("button", { name: "Show 1 charge paid for others" }));
+    const phone = screen.getByRole("region", { name: "Paid for others" });
+    expect(within(phone).getByText(formatDayHeading(thisMonth(3)))).toBeInTheDocument();
+  });
+
+  // Polish 1 #8: the phone filter's count matches the rows you will see.
+  it("leaves collapsed rows out of the filter sheet's count", async () => {
+    tableData = {
+      v_transactions_eur: [row("1"), row("2"), row("3", { personal_amount: 0 })],
+    };
+    renderPage();
+    await screen.findAllByText("Shop 1");
+    await userEvent.click(screen.getByRole("button", { name: "Filter" }));
+    expect(await screen.findByText("Show 2 transactions")).toBeInTheDocument();
+  });
+
+  it("shows them when a search matches", async () => {
+    tableData = {
+      v_transactions_eur: [row("1"), row("2", { personal_amount: 0, creditor_name: "Fresh" })],
+    };
+    renderPage();
+    await screen.findAllByText("Shop 1");
+    await userEvent.type(screen.getByLabelText("Search by merchant or note"), "Fresh");
+    expect(screen.getAllByRole("heading", { name: "Paid for others" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Fresh").length).toBeGreaterThan(0);
+  });
+
+  // Polish 1 #1: opening a row in the section moved it to the main list, closing its sheet.
+  it("opens a row in the section and keeps its sheet open", async () => {
+    tableData = {
+      v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })],
+    };
+    renderPage();
+    await screen.findAllByText("Shop 1");
+    await userEvent.click(screen.getByRole("button", { name: "Show 1 charge paid for others" }));
+    const [edit] = await screen.findAllByRole("button", { name: "Edit Shop 2" });
+    await userEvent.click(edit!);
+    await act(() => new Promise((r) => setTimeout(r, 100)));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  // Polish 1 #1, opposite state: a split set to 0 mid-edit stays put until the sheet closes.
+  it("keeps a row in the main list while its sheet is open, then moves it", async () => {
+    tableData = { v_transactions_eur: [row("1"), row("2")] };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderPage(client);
+    const [edit] = await screen.findAllByRole("button", { name: "Edit Shop 2" });
+    await userEvent.click(edit!);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+    await act(() => client.invalidateQueries({ queryKey: ["transactions"] }));
+    await act(() => new Promise((r) => setTimeout(r, 100)));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /paid for others/ })).toBeNull();
+    await userEvent.keyboard("{Escape}");
+    expect(
+      await screen.findByRole("button", { name: "Show 1 charge paid for others" }),
+    ).toBeInTheDocument();
+  });
+
+  // Polish 3 #2: a failed reload hides the list, so it must not offer the section either.
+  it("offers no paid-for-others toggle after the month fails to reload", async () => {
+    tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderPage(client);
+    expect(
+      await screen.findByRole("button", { name: "Show 1 charge paid for others" }),
+    ).toBeInTheDocument();
+    failTable = "v_transactions_eur";
+    try {
+      await act(() => client.invalidateQueries({ queryKey: ["transactions"] }));
+      await waitFor(() =>
+        expect(screen.queryByRole("button", { name: /paid for others/ })).toBeNull(),
+      );
+    } finally {
+      failTable = null;
+    }
+  });
+
+  // Polish 3 #1: the sheet's trigger is gone when its row moves list, so focus must land
+  // somewhere useful, not on the page body.
+  it("moves focus to the section toggle when the edited row moves into the collapsed section", async () => {
+    tableData = { v_transactions_eur: [row("1"), row("2")] };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderPage(client);
+    const [edit] = await screen.findAllByRole("button", { name: "Edit Shop 2" });
+    await userEvent.click(edit!);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+    await act(() => client.invalidateQueries({ queryKey: ["transactions"] }));
+    await userEvent.keyboard("{Escape}");
+    const toggle = await screen.findByRole("button", { name: "Show 1 charge paid for others" });
+    await waitFor(() => expect(document.activeElement).toBe(toggle));
+  });
+
+  it("moves focus to the row's new place when it leaves the section", async () => {
+    tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderPage(client);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Show 1 charge paid for others" }),
+    );
+    const [edit] = await screen.findAllByRole("button", { name: "Edit Shop 2" });
+    await userEvent.click(edit!);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 4 })] };
+    await act(() => client.invalidateQueries({ queryKey: ["transactions"] }));
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() =>
+      expect(
+        document.activeElement?.closest("[data-entry-ref]")?.getAttribute("data-entry-ref"),
+      ).toBe("2"),
+    );
+  });
+
+  // Polish 5 #9: jsdom renders nothing, so the tests above only ever take the fallbacks
+  // (first copy). These make one copy "on screen" to cover the pick itself.
+  // fails_when=focus goes to the hidden copy of the moved row, or the hidden heading
+  describe("with only one copy on screen", () => {
+    let onScreen: "phone" | "desktop" = "phone";
+    let rects: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+      rects = vi.spyOn(Element.prototype, "getClientRects").mockImplementation(function (
+        this: Element,
+      ) {
+        const phone = this.closest("li") != null || this.id === "paid-for-others-phone";
+        return (phone === (onScreen === "phone") ? [{}] : []) as unknown as DOMRectList;
+      });
+    });
+    afterEach(() => {
+      rects.mockRestore();
+      onScreen = "phone";
+    });
+
+    // The phone card comes first in the page, so the desktop copy is the one to pick.
+    it("focuses the moved row's desktop copy", async () => {
+      onScreen = "desktop";
+      tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      renderPage(client);
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Show 1 charge paid for others" }),
+      );
+      const [edit] = await screen.findAllByRole("button", { name: "Edit Shop 2" });
+      await userEvent.click(edit!);
+      expect(await screen.findByRole("dialog")).toBeInTheDocument();
+      tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 4 })] };
+      await act(() => client.invalidateQueries({ queryKey: ["transactions"] }));
+      await userEvent.keyboard("{Escape}");
+      await waitFor(() =>
+        expect(document.activeElement?.closest("[data-entry-ref]")?.tagName).toBe("TR"),
+      );
+    });
+
+    it("focuses the phone section's heading when shown", async () => {
+      tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+      renderPage();
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Show 1 charge paid for others" }),
+      );
+      await waitFor(() => expect(document.activeElement?.id).toBe("paid-for-others-phone"));
+    });
+  });
+
+  // Polish 3 #5: on desktop the section lives in the same table, under its own heading row.
+  it("adds a heading row and the rows to the desktop table when shown", async () => {
+    tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+    renderPage();
+    await screen.findAllByText("Shop 1");
+    const table = screen.getByRole("table");
+    expect(within(table).queryByText("Shop 2")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Show 1 charge paid for others" }));
+    expect(within(table).getByRole("heading", { name: "Paid for others" })).toBeInTheDocument();
+    expect(within(table).getByText("Shop 2")).toBeInTheDocument();
+  });
+
+  // Polish 4 #1: a Worth it? link to a row later paid entirely for others asked "€0.00" and left
+  // the row hidden in the collapsed section.
+  describe("a Worth it? link", () => {
+    const eligible = { category: "Dine Out", amount: 40, created_at: "2026-01-01T00:00:00Z" };
+    afterEach(() => window.history.replaceState(null, "", "/"));
+
+    it("to a row paid for others asks nothing and opens the section on it", async () => {
+      Element.prototype.scrollIntoView = vi.fn();
+      window.history.replaceState(null, "", "/transactions?highlight=2");
+      tableData = {
+        v_transactions_eur: [row("1"), row("2", { ...eligible, personal_amount: 0 })],
+      };
+      renderPage();
+      expect(
+        await screen.findByRole("button", { name: /Hide 1 (charge )?paid for others/ }),
+      ).toBeInTheDocument();
+      expect(within(screen.getByRole("table")).getByText("Shop 2")).toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    // Polish 5 #1: querySelector took the first copy of the row, the hidden desktop one on phone.
+    // fails_when=the link scrolls to a copy of the row that isn't rendered
+    it("scrolls to the copy of the row that is on screen", async () => {
+      const scroll = vi.fn();
+      Element.prototype.scrollIntoView = scroll;
+      const rects = vi.spyOn(Element.prototype, "getClientRects").mockImplementation(function (
+        this: Element,
+      ) {
+        return (this.tagName === "LI" ? [{}] : []) as unknown as DOMRectList;
+      });
+      window.history.replaceState(null, "", "/transactions?highlight=2");
+      tableData = { v_transactions_eur: [row("1"), row("2", { ...eligible, personal_amount: 0 })] };
+      renderPage();
+      await waitFor(() => expect(scroll).toHaveBeenCalled());
+      expect(scroll.mock.contexts.map((el) => (el as Element).tagName)).toEqual(["LI"]);
+      rects.mockRestore();
+    });
+
+    // Polish 5 re-audit: the router's scroll restoration jumps to the top just after render,
+    // cancelling a scroll made right away. fails_when=the link scrolls as soon as the row renders
+    it("scrolls only after the page has settled, not as the row renders", async () => {
+      const scroll = vi.fn();
+      Element.prototype.scrollIntoView = scroll;
+      const rects = vi
+        .spyOn(Element.prototype, "getClientRects")
+        .mockImplementation(() => [{}] as unknown as DOMRectList);
+      window.history.replaceState(null, "", "/transactions?highlight=2");
+      tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+      renderPage();
+      await screen.findAllByText("Shop 2");
+      expect(scroll).not.toHaveBeenCalled();
+      await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+      rects.mockRestore();
+    });
+
+    it("to a split row asks about my share", async () => {
+      Element.prototype.scrollIntoView = vi.fn();
+      window.history.replaceState(null, "", "/transactions?highlight=2");
+      tableData = {
+        v_transactions_eur: [row("1"), row("2", { ...eligible, personal_amount: 20 })],
+      };
+      renderPage();
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText("€20.00")).toBeInTheDocument();
+    });
+
+    // Re-audit gap on polish 4 #1: in the link's first 3s, each toggle re-ran the link handling.
+    // fails_when=Hide is undone at once, or Show reopens a closed spotlight
+    it("lets Hide close the section it opened", async () => {
+      Element.prototype.scrollIntoView = vi.fn();
+      window.history.replaceState(null, "", "/transactions?highlight=2");
+      tableData = {
+        v_transactions_eur: [row("1"), row("2", { ...eligible, personal_amount: 0 })],
+      };
+      renderPage();
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Hide 1 charge paid for others" }),
+      );
+      expect(
+        await screen.findByRole("button", { name: "Show 1 charge paid for others" }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("Shop 2")).toBeNull();
+    });
+
+    it("doesn't reopen a closed spotlight when the section is shown", async () => {
+      Element.prototype.scrollIntoView = vi.fn();
+      window.history.replaceState(null, "", "/transactions?highlight=2");
+      tableData = {
+        v_transactions_eur: [
+          row("1"),
+          row("2", { ...eligible, personal_amount: 20 }),
+          row("3", { personal_amount: 0 }),
+        ],
+      };
+      renderPage();
+      await screen.findByRole("dialog");
+      await userEvent.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      await userEvent.click(screen.getByRole("button", { name: "Show 1 charge paid for others" }));
+      await act(() => new Promise((r) => setTimeout(r, 50)));
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+  });
+
+  it("shows no section when nothing was paid for others", async () => {
+    tableData = { v_transactions_eur: [row("1", { personal_amount: 4 })] };
+    renderPage();
+    await screen.findAllByText("Shop 1");
+    expect(screen.queryByRole("button", { name: /paid for others/ })).toBeNull();
   });
 });

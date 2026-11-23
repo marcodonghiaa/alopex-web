@@ -16,7 +16,10 @@ import {
   formatMoney,
   formatSignedMoney,
   isSplitwiseShare,
+  isPaidForOthers,
+  isSplit,
   isWorthItEligible,
+  myShare,
   nativeSignedAmount,
   type TransactionRow,
 } from "@/lib/transactions";
@@ -66,22 +69,29 @@ export interface TransactionViewProps {
 /** "#trip #work", or "" without tags. */
 const tagLine = (tx: TransactionRow): string => (tx.tags ?? []).map((t) => `#${t}`).join(" ");
 
-const isSplit = (tx: TransactionRow): boolean =>
-  tx.personal_amount != null && tx.personal_amount < Math.abs(tx.amount ?? 0);
-
 /** An open "worth it?" question: a hint on the row, answered in the row's sheet. */
 function WorthItHint({ tx }: { tx: TransactionRow }) {
   if (isSplitwiseShare(tx) || !isWorthItEligible(tx)) return null;
   return <span className="shrink-0 font-medium text-primary">Worth it?</span>;
 }
 
-/** Signed amount in the transaction's own currency, with the euro value under it if foreign. */
+/** Signed amount in the transaction's own currency, with the euro value under it if foreign.
+ *  A split charge shows my share large and the whole charge under it; one paid entirely for
+ *  others (or money in with a 0 share) shows the whole amount. */
 function AmountText({ tx, large = false }: { tx: TransactionRow; large?: boolean }) {
   const native = nativeSignedAmount(tx);
   if (native == null) return <span className="text-sm text-muted-foreground">—</span>;
   const currency = tx.currency ?? "EUR";
-  const positive = native >= 0;
-  const eur = tx.signed_amount_eur;
+  // A 0 share shows the whole amount: owed by others for money out, and money in isn't split.
+  const split = isSplit(tx) && myShare(tx) > 0;
+  const shown = split ? Math.sign(native) * myShare(tx) : native;
+  const positive = shown > 0;
+  // The euro value of what is shown: the share's part of the charge's euro value.
+  const total = Math.abs(tx.amount ?? 0);
+  const eur =
+    tx.signed_amount_eur == null || total === 0
+      ? null
+      : (tx.signed_amount_eur * Math.abs(shown)) / total;
   return (
     <div className={large ? "text-center" : "shrink-0 text-right"}>
       <div
@@ -89,8 +99,13 @@ function AmountText({ tx, large = false }: { tx: TransactionRow; large?: boolean
           positive ? "text-positive" : "text-foreground"
         }`}
       >
-        {formatSignedMoney(native, currency)}
+        {formatSignedMoney(shown, currency)}
       </div>
+      {split && (
+        <div className="font-figure text-xs whitespace-nowrap text-muted-foreground">
+          of {formatMoney(total, currency)}
+        </div>
+      )}
       {currency !== "EUR" && eur != null && (
         <div className="font-figure text-xs whitespace-nowrap text-muted-foreground">
           ≈ {formatMoney(Math.abs(eur), "EUR")}
@@ -150,6 +165,9 @@ function TransactionEditSheet({
           <div className="mt-1">
             <AmountText tx={tx} large />
           </div>
+          {isPaidForOthers(tx) && (
+            <p className="mt-1 text-xs text-muted-foreground">Paid for others · not counted</p>
+          )}
           <p className="mt-1 text-sm text-muted-foreground">
             {formatBookingDate(tx.booking_date)} · {p.accountLabel}
           </p>
@@ -308,6 +326,13 @@ function SheetMoreMenu({
   );
 }
 
+/** What others owe (money in: the part that isn't mine), or null when the row isn't split. */
+function splitNote(tx: TransactionRow): string | null {
+  if (!isSplit(tx)) return null;
+  const rest = formatMoney(Math.abs(tx.amount ?? 0) - myShare(tx), tx.currency ?? "EUR");
+  return `split, ${tx.credit_debit_indicator === "CRDT" ? "not mine" : "owed"} ${rest}`;
+}
+
 /** Desktop row: date, merchant (its category icon opens the category picker), amount with its account. Type, split and the rest sit behind ›. */
 export function TransactionRowView(props: TransactionViewProps) {
   const { tx, accountLabel, selected, onToggleSelect, highlighted, showAccount = true } = props;
@@ -321,9 +346,7 @@ export function TransactionRowView(props: TransactionViewProps) {
   const notes = [
     tx.category ?? "Uncategorized",
     tx.transaction_type,
-    isSplit(tx)
-      ? `split, owed ${formatMoney(Math.abs(tx.amount ?? 0) - (tx.personal_amount ?? 0), tx.currency ?? "EUR")}`
-      : null,
+    splitNote(tx),
     tagLine(tx) || null,
   ].filter(Boolean);
 
@@ -345,10 +368,10 @@ export function TransactionRowView(props: TransactionViewProps) {
           </label>
         )}
       </td>
-      <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+      <td className="px-2 py-3 whitespace-nowrap text-muted-foreground lg:px-4">
         {formatBookingDateShort(tx.booking_date)}
       </td>
-      <td className="w-full max-w-0 px-4 py-3">
+      <td className="w-full max-w-0 px-2 py-3 lg:px-4">
         <div className="flex items-center gap-3">
           <CategoryPicker
             tx={tx}
@@ -377,7 +400,7 @@ export function TransactionRowView(props: TransactionViewProps) {
           </div>
         </div>
       </td>
-      <td className="px-4 py-3">
+      <td className="px-2 py-3 lg:px-4">
         <div className="flex items-center justify-end gap-3">
           <AmountText tx={tx} />
           {(share || showAccount) && <AccountBadge label={share ? "Splitwise" : accountLabel} />}
@@ -429,6 +452,7 @@ export function TransactionCardView(props: TransactionViewProps) {
             {[
               tx.category ?? "Uncategorized",
               tx.flow_type === "refunded" ? "Refunded" : null,
+              splitNote(tx),
               tagLine(tx) || null,
             ]
               .filter(Boolean)

@@ -30,6 +30,13 @@ describe("Sheet", () => {
     fireEvent.click(el);
   };
 
+  // split-share polish-4 #2: a header that comes after the X (later in the DOM) painted over it,
+  // so clicks hit the header. fails_when=the X has no stacking order above the sheet's content
+  it("keeps the X close button above the sheet's content", () => {
+    renderSheet();
+    expect(screen.getByRole("button", { name: "Close" })).toHaveClass("z-10");
+  });
+
   it("stays open when a toast is touched", async () => {
     const onOpenChange = renderSheet();
     await tick();

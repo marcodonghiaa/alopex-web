@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -25,6 +25,7 @@ const subscriptions = [
 ];
 
 let failTable: string | null = null;
+let txRows: Array<Record<string, unknown>> = [];
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
@@ -44,7 +45,9 @@ vi.mock("@/integrations/supabase/client", () => ({
                     ? subscriptions
                     : table === "v_income_vs_expenses_monthly"
                       ? null
-                      : [],
+                      : table === "v_transactions_eur"
+                        ? txRows
+                        : [],
                 error: null,
               },
         );
@@ -137,6 +140,27 @@ describe("Reports when a figure fails to load", () => {
 
 // protects=every Reports row opens the page behind its figure (#7);
 // fails_when=a headline or the Subscriptions row stops being a link
+// Polish 5 #4 (QA): a rated charge paid entirely for others counted as one of my purchases.
+// fails_when=a rated row with a 0 share counts in "N of M rated purchases"
+describe("Reports Not worth it tile", () => {
+  afterEach(() => {
+    txRows = [];
+  });
+  it("leaves out rated charges paid entirely for others", async () => {
+    txRows = [
+      { worth_it: "yes", personal_signed_amount_eur: -40, signed_amount_eur: -40 },
+      { worth_it: "yes", personal_signed_amount_eur: 0, signed_amount_eur: -30 },
+      { worth_it: "no", personal_signed_amount_eur: -45, signed_amount_eur: -45 },
+    ];
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText("1 of 2 rated purchases")).toBeInTheDocument();
+  });
+});
+
 describe("Reports rows lead to their pages", () => {
   it("links the headlines and Subscriptions, with plain sublabels", async () => {
     render(

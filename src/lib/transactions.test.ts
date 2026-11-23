@@ -15,7 +15,10 @@ import {
   formatMoney,
   isSplitwiseShare,
   isWorthItEligible,
+  isPaidForOthers,
+  isSplit,
   mergeShares,
+  myShare,
   shareToRow,
   type SplitwiseShare,
   listCategories,
@@ -83,8 +86,51 @@ describe("isWorthItEligible", () => {
     expect(isWorthItEligible(tx({ worth_it: "yes" }))).toBe(false);
   });
 
+  // Polish 5 #4: the app asked about refunded purchases; the push skips refunded and transfer rows.
+  // fails_when=a refunded or transfer row is eligible
+  it("rejects refunded and transfer rows, like the push does", () => {
+    expect(isWorthItEligible(tx({ flow_type: "refunded" }))).toBe(false);
+    expect(isWorthItEligible(tx({ flow_type: "transfer" }))).toBe(false);
+    expect(isWorthItEligible(tx({ flow_type: "spend" }))).toBe(true);
+  });
+
   it("rejects a transaction without created_at", () => {
     expect(isWorthItEligible(tx({ created_at: null }))).toBe(false);
+  });
+
+  // protects=Worth it? weighs only my share; fails_when=a split or paid-for-others charge is asked on its full amount
+  it("judges the minimum on my share, and skips a charge paid entirely for others", () => {
+    expect(isWorthItEligible(tx({ amount: 40, personal_amount: 20 }))).toBe(true);
+    expect(isWorthItEligible(tx({ amount: 40, personal_amount: 10 }))).toBe(false);
+    expect(isWorthItEligible(tx({ amount: 40, personal_amount: 0 }))).toBe(false);
+  });
+});
+
+describe("my share of a charge", () => {
+  it("is the whole charge without a split", () => {
+    expect(myShare(tx({ amount: 20 }))).toBe(20);
+    expect(isSplit(tx())).toBe(false);
+    expect(isPaidForOthers(tx())).toBe(false);
+  });
+
+  it("is the split share when one is set, capped at the charge", () => {
+    expect(myShare(tx({ amount: 20, personal_amount: 5 }))).toBe(5);
+    expect(myShare(tx({ amount: 20, personal_amount: 30 }))).toBe(20);
+    expect(isSplit(tx({ amount: 20, personal_amount: 5 }))).toBe(true);
+    expect(isSplit(tx({ amount: 20, personal_amount: 20 }))).toBe(false);
+  });
+
+  it("is paid for others only when my share is zero", () => {
+    expect(isPaidForOthers(tx({ amount: 20, personal_amount: 0 }))).toBe(true);
+    expect(isPaidForOthers(tx({ amount: 20, personal_amount: 5 }))).toBe(false);
+    expect(isPaidForOthers(tx({ amount: 0, personal_amount: 0 }))).toBe(false);
+  });
+
+  // Polish 1 #5: money in with a 0 share is not something others owe me.
+  it("is never money in, which others don't owe me", () => {
+    expect(
+      isPaidForOthers(tx({ credit_debit_indicator: "CRDT", amount: 20, personal_amount: 0 })),
+    ).toBe(false);
   });
 });
 

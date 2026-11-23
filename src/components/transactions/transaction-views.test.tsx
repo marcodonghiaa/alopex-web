@@ -392,3 +392,181 @@ describe("notes and tags", () => {
     expect(screen.queryByRole("combobox")).toBeNull();
   });
 });
+
+const bankProps = (over: Partial<TransactionViewProps["tx"]> = {}): TransactionViewProps => ({
+  ...props(),
+  tx: {
+    entry_reference: "b1",
+    account_uid: "a1",
+    booking_date: "2026-10-04",
+    category: "Groceries",
+    transaction_type: "One-time",
+    creditor_name: "Market",
+    currency: "EUR",
+    amount: 59.08,
+    signed_amount_eur: -59.08,
+    credit_debit_indicator: "DBIT",
+    created_at: null,
+    worth_it: null,
+    personal_amount: null,
+    owed_by: null,
+    flow_type: "spend",
+    refund_of: null,
+    note: null,
+    tags: [],
+    ...over,
+  },
+});
+
+const inTable = (p: TransactionViewProps) =>
+  render(
+    <table>
+      <tbody>
+        <TransactionRowView {...p} />
+      </tbody>
+    </table>,
+  );
+
+// Polish 4 #8: at 768px, with the sidebar open, 16px paddings left merchant names ~6 characters.
+// fails_when=the date, merchant or amount cell keeps 16px side padding below lg
+describe("Table row at tablet width", () => {
+  it("uses tight side padding below lg so the merchant name has room", () => {
+    inTable(bankProps());
+    const cells = screen.getAllByRole("cell").slice(1, 4);
+    for (const cell of cells) expect(cell).toHaveClass("px-2", "lg:px-4");
+  });
+});
+
+// protects=a split charge shows my share as the big number; fails_when=the row leads with the whole charge
+describe("Split charge amount", () => {
+  it("shows my share large and the whole charge under it", () => {
+    inTable(bankProps({ personal_amount: 29.54 }));
+    expect(screen.getByText("−€29.54")).toBeInTheDocument();
+    expect(screen.getByText("of €59.08")).toBeInTheDocument();
+    expect(screen.queryByText("−€59.08")).toBeNull();
+  });
+
+  // Marco's review: the section already says it's for others, so show just the owed amount.
+  it("shows a charge paid entirely for others as just the owed amount", () => {
+    inTable(bankProps({ personal_amount: 0 }));
+    expect(screen.getByText("−€59.08")).toBeInTheDocument();
+    expect(screen.queryByText("€0.00")).toBeNull();
+    expect(screen.queryByText(/^of /)).toBeNull();
+  });
+
+  // Re-audit gap on polish 1 #7: the row note's owed amount.
+  it("notes what others owe on a split row", () => {
+    inTable(bankProps({ amount: 20, signed_amount_eur: -20, personal_amount: 8 }));
+    expect(screen.getByText(/split, owed €12\.00/)).toBeInTheDocument();
+  });
+
+  // Polish 4 #7: the sheet showed −€18.00 with nothing saying others owe all of it.
+  // fails_when=the sheet header of a paid-for-others row has no "not counted" line
+  it("says in the sheet that a charge paid for others isn't counted", async () => {
+    render(
+      <ul>
+        <TransactionCardView {...bankProps({ personal_amount: 0 })} />
+      </ul>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Market/ }));
+    expect(await screen.findByText("Paid for others · not counted")).toBeInTheDocument();
+  });
+
+  it("adds no such line to a charge that is mine", async () => {
+    render(
+      <ul>
+        <TransactionCardView {...bankProps({ personal_amount: 20 })} />
+      </ul>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Market/ }));
+    await screen.findByRole("dialog");
+    expect(screen.queryByText(/not counted/)).toBeNull();
+  });
+
+  // Polish 5 #3: phone cards had no split note, so money in with a 0 share read as all mine.
+  // fails_when=the phone card leaves out what others owe or what isn't mine
+  it("notes the split on phone cards too, for money out and money in", () => {
+    const { unmount } = render(
+      <ul>
+        <TransactionCardView
+          {...bankProps({ amount: 20, signed_amount_eur: -20, personal_amount: 8 })}
+        />
+      </ul>,
+    );
+    expect(screen.getByText(/split, owed €12\.00/)).toBeInTheDocument();
+    unmount();
+    render(
+      <ul>
+        <TransactionCardView
+          {...bankProps({
+            credit_debit_indicator: "CRDT",
+            amount: 20,
+            signed_amount_eur: 20,
+            personal_amount: 0,
+          })}
+        />
+      </ul>,
+    );
+    expect(screen.getByText(/split, not mine €20\.00/)).toBeInTheDocument();
+  });
+
+  // Polish 4 #5: money in can't be owed to me. fails_when=the row note says "owed" on money in
+  it("notes 'not mine', not 'owed', on split money in", () => {
+    inTable(
+      bankProps({
+        credit_debit_indicator: "CRDT",
+        amount: 20,
+        signed_amount_eur: 20,
+        personal_amount: 0,
+      }),
+    );
+    expect(screen.getByText(/split, not mine €20\.00/)).toBeInTheDocument();
+    expect(screen.queryByText(/owed/)).toBeNull();
+  });
+
+  // Polish 3 #6: money in with a 0 share showed "+€0.00 of €20.00".
+  it("shows money in with a 0 share as the whole amount", () => {
+    inTable(
+      bankProps({
+        credit_debit_indicator: "CRDT",
+        amount: 20,
+        signed_amount_eur: 20,
+        personal_amount: 0,
+      }),
+    );
+    expect(screen.getByText("+€20.00")).toBeInTheDocument();
+    expect(screen.queryByText(/^of /)).toBeNull();
+  });
+
+  // Polish 5 #9: no euro value to scale (none from the bank, or a 0 amount) shows no ≈ line.
+  // fails_when=the ≈ line shows €0.00 or NaN
+  it("shows no euro line when there is no euro value or the amount is 0", () => {
+    const { unmount } = inTable(
+      bankProps({ currency: "USD", amount: 20, signed_amount_eur: null, personal_amount: 8 }),
+    );
+    expect(screen.queryByText(/≈/)).toBeNull();
+    unmount();
+    inTable(bankProps({ currency: "USD", amount: 0, signed_amount_eur: 0 }));
+    expect(screen.queryByText(/≈/)).toBeNull();
+  });
+
+  it("scales the euro line to my share", () => {
+    inTable(
+      bankProps({ currency: "USD", amount: 20, signed_amount_eur: -18, personal_amount: 10 }),
+    );
+    expect(screen.getByText("≈ €9.00")).toBeInTheDocument();
+  });
+
+  it("shows an unsplit charge as before, with no 'of' line", () => {
+    inTable(bankProps());
+    expect(screen.getByText("−€59.08")).toBeInTheDocument();
+    expect(screen.queryByText(/^of /)).toBeNull();
+  });
+
+  it("converts only my share to euros for a foreign charge", () => {
+    inTable(
+      bankProps({ currency: "USD", amount: 100, signed_amount_eur: -90, personal_amount: 50 }),
+    );
+    expect(screen.getByText("≈ €45.00")).toBeInTheDocument();
+  });
+});

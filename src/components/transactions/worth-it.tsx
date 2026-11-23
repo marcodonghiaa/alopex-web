@@ -7,7 +7,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { formatMoney, isWorthItEligible, type TransactionRow } from "@/lib/transactions";
+import {
+  formatMoney,
+  isSplit,
+  isWorthItEligible,
+  myShare,
+  type TransactionRow,
+} from "@/lib/transactions";
 import { cleanMerchantName } from "@/lib/merchant-name";
 
 export function WorthItPrompt({
@@ -75,9 +81,16 @@ export function WorthItSpotlight({
               {cleanMerchantName(tx.creditor_name) ?? "A purchase"} · {tx.category}
             </DialogDescription>
           </DialogHeader>
-          <p className="font-figure py-4 text-4xl text-foreground">
-            {formatMoney(Math.abs(tx.amount ?? 0), tx.currency ?? "EUR")}
-          </p>
+          <div className="py-4">
+            <p className="font-figure text-4xl text-foreground">
+              {formatMoney(myShare(tx), tx.currency ?? "EUR")}
+            </p>
+            {isSplit(tx) && (
+              <p className="mt-1 text-sm text-muted-foreground">
+                your share of {formatMoney(Math.abs(tx.amount ?? 0), tx.currency ?? "EUR")}
+              </p>
+            )}
+          </div>
           <div className="flex gap-3">
             <Button
               variant="quiet"
