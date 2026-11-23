@@ -450,6 +450,20 @@ describe("Split charge amount", () => {
     expect(screen.getByText(/split, owed €12\.00/)).toBeInTheDocument();
   });
 
+  // Polish 3 #6: money in with a 0 share showed "+€0.00 of €20.00".
+  it("shows money in with a 0 share as the whole amount", () => {
+    inTable(
+      bankProps({
+        credit_debit_indicator: "CRDT",
+        amount: 20,
+        signed_amount_eur: 20,
+        personal_amount: 0,
+      }),
+    );
+    expect(screen.getByText("+€20.00")).toBeInTheDocument();
+    expect(screen.queryByText(/^of /)).toBeNull();
+  });
+
   it("shows an unsplit charge as before, with no 'of' line", () => {
     inTable(bankProps());
     expect(screen.getByText("−€59.08")).toBeInTheDocument();
