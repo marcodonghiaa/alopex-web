@@ -32,7 +32,7 @@ import type { Trade } from "@/lib/trades";
 import { BROKERS, NEW_BROKER_URL } from "@/lib/brokers";
 import { saveQuantity } from "@/lib/holding-quantity";
 import type { HoldingTarget } from "@/lib/holding-quantity";
-import { callAddHolding } from "@/lib/add-holding";
+import { AlreadyHeld, callAddHolding } from "@/lib/add-holding";
 import { cutChars } from "@/lib/transactions";
 import { BANK_MATCHED_BROKERS, matchBrokerRows, matchSummary } from "@/lib/broker-matching";
 import { loadRates, rateLookup } from "@/lib/brokers/rates";
@@ -56,6 +56,9 @@ interface Held {
 interface Holdings {
   shares: Map<string, number>;
   names: Map<string, string>;
+  /** Stocks only: each holding's key by its Yahoo symbol, upper case. One added by name or ticker
+   * is keyed by that symbol, not the ISIN a broker file uses. */
+  bySymbol: Map<string, string>;
   /** Coins only: each source's own amounts (a coin can sit on Ledger and on Coinbase). */
   bySource: Map<string, Map<string, Held>>;
 }
@@ -64,10 +67,14 @@ interface Holdings {
 async function fetchHoldings(kind: "stock" | "crypto"): Promise<Holdings> {
   let list: Array<{ key: string; shares: number; name: string }>;
   const bySource = new Map<string, Map<string, Held>>();
+  const bySymbol = new Map<string, string>();
   if (kind === "stock") {
-    const { data, error } = await supabase.from("portfolio_holdings").select("isin,shares,name");
+    const { data, error } = await supabase
+      .from("portfolio_holdings")
+      .select("isin,shares,name,yahoo_symbol");
     if (error) throw error;
     list = data.map((r) => ({ key: r.isin.toUpperCase(), shares: r.shares, name: r.name }));
+    for (const r of data) if (r.yahoo_symbol) bySymbol.set(r.yahoo_symbol.toUpperCase(), r.isin);
   } else {
     const { data, error } = await supabase
       .from("crypto_holdings")
@@ -87,6 +94,7 @@ async function fetchHoldings(kind: "stock" | "crypto"): Promise<Holdings> {
     shares: new Map(list.map((r) => [r.key, r.shares])),
     names: new Map(list.map((r) => [r.key, r.name || r.key])),
     bySource,
+    bySymbol,
   };
 }
 
@@ -291,6 +299,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
       // can't be found keeps its trades and dividends out, so it never shows without a value.
       const added: Array<string> = [];
       const missed: Array<string> = [];
+      // A file ISIN you already hold under another key (added by name or ticker): its key.
+      const heldAs = new Map<string, string>();
       for (const h of toAdd) {
         try {
           const { results } = await callAddHolding<{
@@ -298,6 +308,11 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
           }>({ action: "search", kind, query: h.key }, "Search is unavailable");
           const found = results[0];
           if (!found) throw new Error("Not found");
+          const held = keys.data?.bySymbol.get(found.id.toUpperCase());
+          if (held) {
+            heldAs.set(h.key, held);
+            continue;
+          }
           await callAddHolding(
             {
               action: "add",
@@ -312,12 +327,17 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
             "Couldn't add it",
           );
           added.push(h.key);
-        } catch {
-          missed.push(h.key);
+        } catch (e) {
+          if (e instanceof AlreadyHeld) heldAs.set(h.key, e.key);
+          else missed.push(h.key);
         }
       }
-      const trades = fresh.filter((t) => !missed.includes(t.key));
-      const rows = freshEvents.filter((e) => !(e.key && missed.includes(e.key)));
+      const rekey = <T extends { key?: string | null }>(r: T): T => {
+        const key = r.key && heldAs.get(r.key);
+        return key ? { ...r, key } : r;
+      };
+      const trades = fresh.filter((t) => !missed.includes(t.key)).map(rekey);
+      const rows = freshEvents.filter((e) => !(e.key && missed.includes(e.key))).map(rekey);
       const missedNames = missed.map((key) => toAdd.find((h) => h.key === key)!.name);
       const undo: ImportUndo = {
         trades: [],

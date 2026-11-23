@@ -36,7 +36,7 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (table: string) => {
       const q: Record<string, unknown> = {};
-      for (const m of ["select", "order", "eq", "gte", "lt", "lte", "is", "in", "not"])
+      for (const m of ["select", "order", "eq", "gte", "lt", "lte", "is", "in", "not", "range"])
         q[m] = () => q;
       q["maybeSingle"] = () => q;
       q["then"] = (resolve: (v: unknown) => void) =>
