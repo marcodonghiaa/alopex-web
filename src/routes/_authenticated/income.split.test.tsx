@@ -30,7 +30,7 @@ const bank = (ref: string, date: string, name: string) => ({
   amount: 100,
   currency: "EUR",
 });
-const view = (ref: string, name: string, eur: number) => ({
+const view = (ref: string, name: string, eur: number, mine = eur) => ({
   entry_reference: ref,
   account_uid: "a1",
   booking_date: `${ym(0)}-01`,
@@ -39,7 +39,9 @@ const view = (ref: string, name: string, eur: number) => ({
   currency: "EUR",
   amount: eur,
   signed_amount_eur: eur,
+  personal_signed_amount_eur: mine,
 });
+const month = { rows: null as Array<ReturnType<typeof view>> | null };
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/integrations/supabase/client", () => ({
@@ -72,7 +74,7 @@ vi.mock("@/integrations/supabase/client", () => ({
         resolve(
           table === "v_transactions_eur"
             ? {
-                data: [view("e1", "ACME Ltd", 2000), view("e2", "Aunt May", 50)],
+                data: month.rows ?? [view("e1", "ACME Ltd", 2000), view("e2", "Aunt May", 50)],
                 error: null,
               }
             : table === "transactions"
@@ -116,10 +118,30 @@ beforeEach(() => {
   db.inserts = [];
   db.updates = [];
   db.hold = false;
+  month.rows = null;
 });
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+// protects=Received, Regular and One-off count only my share, like Cash flow and Reports;
+// fails_when=a credit split entirely to others, or the others' part of a shared one, is counted
+describe("Income: my share only", () => {
+  it("leaves out others' part of a split credit", async () => {
+    month.rows = [
+      view("e1", "ACME Ltd", 2000, 1500), // partly someone else's
+      view("e2", "Aunt May", 50),
+      view("e3", "Flatmate", 300, 0), // all someone else's
+    ];
+    renderPage();
+    await screen.findByRole("region", { name: "Regular" });
+    expect(
+      screen.getByText((_, el) => el?.tagName === "P" && /^Regular /.test(el.textContent ?? ""))
+        .textContent,
+    ).toBe("Regular €1,500.00 · One-off €50.00");
+    expect(screen.getByRole("region", { name: /^Received in / }).textContent).toContain("1,550.00");
+  });
 });
 
 describe("Income: Regular and One-off", () => {
