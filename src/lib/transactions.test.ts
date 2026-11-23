@@ -86,6 +86,14 @@ describe("isWorthItEligible", () => {
     expect(isWorthItEligible(tx({ worth_it: "yes" }))).toBe(false);
   });
 
+  // Polish 5 #4: the app asked about refunded purchases; the push skips refunded and transfer rows.
+  // fails_when=a refunded or transfer row is eligible
+  it("rejects refunded and transfer rows, like the push does", () => {
+    expect(isWorthItEligible(tx({ flow_type: "refunded" }))).toBe(false);
+    expect(isWorthItEligible(tx({ flow_type: "transfer" }))).toBe(false);
+    expect(isWorthItEligible(tx({ flow_type: "spend" }))).toBe(true);
+  });
+
   it("rejects a transaction without created_at", () => {
     expect(isWorthItEligible(tx({ created_at: null }))).toBe(false);
   });

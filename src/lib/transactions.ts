@@ -145,7 +145,7 @@ export const isPaidForOthers = (
   tx: Pick<TransactionRow, "amount" | "personal_amount" | "credit_debit_indicator">,
 ): boolean => tx.credit_debit_indicator === "DBIT" && isSplit(tx) && myShare(tx) === 0;
 
-// Mirrors the allowlist and share rule in the backend's notify-worth-it.js and notify.ts, kept
+// Mirrors the allowlist, the refunded/transfer skip and the share rule in the backend's notify-worth-it.js and notify.ts, kept
 // in sync by hand: the two repos don't share code.
 const WORTH_IT_CATEGORIES = ["Shopping", "Entertainment", "Dine Out", "Experiences"];
 const WORTH_IT_MIN_AMOUNT = 15;
@@ -154,6 +154,8 @@ const WORTH_IT_MIN_AGE_HOURS = 3;
 export function isWorthItEligible(tx: TransactionRow): boolean {
   return (
     tx.credit_debit_indicator === "DBIT" &&
+    tx.flow_type !== "refunded" &&
+    tx.flow_type !== "transfer" &&
     tx.worth_it == null &&
     tx.category != null &&
     WORTH_IT_CATEGORIES.includes(tx.category) &&
