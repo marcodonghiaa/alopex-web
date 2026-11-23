@@ -63,6 +63,21 @@ describe("rangeReturn", () => {
     expect(r.gain).toBe(0);
   });
 
+  it("counts tax on a trade like a fee, and income paid inside the range only", () => {
+    const r = rangeReturn(
+      { date: "2026-01-01", value: 1000 },
+      { date: "2026-01-31", value: 1000 },
+      [{ ...trade("sell", "2026-01-31", 5, 100, 2), tax_eur: 3 }],
+      [
+        { event_date: "2026-01-01", amount_eur: 50 }, // already in the start
+        { event_date: "2026-01-15", amount_eur: 8 },
+        { event_date: "2026-02-01", amount_eur: 50 }, // after the end
+      ],
+    );
+    // Out 495 net of fee and tax: 1000 − 1000 + 495, plus the 8 paid in the range.
+    expect(r.gain).toBeCloseTo(503);
+  });
+
   it("has no percent when nothing was invested", () => {
     expect(
       rangeReturn({ date: "2026-01-01", value: 0 }, { date: "2026-01-31", value: 0 }, []).percent,

@@ -1,3 +1,4 @@
+import type { EventRow } from "@/lib/investment-events";
 import type { Trade } from "@/lib/trades";
 
 type Point = { date: string; value: number };
@@ -5,27 +6,39 @@ type Point = { date: string; value: number };
 const DAY_MS = 86_400_000;
 const days = (from: string, to: string) => (Date.parse(to) - Date.parse(from)) / DAY_MS;
 
+type CostedTrade = Pick<
+  Trade,
+  "side" | "trade_date" | "shares" | "price_eur" | "fee_eur" | "tax_eur"
+>;
+
 /**
  * The gain over a range with the money you put in or took out removed (modified Dietz): a buy
- * adds cash (price plus fee), a sale takes it out (net of fee). Trades on the first day are
- * already in the start value. `percent` is null when nothing was invested.
+ * adds cash (price plus fee and tax), a sale takes it out (net of fee and tax), as the all-time
+ * return counts them. What your holdings paid you inside the range (`income`: dividends,
+ * interest, after tax) is gained. Trades and income on the first day are already in the start.
+ * `percent` is null when nothing was invested.
  */
 export function rangeReturn(
   start: Point,
   end: Point,
-  trades: Array<Pick<Trade, "side" | "trade_date" | "shares" | "price_eur" | "fee_eur">>,
+  trades: Array<CostedTrade>,
+  income: Array<Pick<EventRow, "event_date" | "amount_eur">> = [],
 ) {
   const span = days(start.date, end.date);
   let flow = 0;
   let weighted = 0;
   for (const t of trades) {
     if (t.trade_date <= start.date || t.trade_date > end.date) continue;
+    const costs = t.fee_eur + (t.tax_eur ?? 0);
     const cash =
-      t.side === "buy" ? t.shares * t.price_eur + t.fee_eur : -(t.shares * t.price_eur - t.fee_eur);
+      t.side === "buy" ? t.shares * t.price_eur + costs : -(t.shares * t.price_eur - costs);
     flow += cash;
     weighted += span > 0 ? (cash * days(t.trade_date, end.date)) / span : 0;
   }
-  const gain = end.value - start.value - flow;
+  const paid = income
+    .filter((e) => e.event_date > start.date && e.event_date <= end.date)
+    .reduce((sum, e) => sum + e.amount_eur, 0);
+  const gain = end.value - start.value - flow + paid;
   const base = start.value + weighted;
   return { gain, percent: base > 0 ? gain / base : null };
 }
@@ -68,15 +81,20 @@ export function sampleIndices(length: number, n: number): Array<number> {
  * that day's prices, with buys and sales in between taken out. The same sum as the range chip.
  */
 export function returnLine(
-  trades: Array<PricedTrade & Pick<Trade, "fee_eur">>,
+  trades: Array<PricedTrade & CostedTrade>,
   days: Array<{ date: string; prices: Map<string, number> }>,
+  income: Array<Pick<EventRow, "event_date" | "amount_eur">> = [],
 ): Array<number> {
   const first = days[0];
   if (first == null) return [];
   const start = { date: first.date, value: tradedValue(trades, first.date, first.prices) };
   return days.map(
     (d) =>
-      rangeReturn(start, { date: d.date, value: tradedValue(trades, d.date, d.prices) }, trades)
-        .gain,
+      rangeReturn(
+        start,
+        { date: d.date, value: tradedValue(trades, d.date, d.prices) },
+        trades,
+        income,
+      ).gain,
   );
 }

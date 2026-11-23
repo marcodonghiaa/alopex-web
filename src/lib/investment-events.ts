@@ -95,6 +95,12 @@ export function summarizeIncome(events: Array<EventRow>, from = ""): IncomeSumma
   return out;
 }
 
+/** An event that adds to one holding's return: income it paid, or tax given back on its trades. */
+export const paysHolding = (
+  e: EventRow,
+): e is EventRow & { key: string; asset_kind: "stock" | "crypto" } =>
+  !!e.key && !!e.asset_kind && (INCOME[e.kind] != null || e.kind === "tax_refund");
+
 /**
  * What one holding paid you, after tax: added to its return. Tax given back on its trades too,
  * since the tax charged on them lowers it.
@@ -102,7 +108,7 @@ export function summarizeIncome(events: Array<EventRow>, from = ""): IncomeSumma
 export function incomeByKey(events: Array<EventRow>): Map<string, number> {
   const by = new Map<string, number>();
   for (const e of events) {
-    if (!e.key || !e.asset_kind || !(INCOME[e.kind] || e.kind === "tax_refund")) continue;
+    if (!paysHolding(e)) continue;
     const k = `${e.asset_kind}|${e.key}`;
     by.set(k, (by.get(k) ?? 0) + e.amount_eur);
   }

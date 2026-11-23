@@ -12,6 +12,7 @@ import { useDayPrices } from "@/lib/use-performance";
 import type { usePerformance } from "@/lib/use-performance";
 import { rangeReturn, returnLine, sampleIndices, tradedValue } from "@/lib/range-return";
 import { formatEur } from "@/lib/transactions";
+import { paysHolding, type EventRow } from "@/lib/investment-events";
 
 type RangeChangeProps = Pick<ValueHistory, "delta" | "change" | "range"> &
   Partial<Pick<ValueHistory, "first" | "scrubbed">>;
@@ -19,7 +20,7 @@ type RangeChangeProps = Pick<ValueHistory, "delta" | "change" | "range"> &
 type ChipPerformance = Pick<
   ReturnType<typeof usePerformance>,
   "isPending" | "unavailable" | "tradesByKey" | "measuredByKey" | "endPrices"
-> & { kind?: "stock" | "crypto" } & {
+> & { kind?: "stock" | "crypto" } & { events?: Array<EventRow> } & {
   summary: Pick<ReturnType<typeof usePerformance>["summary"], "gain" | "change">;
 };
 
@@ -27,6 +28,12 @@ type ChipPerformance = Pick<
 const tradesUsable = (perf: ChipPerformance) =>
   perf.tradesByKey.size > 0 &&
   [...perf.measuredByKey.values()].every((m) => m.state !== "mismatch");
+
+// What the traded holdings paid you, as the all-time return counts it (same kind, same keys).
+const tradedIncome = (perf: ChipPerformance) =>
+  (perf.events ?? []).filter(
+    (e) => paysHolding(e) && e.asset_kind === (perf.kind ?? "stock") && perf.tradesByKey.has(e.key),
+  );
 
 const chip = (gain: number, percent: number | null): HeadlineChange | undefined =>
   percent == null
@@ -55,6 +62,7 @@ export function rangeChip(
     { date: first.snapshot_date, value: tradedValue(trades, first.snapshot_date, startPrices) },
     { date: end.snapshot_date, value: tradedValue(trades, end.snapshot_date, perf.endPrices) },
     trades,
+    tradedIncome(perf),
   );
   return chip(gain, percent);
 }
@@ -115,6 +123,7 @@ export function ValueHistoryChart({
               date: chartData[at]!.snapshot_date,
               prices: prices[from + i] ?? perf.endPrices,
             })),
+            tradedIncome(perf),
           );
           return kept.map((at, i) => ({ ...chartData[at]!, at, return_eur: gains[i]! }));
         })()
