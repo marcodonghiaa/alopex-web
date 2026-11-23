@@ -5,7 +5,14 @@ import { describe, expect, it } from "vitest";
 import type { Measured, MeasuredRow } from "@/lib/trades";
 import { summarizeTrades } from "@/lib/trades";
 import type { PerformanceRow } from "@/lib/performance";
-import { PerformanceNotice, ReturnCell, ReturnText, TradesImport } from "./performance-section";
+import {
+  PerformanceNotice,
+  ReturnCell,
+  ReturnDetail,
+  ReturnText,
+  TradesButton,
+  TradesImport,
+} from "./performance-section";
 
 const row = (key: string): PerformanceRow => ({
   kind: "stock",
@@ -222,5 +229,106 @@ describe("ReturnCell", () => {
     cell({ state: "no_trades" }, { isPending: true });
     expect(screen.queryByText("Add purchases")).not.toBeInTheDocument();
     expect(screen.getByText("…")).toBeInTheDocument();
+  });
+});
+
+describe("ReturnDetail", () => {
+  const detail = (measured: Measured, over: Record<string, unknown> = {}) =>
+    renderWith(
+      <ReturnDetail
+        perf={perf([{ row: row("K"), measured }], over)}
+        holdingKey="K"
+        name="Holding"
+        quantity={10}
+      />,
+    );
+
+  // protects=Marco 2026-11-23: a holding's return amount was shown nowhere; tap swaps % and €
+  // like the Net worth change; fails_when=the tap opens trades again or shows no amount
+  it("shows the return in bold; a tap swaps it to the amount and back", () => {
+    detail(ok(200, 1000));
+    const toggle = screen.getByRole("button", { name: /\+20\.00%\. Show as amount/ });
+    expect(toggle).toHaveTextContent("+20.00%");
+    expect(toggle).toHaveClass("font-semibold", "font-figure", "text-positive", "min-h-11");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveTextContent("+€200.00");
+    expect(toggle).toHaveAccessibleName(/Show as percent/);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveTextContent("+20.00%");
+  });
+
+  it("a loss reads with a real minus, in the loss colour", () => {
+    detail(ok(-50, 1000));
+    const toggle = screen.getByRole("button", { name: /Show as amount/ });
+    fireEvent.click(toggle);
+    expect(toggle).toHaveTextContent("−€50.00");
+    expect(toggle).toHaveClass("text-negative");
+  });
+
+  it("with no base to divide by, shows the amount alone, not a button", () => {
+    detail({ state: "ok", gain: 30, base: 0, change: null });
+    expect(screen.getByText("+€30.00")).toHaveClass("font-semibold");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("anything but a clean return stays the way into the trades", () => {
+    const view = detail({ state: "no_trades" });
+    expect(screen.getByRole("button", { name: "Add purchases" })).toBeInTheDocument();
+    view.unmount();
+    renderWith(
+      <ReturnDetail
+        perf={perf([{ row: row("K"), measured: ok(200, 1000) }], {
+          tradesByKey: new Map([["K", [trade, { ...trade, price_eur: 0 }]]]),
+        })}
+        holdingKey="K"
+        name="Holding"
+        quantity={10}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "+20.00% price missing" })).toBeInTheDocument();
+  });
+
+  it("doesn't claim anything while loading", () => {
+    detail(ok(200, 1000), { isPending: true });
+    expect(screen.getByText("…")).toBeInTheDocument();
+  });
+});
+
+describe("TradesButton", () => {
+  const button = (
+    measured: Measured,
+    over: Record<string, unknown> = {},
+    key: string | null = "K",
+  ) =>
+    renderWith(
+      <TradesButton
+        perf={perf([{ row: row("K"), measured }], over)}
+        holdingKey={key}
+        name="Holding"
+        quantity={10}
+      />,
+    );
+
+  it("opens the trades once the return toggles instead", async () => {
+    button(ok(200, 1000));
+    fireEvent.click(screen.getByRole("button", { name: "Trades" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["no trades", { state: "no_trades" } as Measured, {}, "K"],
+    ["a mismatch", { state: "mismatch", traded: 8, held: 10 } as Measured, {}, "K"],
+    [
+      "a missing price",
+      ok(200, 1000),
+      { tradesByKey: new Map([["K", [{ ...trade, price_eur: 0 }]]]) },
+      "K",
+    ],
+    ["while loading", ok(200, 1000), { isPending: true }, "K"],
+    ["no key", ok(200, 1000), {}, null],
+  ])("is left out with %s (the return opens them, or there is nothing yet)", (_, m, over, key) => {
+    const { container } = button(m, over, key);
+    expect(container).toBeEmptyDOMElement();
   });
 });

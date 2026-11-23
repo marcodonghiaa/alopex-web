@@ -35,7 +35,9 @@ import { InvestmentIncome } from "@/components/holdings/investment-income";
 import {
   PerformanceNotice,
   ReturnCell,
+  ReturnDetail,
   ReturnText,
+  TradesButton,
   TradesImport,
 } from "@/components/performance/performance-section";
 import { formatDay } from "@/lib/date";
@@ -268,7 +270,7 @@ function PortfolioPage() {
                         {group.holdings.length === 1 ? "" : "s"}
                       </span>
                     </span>
-                    <span className="font-figure text-[0.9375rem] text-foreground">
+                    <span className="font-figure text-[0.9375rem] font-semibold text-foreground">
                       {formatEur(group.totalEur)}
                     </span>
                     <ChevronDown
@@ -379,7 +381,7 @@ function PortfolioPage() {
                               </span>
                             </DetailRow>
                             <DetailRow label="Return">
-                              <ReturnCell
+                              <ReturnDetail
                                 perf={perf}
                                 holdingKey={row.isin}
                                 name={row.name ?? row.isin ?? ""}
@@ -398,13 +400,19 @@ function PortfolioPage() {
                             )}
                             {/* Under the details, so every value above lines up on the right. */}
                             {row.isin && (
-                              <div className="flex py-1">
+                              <div className="flex flex-wrap gap-x-4 py-1">
                                 <EditHolding
                                   target={{ kind: "stock", isin: row.isin }}
                                   name={row.name ?? row.isin}
                                   quantity={row.shares ?? 0}
                                   label="Edit shares"
                                   tradesMatch={tradesMatchHeld(perf, row.isin)}
+                                />
+                                <TradesButton
+                                  perf={perf}
+                                  holdingKey={row.isin}
+                                  name={row.name ?? row.isin}
+                                  quantity={row.shares ?? 0}
                                 />
                               </div>
                             )}

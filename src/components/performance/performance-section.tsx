@@ -1,9 +1,13 @@
 import { TradesDialog, hasMissingPrice } from "@/components/holdings/trades-dialog";
-import { TriangleAlert } from "lucide-react";
+import { useState } from "react";
+import { ListOrdered, TriangleAlert } from "lucide-react";
 import { ImportTrades } from "@/components/holdings/import-trades";
 import { Alert } from "@/components/ui/alert";
+import { buttonVariants } from "@/components/ui/button";
 import { RETURN_NOISE_BAND, formatReturn } from "@/lib/performance";
 import type { usePerformance } from "@/lib/use-performance";
+import type { Measured } from "@/lib/trades";
+import { formatMoney } from "@/lib/transactions";
 import { TONE_TEXT, toneOf } from "@/lib/tone";
 
 type Performance = ReturnType<typeof usePerformance>;
@@ -75,6 +79,67 @@ export function ReturnCell({
       quantity={quantity}
       trades={perf.tradesByKey.get(holdingKey) ?? []}
       label={returnLabel(perf, holdingKey)}
+    />
+  );
+}
+
+type Measurable = { perf: Performance; holdingKey: string | null; name: string; quantity: number };
+
+/** A clean return (trades match, every buy priced): the one a tap can turn into an amount. */
+function cleanReturn(perf: Performance, holdingKey: string | null) {
+  if (perf.isPending || perf.unavailable || perf.error || holdingKey == null) return null;
+  const measured = perf.measuredByKey.get(holdingKey);
+  if (measured?.state !== "ok" || hasMissingPrice(perf.tradesByKey.get(holdingKey) ?? [])) {
+    return null;
+  }
+  return measured as Extract<Measured, { state: "ok" }>;
+}
+
+/** "+€1,234.56" / "−€12.00": signed, with a real minus. */
+const signedEur = (value: number) =>
+  `${value < 0 ? "−" : "+"}${formatMoney(Math.abs(value), "EUR")}`;
+
+/** A holding's return in its open detail, in bold. A tap swaps percent and amount, like the
+ * Net worth change; the trades open from TradesButton below. Anything else stays ReturnCell. */
+export function ReturnDetail(props: Measurable) {
+  const [asAmount, setAsAmount] = useState(false);
+  const measured = cleanReturn(props.perf, props.holdingKey);
+  if (!measured) return <ReturnCell {...props} />;
+  const { change, gain } = measured;
+  const base = `font-figure font-semibold ${TONE_TEXT[toneOf(change ?? gain, RETURN_NOISE_BAND)]}`;
+  // No base to divide by (sold out and back in at nothing): the amount is all there is.
+  if (change == null) return <span className={base}>{signedEur(gain)}</span>;
+  const shown = asAmount ? signedEur(gain) : formatReturn(change);
+  return (
+    <button
+      type="button"
+      onClick={() => setAsAmount((v) => !v)}
+      aria-label={`Return ${shown}. Show as ${asAmount ? "percent" : "amount"}`}
+      className={`${base} -my-2.5 inline-flex min-h-11 items-center rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`}
+    >
+      {shown}
+    </button>
+  );
+}
+
+/** "Trades" at the foot of a holding's detail, since its return now toggles instead. Left out
+ * when the return itself still opens them (no trades, a mismatch, a missing price). */
+export function TradesButton({ perf, holdingKey, name, quantity }: Measurable) {
+  if (holdingKey == null || !cleanReturn(perf, holdingKey)) return null;
+  return (
+    <TradesDialog
+      kind={perf.kind}
+      holdingKey={holdingKey}
+      name={name}
+      quantity={quantity}
+      trades={perf.tradesByKey.get(holdingKey) ?? []}
+      label={
+        <>
+          <ListOrdered />
+          Trades
+        </>
+      }
+      triggerClassName={buttonVariants({ variant: "ghost", className: "-ml-3 self-start" })}
     />
   );
 }
