@@ -339,18 +339,32 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
 
   const [spotlightTx, setSpotlightTx] = useState<TransactionRow | null>(null);
 
+  // Act on a link once (it can take a refetch to find its row), so later toggles don't redo it.
+  const handledLink = useRef<string | null>(null);
+  useEffect(() => {
+    if (!highlightRef || txQuery.isPending || handledLink.current === highlightRef) return;
+    const tx = transactions.find((t) => t.entry_reference === highlightRef);
+    if (!tx) return;
+    handledLink.current = highlightRef;
+    // A row others owe all of isn't my spending: open its section, ask nothing.
+    if (isPaidForOthers(tx)) setShowForOthers(true);
+    else if (isWorthItEligible(tx)) setSpotlightTx(tx);
+  }, [highlightRef, txQuery.isPending, transactions]);
+
+  // Scroll once the row is on screen (an opened section renders it a beat later), then unring it.
+  const scrolledLink = useRef<string | null>(null);
+  useEffect(() => {
+    if (!highlightRef || txQuery.isPending || scrolledLink.current === highlightRef) return;
+    const el = document.querySelector(`[data-entry-ref="${CSS.escape(highlightRef)}"]`);
+    if (!el) return;
+    scrolledLink.current = highlightRef;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightRef, txQuery.isPending, transactions, showForOthers]);
   useEffect(() => {
     if (!highlightRef || txQuery.isPending) return;
-    const el = document.querySelector(`[data-entry-ref="${CSS.escape(highlightRef)}"]`);
-    el?.scrollIntoView({ behavior: "smooth", block: "center" });
-    const tx = transactions.find((t) => t.entry_reference === highlightRef);
-    // A row others owe all of isn't my spending: open its section, ask nothing.
-    if (tx && isPaidForOthers(tx)) setShowForOthers(true);
-    else if (tx && isWorthItEligible(tx)) setSpotlightTx(tx);
     const timer = setTimeout(() => setHighlightRef(null), 3000);
     return () => clearTimeout(timer);
-    // showForOthers: re-run once the section renders, so the row can be scrolled to.
-  }, [highlightRef, txQuery.isPending, transactions, showForOthers]);
+  }, [highlightRef, txQuery.isPending]);
 
   const categories = useMemo(() => listCategories(transactions), [transactions]);
   // Only tags on this month's rows, so every option matches something.

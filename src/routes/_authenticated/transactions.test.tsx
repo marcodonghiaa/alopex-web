@@ -822,6 +822,43 @@ describe("Paid for others", () => {
       const dialog = await screen.findByRole("dialog");
       expect(within(dialog).getByText("€20.00")).toBeInTheDocument();
     });
+
+    // Re-audit gap on polish 4 #1: in the link's first 3s, each toggle re-ran the link handling.
+    // fails_when=Hide is undone at once, or Show reopens a closed spotlight
+    it("lets Hide close the section it opened", async () => {
+      Element.prototype.scrollIntoView = vi.fn();
+      window.history.replaceState(null, "", "/transactions?highlight=2");
+      tableData = {
+        v_transactions_eur: [row("1"), row("2", { ...eligible, personal_amount: 0 })],
+      };
+      renderPage();
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Hide 1 charge paid for others" }),
+      );
+      expect(
+        await screen.findByRole("button", { name: "Show 1 charge paid for others" }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("Shop 2")).toBeNull();
+    });
+
+    it("doesn't reopen a closed spotlight when the section is shown", async () => {
+      Element.prototype.scrollIntoView = vi.fn();
+      window.history.replaceState(null, "", "/transactions?highlight=2");
+      tableData = {
+        v_transactions_eur: [
+          row("1"),
+          row("2", { ...eligible, personal_amount: 20 }),
+          row("3", { personal_amount: 0 }),
+        ],
+      };
+      renderPage();
+      await screen.findByRole("dialog");
+      await userEvent.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      await userEvent.click(screen.getByRole("button", { name: "Show 1 charge paid for others" }));
+      await act(() => new Promise((r) => setTimeout(r, 50)));
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
   });
 
   it("shows no section when nothing was paid for others", async () => {
