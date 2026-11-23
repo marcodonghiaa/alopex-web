@@ -33,7 +33,7 @@ export function useCategories() {
     list: query.data ? categoriesFor(settings) : [...CATEGORIES],
     settings,
     available: query.data != null,
-    /** Icons, colours and safe delete need the 20261218 backend migration. */
+    /** Icons, colours and safe delete need the 20261221 backend migration. */
     looksAvailable: query.data?.looks ?? false,
     isPending: query.isPending,
   };

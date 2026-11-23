@@ -51,7 +51,7 @@ describe("category looks", () => {
   });
 
   it("every colour the backend gives a renamed built-in is in the palette", () => {
-    // Kept in step with move_category in the backend migration 20261218000000_category_look_and_move.
+    // Kept in step with move_category in the backend migration 20261221000000_category_look_and_move.
     const fromBackend = [
       "pink",
       "violet",
