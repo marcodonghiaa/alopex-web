@@ -1,4 +1,8 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
 import { categoryColor } from "@/lib/categories";
+import { fetchAllRows } from "@/lib/export/fetch-all";
+import type { ExportRow } from "@/lib/export/tables";
 import { formatISODate } from "@/lib/date";
 import type { IncomeExpenseRow } from "@/lib/income-expenses";
 import { formatPercent } from "@/lib/locale";
@@ -69,8 +73,11 @@ export interface FlowSummary {
   net: number;
   /** Share of income kept, 0.25 = 25%; null without income, where a rate means nothing. */
   savingsRate: number | null;
-  /** Months in the range that have any recorded income or spending. */
+  /** Months in the range that have any recorded income or spending (imported-only ones aside). */
   months: number;
+  /** Months left out because they only hold imported spending, and that spending. */
+  imported: number;
+  importedSpending: number;
 }
 
 /** Share of income kept; null when nothing came in. Can go below zero. */
@@ -100,16 +107,32 @@ export function savedPhrase(net: number): string {
 const inRange = (month: string | null, from: string, to: string): month is string =>
   month != null && month >= from && month < to;
 
-/** Income, spending, net and savings rate of the months in [from, to). */
-export function summarize(rows: Array<MonthlyFlowRow>, from: string, to: string): FlowSummary {
+/**
+ * Income, spending, net and savings rate of the months in [from, to). Months in `importedOnly`
+ * (imported spending, no income recorded) are left out of them, counted apart: they would read
+ * as money taken from savings.
+ */
+export function summarize(
+  rows: Array<MonthlyFlowRow>,
+  from: string,
+  to: string,
+  importedOnly: ReadonlySet<string> = new Set(),
+): FlowSummary {
   let income = 0;
   let spending = 0;
   let months = 0;
+  let imported = 0;
+  let importedSpending = 0;
   for (const r of rows) {
     if (!inRange(r.month, from, to)) continue;
     const i = r.income_eur ?? 0;
     const s = r.expenses_eur ?? 0;
     if (i === 0 && s === 0) continue;
+    if (importedOnly.has(r.month)) {
+      imported += 1;
+      importedSpending += s;
+      continue;
+    }
     income += i;
     spending += s;
     months += 1;
@@ -123,7 +146,58 @@ export function summarize(rows: Array<MonthlyFlowRow>, from: string, to: string)
     net: toCents(income - spending),
     savingsRate: savingsRate(income, spending),
     months,
+    imported,
+    importedSpending: toCents(importedSpending),
   };
+}
+
+/**
+ * Months whose only data is imported spending (spend_history): no bank spend there (the views
+ * count imported totals only then) and no income. `bankSpendDates` are the booking dates of bank
+ * spend in the imported months' span.
+ */
+export function importedOnlyMonths(
+  rows: Array<MonthlyFlowRow>,
+  historyMonths: Array<string>,
+  bankSpendDates: Array<string>,
+): Set<string> {
+  const bank = new Set(bankSpendDates.map((d) => `${d.slice(0, 7)}-01`));
+  const income = new Map(rows.map((r) => [r.month, r.income_eur ?? 0]));
+  return new Set(historyMonths.filter((m) => !bank.has(m) && (income.get(m) ?? 0) === 0));
+}
+
+/**
+ * What importedOnlyMonths needs: the months you imported spending totals for, and the bank spend
+ * dates in their span (usually none: imported history comes from before the bank). Paged, so a
+ * long history isn't cut at the server's row cap.
+ */
+export async function fetchImportedSpend(
+  client: SupabaseClient<Database>,
+): Promise<{ history: Array<string>; bankSpend: Array<string> }> {
+  const months = await fetchAllRows("spend_history", async (from, to) => {
+    const { data, error, count } = await client
+      .from("spend_history")
+      .select("month", { count: "exact" })
+      .order("month")
+      .range(from, to);
+    return { data: data as Array<ExportRow> | null, error, count };
+  });
+  const history = [...new Set(months.map((r) => r["month"] as string))].sort();
+  if (history.length === 0) return { history, bankSpend: [] };
+  const last = new Date(`${history.at(-1)!}T00:00:00`);
+  const end = formatISODate(new Date(last.getFullYear(), last.getMonth() + 1, 1));
+  const bank = await fetchAllRows("v_transactions_eur", async (from, to) => {
+    const { data, error, count } = await client
+      .from("v_transactions_eur")
+      .select("booking_date", { count: "exact" })
+      .eq("flow_type", "spend")
+      .gte("booking_date", history[0]!)
+      .lt("booking_date", end)
+      .order("booking_date")
+      .range(from, to);
+    return { data: data as Array<ExportRow> | null, error, count };
+  });
+  return { history, bankSpend: bank.map((r) => r["booking_date"] as string) };
 }
 
 export interface TrendBar extends FlowSummary {
@@ -137,12 +211,13 @@ export function trend(
   period: Period,
   last: Date,
   count: number,
+  importedOnly?: ReadonlySet<string>,
 ): Array<TrendBar> {
   const bars: Array<TrendBar> = [];
   for (let i = count - 1; i >= 0; i--) {
     const start = shiftPeriod(last, period, -i);
     const { from, to } = periodRange(start, period);
-    bars.push({ start, key: from, ...summarize(rows, from, to) });
+    bars.push({ start, key: from, ...summarize(rows, from, to, importedOnly) });
   }
   return bars;
 }
@@ -162,7 +237,9 @@ export function trendEnd(start: Date, current: Date, period: Period, count: numb
  * Bars from `keep` (the period on screen) on are never dropped, even when empty.
  */
 export function trimLeadingEmpty(bars: Array<TrendBar>, keep?: string): Array<TrendBar> {
-  const first = bars.findIndex((b) => b.months > 0 || (keep != null && b.key >= keep));
+  const first = bars.findIndex(
+    (b) => b.months > 0 || b.imported > 0 || (keep != null && b.key >= keep),
+  );
   return first <= 0 ? bars : bars.slice(first);
 }
 
@@ -261,6 +338,7 @@ export const OTHER_INCOME = "Other income";
 export const OTHER_SPENDING = "Other spending";
 export const SAVED = "Saved";
 export const FROM_SAVINGS = "From savings";
+export const IMPORTED_SPENDING = "Imported spending";
 const HUB = "Income";
 
 // Green only for what was kept (gains); payers are a neutral ink tone, so "Saved" stands out.
@@ -282,6 +360,7 @@ export function buildFlow({
   categories,
   maxSources = 4,
   maxCategories = 7,
+  imported = false,
 }: {
   income: number;
   spending: number;
@@ -289,6 +368,8 @@ export function buildFlow({
   categories: Array<Part>;
   maxSources?: number;
   maxCategories?: number;
+  /** Only imported spending, no income recorded: the shortfall isn't money from savings. */
+  imported?: boolean;
 }): FlowGraph {
   if (income <= CENT && spending <= CENT) return { nodes: [], links: [] };
   const nodes: Array<FlowNode> = [];
@@ -302,7 +383,9 @@ export function buildFlow({
     links.push({ source: nodes.length - 1, target: -1, value });
   };
   for (const p of lefts) left(p.name, "income", INCOME_COLOR, p.value);
-  if (net < -CENT) left(FROM_SAVINGS, "drawn", DRAWN_COLOR, -net);
+  if (net < -CENT)
+    if (imported) left(IMPORTED_SPENDING, "drawn", OTHER_COLOR, -net);
+    else left(FROM_SAVINGS, "drawn", DRAWN_COLOR, -net);
 
   nodes.push({ name: HUB, kind: "hub", color: "var(--color-foreground)" });
   const hub = nodes.length - 1;

@@ -10,7 +10,8 @@ const TICK = {
 /** What one bar says: what was saved and the share of income, or that nothing was recorded. */
 function barText(bar: TrendBar): string {
   // Nothing recorded is not a net of zero.
-  if (bar.months === 0) return "No activity";
+  if (bar.months === 0)
+    return bar.imported > 0 ? "Only imported spending, left out" : "No activity";
   const rate = bar.savingsRate == null ? "" : ` · ${formatRate(bar.savingsRate)} of income`;
   return `${savedPhrase(bar.net)}${rate}`;
 }

@@ -16,16 +16,23 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (table: string) => {
       const q: Record<string, unknown> = {};
-      for (const m of ["select", "order", "eq", "gt", "gte", "lt"])
+      // The bank-spend dates read (select "booking_date") has its own rows.
+      let name = table;
+      for (const m of ["select", "order", "eq", "gt", "gte", "lt", "range"])
         q[m] = (...args: Array<unknown>) => {
           calls.push([table, m, ...args]);
+          if (m === "select" && args[0] === "booking_date") name = "bank_spend";
           return q;
         };
       q["then"] = (resolve: (v: unknown) => void) =>
         resolve(
           table === failTable
             ? { data: null, error: { message: "boom" } }
-            : { data: tables[table] ?? [], error: null },
+            : {
+                data: tables[name] ?? [],
+                error: null,
+                count: (tables[name] ?? []).length,
+              },
         );
       return q;
     },
@@ -320,6 +327,7 @@ describe("Cash flow page", () => {
         "v_income_vs_expenses_monthly",
         "v_spend_by_category_monthly",
         "v_transactions_eur",
+        "spend_history",
       ]),
     );
   });
@@ -461,5 +469,101 @@ describe("Cash flow page", () => {
     expect(row("Spending")).toHaveTextContent("—");
     fireEvent.click(screen.getByText("Previous month"));
     await waitFor(() => expect(row("Income")).toHaveTextContent("€1,000.00"));
+  });
+});
+
+// Marco: a month with only imported spending (spend_history, no bank rows) has no income on
+// record, so it must not read as money taken from savings.
+describe("Cash flow with imported spending", () => {
+  const importedJan = () => {
+    tables["v_income_vs_expenses_monthly"] = [
+      { month: "2025-01-01", income_eur: 0, expenses_eur: 900 },
+      { month: "2025-02-01", income_eur: 2000, expenses_eur: 1000 },
+    ];
+    tables["spend_history"] = [
+      { month: "2025-01-01" },
+      { month: "2025-01-01" }, // one row per category
+      { month: "2025-02-01" }, // has bank spend: its imported totals don't count
+    ];
+    tables["bank_spend"] = [{ booking_date: "2025-02-10" }];
+    tables["v_spend_by_category_monthly"] = [
+      { month: "2025-01-01", category: "Housing", spend_eur: 900 },
+      { month: "2025-02-01", category: "Groceries", spend_eur: 1000 },
+    ];
+    tables["v_transactions_eur"] = [
+      { creditor_name: "Employer", category: "Income", personal_signed_amount_eur: 2000 },
+    ];
+  };
+  const saved = () => screen.getByRole("region", { name: /^Saved in/ });
+
+  // fails_when=the month reads "Spent more than came in −€900", income €0.00, from savings
+  it("shows a month of imported spending neutrally", async () => {
+    importedJan();
+    search = { month: "2025-01" };
+    renderPage();
+    await waitFor(() =>
+      expect(saved()).toHaveTextContent("Imported spending only, no income recorded"),
+    );
+    expect(saved()).toHaveTextContent("€900.00");
+    expect(saved()).not.toHaveTextContent("Spent more than came in");
+    expect(saved()).not.toHaveTextContent("−");
+    expect(row("Income")).toHaveTextContent("—");
+    expect(row("Income")).not.toHaveTextContent("€0.00");
+    expect(row("Spending")).toHaveTextContent("€900.00");
+    expect(row("Savings rate")).toHaveTextContent("—");
+    const chart = await screen.findByRole("img", { name: /^Imported spending for/ });
+    expect(within(chart).getByText("Housing")).toBeInTheDocument();
+    expect(within(chart).getAllByText("Imported spending").length).toBeGreaterThan(0);
+    expect(within(chart).queryByText("From savings")).toBeNull();
+  });
+
+  // fails_when=a quarter's saved and rate count the imported month as a loss
+  it("leaves imported-only months out of a quarter's saved and rate, and says so", async () => {
+    importedJan();
+    search = { month: "2025-02" };
+    renderPage();
+    await waitFor(() => expect(row("Income")).toHaveTextContent("€2,000.00"));
+    fireEvent.click(screen.getByRole("radio", { name: "Quarter" }));
+    await waitFor(() =>
+      expect(saved()).toHaveTextContent("Leaves out 1 month with only imported spending"),
+    );
+    expect(saved()).toHaveTextContent("€1,000.00");
+    expect(row("Spending")).toHaveTextContent("€1,000.00");
+    expect(row("Savings rate")).toHaveTextContent("50.0%");
+    const chart = await screen.findByRole("img", { name: /^Cash flow for/ });
+    expect(within(chart).queryByText("Housing")).toBeNull();
+  });
+
+  it("shows a quarter of only imported spending like such a month", async () => {
+    importedJan();
+    tables["v_income_vs_expenses_monthly"] = [
+      { month: "2025-01-01", income_eur: 0, expenses_eur: 900 },
+      { month: "2025-02-01", income_eur: 0, expenses_eur: 1000 },
+    ];
+    tables["bank_spend"] = [];
+    search = { month: "2025-02" };
+    renderPage();
+    fireEvent.click(screen.getByRole("radio", { name: "Quarter" }));
+    await waitFor(() =>
+      expect(saved()).toHaveTextContent("Imported spending only, no income recorded"),
+    );
+    expect(saved()).toHaveTextContent("€1,900.00");
+    expect(saved()).not.toHaveTextContent("Leaves out");
+    expect(row("Income")).toHaveTextContent("—");
+    expect(row("Savings rate")).toHaveTextContent("—");
+  });
+
+  // fails_when=the imported month's bar reads as a loss
+  it("names an imported-only month's bar as left out, not as a loss", async () => {
+    importedJan();
+    search = { month: "2025-01" };
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole("img", { name: /^Saved per month/ })).toHaveAccessibleName(
+        /Only imported spending, left out/,
+      ),
+    );
+    const trend = screen.getByRole("img", { name: /^Saved per month/ });
+    expect(trend).not.toHaveAccessibleName(/taken from savings/);
   });
 });
