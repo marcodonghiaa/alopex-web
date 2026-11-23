@@ -86,6 +86,15 @@ function applyAction(s: Stream, { action, args }: StreamAction): Stream {
   };
 }
 
+// The streams the page lists, by section: what a re-check can make jump.
+function listedIds(rows: Array<Stream> | undefined): string | null {
+  if (!rows) return null;
+  const g = groupStreams(rows, romeToday());
+  return [g.toReview, g.active, g.stopped, g.dismissed]
+    .map((list) => String(list.map((s) => s.id).sort()))
+    .join("|");
+}
+
 function customIntervalLabel(value: number, unit: IntervalUnit): string {
   const unitLabel = value === 1 ? unit.slice(0, -1) : unit;
   return `Every ${value} ${unitLabel}`;
@@ -127,6 +136,16 @@ function SubscriptionsPage() {
     const t = setTimeout(() => setSlowCheck(true), 300);
     return () => clearTimeout(t);
   }, [checking]);
+  // A re-check that changed the list says so for a moment, where "Checking…" was.
+  const [updated, setUpdated] = useState(false);
+  // When the re-check takes away the last active stream, the total stays (at €0) so the list
+  // doesn't jump up; a visit that never had one still leaves it out (e2e #13).
+  const [keepTotal, setKeepTotal] = useState(false);
+  useEffect(() => {
+    if (!updated) return;
+    const t = setTimeout(() => setUpdated(false), 3_000);
+    return () => clearTimeout(t);
+  }, [updated]);
   // Opening the page re-checks your subscriptions, so a transaction you just renamed, marked
   // One-time or deleted shows here. The saved list shows meanwhile; an action in flight refetches itself.
   // shortcut: a full detection per visit, cheap for one household: server-side a sign-in check,
@@ -147,10 +166,17 @@ function SubscriptionsPage() {
               check(false);
             }, 5_000);
           if (result !== "ran" || queryClient.isMutating({ mutationKey: MUTATION_KEY }) > 0) return;
+          const prev = queryClient.getQueryData<Array<Stream>>(RECURRING_KEY);
+          const before = listedIds(prev);
           // A read still in flight started before the re-check: drop it, or the refetch would reuse it.
           await queryClient.cancelQueries({ queryKey: RECURRING_KEY });
           // Unlock only once the fresh list is on screen.
           await queryClient.invalidateQueries({ queryKey: RECURRING_KEY });
+          const next = queryClient.getQueryData<Array<Stream>>(RECURRING_KEY);
+          if (!open || before == null || listedIds(next) === before) return;
+          setUpdated(true);
+          const activeIn = (rows?: Array<Stream>) => groupStreams(rows ?? [], romeToday()).active;
+          if (activeIn(prev).length > 0 && activeIn(next).length === 0) setKeepTotal(true);
         })
         .finally(() => setChecking(false));
     check(true);
@@ -256,15 +282,19 @@ function SubscriptionsPage() {
       )}
 
       {/* Estimated monthly cost: hidden with nothing active, where its dash read as a white bar (e2e #13). */}
-      {(query.isPending || active.length > 0) && (
+      {(query.isPending || active.length > 0 || keepTotal) && (
         <section aria-label="Estimated monthly cost" className="mb-5">
           <div className="min-h-12">
             {query.isPending ? (
               <Skeleton className="h-12 w-72" />
             ) : (
               <p className="figure-display">
-                {total.known === 0 ? "—" : `~${formatMoney(total.sum, "EUR")}`}
-                {total.known > 0 && (
+                {active.length === 0
+                  ? formatMoney(0, "EUR")
+                  : total.known === 0
+                    ? "—"
+                    : `~${formatMoney(total.sum, "EUR")}`}
+                {(total.known > 0 || active.length === 0) && (
                   <span className="text-[0.4em] tracking-normal text-muted-foreground">
                     {" "}
                     /month
@@ -286,7 +316,7 @@ function SubscriptionsPage() {
       </div>
       {/* Under the switch, next to what it locks; its slot keeps the height, so nothing moves. */}
       <p className="mb-1.5 min-h-5 text-[0.8125rem] text-muted-foreground">
-        {slowCheck ? "Checking your transactions…" : ""}
+        {slowCheck ? "Checking your transactions…" : updated ? "Updated" : ""}
       </p>
 
       {view === "calendar" ? (

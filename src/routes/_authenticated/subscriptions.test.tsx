@@ -871,3 +871,80 @@ describe("Re-check after a rate limit", () => {
     warn.mockRestore();
   });
 });
+
+// polish-4 #9: when the re-check removed a row it vanished with no word, and removing the last
+// active stream also dropped the total block (~125 px jump). fails_when=a changed list gets no
+// "Updated" note (or an unchanged one does), the note never goes, or the total block disappears
+// mid-visit
+describe("After a re-check that changed the list", () => {
+  afterEach(() => vi.useRealTimers());
+  const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+  const checkRemoves = (id: string) =>
+    invoke.mockImplementation(async () => {
+      db.rows = db.rows.filter((r) => r["id"] !== id);
+      return { data: { streams: 1 }, error: null };
+    });
+
+  it("says Updated for about 3 s", async () => {
+    vi.useFakeTimers();
+    let finish!: () => void;
+    invoke.mockImplementation(
+      () =>
+        new Promise((res) => {
+          finish = () => {
+            db.rows = db.rows.filter((r) => r["id"] !== "s2");
+            res({ data: { streams: 1 }, error: null });
+          };
+        }),
+    );
+    renderPage();
+    await advance(50);
+    expect(screen.getByText("Cloudbox")).toBeInTheDocument();
+    finish();
+    await advance(50);
+    expect(screen.queryByText("Cloudbox")).not.toBeInTheDocument();
+    expect(screen.getByText("Updated")).toBeInTheDocument();
+    await advance(2_900);
+    expect(screen.getByText("Updated")).toBeInTheDocument();
+    await advance(200);
+    expect(screen.queryByText("Updated")).not.toBeInTheDocument();
+  });
+
+  it("says nothing when the check changed nothing", async () => {
+    vi.useFakeTimers();
+    renderPage();
+    await advance(100);
+    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+    expect(screen.queryByText("Updated")).not.toBeInTheDocument();
+  });
+
+  it("keeps the total block, at €0, when the last active stream goes", async () => {
+    db.rows = [stream({ user_status: "confirmed" })];
+    db.rows.push(stream({ id: "s3", display_name: "Oldtube", user_status: "dismissed" }));
+    let finish!: () => void;
+    invoke.mockImplementation(
+      () =>
+        new Promise((res) => {
+          finish = () => {
+            db.rows = db.rows.filter((r) => r["id"] !== "s1");
+            res({ data: { streams: 1 }, error: null });
+          };
+        }),
+    );
+    renderPage();
+    expect(await screen.findByText("~€10.00")).toBeInTheDocument();
+    finish();
+    await waitFor(() => expect(screen.queryByText("Streamflix")).not.toBeInTheDocument());
+    const total = screen.getByLabelText("Estimated monthly cost");
+    expect(total).toHaveTextContent("€0.00");
+    expect(total).not.toHaveTextContent("—");
+  });
+
+  it("still leaves the total out on a visit that never had an active stream", async () => {
+    db.rows = [stream({ id: "s3", display_name: "Oldtube", user_status: "dismissed" })];
+    checkRemoves("none");
+    renderPage();
+    await screen.findByText("Dismissed (1)");
+    expect(screen.queryByLabelText("Estimated monthly cost")).toBeNull();
+  });
+});
