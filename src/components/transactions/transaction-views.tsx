@@ -16,6 +16,7 @@ import {
   formatMoney,
   formatSignedMoney,
   isSplitwiseShare,
+  isPaidForOthers,
   isSplit,
   isWorthItEligible,
   myShare,
@@ -164,6 +165,9 @@ function TransactionEditSheet({
           <div className="mt-1">
             <AmountText tx={tx} large />
           </div>
+          {isPaidForOthers(tx) && (
+            <p className="mt-1 text-xs text-muted-foreground">Paid for others · not counted</p>
+          )}
           <p className="mt-1 text-sm text-muted-foreground">
             {formatBookingDate(tx.booking_date)} · {p.accountLabel}
           </p>

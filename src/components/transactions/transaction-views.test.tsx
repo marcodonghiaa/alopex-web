@@ -450,6 +450,29 @@ describe("Split charge amount", () => {
     expect(screen.getByText(/split, owed €12\.00/)).toBeInTheDocument();
   });
 
+  // Polish 4 #7: the sheet showed −€18.00 with nothing saying others owe all of it.
+  // fails_when=the sheet header of a paid-for-others row has no "not counted" line
+  it("says in the sheet that a charge paid for others isn't counted", async () => {
+    render(
+      <ul>
+        <TransactionCardView {...bankProps({ personal_amount: 0 })} />
+      </ul>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Market/ }));
+    expect(await screen.findByText("Paid for others · not counted")).toBeInTheDocument();
+  });
+
+  it("adds no such line to a charge that is mine", async () => {
+    render(
+      <ul>
+        <TransactionCardView {...bankProps({ personal_amount: 20 })} />
+      </ul>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Market/ }));
+    await screen.findByRole("dialog");
+    expect(screen.queryByText(/not counted/)).toBeNull();
+  });
+
   // Polish 4 #5: money in can't be owed to me. fails_when=the row note says "owed" on money in
   it("notes 'not mine', not 'owed', on split money in", () => {
     inTable(
