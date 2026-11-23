@@ -761,6 +761,10 @@ describe("Checking status", () => {
     expect(screen.queryByText(CHECKING)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
     expect(screen.getByTestId("subscriptions-content")).toHaveAttribute("aria-busy", "false");
+    // #1b: outside a check, controls a later action disables dim as usual (no override).
+    expect(screen.getByTestId("subscriptions-content")).not.toHaveClass(
+      "[&_:disabled]:!opacity-100",
+    );
   });
 
   it("a check that settles under 300 ms never shows the text", async () => {
@@ -772,6 +776,9 @@ describe("Checking status", () => {
     await advance(500);
     expect(screen.queryByText(CHECKING)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+    expect(screen.getByTestId("subscriptions-content")).not.toHaveClass(
+      "[&_:disabled]:!opacity-100",
+    );
   });
 
   it("marks the calendar busy too while checking, and not once settled", async () => {
