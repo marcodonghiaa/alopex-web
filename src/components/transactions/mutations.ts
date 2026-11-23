@@ -260,6 +260,10 @@ export function useSplitMutation(queryClient: QueryClient, monthKey: string) {
   });
 }
 
+// References per statement: keeps the `in (...)` request URL well under proxy limits (the
+// backend's batch updates use the same size).
+const CHUNK_SIZE = 50;
+
 // One statement per account so the reference list can't match another account's rows.
 async function updateTxs(txs: Array<TxKey>, patch: TablesUpdate<"transactions">) {
   const refsByAccount = new Map<string | null, Array<string>>();
@@ -269,13 +273,15 @@ async function updateTxs(txs: Array<TxKey>, patch: TablesUpdate<"transactions">)
       tx.entry_reference,
     ]);
   }
-  for (const [accountUid, refs] of refsByAccount) {
-    const query = supabase.from("transactions").update(patch).in("entry_reference", refs);
-    const { error } = await (accountUid
-      ? query.eq("account_uid", accountUid)
-      : query.is("account_uid", null));
-    if (error) throw error;
-  }
+  for (const [accountUid, refs] of refsByAccount)
+    for (let i = 0; i < refs.length; i += CHUNK_SIZE) {
+      const chunk = refs.slice(i, i + CHUNK_SIZE);
+      const query = supabase.from("transactions").update(patch).in("entry_reference", chunk);
+      const { error } = await (accountUid
+        ? query.eq("account_uid", accountUid)
+        : query.is("account_uid", null));
+      if (error) throw error;
+    }
 }
 
 export function useBulkCategoryMutation(
@@ -303,7 +309,9 @@ export function useBulkCategoryMutation(
       );
       onDone();
     },
+    // Batches before the failure were saved: reload whatever they may have changed.
     onError: (error) => {
+      refetchFlows(queryClient);
       saveFailed("Couldn't update categories", error);
     },
   });
@@ -327,6 +335,7 @@ export function useDeleteMutation(queryClient: QueryClient, onDone: () => void) 
       });
     },
     onError: (error) => {
+      void queryClient.invalidateQueries({ queryKey: ["transactions"] });
       saveFailed("Couldn't update transactions", error);
     },
   });
