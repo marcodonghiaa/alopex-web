@@ -231,7 +231,7 @@ function SubscriptionsPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8 md:py-12">
-      <RevealDialog />
+      <RevealDialog ready={!checking} />
       {/* Titled like Net Worth (iOS view board). */}
       <header className="mb-3 flex items-baseline justify-between gap-3">
         <h1 className="text-lg font-semibold text-foreground">Subscriptions</h1>
