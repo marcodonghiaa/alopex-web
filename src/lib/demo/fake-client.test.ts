@@ -928,6 +928,48 @@ describe("fake client: refresh-recurring", () => {
     expect(await listed(c)).toContain(s.id);
   });
 
+  // polish-5 B2: a gone stream charged again came back Active in the demo; the server's detector
+  // re-detects it from the charges left: one charge has no rhythm, so it is a suggestion (To review),
+  // while your own choice (confirmed) is kept. fails_when=one charge back reads Active when
+  // undecided, all back doesn't read Active, or a confirmed stream loses its choice
+  describe("a gone stream charged again", () => {
+    const comeBack = async (confirm: boolean, all: boolean) => {
+      const { c, s, charges, refs } = await setup();
+      if (confirm)
+        await c.rpc("stream_action", { p_stream: s.id, p_action: "confirm", p_args: {} });
+      await charges();
+      await recheck(c);
+      const back = c
+        .from("transactions")
+        .update({ transaction_type: "Subscription", transaction_type_source: "manual" });
+      await (all ? back.eq("merchant_key", s.merchant_key!) : back.eq("entry_reference", refs[0]!));
+      await recheck(c);
+      const g = groupStreams(
+        ((await c.from("recurring_streams").select("*")).data ?? []) as Array<
+          Tables<"recurring_streams">
+        >,
+        NOW,
+      );
+      return { toReview: g.toReview.map((r) => r.id), active: g.active.map((r) => r.id), id: s.id };
+    };
+
+    it("comes back To review when one undecided charge is back", async () => {
+      const r = await comeBack(false, false);
+      expect(r.toReview).toContain(r.id);
+      expect(r.active).not.toContain(r.id);
+    });
+
+    it("comes back Active when its charges with a rhythm are back", async () => {
+      const r = await comeBack(false, true);
+      expect(r.active).toContain(r.id);
+    });
+
+    it("keeps your confirmed choice when one charge is back", async () => {
+      const r = await comeBack(true, false);
+      expect(r.active).toContain(r.id);
+    });
+  });
+
   // polish-5 E4: one bill charge set One-time vanished from the demo calendar (5 of 5 -> 4 of 4),
   // while the server re-dates the stream from the charges left, so the bill reads "not seen yet".
   // fails_when=the stream keeps the One-time charge's dates, or the calendar loses the bill

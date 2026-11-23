@@ -534,7 +534,7 @@ class Store {
   // Each stream's status as generated, so one marked gone comes back when it is charged again.
   private readonly detected = new Map<unknown, unknown>();
   /** Like refresh-recurring's detector: it skips charges you set One-time yourself, so a stream
-   * left with none of its charges is gone, and one left with some is dated from those. */
+   * left with none of its charges is gone, and one left with some is dated and rated from those. */
   refreshStreams(): Result {
     const txs = this.db["transactions"]!;
     const streams = this.db["recurring_streams"]!;
@@ -547,7 +547,13 @@ class Store {
         (t) => !(t["transaction_type"] === "One-time" && t["transaction_type_source"] === "manual"),
       );
       const allMine = charges.length > 0 && counted.length === 0;
-      s["detected_status"] = allMine ? "gone" : this.detected.get(s["id"]);
+      // One charge left has no rhythm, so the detector only suggests it (your own choice is kept).
+      const days = new Set(counted.map((t) => t["booking_date"])).size;
+      s["detected_status"] = allMine
+        ? "gone"
+        : days === 1
+          ? "suggested"
+          : this.detected.get(s["id"]);
       if (counted.length === 0) continue;
       // As the demo seeds it: the newest charge left, plus one period of the stream's cadence.
       const last = counted.map((t) => t["booking_date"] as string).sort()[counted.length - 1]!;
