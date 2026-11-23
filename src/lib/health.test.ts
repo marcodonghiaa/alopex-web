@@ -171,7 +171,7 @@ describe("aiRow", () => {
     expect(row.state).toBe("warn");
     expect(row.detail).toMatch(/^12 transactions still have no category a day after syncing\./);
     expect(row.detail).toMatch(/GEMINI_API_KEY/);
-    expect(row.detail).toMatch(/setup\.sh/);
+    expect(row.detail).not.toMatch(/setup\.sh|GitHub secrets/);
     expect(row.detail).toMatch(/free tier may train on them/);
     expect(row.fix).toEqual({ label: "Open Supabase secrets", href: url });
   });

@@ -194,8 +194,8 @@ export function aiRow(
     state: "warn",
     detail:
       `${plural(counts.stuck)} still ${counts.stuck === 1 ? "has" : "have"} no category a day after syncing. ` +
-      "Add or check GEMINI_API_KEY: in Supabase secrets, or in .env / GitHub secrets if you installed " +
-      "with setup.sh. Descriptions go to Google; its free tier may train on them.",
+      "Add or check GEMINI_API_KEY in your Supabase secrets. " +
+      "Descriptions go to Google; its free tier may train on them.",
     ...(secretsUrl && { fix: { label: "Open Supabase secrets", href: secretsUrl } }),
   };
 }

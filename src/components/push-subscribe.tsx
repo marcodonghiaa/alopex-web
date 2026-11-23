@@ -5,7 +5,7 @@ import { Bell, BellOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
-// Self-hosters get their own VAPID keypair from setup.sh; falls back to the
+// Self-hosters get their own VAPID keypair from npx create-alopex; falls back to the
 // reference deployment's key (same fallback pattern as client.ts) so a
 // self-hoster who hasn't set VITE_VAPID_PUBLIC_KEY yet doesn't hit a hard
 // crash -- push just won't work until their own key is wired up backend-side.

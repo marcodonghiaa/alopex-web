@@ -15,4 +15,4 @@ labels: bug
 **Environment**
 
 - Browser:
-- Self-hosted via: Docker, or `bun run dev`?
+- Self-hosted via: `npx create-alopex`, or `bun run dev`?

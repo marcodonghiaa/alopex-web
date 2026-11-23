@@ -23,7 +23,7 @@ A self-hosted net worth dashboard. It brings together bank accounts (synced thro
 
 ## Operating Context
 
-- Each user deploys their own frontend (Vercel or Docker) and backend: Supabase with RLS, sync on GitHub Actions, Gemini categorization, FX and price feeds.
+- Each user deploys their own frontend (Vercel) and backend: Supabase with RLS, sync on pg_cron + Edge Functions, Gemini categorization, FX and price feeds.
 - Sign-in is email + password, with no in-app sign-up.
 - `/demo` runs on generated fake data in the browser.
 - The app is an installable PWA with Web Push alerts.
