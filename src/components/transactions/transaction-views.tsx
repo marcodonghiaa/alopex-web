@@ -326,6 +326,13 @@ function SheetMoreMenu({
   );
 }
 
+/** What others owe (money in: the part that isn't mine), or null when the row isn't split. */
+function splitNote(tx: TransactionRow): string | null {
+  if (!isSplit(tx)) return null;
+  const rest = formatMoney(Math.abs(tx.amount ?? 0) - myShare(tx), tx.currency ?? "EUR");
+  return `split, ${tx.credit_debit_indicator === "CRDT" ? "not mine" : "owed"} ${rest}`;
+}
+
 /** Desktop row: date, merchant (its category icon opens the category picker), amount with its account. Type, split and the rest sit behind ›. */
 export function TransactionRowView(props: TransactionViewProps) {
   const { tx, accountLabel, selected, onToggleSelect, highlighted, showAccount = true } = props;
@@ -339,9 +346,7 @@ export function TransactionRowView(props: TransactionViewProps) {
   const notes = [
     tx.category ?? "Uncategorized",
     tx.transaction_type,
-    isSplit(tx)
-      ? `split, ${tx.credit_debit_indicator === "CRDT" ? "not mine" : "owed"} ${formatMoney(Math.abs(tx.amount ?? 0) - myShare(tx), tx.currency ?? "EUR")}`
-      : null,
+    splitNote(tx),
     tagLine(tx) || null,
   ].filter(Boolean);
 
@@ -447,6 +452,7 @@ export function TransactionCardView(props: TransactionViewProps) {
             {[
               tx.category ?? "Uncategorized",
               tx.flow_type === "refunded" ? "Refunded" : null,
+              splitNote(tx),
               tagLine(tx) || null,
             ]
               .filter(Boolean)

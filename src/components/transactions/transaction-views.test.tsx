@@ -483,6 +483,33 @@ describe("Split charge amount", () => {
     expect(screen.queryByText(/not counted/)).toBeNull();
   });
 
+  // Polish 5 #3: phone cards had no split note, so money in with a 0 share read as all mine.
+  // fails_when=the phone card leaves out what others owe or what isn't mine
+  it("notes the split on phone cards too, for money out and money in", () => {
+    const { unmount } = render(
+      <ul>
+        <TransactionCardView
+          {...bankProps({ amount: 20, signed_amount_eur: -20, personal_amount: 8 })}
+        />
+      </ul>,
+    );
+    expect(screen.getByText(/split, owed €12\.00/)).toBeInTheDocument();
+    unmount();
+    render(
+      <ul>
+        <TransactionCardView
+          {...bankProps({
+            credit_debit_indicator: "CRDT",
+            amount: 20,
+            signed_amount_eur: 20,
+            personal_amount: 0,
+          })}
+        />
+      </ul>,
+    );
+    expect(screen.getByText(/split, not mine €20\.00/)).toBeInTheDocument();
+  });
+
   // Polish 4 #5: money in can't be owed to me. fails_when=the row note says "owed" on money in
   it("notes 'not mine', not 'owed', on split money in", () => {
     inTable(
