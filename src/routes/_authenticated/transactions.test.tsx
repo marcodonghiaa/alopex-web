@@ -747,6 +747,38 @@ describe("Paid for others", () => {
     expect(within(table).getByText("Shop 2")).toBeInTheDocument();
   });
 
+  // Polish 4 #1: a Worth it? link to a row later paid entirely for others asked "€0.00" and left
+  // the row hidden in the collapsed section.
+  describe("a Worth it? link", () => {
+    const eligible = { category: "Dine Out", amount: 40, created_at: "2026-01-01T00:00:00Z" };
+    afterEach(() => window.history.replaceState(null, "", "/"));
+
+    it("to a row paid for others asks nothing and opens the section on it", async () => {
+      Element.prototype.scrollIntoView = vi.fn();
+      window.history.replaceState(null, "", "/transactions?highlight=2");
+      tableData = {
+        v_transactions_eur: [row("1"), row("2", { ...eligible, personal_amount: 0 })],
+      };
+      renderPage();
+      expect(
+        await screen.findByRole("button", { name: /Hide 1 (charge )?paid for others/ }),
+      ).toBeInTheDocument();
+      expect(within(screen.getByRole("table")).getByText("Shop 2")).toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    it("to a split row asks about my share", async () => {
+      Element.prototype.scrollIntoView = vi.fn();
+      window.history.replaceState(null, "", "/transactions?highlight=2");
+      tableData = {
+        v_transactions_eur: [row("1"), row("2", { ...eligible, personal_amount: 20 })],
+      };
+      renderPage();
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText("€20.00")).toBeInTheDocument();
+    });
+  });
+
   it("shows no section when nothing was paid for others", async () => {
     tableData = { v_transactions_eur: [row("1", { personal_amount: 4 })] };
     renderPage();

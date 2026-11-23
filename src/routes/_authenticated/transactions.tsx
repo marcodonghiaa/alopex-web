@@ -24,6 +24,7 @@ import {
   groupByDay,
   selectedOnly,
   isPaidForOthers,
+  isWorthItEligible,
   isSplitwiseShare,
   shareId,
   listCategories,
@@ -343,10 +344,13 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
     const el = document.querySelector(`[data-entry-ref="${CSS.escape(highlightRef)}"]`);
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
     const tx = transactions.find((t) => t.entry_reference === highlightRef);
-    if (tx && tx.worth_it == null) setSpotlightTx(tx);
+    // A row others owe all of isn't my spending: open its section, ask nothing.
+    if (tx && isPaidForOthers(tx)) setShowForOthers(true);
+    else if (tx && isWorthItEligible(tx)) setSpotlightTx(tx);
     const timer = setTimeout(() => setHighlightRef(null), 3000);
     return () => clearTimeout(timer);
-  }, [highlightRef, txQuery.isPending, transactions]);
+    // showForOthers: re-run once the section renders, so the row can be scrolled to.
+  }, [highlightRef, txQuery.isPending, transactions, showForOthers]);
 
   const categories = useMemo(() => listCategories(transactions), [transactions]);
   // Only tags on this month's rows, so every option matches something.
