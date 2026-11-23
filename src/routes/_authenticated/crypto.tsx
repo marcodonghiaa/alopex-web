@@ -2,7 +2,7 @@ import { formatQuantity } from "@/lib/locale";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Bitcoin, Coins } from "lucide-react";
+import { CoinAvatar } from "@/components/coin-avatar";
 import { colorsForAssets } from "@/lib/crypto-colors";
 import { supabase } from "@/integrations/supabase/client";
 import { currentValueEur, isEditableCryptoSource, priceEur } from "@/lib/holdings";
@@ -445,23 +445,5 @@ function AssetEdits({ asset, tradesMatch }: { asset: AssetGroup; tradesMatch: bo
         />
       ))}
     </>
-  );
-}
-
-// Round coin icon tinted in the coin's allocation colour; no third-party logos, so holdings stay private.
-function CoinAvatar({ symbol, color }: { symbol: string; color: string | undefined }) {
-  const Icon = symbol === "BTC" ? Bitcoin : Coins;
-  const tint = color ?? "var(--color-muted-foreground)";
-  return (
-    <span
-      aria-hidden
-      className="flex size-10 shrink-0 items-center justify-center rounded-full"
-      style={{
-        color: tint,
-        backgroundColor: `color-mix(in oklab, ${tint} 16%, var(--color-card))`,
-      }}
-    >
-      <Icon className="size-[1.125rem]" strokeWidth={2} />
-    </span>
   );
 }
