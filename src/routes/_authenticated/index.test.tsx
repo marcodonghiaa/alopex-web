@@ -30,7 +30,11 @@ vi.mock("@/integrations/supabase/client", () => ({
     from: (table: string) => {
       const q: Record<string, unknown> = {};
       for (const m of ["select", "order", "limit", "in"]) q[m] = () => q;
+      // Paged reads: every row comes on the first page, so the next one is empty.
+      let offset = 0;
+      q["range"] = (from: number) => ((offset = from), q);
       q["then"] = (resolve: (v: unknown) => void) => {
+        if (offset > 0) return resolve({ data: [], error: null });
         // The exchange rates never arrive: the page must say it is waiting, not that there are none.
         if (rowsFor[table]) return resolve({ data: rowsFor[table], error: null });
         if (table === "fx_rates") return;
