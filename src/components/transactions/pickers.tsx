@@ -39,8 +39,14 @@ export function CategoryPicker({
           className="-m-2 inline-flex min-h-11 cursor-pointer items-center p-2 aria-disabled:cursor-default aria-disabled:opacity-60"
         >
           {variant === "icon" ? (
-            <span className="rounded-sm transition-opacity hover:opacity-80">
+            <span className="relative rounded-sm transition-opacity [:not([aria-disabled])>&]:hover:opacity-80">
               <CategoryAvatar category={tx.category} />
+              {/* Over the icon, so the chip keeps its size. */}
+              {saving && (
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <SavingSpinner />
+                </span>
+              )}
             </span>
           ) : tx.category ? (
             <span

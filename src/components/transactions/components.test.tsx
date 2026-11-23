@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render as rtlRender, screen, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import { queryWrapper } from "@/test/query-wrapper";
 import userEvent from "@testing-library/user-event";
 import { useMutation } from "@tanstack/react-query";
@@ -233,6 +233,31 @@ describe("pickers", () => {
     expect(screen.getByTestId("picker-spinner")).toBeInTheDocument();
     rerender(<CategoryPicker tx={tx()} onSelect={vi.fn()} saving={false} />);
     expect(screen.queryByTestId("picker-spinner")).not.toBeInTheDocument();
+  });
+
+  // polish-5 B1: the icon chip (desktop table rows) showed no spinner while saving.
+  // fails_when=no spinner on the icon chip while saving, one when idle, or the icon is dropped
+  it("CategoryPicker's icon chip shows the spinner over its icon while saving, and none otherwise", () => {
+    const { rerender } = render(
+      <CategoryPicker tx={tx()} onSelect={vi.fn()} saving variant="icon" />,
+    );
+    const trigger = screen.getByRole("button", { name: /Change category/ });
+    expect(within(trigger).getByTestId("picker-spinner")).toBeInTheDocument();
+    expect(trigger.querySelector("[data-category]")).not.toBeNull();
+    rerender(<CategoryPicker tx={tx()} onSelect={vi.fn()} saving={false} variant="icon" />);
+    expect(screen.queryByTestId("picker-spinner")).not.toBeInTheDocument();
+    expect(trigger.querySelector("[data-category]")).not.toBeNull();
+  });
+
+  // polish-5 B1 note: the locked icon chip still faded on hover. jsdom has no CSS, so this checks
+  // the hover fade is scoped to an unlocked trigger. fails_when=an unscoped hover:opacity class
+  it("CategoryPicker's icon chip only fades on hover while unlocked", () => {
+    render(<CategoryPicker tx={tx()} onSelect={vi.fn()} saving variant="icon" />);
+    const trigger = screen.getByRole("button", { name: /Change category/ });
+    const classes = [...trigger.querySelectorAll("*")].flatMap((el) => [...el.classList]);
+    expect(classes.filter((c) => /(^|:)hover:opacity/.test(c))).toEqual([
+      "[:not([aria-disabled])>&]:hover:opacity-80",
+    ]);
   });
 
   // polish-4 #4: the current type showed only by font weight, and screen readers got no state.
