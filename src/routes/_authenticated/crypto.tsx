@@ -25,7 +25,6 @@ import { usePerformance, useStartPrices } from "@/lib/use-performance";
 import { InvestmentIncome } from "@/components/holdings/investment-income";
 import {
   PerformanceNotice,
-  ReturnCell,
   ReturnDetail,
   ReturnText,
   TradesButton,
@@ -248,8 +247,8 @@ function CryptoPage() {
                     <th className="px-4 py-3 font-medium sm:px-5">Price</th>
                     <th className="px-4 py-3 text-right font-medium sm:px-5">Return</th>
                     <th className="px-4 py-3 text-right font-medium sm:px-5">Value</th>
-                    <th className="w-14 px-2 py-3">
-                      <span className="sr-only">Edit</span>
+                    <th className="w-24 px-2 py-3">
+                      <span className="sr-only">Actions</span>
                     </th>
                   </tr>
                 </thead>
@@ -290,7 +289,7 @@ function CryptoPage() {
                           {formatPrice(asset)}
                         </td>
                         <td className="px-4 py-3 text-right sm:px-5">
-                          <ReturnCell
+                          <ReturnDetail
                             perf={perf}
                             holdingKey={asset.symbol}
                             name={asset.name}
@@ -301,10 +300,19 @@ function CryptoPage() {
                           {formatEur(asset.valueEur)}
                         </td>
                         <td className="px-2 py-1 text-right">
-                          <AssetEdits
-                            asset={asset}
-                            tradesMatch={tradesMatchHeld(perf, asset.symbol)}
-                          />
+                          <div className="flex justify-end">
+                            <TradesButton
+                              perf={perf}
+                              holdingKey={asset.symbol}
+                              name={asset.name}
+                              quantity={asset.amount}
+                              iconOnly
+                            />
+                            <AssetEdits
+                              asset={asset}
+                              tradesMatch={tradesMatchHeld(perf, asset.symbol)}
+                            />
+                          </div>
                         </td>
                       </tr>
                     );

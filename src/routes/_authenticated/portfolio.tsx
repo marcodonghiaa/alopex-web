@@ -34,7 +34,6 @@ import { usePerformance, useStartPrices } from "@/lib/use-performance";
 import { InvestmentIncome } from "@/components/holdings/investment-income";
 import {
   PerformanceNotice,
-  ReturnCell,
   ReturnDetail,
   ReturnText,
   TradesButton,
@@ -294,8 +293,8 @@ function PortfolioPage() {
                               <th className="px-4 py-2.5 text-right font-medium sm:px-5">
                                 % of total
                               </th>
-                              <th className="w-14 px-2 py-2.5">
-                                <span className="sr-only">Edit</span>
+                              <th className="w-24 px-2 py-2.5">
+                                <span className="sr-only">Actions</span>
                               </th>
                             </tr>
                           </thead>
@@ -325,7 +324,7 @@ function PortfolioPage() {
                                       : "—"}
                                   </td>
                                   <td className="px-4 py-3 text-right sm:px-5">
-                                    <ReturnCell
+                                    <ReturnDetail
                                       perf={perf}
                                       holdingKey={row.isin}
                                       name={row.name ?? row.isin ?? ""}
@@ -340,12 +339,21 @@ function PortfolioPage() {
                                   </td>
                                   <td className="px-2 py-1 text-right">
                                     {row.isin && (
-                                      <EditHolding
-                                        target={{ kind: "stock", isin: row.isin }}
-                                        name={row.name ?? row.isin}
-                                        quantity={row.shares ?? 0}
-                                        tradesMatch={tradesMatchHeld(perf, row.isin)}
-                                      />
+                                      <div className="flex justify-end">
+                                        <TradesButton
+                                          perf={perf}
+                                          holdingKey={row.isin}
+                                          name={row.name ?? row.isin}
+                                          quantity={row.shares ?? 0}
+                                          iconOnly
+                                        />
+                                        <EditHolding
+                                          target={{ kind: "stock", isin: row.isin }}
+                                          name={row.name ?? row.isin}
+                                          quantity={row.shares ?? 0}
+                                          tradesMatch={tradesMatchHeld(perf, row.isin)}
+                                        />
+                                      </div>
                                     )}
                                   </td>
                                 </tr>

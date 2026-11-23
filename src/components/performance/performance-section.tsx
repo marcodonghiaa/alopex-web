@@ -1,5 +1,5 @@
 import { TradesDialog, hasMissingPrice } from "@/components/holdings/trades-dialog";
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
 import { ListOrdered, TriangleAlert } from "lucide-react";
 import { ImportTrades } from "@/components/holdings/import-trades";
 import { Alert } from "@/components/ui/alert";
@@ -20,6 +20,27 @@ function Change({ change }: { change: number | null }) {
     </span>
   );
 }
+
+// Percent or amount, for every return on the page at once: a tap on one switches them all, so the
+// phone's closed rows follow the detail you tapped in. Lasts until reload, like a filter.
+let returnsAsAmount = false;
+const listeners = new Set<() => void>();
+const subscribe = (fn: () => void) => {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+};
+function setReturnsAsAmount(value: boolean) {
+  returnsAsAmount = value;
+  for (const fn of listeners) fn();
+}
+const useReturnsAsAmount = () =>
+  useSyncExternalStore(
+    subscribe,
+    () => returnsAsAmount,
+    () => false,
+  );
+/** Tests only: back to percent. */
+export const resetReturnsView = () => setReturnsAsAmount(false);
 
 const dash = <span className="text-muted-foreground">—</span>;
 
@@ -50,8 +71,13 @@ function returnLabel(perf: Performance, holdingKey: string) {
 
 /** The same words as ReturnCell, not tappable: for a row whose own tap expands it. */
 export function ReturnText({ perf, holdingKey }: { perf: Performance; holdingKey: string | null }) {
+  const asAmount = useReturnsAsAmount();
   if (perf.isPending) return <span className="text-muted-foreground">…</span>;
   if (perf.unavailable || perf.error || holdingKey == null) return dash;
+  const measured = cleanReturn(perf, holdingKey);
+  if (asAmount && measured) {
+    return <span className={`font-figure ${toneClass(measured)}`}>{signedEur(measured.gain)}</span>;
+  }
   return returnLabel(perf, holdingKey);
 }
 
@@ -99,21 +125,25 @@ function cleanReturn(perf: Performance, holdingKey: string | null) {
 const signedEur = (value: number) =>
   `${value < 0 ? "−" : "+"}${formatMoney(Math.abs(value), "EUR")}`;
 
-/** A holding's return in its open detail, in bold. A tap swaps percent and amount, like the
- * Net worth change; the trades open from TradesButton below. Anything else stays ReturnCell. */
+const toneClass = ({ change, gain }: { change: number | null; gain: number }) =>
+  TONE_TEXT[toneOf(change ?? gain, RETURN_NOISE_BAND)];
+
+/** A holding's return, in bold: in its open detail and the desktop table. A tap swaps every return
+ * between percent and amount, like the Net worth change; trades open from TradesButton. Anything
+ * other than a clean return stays ReturnCell. */
 export function ReturnDetail(props: Measurable) {
-  const [asAmount, setAsAmount] = useState(false);
+  const asAmount = useReturnsAsAmount();
   const measured = cleanReturn(props.perf, props.holdingKey);
   if (!measured) return <ReturnCell {...props} />;
   const { change, gain } = measured;
-  const base = `font-figure font-semibold ${TONE_TEXT[toneOf(change ?? gain, RETURN_NOISE_BAND)]}`;
+  const base = `font-figure font-semibold ${toneClass(measured)}`;
   // No base to divide by (sold out and back in at nothing): the amount is all there is.
   if (change == null) return <span className={base}>{signedEur(gain)}</span>;
   const shown = asAmount ? signedEur(gain) : formatReturn(change);
   return (
     <button
       type="button"
-      onClick={() => setAsAmount((v) => !v)}
+      onClick={() => setReturnsAsAmount(!asAmount)}
       aria-label={`Return ${shown}. Show as ${asAmount ? "percent" : "amount"}`}
       className={`${base} -my-2.5 inline-flex min-h-11 items-center rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`}
     >
@@ -122,9 +152,16 @@ export function ReturnDetail(props: Measurable) {
   );
 }
 
-/** "Trades" at the foot of a holding's detail, since its return now toggles instead. Left out
- * when the return itself still opens them (no trades, a mismatch, a missing price). */
-export function TradesButton({ perf, holdingKey, name, quantity }: Measurable) {
+/** "Trades" at the foot of a holding's detail, or as an icon beside the desktop row's edit, since
+ * its return now toggles instead. Left out when the return itself still opens them (no trades, a
+ * mismatch, a missing price). */
+export function TradesButton({
+  perf,
+  holdingKey,
+  name,
+  quantity,
+  iconOnly = false,
+}: Measurable & { iconOnly?: boolean }) {
   if (holdingKey == null || !cleanReturn(perf, holdingKey)) return null;
   return (
     <TradesDialog
@@ -135,11 +172,15 @@ export function TradesButton({ perf, holdingKey, name, quantity }: Measurable) {
       trades={perf.tradesByKey.get(holdingKey) ?? []}
       label={
         <>
-          <ListOrdered />
-          Trades
+          <ListOrdered aria-hidden />
+          {iconOnly ? <span className="sr-only">Trades for {name}</span> : "Trades"}
         </>
       }
-      triggerClassName={buttonVariants({ variant: "ghost", className: "-ml-3 self-start" })}
+      triggerClassName={buttonVariants(
+        iconOnly
+          ? { variant: "ghost", size: "icon" }
+          : { variant: "ghost", className: "-ml-3 self-start" },
+      )}
     />
   );
 }
