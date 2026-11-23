@@ -735,6 +735,18 @@ describe("Paid for others", () => {
     );
   });
 
+  // Polish 3 #5: on desktop the section lives in the same table, under its own heading row.
+  it("adds a heading row and the rows to the desktop table when shown", async () => {
+    tableData = { v_transactions_eur: [row("1"), row("2", { personal_amount: 0 })] };
+    renderPage();
+    await screen.findAllByText("Shop 1");
+    const table = screen.getByRole("table");
+    expect(within(table).queryByText("Shop 2")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Show 1 paid for others" }));
+    expect(within(table).getByRole("heading", { name: "Paid for others" })).toBeInTheDocument();
+    expect(within(table).getByText("Shop 2")).toBeInTheDocument();
+  });
+
   it("shows no section when nothing was paid for others", async () => {
     tableData = { v_transactions_eur: [row("1", { personal_amount: 4 })] };
     renderPage();
