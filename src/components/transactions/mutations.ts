@@ -343,10 +343,11 @@ export function useDeleteMutation(queryClient: QueryClient, onDone: () => void) 
 }
 
 // Renaming one transaction renames every one from the same bank merchant, past and future
-// (see the rename_merchant function), so every cached month is refetched, not just this one.
+// (see the rename_merchant function; Apple, PayPal and Google: at the same price), unless
+// onlyThis. Other rows may change, so every cached month is refetched, not just this one.
 export function useRenameMerchantMutation(queryClient: QueryClient) {
-  return useMutation<number, Error, { tx: TxKey; name: string | null }>({
-    mutationFn: async ({ tx, name }) => {
+  return useMutation<number, Error, { tx: TxKey; name: string | null; onlyThis?: boolean }>({
+    mutationFn: async ({ tx, name, onlyThis = false }) => {
       const { data, error } = await (
         supabase.rpc as unknown as (
           fn: string,
@@ -356,6 +357,7 @@ export function useRenameMerchantMutation(queryClient: QueryClient) {
         p_entry_reference: tx.entry_reference,
         p_account_uid: tx.account_uid,
         p_name: name,
+        p_only_this: onlyThis,
       });
       if (error) throw error;
       return data ?? 0;

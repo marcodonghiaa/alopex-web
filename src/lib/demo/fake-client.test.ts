@@ -394,6 +394,74 @@ describe("fake client: auth, functions and rpc", () => {
     });
   });
 
+  // protects=renaming one of two Apple services leaves the other; fails_when=an aggregator rename ignores price or "only this one"
+  describe("rename_merchant by price and for one row", () => {
+    const rpcRename = (
+      c: ReturnType<typeof fresh>,
+      ref: string,
+      name: string,
+      onlyThis?: boolean,
+    ) =>
+      (c.rpc as unknown as (f: string, a: object) => PromiseLike<{ data: number; error: unknown }>)(
+        "rename_merchant",
+        {
+          p_entry_reference: ref,
+          p_account_uid: "demo-acc-main",
+          p_name: name,
+          p_only_this: onlyThis,
+        },
+      );
+    const seed = async (key: string) => {
+      const c = fresh();
+      const base = { account_uid: "demo-acc-main", currency: "EUR", booking_date: "2026-10-10" };
+      await c.from("transactions").insert([
+        {
+          ...base,
+          entry_reference: "ap-1",
+          creditor_name: "Apple.com",
+          merchant_key: key,
+          amount: 1.99,
+        },
+        {
+          ...base,
+          entry_reference: "ap-2",
+          creditor_name: "Apple.com",
+          merchant_key: key,
+          amount: 1.99,
+        },
+        {
+          ...base,
+          entry_reference: "ap-3",
+          creditor_name: "Apple.com",
+          merchant_key: key,
+          amount: 2.8,
+        },
+      ] as never);
+      const names = async () =>
+        (
+          await c
+            .from("transactions")
+            .select("entry_reference,custom_name")
+            .in("entry_reference", ["ap-1", "ap-2", "ap-3"])
+            .order("entry_reference")
+        ).data!.map((r: { custom_name?: string | null }) => r.custom_name ?? null);
+      return { c, names };
+    };
+
+    it("an aggregator renames only charges at about the same price", async () => {
+      const { c, names } = await seed("apple");
+      expect((await rpcRename(c, "ap-3", "iCloud")).data).toBe(1);
+      expect((await rpcRename(c, "ap-1", "Apple Music")).data).toBe(2);
+      expect(await names()).toEqual(["Apple Music", "Apple Music", "iCloud"]);
+    });
+
+    it("only this one renames just the clicked row", async () => {
+      const { c, names } = await seed("acme");
+      expect((await rpcRename(c, "ap-1", "Mine", true)).data).toBe(1);
+      expect(await names()).toEqual(["Mine", null, null]);
+    });
+  });
+
   it("refuses database functions that would import data", async () => {
     const { error } = await fresh().rpc("import_splitwise", {} as never);
     expect(error?.message).toMatch(/demo/i);

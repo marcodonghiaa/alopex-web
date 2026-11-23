@@ -56,10 +56,12 @@ describe("Splitwise share rows allow only name and category edits", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Rename Dinner" }));
     const input = await screen.findByRole("textbox");
+    // A share is one row of its own: no "All like this / Only this one" choice.
+    expect(screen.queryByRole("radio", { name: "Only this one" })).toBeNull();
     await userEvent.clear(input);
     await userEvent.type(input, "Pizza");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(p.onRename).toHaveBeenCalledWith("Pizza");
+    expect(p.onRename).toHaveBeenCalledWith("Pizza", false);
 
     await userEvent.click(screen.getByRole("button", { name: /Change category for/ }));
     await userEvent.click(await screen.findByRole("button", { name: "Groceries" }));
@@ -153,6 +155,24 @@ describe("Bank card rows", () => {
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByTestId("merchant-initial")).toHaveTextContent("U");
     expect(within(dialog).getByText(/Revolut USD/)).toBeInTheDocument();
+  });
+
+  // protects=renaming one bank charge without renaming the others; fails_when=the sheet's rename has no "Only this one"
+  it("renames only this one from the sheet when picked", async () => {
+    const p = bankProps();
+    render(
+      <ul>
+        <TransactionCardView {...p} />
+      </ul>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Uber/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "Rename Uber" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "Only this one" }));
+    const input = screen.getByRole("textbox", { name: "Name" });
+    await userEvent.clear(input);
+    await userEvent.type(input, "Uber Eats");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(p.onRename).toHaveBeenCalledWith("Uber Eats", true);
   });
 
   // protects=on a phone the sheet covers the toast, so Make a rule must be in the sheet itself

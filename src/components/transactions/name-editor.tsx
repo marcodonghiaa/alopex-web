@@ -2,33 +2,43 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { SegmentedControl } from "@/components/segmented-control";
+
+type Scope = "all" | "one";
 
 // Lets you give a transaction your own name (e.g. a transfer to a friend that is really a
-// subscription). An empty name goes back to the one the bank sent.
+// subscription). An empty name goes back to the one the bank sent. With `scoped`, you pick
+// whether the name goes on every transaction like this one (the default) or only on this one.
 export function NameEditor({
   name,
   onSave,
   saving,
+  scoped = false,
 }: {
   name: string | null;
-  onSave: (name: string | null) => void;
+  onSave: (name: string | null, onlyThis: boolean) => void;
   saving: boolean;
+  scoped?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState(name ?? "");
+  const [scope, setScope] = useState<Scope>("all");
 
   function save() {
     const next = input.trim();
     setOpen(false);
     if (next === (name ?? "")) return;
-    onSave(next === "" ? null : next);
+    onSave(next === "" ? null : next, scoped && scope === "one");
   }
 
   return (
     <Popover
       open={open}
       onOpenChange={(next) => {
-        if (next) setInput(name ?? "");
+        if (next) {
+          setInput(name ?? "");
+          setScope("all");
+        }
         setOpen(next);
       }}
     >
@@ -54,6 +64,24 @@ export function NameEditor({
             className="mt-1"
           />
         </label>
+        {scoped && (
+          <>
+            <SegmentedControl
+              label="Rename"
+              options={[
+                { value: "all", label: "All like this" },
+                { value: "one", label: "Only this one" },
+              ]}
+              value={scope}
+              onChange={setScope}
+            />
+            <p className="text-xs text-muted-foreground">
+              {scope === "all"
+                ? "Past and future ones from this merchant. Apple, PayPal and Google: same price only."
+                : "Just this transaction. Others keep their name."}
+            </p>
+          </>
+        )}
         <p className="text-xs text-muted-foreground">Leave empty to use the bank's name.</p>
         <Button onClick={save} className="w-full px-3">
           Save
