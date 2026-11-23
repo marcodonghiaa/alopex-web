@@ -47,6 +47,15 @@ describe("syncErrorMessage", () => {
     }
   });
 
+  // H039: sync-bank now records a key it can't sign with, instead of failing silently.
+  it("says how to fix an Enable Banking key that can't sign, once for every bank", () => {
+    expect(syncErrorMessage("KEY_INVALID", "N26")).toMatch(
+      /ENABLE_BANKING_PRIVATE_KEY.*npx create-alopex@latest/,
+    );
+    const alerts = syncAlerts([acc("N26", "KEY_INVALID"), acc("Fineco", "KEY_INVALID")]);
+    expect(alerts).toHaveLength(1);
+  });
+
   it("points a refused app at the Enable Banking setup", () => {
     for (const code of [
       "UNAUTHORIZED_IP",
