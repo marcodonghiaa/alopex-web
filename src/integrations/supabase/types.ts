@@ -677,6 +677,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      merchant_aliases: {
+        Row: {
+          alias: string;
+          amount: number | null;
+          created_at: string;
+          merchant_key: string | null;
+          source_name: string;
+          user_id: string;
+        };
+        Insert: {
+          alias: string;
+          amount?: number | null;
+          created_at?: string;
+          merchant_key?: string | null;
+          source_name: string;
+          user_id?: string;
+        };
+        Update: {
+          alias?: string;
+          amount?: number | null;
+          created_at?: string;
+          merchant_key?: string | null;
+          source_name?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       payer_links: {
         Row: { contact: string; created_at: string; payer_key: string; user_id: string };
         Insert: { contact: string; created_at?: string; payer_key: string; user_id: string };

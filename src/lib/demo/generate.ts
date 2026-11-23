@@ -628,6 +628,17 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
     net_worth_reconstructed,
     splitwise_balances,
     payer_links: [],
+    // A rename the demo user made, so the export carries one.
+    merchant_aliases: [
+      {
+        user_id,
+        source_name: "Gym Demo",
+        alias: "Gym",
+        amount: null,
+        merchant_key: null,
+        created_at: stamp(today),
+      },
+    ],
     splitwise_expenses,
     splitwise_review,
     category_budgets: [],
