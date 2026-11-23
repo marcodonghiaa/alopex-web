@@ -851,9 +851,9 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
                     />
                   </label>
                 </th>
-                <th className="px-4 py-3 font-medium">Date</th>
-                <th className="px-4 py-3 font-medium">Merchant</th>
-                <th className="px-4 py-3 text-right font-medium">Amount</th>
+                <th className="px-2 py-3 font-medium lg:px-4">Date</th>
+                <th className="px-2 py-3 font-medium lg:px-4">Merchant</th>
+                <th className="px-2 py-3 text-right font-medium lg:px-4">Amount</th>
                 <th className="w-12 px-2 py-3">
                   <span className="sr-only">Edit</span>
                 </th>

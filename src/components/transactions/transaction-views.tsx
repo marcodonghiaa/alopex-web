@@ -363,10 +363,10 @@ export function TransactionRowView(props: TransactionViewProps) {
           </label>
         )}
       </td>
-      <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+      <td className="px-2 py-3 whitespace-nowrap text-muted-foreground lg:px-4">
         {formatBookingDateShort(tx.booking_date)}
       </td>
-      <td className="w-full max-w-0 px-4 py-3">
+      <td className="w-full max-w-0 px-2 py-3 lg:px-4">
         <div className="flex items-center gap-3">
           <CategoryPicker
             tx={tx}
@@ -395,7 +395,7 @@ export function TransactionRowView(props: TransactionViewProps) {
           </div>
         </div>
       </td>
-      <td className="px-4 py-3">
+      <td className="px-2 py-3 lg:px-4">
         <div className="flex items-center justify-end gap-3">
           <AmountText tx={tx} />
           {(share || showAccount) && <AccountBadge label={share ? "Splitwise" : accountLabel} />}

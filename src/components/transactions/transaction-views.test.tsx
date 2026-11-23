@@ -427,6 +427,16 @@ const inTable = (p: TransactionViewProps) =>
     </table>,
   );
 
+// Polish 4 #8: at 768px, with the sidebar open, 16px paddings left merchant names ~6 characters.
+// fails_when=the date, merchant or amount cell keeps 16px side padding below lg
+describe("Table row at tablet width", () => {
+  it("uses tight side padding below lg so the merchant name has room", () => {
+    inTable(bankProps());
+    const cells = screen.getAllByRole("cell").slice(1, 4);
+    for (const cell of cells) expect(cell).toHaveClass("px-2", "lg:px-4");
+  });
+});
+
 // protects=a split charge shows my share as the big number; fails_when=the row leads with the whole charge
 describe("Split charge amount", () => {
   it("shows my share large and the whole charge under it", () => {
