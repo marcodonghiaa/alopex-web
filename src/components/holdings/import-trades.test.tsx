@@ -41,6 +41,8 @@ const db = vi.hoisted(() => ({
   /** add-holding calls, and what its search finds (by default, one result per ISIN). */
   invoked: [] as Array<Record<string, unknown>>,
   searchFinds: null as null | ((query: string) => Array<Record<string, unknown>>),
+  /** Set, add-holding answers 409 already_held with this key (the backend's duplicate check). */
+  alreadyHeld: null as string | null,
   /** Rows deleted: [table, column, values]. */
   deleted: [] as Array<[string, string, Array<unknown>]>,
 }));
@@ -174,6 +176,13 @@ vi.mock("@/integrations/supabase/client", () => {
               : [{ id: `${q}.DE`, symbol: `${q}.DE`, name: `Found ${q}`, detail: "ETF" }];
             return Promise.resolve({ data: { results }, error: null });
           }
+          if (db.alreadyHeld) {
+            const body = JSON.stringify({ error: "already_held", key: db.alreadyHeld });
+            return Promise.resolve({
+              data: null,
+              error: { context: new Response(body, { status: 409 }) },
+            });
+          }
           return Promise.resolve({ data: { added: true, priced: true }, error: null });
         },
       },
@@ -282,6 +291,7 @@ describe("ImportTrades", () => {
     db.ratesReads = 0;
     db.invoked.length = 0;
     db.searchFinds = null;
+    db.alreadyHeld = null;
     db.deleted.length = 0;
   });
 
@@ -2235,6 +2245,49 @@ describe("ImportTrades", () => {
       expect(db.upserted).toEqual([]);
       expect(vi.mocked(toast.error).mock.lastCall?.[0]).toBe(
         "Example World ETF couldn't be added, so its trades weren't saved. Add it, then import again.",
+      );
+    });
+
+    // protects=one position, counted once; fails_when=a holding added earlier by name or ticker
+    // (keyed by its Yahoo symbol) gets a second holding from the file's ISIN
+    it("a holding added by ticker before gets the trades, and no second holding is added", async () => {
+      db.stocks.push({
+        isin: "VWCE.DE",
+        yahoo_symbol: "VWCE.DE",
+        shares: 4,
+        name: "Example World ETF",
+      });
+      db.searchFinds = () => [{ id: "VWCE.DE", symbol: "VWCE.DE", name: "World", detail: "ETF" }];
+      open("stock");
+      fireEvent.click(await pickTradeRepublic());
+      await waitFor(() => expect(toast.success).toHaveBeenCalled());
+      expect(db.invoked.map((c) => c["action"])).toEqual(["search"]);
+      expect(db.inserted.map((t) => t["key"])).toEqual([
+        "VWCE.DE",
+        "VWCE.DE",
+        "XX0000000002",
+        "XX0000000002",
+      ]);
+      expect(db.upserted[0]![1]).toEqual([
+        expect.objectContaining({ kind: "dividend", key: "VWCE.DE" }),
+      ]);
+      expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe(
+        "Imported 4 trades and 1 income and cash row",
+      );
+    });
+
+    // fails_when=the backend's "already held" answer shows as an error and the trades are dropped
+    it("when add-holding says it's already held, the trades go to that holding", async () => {
+      db.alreadyHeld = "VWCE.DE";
+      open("stock");
+      fireEvent.click(await pickTradeRepublic());
+      await waitFor(() => expect(toast.success).toHaveBeenCalled());
+      expect(db.invoked.map((c) => c["action"])).toEqual(["search", "add"]);
+      expect(db.inserted.filter((t) => t["key"] === "VWCE.DE")).toHaveLength(2);
+      expect(db.upserted[0]![1]).toEqual([expect.objectContaining({ key: "VWCE.DE" })]);
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(vi.mocked(toast.success).mock.lastCall?.[0]).toBe(
+        "Imported 4 trades and 1 income and cash row",
       );
     });
 

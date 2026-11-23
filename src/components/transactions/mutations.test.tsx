@@ -486,6 +486,41 @@ describe("transaction mutations are scoped to one account", () => {
     expect(cached().map((r) => r.category)).toEqual(["Health", "Others"]);
   });
 
+  // protects=Select all on a busy month; fails_when=every reference goes in one `in (...)` URL,
+  // which a proxy can refuse as too long
+  it("bulk update sends references in batches of 50", async () => {
+    const { queryClient, wrapper } = setup();
+    const { result } = renderHook(() => useBulkCategoryMutation(queryClient, MONTH, vi.fn()), {
+      wrapper,
+    });
+    const txs = Array.from({ length: 120 }, (_, i) => ({
+      account_uid: "a1",
+      entry_reference: `r${i}`,
+    }));
+    act(() => result.current.mutate({ txs, category: "Health" }));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(calls.map((c) => c.in["entry_reference"]?.length)).toEqual([50, 50, 20]);
+    expect(calls.flatMap((c) => c.in["entry_reference"])).toEqual(
+      txs.map((t) => t.entry_reference),
+    );
+    expect(calls.every((c) => c.eq["account_uid"] === "a1")).toBe(true);
+  });
+
+  // fails_when=a bulk change fails part way and the list keeps showing the rows already changed
+  it.each([
+    ["category", (qc: QueryClient) => useBulkCategoryMutation(qc, MONTH, vi.fn())],
+    ["delete", (qc: QueryClient) => useDeleteMutation(qc, vi.fn())],
+  ] as const)("bulk %s that fails reloads the transactions", async (_name, hook) => {
+    const { queryClient, wrapper } = setup();
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    updateError = new Error("boom");
+    const { result } = renderHook(() => hook(queryClient), { wrapper });
+    const txs = [{ account_uid: "a1", entry_reference: "r1" }];
+    act(() => result.current.mutate({ txs, category: "Health", deleted: true }));
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["transactions"] });
+  });
+
   // Regression: picking Transfer only changed the label, so the row stayed in spending.
   it("picking Transfer also marks the row as a transfer and takes it off the list", async () => {
     const { queryClient, wrapper, cached } = setup();
