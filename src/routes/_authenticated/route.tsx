@@ -17,6 +17,7 @@ import { needsMfaCode } from "@/lib/mfa";
 import { backHereSearch } from "@/lib/next-url";
 import { registerDashboardOrigin } from "@/lib/register-origin";
 import { MadeWith } from "@/components/made-with";
+import { forgetThisBrowserPush } from "@/components/push-subscribe";
 import { cn } from "@/lib/utils";
 import { GroupedList } from "@/components/ui/grouped-list";
 import { BrandMark } from "@/components/brand-mark";
@@ -276,6 +277,7 @@ function AuthenticatedLayout() {
 
   async function handleSignOut() {
     setSigningOut(true);
+    await forgetThisBrowserPush();
     await supabase.auth.signOut();
     await navigate({ to: "/auth", replace: true });
   }
