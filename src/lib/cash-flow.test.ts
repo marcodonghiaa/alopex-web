@@ -7,6 +7,8 @@ import {
   firstMonth,
   formatRate,
   FROM_SAVINGS,
+  IMPORTED_SPENDING,
+  importedOnlyMonths,
   incomeBySource,
   OTHER_INCOME,
   OTHER_SPENDING,
@@ -138,11 +140,58 @@ describe("summarize", () => {
       net: 1500,
       savingsRate: 0.3,
       months: 2,
+      imported: 0,
+      importedSpending: 0,
     });
   });
   it("does not count an empty month as a month", () => {
     const s = summarize(rows, "2026-11-01", "2026-12-01");
-    expect(s).toEqual({ income: 0, spending: 0, net: 0, savingsRate: null, months: 0 });
+    expect(s).toEqual({
+      income: 0,
+      spending: 0,
+      net: 0,
+      savingsRate: null,
+      months: 0,
+      imported: 0,
+      importedSpending: 0,
+    });
+  });
+
+  // protects=a month of imported spending (no income recorded) isn't read as money taken from
+  // savings; fails_when=it counts in what was saved or the savings rate
+  it("leaves months with only imported spending out of what was saved", () => {
+    const withImported = [...rows, { month: "2026-07-01", income_eur: 0, expenses_eur: 1200 }];
+    const s = summarize(withImported, "2026-07-01", "2026-09-01", new Set(["2026-07-01"]));
+    expect(s).toMatchObject({
+      income: 2000,
+      spending: 1500,
+      net: 500,
+      savingsRate: 0.25,
+      months: 1,
+      imported: 1,
+      importedSpending: 1200,
+    });
+  });
+});
+
+describe("importedOnlyMonths", () => {
+  const monthly: Array<MonthlyFlowRow> = [
+    { month: "2026-01-01", income_eur: 0, expenses_eur: 900 },
+    { month: "2026-02-01", income_eur: 0, expenses_eur: 800 },
+    { month: "2026-03-01", income_eur: 2000, expenses_eur: 700 },
+  ];
+  it("is a month with imported totals, no bank spend and no income", () => {
+    // Feb has bank spend (its imported totals don't count); Mar has income; Apr has no row.
+    expect(
+      importedOnlyMonths(
+        monthly,
+        ["2026-01-01", "2026-02-01", "2026-03-01"],
+        ["2026-02-14", "2026-02-20"],
+      ),
+    ).toEqual(new Set(["2026-01-01"]));
+  });
+  it("is none without imported totals", () => {
+    expect(importedOnlyMonths(monthly, [], [])).toEqual(new Set());
   });
 });
 
@@ -210,48 +259,24 @@ describe("incomeBySource", () => {
   });
 });
 
+// protects=imported spend history counts on Cash flow, as in the monthly totals (which now add it
+// up too); fails_when=a month of imported history is dropped from the categories
 describe("spendByCategory", () => {
-  it("sums the range per category and skips months without live spending", () => {
-    const totals = new Map([
-      ["2026-09-01", 300],
-      ["2026-10-01", 250],
-    ]);
+  it("sums the range per category, imported history months included", () => {
     expect(
-      spendByCategory(
-        [
-          { month: "2026-09-01", category: "Groceries", spend_eur: 300 },
-          { month: "2026-10-01", category: "Groceries", spend_eur: 200 },
-          { month: "2026-10-01", category: null, spend_eur: 50 },
-          { month: "2026-10-01", category: "Health", spend_eur: null },
-          { month: "2026-08-01", category: "Housing", spend_eur: 900 }, // imported history month
-          { month: null, category: "Housing", spend_eur: 900 },
-        ],
-        totals,
-      ),
+      spendByCategory([
+        { month: "2026-09-01", category: "Groceries", spend_eur: 300 },
+        { month: "2026-10-01", category: "Groceries", spend_eur: 200 },
+        { month: "2026-10-01", category: null, spend_eur: 50 },
+        { month: "2026-10-01", category: "Health", spend_eur: null },
+        { month: "2026-08-01", category: "Housing", spend_eur: 900 }, // imported history month
+        { month: null, category: "Housing", spend_eur: 900 },
+      ]),
     ).toEqual([
+      { name: "Housing", value: 900 },
       { name: "Groceries", value: 500 },
       { name: "Uncategorized", value: 50 },
     ]);
-  });
-
-  // Polish 1 #1: a Splitwise share makes the month count, but the category view also adds the
-  // imported history there (no bank spend), so its rows outgrow the month's total.
-  it("leaves out a month whose categories don't add up to its total", () => {
-    const totals = new Map([
-      ["2026-03-01", 300],
-      ["2026-04-01", 100],
-    ]);
-    expect(
-      spendByCategory(
-        [
-          { month: "2026-03-01", category: "Groceries", spend_eur: 1500 },
-          { month: "2026-03-01", category: "Housing", spend_eur: 750 },
-          { month: "2026-03-01", category: "Dine Out", spend_eur: 300 },
-          { month: "2026-04-01", category: "Dine Out", spend_eur: 100.004 },
-        ],
-        totals,
-      ),
-    ).toEqual([{ name: "Dine Out", value: 100.004 }]);
   });
 });
 
@@ -296,6 +321,22 @@ describe("topParts", () => {
 const sum = (xs: Array<number>) => xs.reduce((s, x) => s + x, 0);
 
 describe("buildFlow", () => {
+  // protects=imported spending without income isn't called "From savings"; fails_when=the left
+  // side of an imported-only month reads as money drawn from savings, in the loss colour
+  it("names the left side Imported spending, in a neutral colour, for imported months", () => {
+    const g = buildFlow({
+      income: 0,
+      spending: 900,
+      sources: [],
+      categories: [{ name: "Housing", value: 900 }],
+      imported: true,
+    });
+    const names = g.nodes.map((n) => n.name);
+    expect(names).toContain(IMPORTED_SPENDING);
+    expect(names).not.toContain(FROM_SAVINGS);
+    expect(g.nodes.find((n) => n.name === IMPORTED_SPENDING)?.color).toBe(categoryColor(null));
+  });
+
   // Polish 1 #13: a period that breaks even to the cent draws neither Saved nor From savings.
   it("adds no Saved or From savings node when the period breaks even", () => {
     const g = buildFlow({

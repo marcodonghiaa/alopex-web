@@ -6,8 +6,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { dateLocale } from "@/lib/locale";
 import {
   buildFlow,
+  fetchImportedSpend,
   firstMonth,
   formatRate,
+  importedOnlyMonths,
   incomeBySource,
   periodLabel,
   savedPhrase,
@@ -128,28 +130,42 @@ function CashFlowPage() {
     queryKey: ["cash-flow", "income", from, to],
     queryFn: () => fetchIncomeRows(from, to),
   });
-  const loadError = [monthlyQuery, spendQuery, incomeQuery].find((q) => q.isError)?.error;
+  const importedQuery = useQuery({
+    queryKey: ["cash-flow", "imported"],
+    queryFn: () => fetchImportedSpend(supabase),
+  });
+  const loadError = [monthlyQuery, spendQuery, incomeQuery, importedQuery].find(
+    (q) => q.isError,
+  )?.error;
 
   // A few months and categories: cheap enough to work out on every render.
   const monthly = monthlyQuery.data ?? [];
-  const summary = summarize(monthly, from, to);
+  // Months with only imported spending have no income on record: left out of what was saved.
+  const importedOnly = importedOnlyMonths(
+    monthly,
+    importedQuery.data?.history ?? [],
+    importedQuery.data?.bankSpend ?? [],
+  );
+  const summary = summarize(monthly, from, to, importedOnly);
+  // Nothing but imported spending in the period: shown as spending, not as a loss.
+  const onlyImported = summary.months === 0 && summary.imported > 0;
   const earliest = firstMonth(monthly);
   const canGoPrev = earliest != null && from > earliest;
   const canGoNext = start < current;
 
-  const monthTotals = new Map(
-    monthly.filter((r) => r.month).map((r) => [r.month as string, r.expenses_eur ?? 0]),
-  );
   const graph = buildFlow({
     income: summary.income,
-    spending: summary.spending,
+    spending: onlyImported ? summary.importedSpending : summary.spending,
     sources: incomeBySource(incomeQuery.data ?? []),
-    categories: spendByCategory(spendQuery.data ?? [], monthTotals),
+    categories: spendByCategory(
+      (spendQuery.data ?? []).filter((r) => onlyImported || !importedOnly.has(r.month ?? "")),
+    ),
+    imported: onlyImported,
   });
 
   const count = TREND_COUNT[period];
   const bars = trimLeadingEmpty(
-    trend(monthly, period, trendEnd(start, current, period, count), count),
+    trend(monthly, period, trendEnd(start, current, period, count), count, importedOnly),
     from,
   );
 
@@ -199,20 +215,33 @@ function CashFlowPage() {
 
       <section aria-label={`Saved in ${label}`} className="mb-8">
         <p className="text-[0.9375rem] text-muted-foreground">
-          {summary.net < 0 ? "Spent more than came in" : "Saved"}
+          {onlyImported ? "Spent" : summary.net < 0 ? "Spent more than came in" : "Saved"}
           {/* The period still running isn't a full month, quarter or year yet. */}
           {!canGoNext && " so far"}
         </p>
         <div className="mt-1">
           {pending ? (
             <Skeleton className="h-12 w-48" />
-          ) : noTotals || summary.months === 0 ? (
+          ) : noTotals ? (
+            <p className="figure-display text-muted-foreground">—</p>
+          ) : onlyImported ? (
+            <HeadlineFigure value={summary.importedSpending} currency="EUR" />
+          ) : summary.months === 0 ? (
             // Nothing recorded is not a net of zero (as on Reports).
             <p className="figure-display text-muted-foreground">—</p>
           ) : (
             <HeadlineFigure value={summary.net} currency="EUR" />
           )}
         </div>
+        {!pending && !noTotals && summary.imported > 0 && (
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            {onlyImported
+              ? "Imported spending only, no income recorded."
+              : `Leaves out ${summary.imported} ${
+                  summary.imported === 1 ? "month" : "months"
+                } with only imported spending.`}
+          </p>
+        )}
         <p className="mt-1 text-xs text-muted-foreground">Excludes transfers.</p>
       </section>
 
@@ -231,7 +260,11 @@ function CashFlowPage() {
             to={rowLink ? "/spending" : undefined}
             month={rowLink}
             pending={pending}
-            value={money(summary.spending)}
+            value={
+              onlyImported && !noTotals
+                ? formatEur(summary.importedSpending)
+                : money(summary.spending)
+            }
           />
           <SummaryRow
             label="Savings rate"
@@ -240,11 +273,13 @@ function CashFlowPage() {
                 ? undefined
                 : noTotals
                   ? "Didn't load"
-                  : summary.savingsRate == null
-                    ? "No income this period"
-                    : summary.savingsRate < 0
-                      ? "Taken from savings"
-                      : "Share of income kept"
+                  : onlyImported
+                    ? "No income recorded"
+                    : summary.savingsRate == null
+                      ? "No income this period"
+                      : summary.savingsRate < 0
+                        ? "Taken from savings"
+                        : "Share of income kept"
             }
             pending={pending}
             value={formatRate(summary.savingsRate)}
@@ -291,9 +326,13 @@ function CashFlowPage() {
           ) : (
             <FlowSankey
               graph={graph}
-              label={`Cash flow for ${label}: ${formatEur(summary.income)} in, ${formatEur(
-                summary.spending,
-              )} out, ${savedPhrase(summary.net)}.`}
+              label={
+                onlyImported
+                  ? `Imported spending for ${label}: ${formatEur(summary.importedSpending)} by category.`
+                  : `Cash flow for ${label}: ${formatEur(summary.income)} in, ${formatEur(
+                      summary.spending,
+                    )} out, ${savedPhrase(summary.net)}.`
+              }
             />
           )}
         </GroupedList>

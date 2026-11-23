@@ -67,8 +67,14 @@ interface IncomeRow {
   payer_name: string | null;
   currency: string | null;
   amount: number | null;
-  signed_amount_eur: number | null;
+  /** My share in the credit's currency, when split. */
+  personal_amount: number | null;
+  personal_signed_amount_eur: number | null;
 }
+
+// My share received, as on Cash flow and Reports: a credit split entirely to others counts 0.
+const receivedEur = (list: Array<IncomeRow>) =>
+  list.reduce((sum, r) => sum + Math.max(r.personal_signed_amount_eur ?? 0, 0), 0);
 
 async function fetchIncomeForMonth(month: Date): Promise<Array<IncomeRow>> {
   const start = formatISODate(startOfMonth(month));
@@ -76,7 +82,7 @@ async function fetchIncomeForMonth(month: Date): Promise<Array<IncomeRow>> {
   const { data, error } = await supabase
     .from("v_transactions_eur")
     .select(
-      "entry_reference,account_uid,booking_date,category,creditor_name,payer_name,currency,amount,signed_amount_eur",
+      "entry_reference,account_uid,booking_date,category,creditor_name,payer_name,currency,amount,personal_amount,personal_signed_amount_eur",
     )
     .eq("flow_type", "income")
     .gte("booking_date", start)
@@ -105,6 +111,9 @@ function IncomeList({ rows, mark }: { rows: Array<IncomeRow>; mark?: MarkProps }
     <ul className="divide-y divide-hairline">
       {rows.map((r) => {
         const bankRow = mark?.bank.get(txKey(r));
+        const currency = r.currency ?? "EUR";
+        const full = Math.abs(r.amount ?? 0);
+        const share = Math.abs(r.personal_amount ?? full);
         return (
           <li
             key={`${r.account_uid}:${r.entry_reference}`}
@@ -149,10 +158,18 @@ function IncomeList({ rows, mark }: { rows: Array<IncomeRow>; mark?: MarkProps }
                 )}
               </div>
             </div>
-            <span className="inline-flex shrink-0 items-center gap-1 font-figure text-foreground">
-              <ArrowDownLeft className="size-3.5" />
-              {formatMoney(Math.abs(r.amount ?? 0), r.currency ?? "EUR")}
-            </span>
+            {/* As on Transactions: a split credit shows my share (what Received counts), the whole under it. */}
+            <div className="shrink-0 text-right">
+              <span className="inline-flex items-center gap-1 font-figure text-foreground">
+                <ArrowDownLeft className="size-3.5" />
+                {formatMoney(share, currency)}
+              </span>
+              {share !== full && (
+                <div className="font-figure text-xs whitespace-nowrap text-muted-foreground">
+                  of {formatMoney(full, currency)}
+                </div>
+              )}
+            </div>
           </li>
         );
       })}
@@ -179,7 +196,7 @@ function IncomePage() {
   const marking = useRef(false);
   const net = netAfterSpending(flowQuery.data);
   const rows = useMemo(() => incomeQuery.data ?? [], [incomeQuery.data]);
-  const total = rows.reduce((sum, r) => sum + Math.abs(r.signed_amount_eur ?? 0), 0);
+  const total = receivedEur(rows);
 
   // Each row's kind and its bank row (original name, for a rule), once the six months are in.
   // Until then (or if that read fails) the list stays one list, as before.
@@ -188,11 +205,15 @@ function IncomePage() {
     const kinds = classifyIncome(windowQuery.data, rulesQuery.data);
     const bank = new Map(windowQuery.data.map((t) => [txKey(t), t]));
     const kindOf = (r: IncomeRow): IncomeKind => kinds.get(txKey(r)) ?? "one_off";
-    const sum = (list: Array<IncomeRow>) =>
-      list.reduce((acc, r) => acc + Math.abs(r.signed_amount_eur ?? 0), 0);
     const regular = rows.filter((r) => kindOf(r) === "regular");
     const oneOff = rows.filter((r) => kindOf(r) === "one_off");
-    return { regular, oneOff, regularTotal: sum(regular), oneOffTotal: sum(oneOff), bank };
+    return {
+      regular,
+      oneOff,
+      regularTotal: receivedEur(regular),
+      oneOffTotal: receivedEur(oneOff),
+      bank,
+    };
   }, [windowQuery.data, rulesQuery.data, rows]);
 
   const monthLabel = month.toLocaleDateString(dateLocale(), { month: "long", year: "numeric" });

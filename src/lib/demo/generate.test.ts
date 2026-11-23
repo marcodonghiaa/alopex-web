@@ -156,6 +156,17 @@ describe("generateDemoData: internal consistency", () => {
     }
   });
 
+  // protects=demo totals follow the real view: a month's expenses are its category spend, imported
+  // history included; fails_when=history months are missing from Cash flow and Reports totals
+  it("monthly expenses are the month's category spend, imported history included", () => {
+    const byMonth = new Map<string, number>();
+    for (const r of db.v_spend_by_category_monthly)
+      byMonth.set(r.month!, (byMonth.get(r.month!) ?? 0) + r.spend_eur!);
+    expect(db.spend_history.some((h) => byMonth.has(h.month))).toBe(true);
+    const totals = new Map(db.v_income_vs_expenses_monthly.map((r) => [r.month!, r.expenses_eur!]));
+    for (const [month, spend] of byMonth) expect(totals.get(month)).toBeCloseTo(spend, 2);
+  });
+
   it("income vs expenses has one row per month, month always the 1st", () => {
     const months = db.v_income_vs_expenses_monthly.map((r) => r.month!);
     expect(new Set(months).size).toBe(months.length);
@@ -267,8 +278,16 @@ describe("generateDemoData: the dashboard tells one story", () => {
     expect(new Set(db.net_worth_history.map((h) => share(h).toFixed(3))).size).toBeGreaterThan(3);
   });
 
+  // protects=the demo year reads like a person who saves; fails_when=imported history (spending
+  // only) lands in the months Cash flow's Year and 12-month trend show, as a loss
   it("income beats spending in every full month, like a person who saves", () => {
-    const months = db.v_income_vs_expenses_monthly.slice(1);
+    const now = new Date();
+    const yearAgo = new Date(Date.UTC(now.getFullYear() - 1, now.getMonth(), 1))
+      .toISOString()
+      .slice(0, 10);
+    // Imported history (spending only, no income imported) stays out of the shown year and trend.
+    for (const h of db.spend_history) expect(h.month < yearAgo).toBe(true);
+    const months = db.v_income_vs_expenses_monthly.filter((m) => m.month! >= yearAgo).slice(1);
     expect(months.length).toBeGreaterThanOrEqual(2);
     for (const m of months) expect(m.income_eur!).toBeGreaterThan(m.expenses_eur!);
   });

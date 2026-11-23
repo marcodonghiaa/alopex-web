@@ -14,7 +14,7 @@ vi.mock("@/lib/use-performance", () => ({
 
 import { RangeChange, ValueHistoryChart, rangeChip } from "./value-history";
 import type { ValueHistory } from "@/lib/use-value-history";
-import type { Measured } from "@/lib/trades";
+import { measure, summarizeTrades, type Measured } from "@/lib/trades";
 
 type Point = NonNullable<ValueHistory["first"]>;
 const day = (snapshot_date: string) => ({ snapshot_date }) as Point;
@@ -147,6 +147,62 @@ describe("rangeChip", () => {
     expect(
       rangeChip(history({ range: "ALL" }), perf({ summary: { gain: 0, change: null } }), undefined),
     ).toBeUndefined();
+  });
+});
+
+// protects=a range holding every trade and dividend gives the ALL figure; fails_when=the range
+// leaves out tax on trades or dividends paid inside it
+describe("rangeChip with tax and dividends", () => {
+  it("over a range holding everything, equals the all-time return", () => {
+    const t = (
+      trade_date: string,
+      side: string,
+      shares: number,
+      price_eur: number,
+      tax: number,
+    ) => ({ ...trade(trade_date, shares), side, price_eur, fee_eur: 1, tax_eur: tax });
+    const trades = [t("2026-01-05", "buy", 10, 100, 0.5), t("2026-01-20", "sell", 2, 110, 2)];
+    const event = (key: string, asset_kind: "stock" | "crypto", event_date = "2026-01-25") => ({
+      kind: "dividend" as const,
+      asset_kind,
+      key,
+      event_date,
+      amount_eur: 8,
+      tax_eur: 2,
+      fee_eur: 0,
+    });
+    // Counted on ALL: X's dividend. Not counted there either: no trades (Y), another kind.
+    const events = [event("X", "stock"), event("Y", "stock"), event("X", "crypto")];
+    const row = {
+      kind: "stock",
+      key: "X",
+      name: null,
+      quantity: 8,
+      start_date: null,
+      start_price_eur: null,
+      end_date: null,
+      end_price_eur: 120,
+      status: "ok",
+    };
+    const all = summarizeTrades([{ row, measured: measure(row, trades, 8) }], 1);
+    const p = perf({
+      kind: "stock",
+      tradesByKey: new Map([["X", trades]]),
+      endPrices: new Map([["X", 120]]),
+      summary: { gain: all.gain, change: all.change },
+      events,
+    });
+    const ytd = rangeChip(
+      history({
+        chartData: [point("2026-01-01", 0), point("2026-01-31", 960)],
+        first: point("2026-01-01", 0),
+      }),
+      p,
+      startPrices,
+    );
+    expect(all.gain).toBeCloseTo(960 + 2 * 110 - 2 - 1 - (10 * 100 + 1 + 0.5) + 8);
+    expect(ytd?.value).toBeCloseTo(all.gain);
+    expect(rangeChip(history({ range: "ALL" }), p, undefined)?.value).toBeCloseTo(all.gain);
   });
 });
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createFakeClient } from "./fake-client";
+import { fetchImportedSpend, importedOnlyMonths, type MonthlyFlowRow } from "@/lib/cash-flow";
 
 const NOW = new Date("2026-10-20T12:00:00Z");
 
@@ -123,5 +124,18 @@ describe("demo views match the real ones", () => {
       const row = (ie ?? []).find((r) => r.month === m);
       expect(row?.expenses_eur).toBeCloseTo((bank.get(m) ?? 0) + (shares.get(m) ?? 0), 1);
     }
+  });
+});
+
+// protects=the demo's imported months follow Cash flow's rule (no bank spend, no income);
+// fails_when=the demo reads them as losses, or a live month counts as imported-only
+describe("demo imported-only months", () => {
+  it("are exactly the imported history months", async () => {
+    const client = createFakeClient(NOW);
+    const { history, bankSpend } = await fetchImportedSpend(client);
+    const { data: monthly } = await client.from("v_income_vs_expenses_monthly").select("*");
+    expect(history.length).toBeGreaterThan(0);
+    const only = importedOnlyMonths((monthly ?? []) as Array<MonthlyFlowRow>, history, bankSpend);
+    expect([...only].sort()).toEqual(history);
   });
 });

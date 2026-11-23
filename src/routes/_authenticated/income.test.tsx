@@ -29,7 +29,7 @@ vi.mock("@/integrations/supabase/client", () => ({
                     creditor_name: "Income",
                     currency: "EUR",
                     amount: 2000,
-                    signed_amount_eur: 2000,
+                    personal_signed_amount_eur: 2000,
                   },
                   {
                     entry_reference: "e2",
@@ -39,7 +39,7 @@ vi.mock("@/integrations/supabase/client", () => ({
                     creditor_name: "ACME Ltd",
                     currency: "EUR",
                     amount: 450,
-                    signed_amount_eur: 450,
+                    personal_signed_amount_eur: 450,
                   },
                 ]
               : [],

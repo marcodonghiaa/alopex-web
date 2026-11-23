@@ -599,8 +599,9 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
     crypto_snapshots,
     fx_rates,
     net_worth_history,
-    // Imported monthly totals from before the live window.
-    spend_history: [6, 5, 4].flatMap((k) =>
+    // Imported monthly totals from over a year back: spending only, so they stay out of the year
+    // and the 12-month trend Cash flow shows.
+    spend_history: [15, 14, 13].flatMap((k) =>
       [
         ["Groceries", 310],
         ["Dine Out", 190],

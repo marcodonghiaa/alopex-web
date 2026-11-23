@@ -22,6 +22,8 @@ const bar = (over: Partial<TrendBar>): TrendBar & { tick: string } => ({
   net: 750,
   savingsRate: 0.25,
   months: 1,
+  imported: 0,
+  importedSpending: 0,
   ...over,
 });
 
@@ -41,6 +43,16 @@ describe("TrendTooltip", () => {
     );
     expect(container).toHaveTextContent("No activity");
     expect(container).not.toHaveTextContent("€0.00");
+  });
+
+  // fails_when=a month of imported spending only reads as "No activity" or as a loss
+  it("says when a period only has imported spending", () => {
+    const only = { income: 0, spending: 0, net: 0, savingsRate: null, months: 0 };
+    const { container } = render(
+      <TrendTooltip bar={bar({ ...only, imported: 1, importedSpending: 900 })} />,
+    );
+    expect(container).toHaveTextContent("Only imported spending, left out");
+    expect(container).not.toHaveTextContent("taken from savings");
   });
 });
 
