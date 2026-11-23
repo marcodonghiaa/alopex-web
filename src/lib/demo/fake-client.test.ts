@@ -4,6 +4,8 @@ import { DEMO_USER_ID } from "./generate";
 import { functionErrorMessage } from "@/lib/function-error";
 import { groupStreams } from "@/lib/recurring";
 import type { Tables } from "@/integrations/supabase/types";
+import { billEntries, monthBounds, type ChargeTx } from "@/lib/recurring-calendar";
+import { addDays } from "@/lib/date";
 
 const NOW = new Date(2026, 9, 19, 12);
 const fresh = () => createFakeClient(NOW);
@@ -924,6 +926,64 @@ describe("fake client: refresh-recurring", () => {
       .eq("entry_reference", refs[0]!);
     await recheck(c);
     expect(await listed(c)).toContain(s.id);
+  });
+
+  // polish-5 E4: one bill charge set One-time vanished from the demo calendar (5 of 5 -> 4 of 4),
+  // while the server re-dates the stream from the charges left, so the bill reads "not seen yet".
+  // fails_when=the stream keeps the One-time charge's dates, or the calendar loses the bill
+  it("re-dates a stream from the charges left, so the calendar shows its bill not seen yet", async () => {
+    const c = fresh();
+    const month = new Date(NOW.getFullYear(), NOW.getMonth(), 1);
+    const { start, end } = monthBounds(month);
+    const streams = async () =>
+      ((await c.from("recurring_streams").select("*")).data ?? []) as Array<
+        Tables<"recurring_streams">
+      >;
+    const bills = async () => {
+      const active = groupStreams(await streams(), NOW).active;
+      const { data } = await c
+        .from("transactions")
+        .select("*")
+        .gte("booking_date", start)
+        .lt("booking_date", end);
+      return billEntries(active, (data ?? []) as Array<ChargeTx>, month, NOW);
+    };
+    // An active monthly bill already paid this month, with earlier charges.
+    const s = groupStreams(await streams(), NOW).active.find(
+      (r) => r.cadence === "monthly" && r.last_charged! >= start && r.charge_count! >= 2,
+    )!;
+    const before = await bills();
+    expect(before.filter((e) => e.name === s.display_name).map((e) => e.status)).toEqual(["done"]);
+    const { data: own } = await c
+      .from("transactions")
+      .select("booking_date")
+      .eq("merchant_key", s.merchant_key!)
+      .eq("account_uid", s.account_uid!);
+    const dates = [...new Set(own!.map((t) => t.booking_date!))].sort();
+    const prev = dates[dates.length - 2]!;
+
+    await c
+      .from("transactions")
+      .update({ transaction_type: "One-time", transaction_type_source: "manual" })
+      .eq("merchant_key", s.merchant_key!)
+      .eq("booking_date", s.last_charged!);
+    await recheck(c);
+
+    const row = (await streams()).find((r) => r.id === s.id)!;
+    expect(row.last_charged).toBe(prev);
+    expect(row.next_expected).toBe(addDays(prev, 30)); // as the demo seeds a monthly stream
+    const after = await bills();
+    expect(after.length).toBe(before.length);
+    expect(after.filter((e) => e.name === s.display_name).map((e) => e.status)).toEqual(["late"]);
+  });
+
+  it("leaves every stream's dates as generated when no charge changed", async () => {
+    const c = fresh();
+    const dates = async () =>
+      (await c.from("recurring_streams").select("id,last_charged,next_expected")).data ?? [];
+    const before = await dates();
+    await recheck(c);
+    expect(await dates()).toEqual(before);
   });
 });
 

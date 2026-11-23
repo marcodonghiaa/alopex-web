@@ -668,7 +668,12 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
 }
 
 const CADENCES = ["weekly", "monthly", "quarterly", "yearly"];
-const PERIOD_DAYS: Record<string, number> = { weekly: 7, monthly: 30, quarterly: 91, yearly: 365 };
+export const PERIOD_DAYS: Record<string, number> = {
+  weekly: 7,
+  monthly: 30,
+  quarterly: 91,
+  yearly: 365,
+};
 // Two made-up merchants the detector would only suggest, due soon so they sit in "To review".
 const DEMO_SUGGESTED = [
   { name: "Sample Yoga Studio", category: "Health", amount: 39, ago: 20 },

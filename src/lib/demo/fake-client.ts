@@ -1,7 +1,7 @@
-import { formatISODate } from "@/lib/date";
+import { addDays, formatISODate } from "@/lib/date";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
-import { DEMO_USER_ID, generateDemoData, type DemoDb } from "./generate";
+import { DEMO_USER_ID, PERIOD_DAYS, generateDemoData, type DemoDb } from "./generate";
 import { demoHoldingPerformance } from "./performance";
 import { deriveViews } from "./views";
 import { onDemoExit } from "./mode";
@@ -534,7 +534,7 @@ class Store {
   // Each stream's status as generated, so one marked gone comes back when it is charged again.
   private readonly detected = new Map<unknown, unknown>();
   /** Like refresh-recurring's detector: it skips charges you set One-time yourself, so a stream
-   * left with none of its charges is gone. */
+   * left with none of its charges is gone, and one left with some is dated from those. */
   refreshStreams(): Result {
     const txs = this.db["transactions"]!;
     const streams = this.db["recurring_streams"]!;
@@ -543,12 +543,16 @@ class Store {
       const charges = txs.filter(
         (t) => t["merchant_key"] === s["merchant_key"] && t["account_uid"] === s["account_uid"],
       );
-      const allMine =
-        charges.length > 0 &&
-        charges.every(
-          (t) => t["transaction_type"] === "One-time" && t["transaction_type_source"] === "manual",
-        );
+      const counted = charges.filter(
+        (t) => !(t["transaction_type"] === "One-time" && t["transaction_type_source"] === "manual"),
+      );
+      const allMine = charges.length > 0 && counted.length === 0;
       s["detected_status"] = allMine ? "gone" : this.detected.get(s["id"]);
+      if (counted.length === 0) continue;
+      // As the demo seeds it: the newest charge left, plus one period of the stream's cadence.
+      const last = counted.map((t) => t["booking_date"] as string).sort()[counted.length - 1]!;
+      s["last_charged"] = last;
+      s["next_expected"] = addDays(last, PERIOD_DAYS[s["cadence"] as string] ?? 30);
     }
     const found = streams.filter((s) => s["detected_status"] !== "gone").length;
     return { data: { streams: found }, error: null };
