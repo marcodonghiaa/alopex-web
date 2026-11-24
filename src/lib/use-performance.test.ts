@@ -7,24 +7,17 @@ const client = (result: unknown) =>
 describe("fetchPerformance", () => {
   it("asks for the range start and passes the rows through", async () => {
     const c = client({ data: [{ key: "A" }], error: null });
-    expect(await fetchPerformance(c, "2026-09-30", false)).toEqual([{ key: "A" }]);
-    expect(c.rpc).toHaveBeenCalledWith("holding_performance", {
-      p_from: "2026-09-30",
-      p_last_move: false,
-    });
+    expect(await fetchPerformance(c, "2026-09-30")).toEqual([{ key: "A" }]);
+    expect(c.rpc).toHaveBeenCalledWith("holding_performance", { p_from: "2026-09-30" });
   });
 
   it("throws any other error", async () => {
     const error = { code: "42501", message: "permission denied" };
-    await expect(fetchPerformance(client({ data: null, error }), "2026-09-30", false)).rejects.toBe(
-      error,
-    );
+    await expect(fetchPerformance(client({ data: null, error }), "2026-09-30")).rejects.toBe(error);
   });
 
   it("no rows is an empty list", async () => {
-    expect(await fetchPerformance(client({ data: null, error: null }), "2026-09-30", true)).toEqual(
-      [],
-    );
+    expect(await fetchPerformance(client({ data: null, error: null }), "2026-09-30")).toEqual([]);
   });
 });
 
