@@ -15,8 +15,9 @@ const salary: StatementRow = {
   direction: "CRDT",
 };
 
-// Fake client: serves `existing` in pages of 1000 like PostgREST, and records each request.
-function client(existing: Array<Record<string, unknown>>, failOn?: string) {
+// Fake client: serves `existing` in pages of 1000 like PostgREST (or `cap`, a server set lower),
+// and records each request.
+function client(existing: Array<Record<string, unknown>>, failOn?: string, cap = 1000) {
   const rpc = vi.fn(async (_fn: string, args: Record<string, unknown>) =>
     args["p_description"] === failOn
       ? { data: null, error: { message: "boom" } }
@@ -34,7 +35,7 @@ function client(existing: Array<Record<string, unknown>>, failOn?: string) {
               order: () => ({
                 range: async (a: number, b: number) => {
                   requests.push({ from, to, deleted, page: [a, b] });
-                  return { data: existing.slice(a, b + 1), error: null };
+                  return { data: existing.slice(a, Math.min(b + 1, a + cap)), error: null };
                 },
               }),
             }),
@@ -54,12 +55,21 @@ const inApp = (row: StatementRow, description = row.description) => ({
 });
 
 describe("newRows", () => {
+  // H139: a server capped below 1000 rows ended the duplicate check after its first short page,
+  // so importing the same statement again added rows that were already there.
+  it("reads every page when the server caps a response below 1000 rows", async () => {
+    const existing = [...Array(600).fill(inApp(salary)), inApp(coffee)];
+    const { c } = client(existing, undefined, 500);
+    expect(await newRows(c, [coffee])).toEqual([]);
+  });
+
   it("polish-3 #13 asks the app once per date range when given a cache", async () => {
     const { c, requests } = client([inApp(coffee)]);
     const cache = new Map();
     expect(await newRows(c, [coffee, salary], cache)).toEqual([salary]);
     expect(await newRows(c, [salary, coffee], cache)).toEqual([salary]);
-    expect(requests).toHaveLength(1);
+    // One read (its first page, then the empty page that ends it), not two.
+    expect(requests).toHaveLength(2);
   });
 
   it("only treats a row as already there when the currency matches too", async () => {
@@ -89,6 +99,7 @@ describe("newRows", () => {
     expect(requests.map((r) => r.page)).toEqual([
       [0, 999],
       [1000, 1999],
+      [1001, 2000],
     ]);
   });
 });

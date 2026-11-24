@@ -15,7 +15,11 @@ vi.mock("@/integrations/supabase/client", () => ({
         is: () => ({
           gte: () => ({
             lte: () => ({
-              order: () => ({ range: () => range() }),
+              // `range` answers the first page; the next one is empty, which ends the read.
+              order: () => ({
+                range: (from: number) =>
+                  from === 0 ? range() : Promise.resolve({ data: [], error: null }),
+              }),
             }),
           }),
         }),
