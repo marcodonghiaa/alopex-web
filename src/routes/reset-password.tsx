@@ -4,7 +4,7 @@ import { KeyRound, Loader2 } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { openedFromRecoveryLink, supabase } from "@/integrations/supabase/client";
 import { exitDemoMode } from "@/lib/demo/mode";
-import { MIN_PASSWORD_LENGTH } from "@/lib/password";
+import { MIN_PASSWORD_LENGTH, passwordErrorMessage, validateNewPassword } from "@/lib/password";
 import { needsMfaCode, verifyMfaCode } from "@/lib/mfa";
 import { CodeInput } from "@/components/ui/field";
 
@@ -71,6 +71,8 @@ export function ResetPasswordPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const invalid = validateNewPassword(password);
+    if (invalid) return setError(invalid);
     setError(null);
     setPending(true);
     try {
@@ -82,7 +84,7 @@ export function ResetPasswordPage() {
       if (updateError) throw updateError;
       await navigate({ to: "/", replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save the new password");
+      setError(passwordErrorMessage(err));
     } finally {
       setPending(false);
     }

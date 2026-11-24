@@ -162,6 +162,35 @@ describe("ResetPasswordPage", () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
+  // H140: the reset page uses the same rule and words as Settings > Change password.
+  it("words Supabase's weak-password refusal like Settings does", async () => {
+    session = { user: { id: "u" } };
+    updateError = Object.assign(new Error("Password is known to be weak"), {
+      code: "weak_password",
+    });
+    render(<ResetPasswordPage />);
+    fireEvent.change(await screen.findByLabelText("New password"), {
+      target: { value: "password123" },
+    });
+    const save = screen.getByRole("button", { name: "Save and sign in" });
+    await waitFor(() => expect(save).toHaveProperty("disabled", false));
+    fireEvent.click(save);
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "That password is too easy to guess. Try a longer or less common one.",
+    );
+  });
+
+  it("refuses a too-short password before sending it", async () => {
+    session = { user: { id: "u" } };
+    render(<ResetPasswordPage />);
+    fireEvent.change(await screen.findByLabelText("New password"), { target: { value: "short" } });
+    const save = screen.getByRole("button", { name: "Save and sign in" });
+    await waitFor(() => expect(save).toHaveProperty("disabled", false));
+    fireEvent.submit(save.closest("form")!);
+    expect((await screen.findByRole("alert")).textContent).toBe("Use at least 8 characters.");
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
   // Regression: any signed-in tab got the form, so someone at an unlocked laptop could set a new
   // password without knowing the current one.
   it("hides the form for a tab that was signed in without a recovery link", async () => {
