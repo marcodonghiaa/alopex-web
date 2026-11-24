@@ -135,6 +135,19 @@ describe("debts", () => {
     expect(document.querySelector(".figure-display")?.textContent).toBe("€1,050.00");
   });
 
+  // Review of H098: a bank's share used every sub-account, so a stale pocket pushed it past 100%.
+  it("works out a bank's share from the balances in the total only", async () => {
+    const old = new Date(Date.now() - 40 * 86_400_000).toISOString().slice(0, 10);
+    rows.v_bank_accounts_latest = [
+      account({}),
+      account({ uid: "u1", currency: "USD", amount: 1000, amount_eur: 1000, snapshot_date: old }),
+    ];
+    renderPage();
+    await screen.findByText("Demo Bank");
+    expect(screen.queryByText(/^200(\.0)?%$/)).toBeNull();
+    expect(screen.getByText(/^100(\.0)?%$/)).toBeInTheDocument();
+  });
+
   // protects=balances come first; setup is a quiet last row (#13);
   // fails_when=Connect a bank or Add a debt sits above the accounts again
   const follows = (a: Element, b: Element) =>
