@@ -79,6 +79,13 @@ describe("parseAmount, as banks write it", () => {
     expect(parseAmount("1.234.5", ",")).toBeNull();
     expect(parseAmount("12,50 €-", ".")).toBeNull();
   });
+
+  it("refuses a leading-zero thousands group, never reading 0,125 as 125", () => {
+    expect(parseAmount("0,125", ".")).toBeNull();
+    expect(parseAmount("0.125", ",")).toBeNull();
+    expect(parseAmount("0.125", ".")).toBe(0.125);
+    expect(parseAmount("1,125", ".")).toBe(1125);
+  });
 });
 
 describe("parseAmount, unreadable signs", () => {
