@@ -314,7 +314,7 @@ export function useDeleteMutation(queryClient: QueryClient, onDone: () => void) 
     mutationFn: ({ txs, deleted }: { txs: Array<TxKey>; deleted: boolean }) =>
       updateTxs(txs, { deleted_at: deleted ? new Date().toISOString() : null }),
     onSuccess: (_data, vars) => {
-      void queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      refetchFlows(queryClient);
       if (!vars.deleted) return;
       onDone();
       toast.success(`Deleted ${vars.txs.length} transaction${vars.txs.length === 1 ? "" : "s"}`, {

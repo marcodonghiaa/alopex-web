@@ -689,6 +689,22 @@ describe("transaction mutations are scoped to one account", () => {
     expect(calls[0]!.update).toEqual({ deleted_at: null });
   });
 
+  // H147: deleting refreshed only the list, so the month's In/Out header still counted the row.
+  it("delete and undo refresh the In/Out header and other totals", async () => {
+    const { queryClient, wrapper } = setup();
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const { result } = renderHook(() => useDeleteMutation(queryClient, vi.fn()), { wrapper });
+    const tx = { account_uid: "a1", entry_reference: "r1" };
+    act(() => result.current.mutate({ txs: [tx], deleted: true }));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["income-vs-expenses"] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["cash-flow"] });
+
+    invalidate.mockClear();
+    await act(() => result.current.mutateAsync({ txs: [tx], deleted: false }));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["income-vs-expenses"] });
+  });
+
   it("rename calls rename_merchant and refetches every month", async () => {
     rpc.mockResolvedValue({ data: 3, error: null });
     const { queryClient, wrapper } = setup();
