@@ -282,7 +282,7 @@ function TransactionEditSheet({
           {!share && tx.worth_it != null && (
             <GroupedList>
               <Field label="Worth it">
-                <WorthItPrompt tx={tx} onAnswer={p.onAnswerWorthIt} />
+                <WorthItPrompt tx={tx} />
               </Field>
             </GroupedList>
           )}

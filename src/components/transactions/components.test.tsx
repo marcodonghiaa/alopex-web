@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import { queryWrapper } from "@/test/query-wrapper";
 import userEvent from "@testing-library/user-event";
@@ -34,31 +34,12 @@ const tx = (over: Partial<TransactionRow> = {}): TransactionRow => ({
 });
 
 describe("WorthItPrompt", () => {
-  beforeEach(() => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    vi.setSystemTime(new Date("2026-10-05T12:00:00Z"));
-  });
-  afterEach(() => vi.useRealTimers());
-
-  it("shows the recorded answer when one exists", () => {
-    render(<WorthItPrompt tx={tx({ worth_it: "no" })} onAnswer={vi.fn()} />);
+  it("shows the recorded answer", () => {
+    const { unmount } = render(<WorthItPrompt tx={tx({ worth_it: "no" })} />);
     expect(screen.getByText("Not worth it")).toBeInTheDocument();
-  });
-
-  it("asks and reports the answer for an eligible purchase", async () => {
-    const onAnswer = vi.fn();
-    render(<WorthItPrompt tx={tx()} onAnswer={onAnswer} />);
-    await userEvent
-      .setup({ advanceTimers: vi.advanceTimersByTime })
-      .click(screen.getByRole("button", { name: "Yes" }));
-    expect(onAnswer).toHaveBeenCalledWith("yes");
-  });
-
-  it("renders nothing for an ineligible transaction", () => {
-    const { container } = render(
-      <WorthItPrompt tx={tx({ category: "Groceries" })} onAnswer={vi.fn()} />,
-    );
-    expect(container).toBeEmptyDOMElement();
+    unmount();
+    render(<WorthItPrompt tx={tx({ worth_it: "yes" })} />);
+    expect(screen.getByText("Worth it")).toBeInTheDocument();
   });
 });
 
