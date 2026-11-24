@@ -253,10 +253,16 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
   const rules = useQuery(rulesQuery).data;
   const ruleAction = (name: string | null | undefined, category: string | null) =>
     makeRuleAction(name, category, navigate, rules);
+  // Rules match the bank's own name. No bank name (a manual or broker row): no rule can match it.
+  // A database without the bank_creditor_name column yet: the shown name, as before.
+  const ruleName = (tx: {
+    creditor_name?: string | null | undefined;
+    bank_creditor_name?: string | null | undefined;
+  }) => (tx.bank_creditor_name === undefined ? tx.creditor_name : tx.bank_creditor_name);
   const updateCategory = useTransactionFieldMutation(queryClient, listKey, "category", {
     errorMessage: "Couldn't save category",
     successMessage: (value) => `Saved — ${value}`,
-    successAction: ({ tx, value }) => ruleAction(tx.bank_creditor_name ?? tx.creditor_name, value),
+    successAction: ({ tx, value }) => ruleAction(ruleName(tx), value),
   });
 
   // A type decides what counts as a subscription: re-check them so the nav badge follows.
@@ -621,9 +627,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
         : renameTx.mutate({ tx, name, onlyThis }),
     highlighted: tx.entry_reference === highlightRef,
     // In the sheet too: on a phone the open sheet covers the toast's button.
-    makeRule: isSplitwiseShare(tx)
-      ? undefined
-      : ruleAction(tx.bank_creditor_name ?? tx.creditor_name, tx.category),
+    makeRule: isSplitwiseShare(tx) ? undefined : ruleAction(ruleName(tx), tx.category),
     showAccount: multiAccount,
     // false when the save failed (the hook already showed why), so the editor can retry or roll back.
     onSaveNote: (note) =>

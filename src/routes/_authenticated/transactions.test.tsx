@@ -244,6 +244,18 @@ describe("Make a rule in the transaction sheet", () => {
     );
   });
 
+  // Batch H review: with no bank name (a manual or broker row) a rule could never match it.
+  it("leaves it out when the bank sent no name", async () => {
+    rows["v_transactions_eur"] = [
+      { ...bankRow, creditor_name: "Broker buy", bank_creditor_name: null },
+    ];
+    renderPage();
+    const sheet = await openSheet(/Broker buy/);
+    await waitFor(() =>
+      expect(within(sheet).queryByRole("button", { name: "Make a rule" })).toBeNull(),
+    );
+  });
+
   it("leaves it out for a Splitwise share", async () => {
     rows["v_splitwise_eur"] = [
       {
