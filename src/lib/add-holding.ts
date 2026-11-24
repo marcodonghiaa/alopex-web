@@ -1,24 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
-import { functionErrorBody } from "@/lib/function-error";
+import { functionErrorBody, functionErrorMessage } from "@/lib/function-error";
 
 /** add-holding's 409 `already_held`: you hold this security already, under `key`. */
 export class AlreadyHeld extends Error {
   constructor(readonly key: string) {
     super("Already in your holdings: change its quantity instead");
   }
-}
-
-// add-holding answers errors as { error } with a 4xx/5xx; supabase-js wraps that in a generic
-// message, so read the body to show the real reason.
-async function functionError(error: unknown, fallback: string): Promise<string> {
-  const context = (error as { context?: Response }).context;
-  try {
-    const body = (await context?.json()) as { error?: string } | undefined;
-    if (body?.error) return body.error;
-  } catch {
-    // Not JSON: fall through.
-  }
-  return fallback;
 }
 
 /** The add-holding Edge Function: search for an investment or a coin, or add one. */
@@ -31,7 +18,7 @@ export async function callAddHolding<T>(
     const body = (await functionErrorBody(error)) as { error?: unknown; key?: unknown } | null;
     if (body?.error === "already_held" && typeof body.key === "string")
       throw new AlreadyHeld(body.key);
-    throw new Error(await functionError(error, fallback));
+    throw new Error(await functionErrorMessage(error, fallback));
   }
   if (!data) throw new Error(fallback);
   return data;
