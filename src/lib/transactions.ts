@@ -8,6 +8,8 @@ export interface TransactionRow {
   category: string | null;
   transaction_type: string | null;
   creditor_name: string | null;
+  /** The name the bank sent, before a rename: what rules match. creditor_name is the shown one. */
+  bank_creditor_name?: string | null;
   currency: string | null;
   amount: number | null;
   signed_amount_eur: number | null;

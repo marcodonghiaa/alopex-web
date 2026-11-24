@@ -78,7 +78,7 @@ function forTx<Q extends { eq: (c: string, v: string) => Q; is: (c: string, v: n
 // on one transaction, with optimistic cache update + rollback. (Renames go through
 // useRenameMerchantMutation, which renames the merchant's other rows too.)
 // The row being edited; its name feeds a success action such as "Make a rule".
-type MutatedTx = TxKey & Partial<Pick<TransactionRow, "creditor_name">>;
+type MutatedTx = TxKey & Partial<Pick<TransactionRow, "creditor_name" | "bank_creditor_name">>;
 
 export function useTransactionFieldMutation<
   K extends "category" | "transaction_type" | "worth_it" | "note" | "tags",

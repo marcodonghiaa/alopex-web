@@ -209,6 +209,41 @@ describe("Make a rule in the transaction sheet", () => {
     );
   });
 
+  // H142: rules match the bank's name, so a rule made from a renamed row ("Amazon") never matched.
+  // fails_when=Make a rule fills in or checks the shown name instead of bank_creditor_name
+  it("fills in the bank's name, not the name the row was renamed to", async () => {
+    rows["v_transactions_eur"] = [
+      { ...bankRow, creditor_name: "Amazon", bank_creditor_name: "AMZN Mktp DE*123" },
+    ];
+    renderPage();
+    const sheet = await openSheet(/Amazon/);
+    await userEvent.click(within(sheet).getByRole("button", { name: "Make a rule" }));
+    expect(navigate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ search: { text: "AMZN Mktp DE*123", category: "Shopping" } }),
+    );
+  });
+
+  it("leaves it out when a rule already sorts the bank's name of a renamed row", async () => {
+    rows["v_transactions_eur"] = [
+      { ...bankRow, creditor_name: "Amazon", bank_creditor_name: "AMZN Mktp DE*123" },
+    ];
+    rows["category_rules"] = [
+      {
+        id: "r1",
+        match_field: "creditor_name",
+        match_text: "AMZN",
+        match_mode: "word",
+        set_category: "Shopping",
+        priority: 100,
+      },
+    ];
+    renderPage();
+    const sheet = await openSheet(/Amazon/);
+    await waitFor(() =>
+      expect(within(sheet).queryByRole("button", { name: "Make a rule" })).toBeNull(),
+    );
+  });
+
   it("leaves it out for a Splitwise share", async () => {
     rows["v_splitwise_eur"] = [
       {

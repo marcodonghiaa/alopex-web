@@ -1358,6 +1358,7 @@ export type Database = {
         Row: {
           account_uid: string | null;
           amount: number | null;
+          bank_creditor_name: string | null;
           booking_date: string | null;
           category: string | null;
           created_at: string | null;
