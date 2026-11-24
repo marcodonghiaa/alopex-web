@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render } from "@testing-library/react";
-import { isVerticalSwipe, latestDot, ValueChart } from "./value-chart";
+import { isVerticalSwipe, latestDot, startValue, ValueChart } from "./value-chart";
 
 // jsdom has no layout (nor ResizeObserver): the chart itself isn't needed, only its wrapper.
 vi.mock("recharts", async (importOriginal) => ({
@@ -54,5 +54,20 @@ describe("isVerticalSwipe", () => {
   });
   it("stays a scroll once decided", () => {
     expect(isVerticalSwipe({ ...at, scroll: true }, 300, 100)).toBe(true);
+  });
+});
+
+// Whiteboard (2026-11-24): the chart looked bare. A faint baseline marks where the range started.
+// fails_when=the baseline sits on a missing first day, or shows with nothing to compare
+describe("startValue", () => {
+  const row = (v: number | null) => ({ ts: 1, snapshot_date: "2026-01-01", v });
+  it("is the first day that has a value", () => {
+    expect(startValue([row(null), row(10), row(20)], "v")).toBe(10);
+  });
+  it("is nothing for an empty range", () => {
+    expect(startValue([], "v")).toBeUndefined();
+  });
+  it("is nothing when no day has a value", () => {
+    expect(startValue([row(null)], "v")).toBeUndefined();
   });
 });
