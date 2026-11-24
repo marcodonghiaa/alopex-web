@@ -133,6 +133,17 @@ function makeFilter(op: string, col: string, v: unknown): Filter {
       return (r) => (v as Array<unknown>).includes(r[col]);
     case "is":
       return (r) => (v === null ? r[col] == null : r[col] === v);
+    case "ilike": {
+      // `*` or `%` any run, `_` any one character, case-insensitive (as PostgREST's ilike).
+      const body = String(v)
+        .split("")
+        .map((c) =>
+          c === "*" || c === "%" ? ".*" : c === "_" ? "." : c.replace(/[.+?^${}()|[\]\\]/g, "\\$&"),
+        )
+        .join("");
+      const re = new RegExp(`^${body}$`, "is");
+      return (r) => r[col] != null && re.test(String(r[col]));
+    }
     default:
       throw new Error(`Demo client: unsupported filter "${op}"`);
   }
@@ -921,6 +932,9 @@ class Query implements PromiseLike<Result> {
   }
   is(c: string, v: unknown) {
     return this.where("is", c, v);
+  }
+  ilike(c: string, v: string) {
+    return this.where("ilike", c, v);
   }
   not(c: string, op: string, v: unknown) {
     const f = makeFilter(op, c, v);

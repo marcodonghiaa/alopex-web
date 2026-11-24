@@ -19,8 +19,8 @@ export interface FilterSheetProps {
   tags: Array<string>;
   day: string;
   onDay: (day: string) => void;
-  minDay: string;
-  maxDay: string;
+  minDay?: string | undefined;
+  maxDay?: string | undefined;
   /** Filters set (search not counted), shown on the button. */
   count: number;
   /** Rows the current filters leave, for the sheet's done button. */
