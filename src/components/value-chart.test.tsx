@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render } from "@testing-library/react";
-import { latestDot, ValueChart } from "./value-chart";
+import { isVerticalSwipe, latestDot, ValueChart } from "./value-chart";
 
 // jsdom has no layout (nor ResizeObserver): the chart itself isn't needed, only its wrapper.
 vi.mock("recharts", async (importOriginal) => ({
@@ -36,5 +36,23 @@ describe("ValueChart", () => {
     );
     fireEvent[event](container.firstElementChild!);
     expect(onScrub).toHaveBeenCalledWith(null);
+  });
+});
+
+// Marco's phone recording (2026-11-24): scrolling the page across the chart scrubbed it.
+// fails_when=an up/down finger counts as a scrub
+describe("isVerticalSwipe", () => {
+  const at = { x: 100, y: 100, scroll: false };
+  it("is a scroll when the finger moves more up/down than sideways", () => {
+    expect(isVerticalSwipe(at, 103, 130)).toBe(true);
+  });
+  it("is a scrub when it moves sideways", () => {
+    expect(isVerticalSwipe(at, 160, 120)).toBe(false);
+  });
+  it("waits for a few pixels before deciding", () => {
+    expect(isVerticalSwipe(at, 100, 104)).toBe(false);
+  });
+  it("stays a scroll once decided", () => {
+    expect(isVerticalSwipe({ ...at, scroll: true }, 300, 100)).toBe(true);
   });
 });

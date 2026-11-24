@@ -8,6 +8,7 @@ import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCloseOnBack } from "./close-on-back";
 import { rememberOpener, returnFocus } from "./return-focus";
+import { useSwipeToDismiss } from "./swipe-to-dismiss";
 
 // The sides of the sheets on screen, newest last, so the toaster can keep out of their way.
 type Side = NonNullable<VariantProps<typeof sheetVariants>["side"]>;
@@ -60,8 +61,9 @@ const sheetVariants = cva(
     variants: {
       side: {
         top: "inset-x-0 top-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
+        // overscroll-contain: scrolling past the sheet's end must not move the page behind it.
         bottom:
-          "inset-x-0 bottom-0 border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
+          "inset-x-0 bottom-0 border-t overscroll-contain data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
         left: "inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
         right:
           "inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
@@ -92,6 +94,18 @@ function OnScreen({ side, opener }: { side: Side; opener: React.RefObject<Elemen
   return null;
 }
 
+// Mounted with the sheet, so the swipe listens on the sheet that is on screen now.
+function SwipeDown({
+  sheet,
+  close,
+}: {
+  sheet: React.RefObject<HTMLElement | null>;
+  close: React.RefObject<HTMLButtonElement | null>;
+}) {
+  useSwipeToDismiss(sheet, true, () => close.current?.click());
+  return null;
+}
+
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
@@ -101,11 +115,21 @@ const SheetContent = React.forwardRef<
     ref,
   ) => {
     const opener = React.useRef<Element | null>(null);
+    const sheet = React.useRef<HTMLDivElement | null>(null);
+    const close = React.useRef<HTMLButtonElement | null>(null);
+    const setRefs = React.useCallback(
+      (node: HTMLDivElement | null) => {
+        sheet.current = node;
+        if (typeof ref === "function") ref(node);
+        else if (ref) ref.current = node;
+      },
+      [ref],
+    );
     return (
       <SheetPortal>
         <SheetOverlay />
         <SheetPrimitive.Content
-          ref={ref}
+          ref={setRefs}
           className={cn(sheetVariants({ side }), className)}
           onPointerDownOutside={(e) => {
             // A toast shown over the sheet isn't a click outside: touching it must not close the sheet.
@@ -117,7 +141,11 @@ const SheetContent = React.forwardRef<
           {...props}
         >
           <OnScreen side={side ?? "right"} opener={opener} />
-          <SheetPrimitive.Close className="absolute right-1 top-1 z-10 flex size-11 items-center justify-center rounded-sm opacity-70 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
+          {side === "bottom" && <SwipeDown sheet={sheet} close={close} />}
+          <SheetPrimitive.Close
+            ref={close}
+            className="absolute right-1 top-1 z-10 flex size-11 items-center justify-center rounded-sm opacity-70 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary"
+          >
             <X className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </SheetPrimitive.Close>
