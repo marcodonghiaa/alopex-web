@@ -6,27 +6,31 @@ const rpc = vi.fn();
 const invoke = vi.fn();
 let existing: Array<object> = [];
 let range = async () => ({ data: existing, error: null });
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {
-    rpc: (...args: unknown[]) => rpc(...args),
-    functions: { invoke: (...args: unknown[]) => invoke(...args) },
-    from: () => ({
-      select: () => ({
-        is: () => ({
-          gte: () => ({
-            lte: () => ({
-              // `range` answers the first page; the next one is empty, which ends the read.
-              order: () => ({
-                range: (from: number) =>
-                  from === 0 ? range() : Promise.resolve({ data: [], error: null }),
+vi.mock("@/integrations/supabase/client", () => {
+  // Any number of order() calls, then `range` answers the first page; the next one is empty,
+  // which ends the read.
+  const ordered: object = {
+    order: () => ordered,
+    range: (from: number) => (from === 0 ? range() : Promise.resolve({ data: [], error: null })),
+  };
+  return {
+    supabase: {
+      rpc: (...args: unknown[]) => rpc(...args),
+      functions: { invoke: (...args: unknown[]) => invoke(...args) },
+      from: () => ({
+        select: () => ({
+          is: () => ({
+            gte: () => ({
+              lte: () => ({
+                order: () => ordered,
               }),
             }),
           }),
         }),
       }),
-    }),
-  },
-}));
+    },
+  };
+});
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { ImportStatement } from "./import-statement";
