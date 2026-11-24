@@ -6,7 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { CategoryTable } from "@/components/import/splitwise-category-table";
 import { FindInBank } from "@/components/import/find-in-bank";
 import { CTA, Group, LINK, PRIMARY, Steps, TINTED } from "@/components/import/splitwise-ui";
-import { money as amount, shortDate, moneyAmount } from "@/lib/import/splitwise-format";
+import { moneyFromCents as amount, shortDate, moneyAmount } from "@/lib/import/splitwise-format";
 import type { ClassifiedRow } from "@/lib/import/splitwise-classify";
 import { refreshKeys } from "@/lib/import/last-import";
 import { IMPORT_KEY, runSplitwiseImport, type RpcClient } from "@/lib/import/splitwise-commit";

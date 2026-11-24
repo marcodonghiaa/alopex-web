@@ -5,7 +5,7 @@ import { readCsvFile } from "@/lib/import/parse-csv";
 import { readPages } from "@/lib/read-pages";
 import { SplitwiseReview, type ImportDone } from "@/components/import/splitwise-review";
 import { CTA, Group, LINK, Steps } from "@/components/import/splitwise-ui";
-import { money as amount } from "@/lib/import/splitwise-format";
+import { moneyFromCents as amount } from "@/lib/import/splitwise-format";
 import { balancesFromFile } from "@/lib/import/splitwise-balances";
 import { classifyRows, summarize } from "@/lib/import/splitwise-classify";
 import { groupNames, newGroupProblem, type StoredGroupRow } from "@/lib/import/splitwise-group";

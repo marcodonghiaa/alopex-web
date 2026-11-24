@@ -10,7 +10,7 @@ import { isDemoMode } from "@/lib/demo/mode";
 import { cn } from "@/lib/utils";
 import { txId, type TxKey } from "@/lib/transactions";
 import { PENDING } from "./pending";
-import { moneyAmount, money, shortDate } from "@/lib/import/splitwise-format";
+import { moneyAmount, moneyFromCents, shortDate } from "@/lib/import/splitwise-format";
 import {
   canCount,
   directionOf,
@@ -303,7 +303,7 @@ function ReviewRow({
           <span className="shrink-0 text-right">
             <span className="block font-figure">
               {out ? "−" : "+"}
-              {money(tx.amountCents, tx.currency)}
+              {moneyFromCents(tx.amountCents, tx.currency)}
             </span>
             <span className="block font-figure text-xs text-muted-foreground">
               {shortDate(tx.bookingDate)}
