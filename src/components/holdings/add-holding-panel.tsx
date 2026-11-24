@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { invalidateHoldings } from "@/lib/holding-quantity";
 
-export type HoldingKind = "stock" | "crypto";
+type HoldingKind = "stock" | "crypto";
 
 interface Candidate {
   id: string;
