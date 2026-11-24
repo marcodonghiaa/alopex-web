@@ -391,7 +391,8 @@ function SubscriptionsPage() {
           )}
 
           {/* The first-run empty state only when nothing at all is listed; otherwise a plain line. */}
-          {!query.isPending &&
+          {/* Not on a failed load: the alert says it failed, not that there are none. */}
+          {query.data !== undefined &&
             active.length === 0 &&
             (toReview.length + stopped.length + dismissed.length === 0 ? (
               <EmptyState

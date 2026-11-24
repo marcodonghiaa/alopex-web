@@ -187,9 +187,10 @@ function SpendingPage() {
         canGoNext={canGoNext}
       />
 
+      {/* A failed load shows only the alert above: no spending is not the same as no data. */}
       {spendQuery.isPending ? (
         <Skeleton className="h-80" />
-      ) : rows.length === 0 ? (
+      ) : spendQuery.data === undefined ? null : rows.length === 0 ? (
         <EmptyState
           title={`No spending recorded for ${monthLabel}.`}
           action={

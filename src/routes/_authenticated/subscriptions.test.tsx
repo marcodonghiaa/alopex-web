@@ -454,6 +454,9 @@ describe("Subscriptions page", () => {
     db.error = new Error("boom");
     renderPage();
     expect(await screen.findByRole("alert")).toHaveTextContent("boom");
+    // H128: the failed load also said "No subscription charges found yet." as if there were none.
+    expect(screen.queryByText(/No subscription charges found yet/)).toBeNull();
+    expect(screen.queryByText(/No active subscriptions/)).toBeNull();
   });
 
   it("shows the pencil only for a manual cadence, not after plain Confirm", async () => {
