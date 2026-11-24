@@ -58,3 +58,16 @@ export const isDay = (s: string): boolean =>
   /^\d{4}-\d{2}-\d{2}$/.test(s) &&
   !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) &&
   addDays(s, 0) === s;
+
+/**
+ * Whether an account's last balance still counts toward the totals. A bank balance not updated
+ * for 30 days (a bank left unlinked) drops out, like v_net_worth_daily does; a balance typed in
+ * by hand always counts (H098).
+ */
+export function countsInTotal(
+  a: { manual?: boolean | null; snapshot_date: string | null },
+  today: string,
+): boolean {
+  if (a.manual) return true;
+  return !!a.snapshot_date && a.snapshot_date > addDays(today, -31);
+}

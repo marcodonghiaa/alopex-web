@@ -50,7 +50,7 @@ describe("debts", () => {
     label: "Demo Bank Current",
     iban: null,
     currency: "EUR",
-    snapshot_date: "2026-10-19",
+    snapshot_date: new Date().toISOString().slice(0, 10),
     amount: 1000,
     amount_eur: 1000,
     consent_valid_until: null,
@@ -103,6 +103,49 @@ describe("debts", () => {
     // Bank accounts keep only the cash account.
     expect(screen.getAllByText("€1,000.00").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Add a debt" })).toBeInTheDocument();
+  });
+
+  // H098/H111: net worth drops a bank balance not updated for 30 days (a bank left unlinked),
+  // but this page still added it, so the two totals disagreed.
+  it("leaves a bank balance older than 30 days out of the total, and says so", async () => {
+    const old = new Date(Date.now() - 40 * 86_400_000).toISOString().slice(0, 10);
+    rows.v_bank_accounts_latest = [
+      account({}),
+      account({
+        uid: "o1",
+        label: "Old Bank",
+        bank_name: "Old Bank",
+        amount: 250,
+        amount_eur: 250,
+        snapshot_date: old,
+      }),
+      account({
+        uid: "m1",
+        label: "Cash box",
+        bank_name: "Cash box",
+        manual: true,
+        amount: 50,
+        amount_eur: 50,
+        snapshot_date: old,
+      }),
+    ];
+    renderPage();
+    expect(await screen.findByText(/not in total/)).toBeInTheDocument();
+    expect(screen.getAllByText(/not in total/)).toHaveLength(1); // a manual balance always counts
+    expect(document.querySelector(".figure-display")?.textContent).toBe("€1,050.00");
+  });
+
+  // Review of H098: a bank's share used every sub-account, so a stale pocket pushed it past 100%.
+  it("works out a bank's share from the balances in the total only", async () => {
+    const old = new Date(Date.now() - 40 * 86_400_000).toISOString().slice(0, 10);
+    rows.v_bank_accounts_latest = [
+      account({}),
+      account({ uid: "u1", currency: "USD", amount: 1000, amount_eur: 1000, snapshot_date: old }),
+    ];
+    renderPage();
+    await screen.findByText("Demo Bank");
+    expect(screen.queryByText(/^200(\.0)?%$/)).toBeNull();
+    expect(screen.getByText(/^100(\.0)?%$/)).toBeInTheDocument();
   });
 
   // protects=balances come first; setup is a quiet last row (#13);

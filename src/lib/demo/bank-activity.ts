@@ -331,7 +331,9 @@ export function buildSubscriptions(
 ): DemoDb["v_subscriptions"] {
   const byName = new Map<string, Array<Tx>>();
   for (const t of txs) {
+    // Like the real view: money out only, and a refunded charge is not a subscription payment.
     if (t.transaction_type !== "Subscription" || t.deleted_at || !t.creditor_name) continue;
+    if (t.credit_debit_indicator !== "DBIT" || t.flow_type === "refunded") continue;
     byName.set(t.creditor_name, [...(byName.get(t.creditor_name) ?? []), t]);
   }
   return [...byName.entries()].flatMap(([name, charges]) => {
@@ -345,6 +347,8 @@ export function buildSubscriptions(
     const days = custom
       ? o.custom_interval_value! * (UNIT_DAYS[o.custom_interval_unit!] ?? 30)
       : (FREQUENCY_DAYS[frequency] ?? 30);
+    // My share (unsplit: all of it), signed: a cost, so negative.
+    const signed = signedEur({ ...latest, amount: latest.personal_amount ?? latest.amount });
     return [
       {
         amount: latest.amount,
@@ -353,19 +357,23 @@ export function buildSubscriptions(
         category: latest.category,
         charge_count: charges.length,
         creditor_name: name,
-        currency: "EUR",
+        currency: latest.currency,
         custom_interval_unit: o?.custom_interval_unit ?? null,
         custom_interval_value: o?.custom_interval_value ?? null,
         interval_days: days,
         last_charged: latest.booking_date,
-        // A cost, so negative, like the real view (its signed amount divided by the frequency).
-        monthly_equivalent_eur: -round2((latest.amount * 30) / days),
-        signed_amount_eur: -latest.amount,
+        // Like the real view: its signed amount divided by the frequency.
+        monthly_equivalent_eur: round2((signed * 30) / days),
+        signed_amount_eur: signed,
         user_id: DEMO_USER_ID,
       },
     ];
   });
 }
+
+// Like the real view: spend is my share of money out on a row flagged spend.
+const isMySpend = (t: DemoDb["v_transactions_eur"][number]) =>
+  t.flow_type === "spend" && (t.personal_signed_amount_eur ?? 0) < 0;
 
 // Like the real views: my Splitwise shares count as spend, imported history only fills the
 // months that have no live bank spend, and a month's expenses are its category spend.
@@ -379,19 +387,20 @@ export function buildMonthly(
   for (const t of view) {
     const month = monthStart(t.booking_date!);
     const cell = byMonth.get(month) ?? { income: 0, expenses: 0 };
-    if (t.flow_type === "income") cell.income += Math.abs(t.signed_amount_eur!);
-    if (t.flow_type === "spend") {
-      const mine = Math.abs(t.personal_signed_amount_eur ?? t.signed_amount_eur!);
-      const key = `${month}|${t.category}`;
-      const row = spendByKey.get(key) ?? { month, category: t.category!, spend: 0 };
-      row.spend += mine;
+    // Like the real view: my share of money in only.
+    const mineIn = t.personal_signed_amount_eur ?? 0;
+    if (t.flow_type === "income" && mineIn > 0) cell.income += mineIn;
+    if (isMySpend(t)) {
+      const category = t.category ?? "Uncategorized";
+      const key = `${month}|${category}`;
+      const row = spendByKey.get(key) ?? { month, category, spend: 0 };
+      row.spend -= t.personal_signed_amount_eur!;
       spendByKey.set(key, row);
     }
     byMonth.set(month, cell);
   }
-  const spendMonths = new Set(
-    view.filter((t) => t.flow_type === "spend").map((t) => monthStart(t.booking_date!)),
-  );
+  // An imported month gives way only to spend counted above, like the real view.
+  const spendMonths = new Set(view.filter(isMySpend).map((t) => monthStart(t.booking_date!)));
   const addSpend = (month: string, category: string, amount: number) => {
     const key = `${month}|${category}`;
     const row = spendByKey.get(key) ?? { month, category, spend: 0 };

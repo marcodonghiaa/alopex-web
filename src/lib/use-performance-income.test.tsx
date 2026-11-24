@@ -72,4 +72,31 @@ describe("usePerformance income", () => {
     await waitFor(() => expect(result.current.isPending).toBe(false));
     expect(result.current.measuredByKey.get("K")).toMatchObject({ state: "ok", gain: 25 });
   });
+
+  // H155: with no value history yet (or it failed to load), returns still load instead of "…".
+  it("loads returns even when there is no value history yet", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => usePerformance(undefined, "stock"), { wrapper });
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    expect(result.current.measuredByKey.get("K")).toMatchObject({ state: "ok", gain: 25 });
+  });
+
+  // Review of H155: when the history arrives the key changes; returns must not flash back to "…".
+  it("keeps the returns shown while the value history arrives", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result, rerender } = renderHook(
+      ({ last }: { last: string | undefined }) => usePerformance(last, "stock"),
+      { wrapper, initialProps: { last: undefined as string | undefined } },
+    );
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    rerender({ last: "2026-11-16" });
+    expect(result.current.isPending).toBe(false);
+    expect(result.current.measuredByKey.get("K")).toMatchObject({ state: "ok", gain: 25 });
+  });
 });

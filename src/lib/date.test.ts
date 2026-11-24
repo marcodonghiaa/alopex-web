@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asOf, axisDateFormatter, addDays, isDay } from "./date";
+import { asOf, axisDateFormatter, addDays, countsInTotal, isDay } from "./date";
 
 describe("axisDateFormatter", () => {
   it("shows day and month on a short range, so daily ticks stay distinct", () => {
@@ -56,5 +56,15 @@ describe("isDay", () => {
       "2026-01-05T08",
     ])
       expect(isDay(d)).toBe(false);
+  });
+});
+
+describe("countsInTotal", () => {
+  it("keeps bank balances up to 30 days old and every manual one, like net worth", () => {
+    const today = "2026-11-24";
+    expect(countsInTotal({ manual: false, snapshot_date: "2026-10-25" }, today)).toBe(true);
+    expect(countsInTotal({ manual: false, snapshot_date: "2026-10-24" }, today)).toBe(false);
+    expect(countsInTotal({ manual: false, snapshot_date: null }, today)).toBe(false);
+    expect(countsInTotal({ manual: true, snapshot_date: "2025-01-01" }, today)).toBe(true);
   });
 });

@@ -381,6 +381,24 @@ describe("allocationHistory", () => {
     expect(rows[1]).toMatchObject({ stocks_eur: 70, bonds_eur: 10, cash_eur: 20, crypto_eur: 0 });
   });
 
+  // H156: the chart skipped the first live days that held bank balances only, but the Breakdown
+  // did not, so on those days it showed stocks at 0 next to a chart point that still had them.
+  it("skips the same partial first live days as the chart", () => {
+    const bankOnly = (d: string) => ({
+      snapshot_date: d,
+      total_eur: 1100,
+      bank_total_eur: 1100,
+      portfolio_total_eur: 0,
+      crypto_total_eur: 0,
+    });
+    const snapshots = [bankOnly("2026-10-25"), bankOnly("2026-10-26"), live("2026-11-01")];
+    const rebuilt = [rec("2026-09-30"), { ...rec("2026-10-24"), cash_eur: 1100 }];
+    const chart = withHistory([], snapshots, undefined, rebuilt).map((r) => r.snapshot_date);
+    const alloc = allocationHistory([], snapshots, undefined, rebuilt).map((r) => r.snapshot_date);
+    expect(alloc).toEqual(chart);
+    expect(alloc).not.toContain("2026-10-25");
+  });
+
   it("uses rebuilt months when there are no snapshots at all", () => {
     const rows = allocationHistory([], [], undefined, [rec("2026-08-31")]);
     expect(rows.map((r) => r.snapshot_date)).toEqual(["2026-08-31"]);

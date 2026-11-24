@@ -1,4 +1,4 @@
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQueries, useQuery } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -85,12 +85,16 @@ export async function fetchEvents(client: SupabaseClient<Database>): Promise<Arr
 // Every holding's latest price: total return has no range, so any early date will do.
 const EARLIEST = "1970-01-01";
 
-/** Total return from your trades. `lastIso` is the latest data day; refetches when it moves. */
+/**
+ * Total return from your trades. `lastIso` is the latest data day; refetches when it moves.
+ * Undefined (no value history yet, or it failed) still loads, so returns never wait forever.
+ */
 export function usePerformance(lastIso: string | undefined, kind: "stock" | "crypto") {
   const prices = useQuery({
-    queryKey: ["holding-performance", lastIso],
+    queryKey: ["holding-performance", lastIso ?? null],
     queryFn: () => fetchPerformance(supabase, EARLIEST, false),
-    enabled: lastIso != null,
+    // The latest prices stay on screen while the next day's load, so returns never flash to "…".
+    placeholderData: keepPreviousData,
   });
   const saved = useQuery({ queryKey: ["holding-trades"], queryFn: () => fetchTrades(supabase) });
   const events = useQuery({
@@ -153,7 +157,7 @@ export function usePerformance(lastIso: string | undefined, kind: "stock" | "cry
     endPrices,
     tradesByKey,
     events: events.data ?? [],
-    isPending: lastIso == null || prices.isPending || saved.isPending || events.isPending,
+    isPending: prices.isPending || saved.isPending || events.isPending,
     unavailable:
       (prices.data != null && "unavailable" in prices.data) ||
       (saved.data != null && "unavailable" in saved.data),

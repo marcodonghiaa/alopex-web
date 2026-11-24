@@ -24,7 +24,7 @@ import {
 import { functionErrorMessage } from "@/lib/function-error";
 import { consentAlerts, type ConsentAlert } from "@/lib/consent-expiry";
 import { syncAlerts, type SyncAlert } from "@/lib/sync-error";
-import { asOf, formatISODate } from "@/lib/date";
+import { asOf, countsInTotal, formatISODate } from "@/lib/date";
 import { AccountBadge, accountName, bankOf } from "@/components/bank-badge";
 import { formatEur, formatMoney } from "@/lib/transactions";
 import { HeadlineFigure } from "@/components/headline-figure";
@@ -77,6 +77,8 @@ interface BankGroup {
   main: BankAccountRow;
   subAccounts: Array<BankAccountRow>;
   subtotalEur: number;
+  // The part of the subtotal in the bank total (balances under 30 days old): its share.
+  countedEur: number;
 }
 
 async function fetchBankAccounts(): Promise<Array<BankAccountRow>> {
@@ -193,14 +195,23 @@ function AccountsPage() {
     [bankAccounts],
   );
   const debts = useMemo(() => bankAccounts.filter((a) => isDebt(a.account_type)), [bankAccounts]);
+  // Same rule as net worth: a bank balance older than 30 days is shown but not added up.
+  const today = formatISODate(new Date());
+  const counted = (a: BankAccountRow) => countsInTotal(a, today);
   const totalBankEur = useMemo(
-    () => cashAccounts.reduce((sum, a) => sum + (a.amount_eur ?? 0), 0),
-    [cashAccounts],
+    () => cashAccounts.filter(counted).reduce((sum, a) => sum + (a.amount_eur ?? 0), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `counted` only changes with `today`
+    [cashAccounts, today],
   );
   const totalDebtEur = useMemo(
-    () => debts.reduce((sum, a) => sum + debtEur(a.amount_eur), 0),
-    [debts],
+    () => debts.filter(counted).reduce((sum, a) => sum + debtEur(a.amount_eur), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `counted` only changes with `today`
+    [debts, today],
   );
+  const balanceNote = (a: BankAccountRow) =>
+    a.snapshot_date
+      ? [asOf(a.snapshot_date, today), !counted(a) && "not in total"].filter(Boolean).join(" · ")
+      : null;
 
   const bankGroups = useMemo<Array<BankGroup>>(() => {
     const byBank = new Map<string, Array<BankAccountRow>>();
@@ -228,10 +239,14 @@ function AccountsPage() {
           .sort((a, b) => (b.amount_eur ?? 0) - (a.amount_eur ?? 0));
         const subtotalEur =
           (main.amount_eur ?? 0) + subAccounts.reduce((sum, a) => sum + (a.amount_eur ?? 0), 0);
-        return { bank, main, subAccounts, subtotalEur };
+        const countedEur = [main, ...subAccounts]
+          .filter(counted)
+          .reduce((sum, a) => sum + (a.amount_eur ?? 0), 0);
+        return { bank, main, subAccounts, subtotalEur, countedEur };
       })
       .sort((a, b) => b.subtotalEur - a.subtotalEur);
-  }, [cashAccounts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `counted` only changes with `today`
+  }, [cashAccounts, today]);
 
   // Connect-a-bank form state
   const [showConnectForm, setShowConnectForm] = useState(false);
@@ -391,7 +406,7 @@ function AccountsPage() {
           ) : (
             <ul className="divide-y">
               {bankGroups.map((group) => {
-                const percent = totalBankEur > 0 ? (group.subtotalEur / totalBankEur) * 100 : 0;
+                const percent = totalBankEur > 0 ? (group.countedEur / totalBankEur) * 100 : 0;
                 return (
                   <li key={group.bank} className="px-4 py-3 sm:px-5">
                     {/* Main (EUR) account */}
@@ -420,8 +435,8 @@ function AccountsPage() {
                         <div className="text-xs text-muted-foreground">
                           {group.main.snapshot_date
                             ? [
-                                formatPercent(percent / 100),
-                                asOf(group.main.snapshot_date, formatISODate(new Date())),
+                                group.countedEur !== 0 && formatPercent(percent / 100),
+                                balanceNote(group.main),
                               ]
                                 .filter(Boolean)
                                 .join(" · ")
@@ -635,10 +650,7 @@ function AccountsPage() {
                       {a.manual ? (a.label ?? bank) : bank}
                     </div>
                     <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {[
-                        accountTypeLabel(a.account_type),
-                        a.snapshot_date && asOf(a.snapshot_date, formatISODate(new Date())),
-                      ]
+                      {[accountTypeLabel(a.account_type), balanceNote(a)]
                         .filter(Boolean)
                         .join(" · ")}
                     </div>
