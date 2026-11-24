@@ -111,7 +111,8 @@
   --rule: oklch(0.17 0.012 240 / 18%);
   --border: var(--hairline);
   --input: var(--rule);
-  --ring: var(--ember);
+  /* Focus ring: --ember is 2.9:1 on the light page; WCAG 1.4.11 asks 3:1 */
+  --ring: var(--ember-text);
   /* Categorical: one hue, low chroma, ordered by lightness (rank 1 = darkest) */
   --chart-1: oklch(0.3 0.03 240);
   --chart-2: oklch(0.42 0.04 240);
@@ -133,7 +134,7 @@
   --sidebar-accent: oklch(0.17 0.012 240 / 5%);
   --sidebar-accent-foreground: oklch(0.17 0.012 240);
   --sidebar-border: var(--hairline);
-  --sidebar-ring: var(--ember);
+  --sidebar-ring: var(--ember-text);
   --sankey-band-opacity: 0.28;
 }
 
