@@ -4,7 +4,8 @@ import { DEMO_USER_ID } from "./generate";
 import { functionErrorMessage } from "@/lib/function-error";
 import { groupStreams } from "@/lib/recurring";
 import type { Tables } from "@/integrations/supabase/types";
-import { billEntries, monthBounds, type ChargeTx } from "@/lib/recurring-calendar";
+import { billEntries, type ChargeTx } from "@/lib/recurring-calendar";
+import { monthBounds } from "@/lib/date";
 import { addDays } from "@/lib/date";
 
 // Lets one test change the generated demo data (e.g. a stream's cadence) before the client loads it.

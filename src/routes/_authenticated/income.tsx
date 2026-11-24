@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { ArrowDownLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { formatISODate } from "@/lib/date";
+import { formatISODate, monthBounds } from "@/lib/date";
 import {
   categoryRepeatsTitle,
   formatMoney,
@@ -77,8 +77,7 @@ const receivedEur = (list: Array<IncomeRow>) =>
   list.reduce((sum, r) => sum + Math.max(r.personal_signed_amount_eur ?? 0, 0), 0);
 
 async function fetchIncomeForMonth(month: Date): Promise<Array<IncomeRow>> {
-  const start = formatISODate(startOfMonth(month));
-  const end = formatISODate(new Date(month.getFullYear(), month.getMonth() + 1, 1));
+  const { start, end } = monthBounds(month);
   const { data, error } = await supabase
     .from("v_transactions_eur")
     .select(

@@ -5,7 +5,6 @@ import {
   byDay,
   cadenceStep,
   incomeEntries,
-  monthBounds,
   monthGrid,
   type ChargeTx,
 } from "./recurring-calendar";
@@ -78,12 +77,6 @@ describe("cadenceStep", () => {
   });
   it("is null without a cadence", () => {
     expect(cadenceStep(stream({ cadence: null }))).toBeNull();
-  });
-});
-
-describe("monthBounds", () => {
-  it("spans the month", () => {
-    expect(monthBounds(new Date(2026, 11, 15))).toEqual({ start: "2026-12-01", end: "2027-01-01" });
   });
 });
 

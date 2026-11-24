@@ -30,6 +30,14 @@ export function axisDateFormatter(
 }
 
 // A day as people read it: 3 Mar 2026.
+/** The 1st of `month` and of the month after, as ISO dates. */
+export function monthBounds(month: Date): { start: string; end: string } {
+  return {
+    start: formatISODate(new Date(month.getFullYear(), month.getMonth(), 1)),
+    end: formatISODate(new Date(month.getFullYear(), month.getMonth() + 1, 1)),
+  };
+}
+
 export function formatDay(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString(dateLocale(), {
     day: "numeric",

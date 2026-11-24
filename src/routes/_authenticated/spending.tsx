@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { CategoryAvatar } from "@/components/category-avatar";
 import { CategoryRow } from "@/components/spending/category-row";
 import { supabase } from "@/integrations/supabase/client";
-import { formatDay, formatISODate } from "@/lib/date";
+import { formatDay, formatISODate, monthBounds } from "@/lib/date";
 import { cleanMerchantName } from "@/lib/merchant-name";
 import { categoryColor } from "@/lib/categories";
 import { shareSummary } from "@/lib/chart-summary";
@@ -89,8 +89,7 @@ async function fetchSpendForMonth(month: Date): Promise<Array<MonthlySpendRow>> 
 
 // Scoped to the selected month, like the rest of the page.
 async function fetchRegretSpend(month: Date): Promise<Array<RegretGroup>> {
-  const start = formatISODate(startOfMonth(month));
-  const end = formatISODate(new Date(month.getFullYear(), month.getMonth() + 1, 1));
+  const { start, end } = monthBounds(month);
   const { data, error } = await supabase
     .from("v_transactions_eur")
     .select(

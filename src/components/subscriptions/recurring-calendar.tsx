@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { ArrowDownLeft, Check, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
-import { formatISODate } from "@/lib/date";
+import { formatISODate, monthBounds } from "@/lib/date";
 import { dateLocale } from "@/lib/locale";
 import { readPages } from "@/lib/read-pages";
 import { formatBookingDateShort, formatMoney, startOfMonth } from "@/lib/transactions";
@@ -14,7 +14,6 @@ import {
   billEntries,
   byDay,
   incomeEntries,
-  monthBounds,
   monthGrid,
   type CalendarEntry,
   type ChargeTx,

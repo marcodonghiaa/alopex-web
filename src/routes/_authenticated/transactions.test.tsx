@@ -9,6 +9,7 @@ const rows: Record<string, Array<Record<string, unknown>>> = {};
 let tableData: Record<string, unknown> = {};
 // Every select the page sends, to check which columns each query asks for.
 const selects: Array<{ table: string; cols: string }> = [];
+const ins: Array<{ table: string; col: string; values: unknown }> = [];
 // Every or() and limit() filter, by table, to tell a search across months from a month's list.
 const ors: Array<{ table: string; expr: string }> = [];
 const limits: Array<{ table: string; n: number }> = [];
@@ -38,6 +39,10 @@ vi.mock("@/integrations/supabase/client", () => ({
       }
       q["or"] = (expr: string) => {
         ors.push({ table, expr });
+        return q;
+      };
+      q["in"] = (col: string, values: unknown) => {
+        ins.push({ table, col, values });
         return q;
       };
       q["limit"] = (n: number) => {
@@ -543,6 +548,17 @@ describe("Transactions page tag filter", () => {
     const views = selects.filter((s) => s.table === "v_transactions_eur").map((s) => s.cols);
     expect(views.length).toBeGreaterThan(1);
     expect(views.filter((c) => c.includes("note,tags"))).toHaveLength(1);
+  });
+
+  // protects=the month list shows spending and refunds, the transfers list only transfers
+  it("filters the two lists by flow type", async () => {
+    ins.length = 0;
+    renderPage();
+    await screen.findAllByText(/No transactions for/);
+    const flows = ins
+      .filter((i) => i.table === "v_transactions_eur" && i.col === "flow_type")
+      .map((i) => i.values);
+    expect(flows).toEqual(expect.arrayContaining([["spend", "refunded"], ["transfer"]]));
   });
 
   // protects=a failing tag-suggestions call is reported in the console, not hidden;

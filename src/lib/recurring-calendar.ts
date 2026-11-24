@@ -1,5 +1,5 @@
 import type { Tables } from "@/integrations/supabase/types";
-import { formatISODate } from "@/lib/date";
+import { formatISODate, monthBounds } from "@/lib/date";
 import type { RegularSource } from "@/lib/regular-income";
 import { cleanMerchantName } from "@/lib/merchant-name";
 
@@ -89,14 +89,6 @@ const stepDays = (step: Step) => ("days" in step ? step.days : step.months * 30.
 // The anchor's day of month is kept across steps, so 31 Jan → 28 Feb → 31 Mar, not 28 Mar.
 function nth(anchor: string, step: Step, n: number): string {
   return "days" in step ? addDays(anchor, step.days * n) : addMonths(anchor, step.months * n);
-}
-
-/** The 1st of `month` and of the month after, as ISO dates. */
-export function monthBounds(month: Date): { start: string; end: string } {
-  return {
-    start: formatISODate(new Date(month.getFullYear(), month.getMonth(), 1)),
-    end: formatISODate(new Date(month.getFullYear(), month.getMonth() + 1, 1)),
-  };
 }
 
 /**

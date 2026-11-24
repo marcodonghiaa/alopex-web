@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asOf, axisDateFormatter, addDays, countsInTotal, isDay } from "./date";
+import { asOf, axisDateFormatter, addDays, countsInTotal, isDay, monthBounds } from "./date";
 
 describe("axisDateFormatter", () => {
   it("shows day and month on a short range, so daily ticks stay distinct", () => {
@@ -66,5 +66,11 @@ describe("countsInTotal", () => {
     expect(countsInTotal({ manual: false, snapshot_date: "2026-10-24" }, today)).toBe(false);
     expect(countsInTotal({ manual: false, snapshot_date: null }, today)).toBe(false);
     expect(countsInTotal({ manual: true, snapshot_date: "2025-01-01" }, today)).toBe(true);
+  });
+});
+
+describe("monthBounds", () => {
+  it("spans the month", () => {
+    expect(monthBounds(new Date(2026, 11, 15))).toEqual({ start: "2026-12-01", end: "2027-01-01" });
   });
 });
