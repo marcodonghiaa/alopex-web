@@ -56,7 +56,9 @@ function withSecurityHeaders(response: Response): Response {
   headers.set("X-Frame-Options", "DENY");
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  // This host only: includeSubDomains would pin every subdomain of a self-hoster's domain (a NAS
+  // or router page on plain http) to HTTPS for a year. Browsers ignore it over plain http.
+  headers.set("Strict-Transport-Security", "max-age=31536000");
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
