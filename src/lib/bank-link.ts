@@ -92,6 +92,10 @@ const LINK_ERRORS = new Set([
   "Invalid or expired consent request",
   "Consent request expired, please try again",
   "Not signed in",
+  "Sign-in check is unavailable, please try again",
+  "Couldn't finish linking the bank, please try again",
+  "Enter your authenticator code first",
+  "Server update incomplete: apply the latest database migration",
   "Enable Banking didn't share any accounts. Link this bank once on enablebanking.com → API applications → your app → Link accounts, then try again.",
 ]);
 

@@ -106,6 +106,18 @@ describe("linkErrorMessage", () => {
     expect(linkErrorMessage(p)).toBe("The bank did not approve the connection");
   });
 
+  // H302: complete-bank-consent can also send these; they fell back to the generic text.
+  it("shows complete-bank-consent's claim, sign-in check and two-step messages", () => {
+    for (const text of [
+      "Couldn't finish linking the bank, please try again",
+      "Sign-in check is unavailable, please try again",
+      "Enter your authenticator code first",
+      "Server update incomplete: apply the latest database migration",
+    ]) {
+      expect(linkErrorMessage(new URLSearchParams({ bank_link_error: text }))).toBe(text);
+    }
+  });
+
   it("replaces any other text with a fixed message", () => {
     const p = new URLSearchParams({ bank_link_error: "Call +39 000 000 to verify your account" });
     expect(linkErrorMessage(p)).toBe("Couldn't link the bank, please try again");
