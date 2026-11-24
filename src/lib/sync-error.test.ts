@@ -78,9 +78,13 @@ describe("syncErrorMessage", () => {
     expect(syncErrorMessage("SAVE_FAILED", "N26")).not.toMatch(/Nothing to do/);
   });
 
-  it("says plainly that the bank kept sending the same page, and that the next sync retries", () => {
+  // The backend sends PAGING_LOOP for a repeated page and for more than 500 pages (bank-sync.ts):
+  // the text must fit both, not claim the same page came back.
+  it("says plainly that the bank's pages didn't end, and that the next sync retries", () => {
     const text = syncErrorMessage("PAGING_LOOP", "N26");
-    expect(text).toMatch(/^N26 kept sending the same page of transactions/);
+    expect(text).toMatch(
+      /^N26 sent more pages of transactions than one sync reads, or the same page again/,
+    );
     expect(text).toMatch(/Nothing to do: Alopex tries again at the next sync/);
     expect(text).not.toMatch(/PAGING_LOOP/);
     expect(syncErrorKind("PAGING_LOOP")).toBe("retry");
