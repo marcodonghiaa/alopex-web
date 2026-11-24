@@ -25,7 +25,6 @@ export function CategoryPicker({
   variant?: "pill" | "icon";
 }) {
   const [open, setOpen] = useState(false);
-  const categories = useCategories().list;
 
   return (
     // Locked while saving like TypePicker: aria-disabled and this guard keep the trigger focusable.
@@ -72,27 +71,44 @@ export function CategoryPicker({
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-48 p-1">
-        <div className="max-h-72 overflow-y-auto">
-          {categories.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                // Every pick saves, the same category too: that is how you claim the AI's pick.
-                onSelect(c);
-              }}
-              className={`block min-h-11 w-full rounded-sm px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-accent ${
-                c === tx.category ? "font-medium text-primary" : "text-foreground"
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-      </PopoverContent>
+      {/* Every pick saves, the same category too: that is how you claim the AI's pick. */}
+      <CategoryMenu
+        current={tx.category}
+        onPick={(c) => {
+          setOpen(false);
+          onSelect(c);
+        }}
+      />
     </Popover>
+  );
+}
+
+/** The category list both pickers open, with the current one highlighted. */
+function CategoryMenu({
+  current,
+  onPick,
+}: {
+  current?: string | null;
+  onPick: (category: string) => void;
+}) {
+  const categories = useCategories().list;
+  return (
+    <PopoverContent align="start" className="w-48 p-1">
+      <div className="max-h-72 overflow-y-auto">
+        {categories.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => onPick(c)}
+            className={`block min-h-11 w-full rounded-sm px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-accent ${
+              c === current ? "font-medium text-primary" : "text-foreground"
+            }`}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+    </PopoverContent>
   );
 }
 
@@ -104,7 +120,6 @@ export function BulkCategoryPicker({
   disabled: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const categories = useCategories().list;
 
   return (
     <Popover modal open={open} onOpenChange={setOpen}>
@@ -117,23 +132,12 @@ export function BulkCategoryPicker({
           {disabled ? "Saving…" : "Set category…"}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-48 p-1">
-        <div className="max-h-72 overflow-y-auto">
-          {categories.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onSelect(c);
-              }}
-              className="block min-h-11 w-full rounded-sm px-2.5 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-accent"
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-      </PopoverContent>
+      <CategoryMenu
+        onPick={(c) => {
+          setOpen(false);
+          onSelect(c);
+        }}
+      />
     </Popover>
   );
 }
