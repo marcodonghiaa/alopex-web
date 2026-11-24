@@ -77,14 +77,9 @@ function AuthPage() {
       return;
     }
     let cancelled = false;
-    let sessionPromise: ReturnType<typeof supabase.auth.getSession>;
-    try {
-      sessionPromise = supabase.auth.getSession();
-    } catch {
-      setCheckingSession(false);
-      return;
-    }
-    sessionPromise
+    // beforeLoad left the demo, so the client can't throw "still loading" here.
+    supabase.auth
+      .getSession()
       .then(({ data }) => {
         if (cancelled) return;
         if (data.session) {
