@@ -24,7 +24,7 @@ import {
 import { functionErrorMessage } from "@/lib/function-error";
 import { consentAlerts, type ConsentAlert } from "@/lib/consent-expiry";
 import { syncAlerts, type SyncAlert } from "@/lib/sync-error";
-import { asOf, formatISODate } from "@/lib/date";
+import { asOf, countsInTotal, formatISODate } from "@/lib/date";
 import { AccountBadge, accountName, bankOf } from "@/components/bank-badge";
 import { formatEur, formatMoney } from "@/lib/transactions";
 import { HeadlineFigure } from "@/components/headline-figure";
@@ -193,14 +193,23 @@ function AccountsPage() {
     [bankAccounts],
   );
   const debts = useMemo(() => bankAccounts.filter((a) => isDebt(a.account_type)), [bankAccounts]);
+  // Same rule as net worth: a bank balance older than 30 days is shown but not added up.
+  const today = formatISODate(new Date());
+  const counted = (a: BankAccountRow) => countsInTotal(a, today);
   const totalBankEur = useMemo(
-    () => cashAccounts.reduce((sum, a) => sum + (a.amount_eur ?? 0), 0),
-    [cashAccounts],
+    () => cashAccounts.filter(counted).reduce((sum, a) => sum + (a.amount_eur ?? 0), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `counted` only changes with `today`
+    [cashAccounts, today],
   );
   const totalDebtEur = useMemo(
-    () => debts.reduce((sum, a) => sum + debtEur(a.amount_eur), 0),
-    [debts],
+    () => debts.filter(counted).reduce((sum, a) => sum + debtEur(a.amount_eur), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `counted` only changes with `today`
+    [debts, today],
   );
+  const balanceNote = (a: BankAccountRow) =>
+    a.snapshot_date
+      ? [asOf(a.snapshot_date, today), !counted(a) && "not in total"].filter(Boolean).join(" · ")
+      : null;
 
   const bankGroups = useMemo<Array<BankGroup>>(() => {
     const byBank = new Map<string, Array<BankAccountRow>>();
@@ -420,8 +429,8 @@ function AccountsPage() {
                         <div className="text-xs text-muted-foreground">
                           {group.main.snapshot_date
                             ? [
-                                formatPercent(percent / 100),
-                                asOf(group.main.snapshot_date, formatISODate(new Date())),
+                                counted(group.main) && formatPercent(percent / 100),
+                                balanceNote(group.main),
                               ]
                                 .filter(Boolean)
                                 .join(" · ")
@@ -635,10 +644,7 @@ function AccountsPage() {
                       {a.manual ? (a.label ?? bank) : bank}
                     </div>
                     <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {[
-                        accountTypeLabel(a.account_type),
-                        a.snapshot_date && asOf(a.snapshot_date, formatISODate(new Date())),
-                      ]
+                      {[accountTypeLabel(a.account_type), balanceNote(a)]
                         .filter(Boolean)
                         .join(" · ")}
                     </div>
