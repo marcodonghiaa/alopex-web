@@ -29,17 +29,27 @@ const acct = (over: Partial<HealthAccount>): HealthAccount => ({
 describe("syncState", () => {
   it.each([
     [0, "ok"],
-    [24, "ok"],
-    [24.1, "warn"],
+    [24.1, "ok"],
+    [48, "ok"],
+    [48.1, "warn"],
     [72, "warn"],
     [72.1, "bad"],
   ] as const)("%s h is %s", (h, state) => expect(syncState(h)).toBe(state));
 
-  it("reads a snapshot from today as fresh, yesterday as amber, three days back as red", () => {
+  it("reads a snapshot from today or yesterday as fresh, two days back as amber, three as red", () => {
     const state = (d: string) => syncState(syncAgeHours(d, NOW));
     expect(state("2026-10-28")).toBe("ok");
-    expect(state("2026-10-27")).toBe("warn");
+    expect(state("2026-10-27")).toBe("ok");
+    expect(state("2026-10-26")).toBe("warn");
     expect(state("2026-10-25")).toBe("bad");
+  });
+
+  // Syncs run 4 times a day, the first at 05:17 UTC: from midnight UTC until then the latest
+  // balance is dated yesterday. That is on schedule, not an account that needs attention.
+  it("keeps the last evening's sync fresh until the next morning's run", () => {
+    const justAfterMidnight = new Date("2026-10-29T00:08:00Z");
+    expect(syncState(syncAgeHours("2026-10-28", justAfterMidnight))).toBe("ok");
+    expect(syncState(syncAgeHours("2026-10-28", new Date("2026-10-29T05:16:00Z")))).toBe("ok");
   });
 });
 

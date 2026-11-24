@@ -29,7 +29,9 @@ export interface HealthAccount {
 }
 
 const HOUR_MS = 60 * 60 * 1000;
-const STALE_AMBER_H = 24;
+// Amber once a whole calendar day passed with no sync: syncs run 4 times a day, the first at
+// 05:17 UTC, so from midnight UTC until then yesterday's balance is still on schedule.
+const STALE_AMBER_H = 48;
 const STALE_RED_H = 72;
 
 // Worst first, so a page can show what needs attention at the top.
@@ -38,7 +40,7 @@ export const bySeverity = (a: { state: HealthState }, b: { state: HealthState })
   SEVERITY[a.state] - SEVERITY[b.state];
 
 // Hours since the account's latest balance snapshot. The snapshot is a calendar day (UTC), so a
-// balance from today reads 0-24 h, yesterday's 24-48 h, and three days back is red.
+// balance from today reads 0-24 h, yesterday's 24-48 h (both fresh), and three days back is red.
 export function syncAgeHours(snapshotDate: string, now: Date): number {
   return (now.getTime() - Date.parse(snapshotDate.slice(0, 10))) / HOUR_MS;
 }
