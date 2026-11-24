@@ -127,8 +127,8 @@ export function ImportWizard() {
   const plan = useMemo(() => {
     if (!csv || !mapping) return null;
     return kind === "net_worth"
-      ? planNetWorth(csv.rows, mapping)
-      : planSpend(csv.rows, mapping, overrides);
+      ? planNetWorth(csv.rows, mapping, csv.lines)
+      : planSpend(csv.rows, mapping, overrides, csv.lines);
   }, [csv, mapping, kind, overrides]);
   const categories = plan && "categories" in plan ? plan.categories : [];
 

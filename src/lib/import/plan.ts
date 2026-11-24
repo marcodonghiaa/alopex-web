@@ -41,8 +41,9 @@ const cell = (row: Array<string>, index: number | null) =>
   index === null ? "" : (row[index] ?? "").trim();
 // Sums of parsed floats drift (0.1 + 0.2 = 0.30000000000000004): store whole cents.
 const cents = (n: number) => Math.round(n * 100) / 100;
-// Line 1 is the header, so the first data row is line 2.
-const lineOf = (i: number) => i + 2;
+// Each row's line in the file (parseCsv's `lines`); without them line 1 is the header, so the
+// first data row is line 2.
+const lineOf = (i: number, lines?: Array<number>) => lines?.[i] ?? i + 2;
 const monthEnd = (ym: string) => {
   const [y, m] = ym.split("-").map(Number) as [number, number];
   return `${ym}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
@@ -54,12 +55,13 @@ type NetWorthRoles = "month" | "total" | "stocks" | "bonds" | "crypto" | "cash";
 export function planNetWorth(
   rows: Array<Array<string>>,
   columns: Columns<NetWorthRoles>,
+  lines?: Array<number>,
 ): Plan<NetWorthPlanRow> {
   const byMonth = new Map<string, { line: number; row: NetWorthPlanRow }>();
   const skipped: Array<Skipped> = [];
 
   rows.forEach((raw, i): undefined => {
-    const line = lineOf(i);
+    const line = lineOf(i, lines);
     const skip = (reason: string): undefined => {
       skipped.push({ line, reason });
     };
@@ -121,6 +123,7 @@ export function planSpend(
   rows: Array<Array<string>>,
   columns: Columns<"month" | "category" | "amount" | "currency">,
   overrides: Partial<Record<string, AppCategory>> = {},
+  lines?: Array<number>,
 ): Plan<SpendPlanRow> & { categories: Array<CategoryMapping> } {
   const totals = new Map<string, SpendPlanRow>();
   const skipped: Array<Skipped> = [];
@@ -143,7 +146,7 @@ export function planSpend(
   const signed = amounts.filter((a) => a < 0).length > amounts.length / 2;
 
   rows.forEach((raw, i): undefined => {
-    const line = lineOf(i);
+    const line = lineOf(i, lines);
     const skip = (reason: string): undefined => {
       skipped.push({ line, reason });
     };

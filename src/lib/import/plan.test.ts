@@ -80,6 +80,18 @@ describe("planNetWorth", () => {
     expect(skipped.every((s) => s.reason.length > 0)).toBe(true);
   });
 
+  it("reports the file's own line numbers when blank lines were dropped", () => {
+    const { skipped } = planNetWorth(
+      [
+        ["2024-03", "1"],
+        ["nope", "1"],
+      ],
+      nw,
+      [2, 5],
+    );
+    expect(skipped.map((s) => s.line)).toEqual([5]);
+  });
+
   it("keeps the last row for a repeated month and reports the earlier one", () => {
     const { rows, skipped } = planNetWorth(
       [
@@ -151,6 +163,11 @@ describe("planSpend", () => {
     );
     expect(rows).toEqual([]);
     expect(skipped.map((s) => s.line)).toEqual([2, 3, 4, 5, 6, 7]);
+  });
+
+  it("reports the file's own line numbers when blank lines were dropped", () => {
+    const { skipped } = planSpend([["x", "Rent", "1", "EUR"]], sp, {}, [4]);
+    expect(skipped.map((s) => s.line)).toEqual([4]);
   });
 
   it("works without a currency column, and skips all when month or amount is unmapped", () => {
