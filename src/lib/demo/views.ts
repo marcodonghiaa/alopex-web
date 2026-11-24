@@ -56,17 +56,20 @@ export function deriveViews(db: DemoDb): Derived {
     tags: t.tags,
   }));
 
-  const v_splitwise_eur: DemoDb["v_splitwise_eur"] = db.splitwise_expenses.map((e) => ({
-    amount: e.amount,
-    amount_eur: e.amount,
-    booking_date: e.booking_date,
-    category: e.category,
-    currency: e.currency,
-    description: e.description,
-    group_name: e.group_name,
-    id: e.id,
-    user_id: e.user_id,
-  }));
+  // Like the real view: a share linked to a bank row is already counted there.
+  const v_splitwise_eur: DemoDb["v_splitwise_eur"] = db.splitwise_expenses
+    .filter((e) => e.linked_entry_reference == null)
+    .map((e) => ({
+      amount: e.amount,
+      amount_eur: e.amount,
+      booking_date: e.booking_date,
+      category: e.category,
+      currency: e.currency,
+      description: e.description,
+      group_name: e.group_name,
+      id: e.id,
+      user_id: e.user_id,
+    }));
 
   const v_portfolio_latest: DemoDb["v_portfolio_latest"] = db.portfolio_holdings.flatMap((h) => {
     const snap = latestSnapshot(
