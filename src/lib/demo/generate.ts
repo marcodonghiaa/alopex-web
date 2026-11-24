@@ -165,7 +165,7 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
     amount: b.amount,
     created_at: stamp(iso(b.n)),
     currency: "EUR",
-    eur_equivalent: b.amount,
+    eur_equivalent: null, // never written by a real install; amount_eur is in v_net_worth_eur
     id,
     snapshot_date: iso(b.n),
     user_id,
@@ -371,10 +371,9 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
     const d = iso(n);
     // Like the view: debts are left out of bank and subtracted from the total.
     const ofDay = net_worth_snapshots.filter((s) => s.snapshot_date === d);
-    const bank = sum(ofDay.filter((s) => s.account_uid !== CARD).map((s) => s.eur_equivalent!));
-    const owed = sum(
-      ofDay.filter((s) => s.account_uid === CARD).map((s) => Math.abs(s.eur_equivalent!)),
-    );
+    // Every demo account is in EUR, so amount is already the euro value.
+    const bank = sum(ofDay.filter((s) => s.account_uid !== CARD).map((s) => s.amount));
+    const owed = sum(ofDay.filter((s) => s.account_uid === CARD).map((s) => Math.abs(s.amount)));
     const held = portfolio_snapshots.filter((s) => s.snapshot_date === d);
     const port = sum(held.map((s) => s.value_eur!));
     const bonds = sum(held.filter((s) => BOND_ISINS.has(s.isin)).map((s) => s.value_eur!));
@@ -673,7 +672,7 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
     v_net_worth_eur: net_worth_snapshots.map((s) => ({
       account_uid: s.account_uid,
       amount: s.amount,
-      amount_eur: s.eur_equivalent,
+      amount_eur: s.amount,
       currency: s.currency,
       snapshot_date: s.snapshot_date,
       user_id,

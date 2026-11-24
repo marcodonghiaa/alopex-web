@@ -81,6 +81,11 @@ describe("buildZip", () => {
     ]);
   });
 
+  // H109: eur_equivalent is never written by any install; the export no longer carries the empty column
+  it("leaves the never-written eur_equivalent column out of net_worth.csv", () => {
+    expect(text("net_worth.csv").split("\r\n")[0]).not.toContain("eur_equivalent");
+  });
+
   it("neutralises a formula in a merchant name", () => {
     expect(text("transactions.csv")).toContain("'=EVIL()");
   });

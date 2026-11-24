@@ -30,6 +30,11 @@ describe("generateDemoData: coverage", () => {
     expect(Object.keys(db)).not.toContain("v_cd_holdings");
   });
 
+  // H109: no install writes net_worth_snapshots.eur_equivalent; the demo must not rely on it
+  it("leaves eur_equivalent empty on account snapshots, like a real install", () => {
+    expect(db.net_worth_snapshots.every((s) => s.eur_equivalent === null)).toBe(true);
+  });
+
   it("covers every transaction flow the screens filter on", () => {
     const flows = new Set(db.transactions.map((t) => t.flow_type));
     for (const f of ["spend", "income", "refunded", "transfer"]) expect(flows).toContain(f);

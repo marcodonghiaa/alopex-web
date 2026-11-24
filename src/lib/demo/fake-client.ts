@@ -372,6 +372,13 @@ class Store {
       "",
     );
   }
+  /** An amount in euros at the latest demo rate (1 for EUR, or when the demo has no rate). */
+  private toEur(amount: unknown, currency: unknown): number {
+    const rate = this.db["fx_rates"]!.filter((r) => r["currency"] === currency)
+      .sort((a, b) => String(b["date"]).localeCompare(String(a["date"])))
+      .at(0)?.["rate_to_eur"];
+    return currency === "EUR" ? Number(amount ?? 0) : Number(amount ?? 0) * Number(rate ?? 1);
+  }
   /** Mirror of the database function set_account_type: past net worth follows the new type. */
   setAccountType(uid: unknown, type: unknown): Result {
     if (type !== null && !ACCOUNT_TYPES.some(([t]) => t === type))
@@ -384,7 +391,7 @@ class Store {
       if (r["uid"] === uid) r["account_type"] = type;
     if (was !== now)
       for (const s of this.db["net_worth_snapshots"]!.filter((s) => s["account_uid"] === uid)) {
-        const eur = Number(s["eur_equivalent"] ?? 0);
+        const eur = this.toEur(s["amount"], s["currency"]);
         this.moveNetWorth(s["snapshot_date"], [eur, was], [eur, now]);
       }
     return { data: null, error: null };
@@ -397,10 +404,7 @@ class Store {
     if (args["p_amount"] == null || !Number.isFinite(amount))
       return { data: null, error: { message: "amount is required" } };
     const currency = String(args["p_currency"] ?? "EUR").toUpperCase();
-    const rate = this.db["fx_rates"]!.filter((r) => r["currency"] === currency)
-      .sort((a, b) => String(b["date"]).localeCompare(String(a["date"])))
-      .at(0)?.["rate_to_eur"];
-    const eur = currency === "EUR" ? amount : amount * Number(rate ?? 1);
+    const eur = this.toEur(amount, currency);
     const uid = `demo-debt-${this.nextId++}`;
     const today = this.latestDay();
     this.db["accounts"]!.push(
@@ -420,7 +424,6 @@ class Store {
       account_uid: uid,
       amount,
       currency,
-      eur_equivalent: eur,
       snapshot_date: today,
       user_id: DEMO_USER_ID,
     });
@@ -452,7 +455,11 @@ class Store {
       return { data: null, error: { message: "not a manual debt" } };
     const mine = (r: Row) => r["account_uid"] === uid;
     for (const s of this.db["net_worth_snapshots"]!.filter(mine))
-      this.moveNetWorth(s["snapshot_date"], [Number(s["eur_equivalent"] ?? 0), true], [0, true]);
+      this.moveNetWorth(
+        s["snapshot_date"],
+        [this.toEur(s["amount"], s["currency"]), true],
+        [0, true],
+      );
     this.db["net_worth_snapshots"] = this.db["net_worth_snapshots"]!.filter((r) => !mine(r));
     this.db["accounts"] = this.db["accounts"]!.filter((a) => a !== account);
     this.db["v_bank_accounts_latest"] = this.db["v_bank_accounts_latest"]!.filter(
@@ -475,13 +482,12 @@ class Store {
     const snap = this.db["net_worth_snapshots"]!.find(
       (s) => s["account_uid"] === uid && s["snapshot_date"] === today,
     );
-    if (snap) Object.assign(snap, { amount, eur_equivalent: eur });
+    if (snap) Object.assign(snap, { amount });
     else
       this.db["net_worth_snapshots"]!.push({
         account_uid: uid,
         amount,
         currency: account["currency"],
-        eur_equivalent: eur,
         snapshot_date: today,
         user_id: DEMO_USER_ID,
       });
