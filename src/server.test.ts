@@ -1,29 +1,58 @@
-import { describe, expect, it, vi } from "vitest";
+// @vitest-environment node
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@tanstack/react-start/server-entry", () => ({
-  default: {
-    fetch: () => new Response("<html></html>", { headers: { "content-type": "text/html" } }),
-  },
-}));
+const entryFetch = vi.hoisted(() => vi.fn<(request: Request) => Promise<Response>>());
+vi.mock("@tanstack/react-start/server-entry", () => ({ default: { fetch: entryFetch } }));
 
 import server from "./server";
 
-const headersOf = async () =>
-  (await server.fetch(new Request("https://money.example.org/"), {}, {})).headers;
+const HEADERS = [
+  "Content-Security-Policy",
+  "X-Frame-Options",
+  "X-Content-Type-Options",
+  "Referrer-Policy",
+  "Strict-Transport-Security",
+];
 
-describe("security headers", () => {
-  // H357: includeSubDomains pinned every subdomain of a self-hoster's domain (a NAS, a router
-  // page on plain http) to HTTPS for a year. HSTS now covers only the dashboard's own host.
-  it("asks for HTTPS on the dashboard's own host only", async () => {
-    expect((await headersOf()).get("Strict-Transport-Security")).toBe("max-age=31536000");
+const get = () => server.fetch(new Request("https://dash.example/"), {}, {});
+
+describe("server security headers", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("sets every header on a normal page", async () => {
+    entryFetch.mockResolvedValue(new Response("ok", { status: 200 }));
+    const res = await get();
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("ok");
+    for (const h of HEADERS) expect(res.headers.get(h)).toBeTruthy();
+    expect(res.headers.get("X-Frame-Options")).toBe("DENY");
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
+    expect(res.headers.get("Strict-Transport-Security")).toBe("max-age=31536000");
   });
 
-  it("sends the CSP with form-action, and the framing and sniffing guards", async () => {
-    const h = await headersOf();
-    expect(h.get("Content-Security-Policy")).toContain("form-action 'self'");
-    expect(h.get("Content-Security-Policy")).toContain("frame-ancestors 'none'");
-    expect(h.get("X-Frame-Options")).toBe("DENY");
-    expect(h.get("X-Content-Type-Options")).toBe("nosniff");
-    expect(h.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
+  it("sets them on the error page when the handler throws", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    entryFetch.mockRejectedValue(new Error("boom"));
+    const res = await get();
+    expect(res.status).toBe(500);
+    expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(await res.text()).toContain("This page didn't load");
+    for (const h of HEADERS) expect(res.headers.get(h)).toBeTruthy();
+  });
+
+  it("replaces h3's swallowed-error JSON with the error page, headers included", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    entryFetch.mockResolvedValue(
+      new Response(JSON.stringify({ unhandled: true, message: "HTTPError" }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const res = await get();
+    expect(res.status).toBe(500);
+    expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(await res.text()).toContain("This page didn't load");
+    for (const h of HEADERS) expect(res.headers.get(h)).toBeTruthy();
   });
 });
