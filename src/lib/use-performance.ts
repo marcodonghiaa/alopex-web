@@ -1,4 +1,4 @@
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQueries, useQuery } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -93,6 +93,8 @@ export function usePerformance(lastIso: string | undefined, kind: "stock" | "cry
   const prices = useQuery({
     queryKey: ["holding-performance", lastIso ?? null],
     queryFn: () => fetchPerformance(supabase, EARLIEST, false),
+    // The latest prices stay on screen while the next day's load, so returns never flash to "…".
+    placeholderData: keepPreviousData,
   });
   const saved = useQuery({ queryKey: ["holding-trades"], queryFn: () => fetchTrades(supabase) });
   const events = useQuery({
