@@ -1033,7 +1033,7 @@ export type Database = {
       };
       transactions: {
         Row: {
-          account_uid: string | null;
+          account_uid: string;
           amount: number;
           bank_transaction_code: string | null;
           booking_date: string | null;
