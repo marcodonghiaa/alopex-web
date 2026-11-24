@@ -9,6 +9,9 @@ const rows: Record<string, Array<Record<string, unknown>>> = {};
 let tableData: Record<string, unknown> = {};
 // Every select the page sends, to check which columns each query asks for.
 const selects: Array<{ table: string; cols: string }> = [];
+// Every or() and limit() filter, by table, to tell a search across months from a month's list.
+const ors: Array<{ table: string; expr: string }> = [];
+const limits: Array<{ table: string; n: number }> = [];
 let rpcResult: { data: unknown; error: { message: string } | null } = { data: [], error: null };
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@/integrations/supabase/client", () => ({
@@ -33,6 +36,14 @@ vi.mock("@/integrations/supabase/client", () => ({
       ]) {
         q[m] = () => q;
       }
+      q["or"] = (expr: string) => {
+        ors.push({ table, expr });
+        return q;
+      };
+      q["limit"] = (n: number) => {
+        limits.push({ table, n });
+        return q;
+      };
       q["select"] = (cols: string) => {
         selects.push({ table, cols });
         return q;
@@ -339,6 +350,81 @@ describe("Activity page", () => {
     expect(screen.getAllByText("Nothing matches “zzz”.").length).toBeGreaterThan(0);
     await userEvent.click(screen.getAllByRole("button", { name: "Clear search" })[0]!);
     expect(screen.getAllByText("Shop 1").length).toBeGreaterThan(0);
+  });
+
+  // protects=search looks through every month (Marco 2026-11-24); fails_when=a search only
+  // filters the month on screen, or the month arrows stay up while results span every month
+  it("searches every month on the server, then goes back to the month", async () => {
+    ors.length = 0;
+    limits.length = 0;
+    tableData = {
+      v_income_vs_expenses_monthly: { income_eur: 999, expenses_eur: 888 },
+      v_transactions_eur: [
+        row("1", { creditor_name: "Rent Co" }),
+        row("2", {
+          creditor_name: "Rent Co",
+          booking_date: "2024-03-01",
+          amount: 40,
+          signed_amount_eur: -40,
+        }),
+      ],
+    };
+    renderPage();
+    await screen.findAllByText("€999.00");
+    await userEvent.type(screen.getByLabelText("Search by merchant or note"), "rent");
+    expect(await screen.findByText("All months")).toBeInTheDocument();
+    expect(ors).toContainEqual({
+      table: "v_transactions_eur",
+      expr: "creditor_name.ilike.*rent*,note.ilike.*rent*",
+    });
+    expect(ors).toContainEqual({ table: "v_splitwise_eur", expr: "description.ilike.*rent*" });
+    expect(limits).toContainEqual({ table: "v_transactions_eur", n: 500 });
+    // In/Out add up what was found, not the month's figures.
+    expect(await screen.findByText("€50.00")).toBeInTheDocument();
+    expect(screen.queryByText("€888.00")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Previous month" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /^Back to / }));
+    expect(screen.queryByText("All months")).toBeNull();
+    expect(screen.getByRole("button", { name: "Previous month" })).toBeInTheDocument();
+    expect(await screen.findByText("€888.00")).toBeInTheDocument();
+  });
+
+  it("says when no month matches a search", async () => {
+    tableData = { v_transactions_eur: [] };
+    renderPage();
+    await screen.findAllByText(/No transactions for/);
+    await userEvent.type(screen.getByLabelText("Search by merchant or note"), "zzz");
+    expect(
+      (await screen.findAllByText("Nothing matches “zzz” in any month.")).length,
+    ).toBeGreaterThan(0);
+    await userEvent.click(screen.getAllByRole("button", { name: "Clear search" })[0]!);
+    expect((await screen.findAllByText(/No transactions for/)).length).toBeGreaterThan(0);
+  });
+
+  it("says when a search shows only the newest matches", async () => {
+    tableData = {
+      v_transactions_eur: Array.from({ length: 500 }, (_, i) =>
+        row(String(i), { creditor_name: "Bar" }),
+      ),
+    };
+    renderPage();
+    await userEvent.type(screen.getByLabelText("Search by merchant or note"), "bar");
+    expect(
+      await screen.findByText(/Newest 500 matches/, {}, { timeout: 15_000 }),
+    ).toBeInTheDocument();
+  }, 30_000);
+
+  it("keeps a day picked while searching only if it's in the month it goes back to", async () => {
+    tableData = { v_transactions_eur: [row("1", { booking_date: "2024-03-01" })] };
+    renderPage();
+    await userEvent.type(screen.getByLabelText("Search by merchant or note"), "shop");
+    await screen.findByText("All months");
+    const dayInput = screen.getByLabelText("Filter by day");
+    expect(dayInput).not.toHaveAttribute("min");
+    fireEvent.change(dayInput, { target: { value: "2024-03-01" } });
+    await userEvent.click(screen.getByRole("button", { name: /^Back to / }));
+    expect(screen.getByLabelText("Filter by day")).toHaveValue("");
+    expect(screen.getByLabelText("Filter by day")).toHaveAttribute("min");
   });
 
   it("says when filters hide everything, and clears them", async () => {

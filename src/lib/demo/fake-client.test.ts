@@ -60,6 +60,22 @@ describe("fake client: reading", () => {
     expect(answered!.every((r) => r.worth_it === "no")).toBe(true);
   });
 
+  // fails_when=the demo's Transactions search across all months throws or finds nothing
+  it("supports ilike in or(), case-insensitive, with * and _ wildcards", async () => {
+    const { data } = await fresh()
+      .from("v_transactions_eur")
+      .select("creditor_name,note,booking_date")
+      .or("creditor_name.ilike.*AFFITTO_demo*,note.ilike.*AFFITTO_demo*");
+    expect(data!.length).toBeGreaterThan(1);
+    for (const r of data!) expect(r.creditor_name).toBe("Affitto Demo");
+    expect(new Set(data!.map((r) => String(r.booking_date).slice(0, 7))).size).toBeGreaterThan(1);
+    const { data: none } = await fresh()
+      .from("v_transactions_eur")
+      .select("creditor_name")
+      .ilike("creditor_name", "*no such (shop)*");
+    expect(none).toEqual([]);
+  });
+
   it("supports or() with eq and is.null", async () => {
     const { data } = await fresh()
       .from("transactions")

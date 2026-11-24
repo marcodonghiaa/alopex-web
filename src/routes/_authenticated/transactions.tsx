@@ -35,7 +35,10 @@ import {
   monthFromParam,
   parseTransactionsSearch,
   withoutHighlight,
+  searchPattern,
+  SEARCH_LIMIT,
   startOfMonth,
+  totalsOf,
   type AccountRow,
   type TransactionsSearch,
   type SplitwiseShare,
@@ -106,39 +109,57 @@ function TransactionsRoute() {
   return <TransactionsPage key={`${search.category ?? ""}|${search.month ?? ""}`} {...search} />;
 }
 
-async function fetchTransactionsForMonth(month: Date): Promise<Array<TransactionRow>> {
-  const start = formatISODate(startOfMonth(month));
-  const end = formatISODate(new Date(month.getFullYear(), month.getMonth() + 1, 1));
-  const { data, error } = await supabase
+// What the list shows: one month, or a search through every month.
+type Scope = { month: Date } | { query: string };
+
+const monthBounds = (month: Date) => ({
+  start: formatISODate(startOfMonth(month)),
+  end: formatISODate(new Date(month.getFullYear(), month.getMonth() + 1, 1)),
+});
+
+// A search matches the merchant or the note, like the list's own filter, in any month.
+const searchOr = (query: string, columns: Array<string>) =>
+  columns.map((c) => `${c}.ilike.${searchPattern(query)}`).join(",");
+
+async function fetchTransactions(scope: Scope): Promise<Array<TransactionRow>> {
+  let q = supabase
     .from("v_transactions_eur")
     .select(
       "entry_reference,account_uid,booking_date,category,transaction_type,creditor_name,currency,amount,signed_amount_eur,credit_debit_indicator,created_at,worth_it,personal_amount,owed_by,flow_type,refund_of,note,tags",
     )
-    .gte("booking_date", start)
-    .lt("booking_date", end)
     .in("flow_type", ["spend", "refunded"])
-    .neq("amount", 0)
+    .neq("amount", 0);
+  if ("query" in scope) q = q.or(searchOr(scope.query, ["creditor_name", "note"]));
+  else {
+    const { start, end } = monthBounds(scope.month);
+    q = q.gte("booking_date", start).lt("booking_date", end);
+  }
+  const ordered = q
     .order("booking_date", { ascending: false })
     .order("entry_reference", { ascending: false });
+  const { data, error } = await ("query" in scope ? ordered.limit(SEARCH_LIMIT) : ordered);
   if (error) throw error;
   return (data ?? []) as Array<TransactionRow>;
 }
 
 // Transfers are left out of spending and income; they are listed on request so a wrong one can be moved back.
-async function fetchTransfersForMonth(month: Date): Promise<Array<TransferRow>> {
-  const start = formatISODate(startOfMonth(month));
-  const end = formatISODate(new Date(month.getFullYear(), month.getMonth() + 1, 1));
-  const { data, error } = await supabase
+async function fetchTransfers(scope: Scope): Promise<Array<TransferRow>> {
+  let q = supabase
     .from("v_transactions_eur")
     .select(
       "entry_reference,account_uid,booking_date,category,transaction_type,creditor_name,currency,amount,signed_amount_eur,credit_debit_indicator,created_at,worth_it,personal_amount,owed_by,flow_type,refund_of",
     )
-    .gte("booking_date", start)
-    .lt("booking_date", end)
     .eq("flow_type", "transfer")
-    .neq("amount", 0)
+    .neq("amount", 0);
+  if ("query" in scope) q = q.or(searchOr(scope.query, ["creditor_name", "note"]));
+  else {
+    const { start, end } = monthBounds(scope.month);
+    q = q.gte("booking_date", start).lt("booking_date", end);
+  }
+  const ordered = q
     .order("booking_date", { ascending: false })
     .order("entry_reference", { ascending: false });
+  const { data, error } = await ("query" in scope ? ordered.limit(SEARCH_LIMIT) : ordered);
   if (error) throw error;
   return (data ?? []) as Array<TransferRow>;
 }
@@ -154,14 +175,17 @@ async function fetchSuggestedPairs(): Promise<Array<TransferPair>> {
 }
 
 // My share of Splitwise expenses in the month (shares already paid by card are bank rows).
-async function fetchSharesForMonth(month: Date): Promise<Array<SplitwiseShare>> {
-  const start = formatISODate(startOfMonth(month));
-  const end = formatISODate(new Date(month.getFullYear(), month.getMonth() + 1, 1));
-  const { data, error } = await supabase
+async function fetchShares(scope: Scope): Promise<Array<SplitwiseShare>> {
+  let q = supabase
     .from("v_splitwise_eur")
-    .select("id,booking_date,category,description,group_name,currency,amount,amount_eur")
-    .gte("booking_date", start)
-    .lt("booking_date", end);
+    .select("id,booking_date,category,description,group_name,currency,amount,amount_eur");
+  if ("query" in scope) q = q.or(searchOr(scope.query, ["description"]));
+  else {
+    const { start, end } = monthBounds(scope.month);
+    q = q.gte("booking_date", start).lt("booking_date", end);
+  }
+  const ordered = q.order("booking_date", { ascending: false });
+  const { data, error } = await ("query" in scope ? ordered.limit(SEARCH_LIMIT) : ordered);
   if (error) throw error;
   return (data ?? []) as Array<SplitwiseShare>;
 }
@@ -209,6 +233,18 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
   const [editingApart, setEditingApart] = useState(false);
   const [month, setMonth] = useState(() => monthFromParam(initialMonth));
   const monthKey = useMemo(() => formatISODate(month), [month]);
+  // The search sent to the server: through every month once typing pauses, back to the month at
+  // once when cleared. The list's own filter keeps following each keystroke meanwhile.
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    const next = search.trim();
+    if (!next) return setQuery("");
+    const timer = setTimeout(() => setQuery(next), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+  const scope: Scope = query ? { query } : { month };
+  // The cache key of what's listed, so edits update the rows on screen, searched or not.
+  const listKey = query ? `search:${query.toLowerCase()}` : monthKey;
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -217,7 +253,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
   const rules = useQuery(rulesQuery).data;
   const ruleAction = (name: string | null | undefined, category: string | null) =>
     makeRuleAction(name, category, navigate, rules);
-  const updateCategory = useTransactionFieldMutation(queryClient, monthKey, "category", {
+  const updateCategory = useTransactionFieldMutation(queryClient, listKey, "category", {
     errorMessage: "Couldn't save category",
     successMessage: (value) => `Saved — ${value}`,
     successAction: ({ tx, value }) => ruleAction(tx.creditor_name, value),
@@ -244,22 +280,22 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
       return queryClient.invalidateQueries({ queryKey: RECURRING_KEY });
     });
 
-  const updateType = useTransactionFieldMutation(queryClient, monthKey, "transaction_type", {
+  const updateType = useTransactionFieldMutation(queryClient, listKey, "transaction_type", {
     errorMessage: "Couldn't save type",
     successMessage: (value) => `Saved — ${value}`,
     onSaved: () => recheck(true),
   });
 
-  const answerWorthIt = useTransactionFieldMutation(queryClient, monthKey, "worth_it", {
+  const answerWorthIt = useTransactionFieldMutation(queryClient, listKey, "worth_it", {
     errorMessage: "Couldn't save answer",
   });
 
   const renameTx = useRenameMerchantMutation(queryClient);
 
-  const updateNote = useTransactionFieldMutation(queryClient, monthKey, "note", {
+  const updateNote = useTransactionFieldMutation(queryClient, listKey, "note", {
     errorMessage: "Couldn't save note",
   });
-  const updateTags = useTransactionFieldMutation(queryClient, monthKey, "tags", {
+  const updateTags = useTransactionFieldMutation(queryClient, listKey, "tags", {
     errorMessage: "Couldn't save tags",
   });
   // Every tag used before (all months), most used first, for suggestions while typing one.
@@ -269,16 +305,16 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
     staleTime: 5 * 60_000,
   });
 
-  const updateSplit = useSplitMutation(queryClient, monthKey);
+  const updateSplit = useSplitMutation(queryClient, listKey);
 
-  const updateShare = useShareMutation(queryClient, monthKey);
+  const updateShare = useShareMutation(queryClient, listKey);
 
-  const restoreTransfer = useFlowMutation(queryClient, monthKey);
+  const restoreTransfer = useFlowMutation(queryClient, listKey);
   const changeAmount = useManualAmountMutation(queryClient);
   const [showTransfers, setShowTransfers] = useState(false);
   const [showForOthers, setShowForOthers] = useState(false);
 
-  const bulkUpdateCategory = useBulkCategoryMutation(queryClient, monthKey, () =>
+  const bulkUpdateCategory = useBulkCategoryMutation(queryClient, listKey, () =>
     setSelected(new Set()),
   );
 
@@ -291,14 +327,14 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
   });
 
   const txQuery = useQuery({
-    queryKey: ["transactions", monthKey],
-    queryFn: () => fetchTransactionsForMonth(month),
+    queryKey: ["transactions", listKey],
+    queryFn: () => fetchTransactions(scope),
     staleTime: 60_000,
   });
 
   const transfersQuery = useQuery({
-    queryKey: ["transfers", monthKey],
-    queryFn: () => fetchTransfersForMonth(month),
+    queryKey: ["transfers", listKey],
+    queryFn: () => fetchTransfers(scope),
     staleTime: 60_000,
   });
   const transfers = transfersQuery.data ?? [];
@@ -326,8 +362,8 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
   });
 
   const sharesQuery = useQuery({
-    queryKey: ["splitwise-shares", monthKey],
-    queryFn: () => fetchSharesForMonth(month),
+    queryKey: ["splitwise-shares", listKey],
+    queryFn: () => fetchShares(scope),
     staleTime: 60_000,
   });
 
@@ -406,6 +442,8 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
   // Removing the last use of the selected tag turns the filter off, so the list isn't left empty;
   // if it's still used in another spelling (Trip/trip), the filter follows that spelling.
   const tagNow = tags.find((t) => sameTag(t, tag));
+  // A day picked while searching every month may not be in this month: back on the month, drop it.
+  if (!query && day && day.slice(0, 7) !== monthKey.slice(0, 7)) setDay("");
   if (tag && !txQuery.isPending && tagNow !== tag) setTag(tagNow ?? "");
 
   const accounts = useMemo(() => accountsQuery.data ?? {}, [accountsQuery.data]);
@@ -629,8 +667,31 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
     goToMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1));
   }
 
+  // Totals of what a search found (the month's come from the same view as Reports).
+  const searchTotals = useMemo(() => totalsOf(mine), [mine]);
+  const inOut = query
+    ? { income_eur: searchTotals.income, expenses_eur: searchTotals.expenses }
+    : inOutQuery.data;
+  // The search hit its cap: older matches exist but aren't listed.
+  const searchCapped = !!query && (txQuery.data?.length ?? 0) >= SEARCH_LIMIT;
+  const monthDays = query
+    ? {}
+    : {
+        min: formatISODate(month),
+        max: formatISODate(new Date(month.getFullYear(), month.getMonth() + 1, 0)),
+      };
+
   const emptyList =
-    transactions.length === 0 ? (
+    query && transactions.length === 0 && !txQuery.isPending ? (
+      <EmptyState
+        title={`Nothing matches “${query}” in any month.`}
+        action={
+          <Button variant="quiet" onClick={clearFilters} className="bg-muted">
+            Clear search
+          </Button>
+        }
+      />
+    ) : transactions.length === 0 ? (
       <EmptyState
         title={`No transactions for ${monthLabel}.`}
         action={
@@ -693,24 +754,35 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
         onDecide={(group, choice) => decideGroup.mutate({ group, choice })}
       />
 
-      <MonthSwitcher
-        label={monthLabel}
-        onPrev={goToPrevMonth}
-        onNext={goToNextMonth}
-        canGoNext={canGoNext}
-      />
+      {query ? (
+        // Searching looks through every month, so the month arrows give way to a way back.
+        <div className="flex min-h-11 items-center gap-3">
+          <span aria-live="polite" className="mr-auto text-xl font-semibold text-foreground">
+            All months
+          </span>
+          <Button variant="quiet" onClick={() => setSearch("")} className="bg-card">
+            Back to {monthLabel}
+          </Button>
+        </div>
+      ) : (
+        <MonthSwitcher
+          label={monthLabel}
+          onPrev={goToPrevMonth}
+          onNext={goToNextMonth}
+          canGoNext={canGoNext}
+        />
+      )}
       <p className="mt-0.5 mb-4 min-h-5 text-sm text-muted-foreground">
-        {inOutQuery.data && (
+        {inOut && !(query && txQuery.isPending) && (
           <>
             In{" "}
-            <span className="font-figure text-foreground">
-              {formatEur(inOutQuery.data.income_eur ?? 0)}
-            </span>
+            <span className="font-figure text-foreground">{formatEur(inOut.income_eur ?? 0)}</span>
             {" · "}
             Out{" "}
             <span className="font-figure text-foreground">
-              {formatEur(inOutQuery.data.expenses_eur ?? 0)}
+              {formatEur(inOut.expenses_eur ?? 0)}
             </span>
+            {searchCapped && ` · Newest ${SEARCH_LIMIT} matches. Type more to narrow it.`}
           </>
         )}
       </p>
@@ -742,8 +814,8 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
             tags={tags}
             day={day}
             onDay={setDay}
-            minDay={formatISODate(month)}
-            maxDay={formatISODate(new Date(month.getFullYear(), month.getMonth() + 1, 0))}
+            minDay={monthDays.min}
+            maxDay={monthDays.max}
             count={filterCount}
             resultCount={visible.length}
             onClear={clearSheetFilters}
@@ -801,8 +873,8 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
             onGround
             type="date"
             value={day}
-            min={formatISODate(month)}
-            max={formatISODate(new Date(month.getFullYear(), month.getMonth() + 1, 0))}
+            min={monthDays.min}
+            max={monthDays.max}
             onChange={(e) => setDay(e.target.value)}
             aria-label="Filter by day"
             className="w-auto px-4"

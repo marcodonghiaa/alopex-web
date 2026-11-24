@@ -341,6 +341,33 @@ export function filterTransactions(
   });
 }
 
+/** A search looks through every month, newest first, up to this many rows so a long history stays fast. */
+export const SEARCH_LIMIT = 500;
+
+/**
+ * The `ilike` pattern a search sends. Characters that mean something in PostgREST's `or=(…)` list
+ * (or in a LIKE pattern) become `_`, which matches any one character: the server returns a few
+ * extra rows at most, and filterTransactions then keeps only the exact matches.
+ */
+export function searchPattern(query: string): string {
+  return `*${query.trim().replace(/[\s,()"'\\%_*:.]/g, "_")}*`;
+}
+
+/** Money in and my share of money out across rows (a search's results), in euros. */
+export function totalsOf(rows: Array<TransactionRow>): { income: number; expenses: number } {
+  let income = 0;
+  let expenses = 0;
+  for (const tx of rows) {
+    const eur = tx.signed_amount_eur ?? 0;
+    if (eur > 0) income += eur;
+    else if (eur < 0) {
+      const total = Math.abs(tx.amount ?? 0);
+      expenses += total === 0 ? -eur : (-eur * myShare(tx)) / total;
+    }
+  }
+  return { income, expenses };
+}
+
 /** The selected rows among those shown, leaving out Splitwise shares (not transactions rows). */
 export function selectedOnly(
   shown: Array<TransactionRow>,
