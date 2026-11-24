@@ -49,7 +49,10 @@ vi.mock("@/integrations/supabase/client", () => ({
         }
         if (side === "CRDT" && db.windowError)
           return resolve({ data: null, error: db.windowError });
-        if (side === "DBIT") (db.chargeReads++, db.selects.push(cols));
+        if (side === "DBIT") {
+          db.chargeReads++;
+          db.selects.push(cols);
+        }
         if (db.error) return resolve({ data: null, error: db.error });
         if (broken) return resolve({ data: null, error: { message: "failed to parse filter" } });
         const rows = (side === "DBIT" ? db.charges : db.income).filter(

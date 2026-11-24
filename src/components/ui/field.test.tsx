@@ -20,6 +20,8 @@ describe("CodeInput", () => {
     render(<CodeInput aria-label="Large" large />);
     expect(screen.getByLabelText("Large").className).toMatch(/text-center font-mono/);
     render(<CodeInput aria-label="Extra" className="mt-2" />);
-    expect(screen.getByLabelText("Extra").className).toBe(`${fieldClass()} font-mono tracking-[0.2em] mt-2`);
+    expect(screen.getByLabelText("Extra").className).toBe(
+      `${fieldClass()} font-mono tracking-[0.2em] mt-2`,
+    );
   });
 });

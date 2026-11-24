@@ -81,8 +81,7 @@ export function AddTransaction({ today }: { today: string }) {
     mutationFn: addTransaction,
     onSuccess: (_data, tx) => {
       toast.success(`${tx.description} added`);
-      for (const k of TRANSACTION_QUERIES)
-        void queryClient.invalidateQueries({ queryKey: [k] });
+      for (const k of TRANSACTION_QUERIES) void queryClient.invalidateQueries({ queryKey: [k] });
       setOpen(false);
       reset();
     },
