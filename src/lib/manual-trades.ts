@@ -66,13 +66,16 @@ export function changeTrade(input: {
   );
 }
 
-/** Today's price in euros: the latest snapshot's value per share or coin. Null when unpriced. */
+/**
+ * Today's price in euros: the latest snapshot's value per share or coin. Null when unpriced.
+ * A coin reads only snapshots that hold some: a sold-out source's 0-amount row has no price.
+ */
 export async function latestPriceEur(
   client: SupabaseClient<Database>,
   kind: Kind,
   key: string,
 ): Promise<number | null> {
-  const { data } =
+  const { data, error } =
     kind === "stock"
       ? await client
           .from("portfolio_snapshots")
@@ -84,8 +87,10 @@ export async function latestPriceEur(
           .from("crypto_snapshots")
           .select("value_eur,amount")
           .eq("asset_symbol", key)
+          .gt("amount", 0)
           .order("snapshot_date", { ascending: false })
           .limit(1);
+  if (error) throw error;
   const row = data?.[0] as
     | { value_eur: number | null; value_native?: number; price?: number; amount?: number }
     | undefined;
