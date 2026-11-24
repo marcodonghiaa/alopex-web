@@ -232,15 +232,18 @@ function SplitwisePage() {
     });
   };
 
-  const settleAll = (name: string, rows: Array<SplitRow>) => {
-    for (const r of rows) settle.mutate({ tx: r, settled: true });
-    toast.success(`Settled ${rows.length} bills with ${name}`, {
-      action: {
-        label: "Undo",
-        onClick: () => rows.forEach((r) => settle.mutate({ tx: r, settled: false })),
-      },
+  const settleAll = (name: string, rows: Array<SplitRow>) =>
+    settle.mutate({
+      txs: rows,
+      settled: true,
+      announce: () =>
+        toast.success(`Settled ${rows.length} bills with ${name}`, {
+          action: {
+            label: "Undo",
+            onClick: () => settle.mutate({ txs: rows, settled: false }),
+          },
+        }),
     });
-  };
 
   const loading = (label: string) => (
     <Skeleton role="status" aria-label={label} aria-hidden={false} className="h-24" />
@@ -306,7 +309,7 @@ function SplitwisePage() {
       ) : (
         <OwedView
           rows={splits.data}
-          onToggleSettled={(row, settled) => settle.mutate({ tx: row, settled })}
+          onToggleSettled={(row, settled) => settle.mutate({ txs: [row], settled })}
           onSettleAll={settleAll}
         />
       )}

@@ -439,11 +439,12 @@ describe("transaction mutations are scoped to one account", () => {
     const { result } = renderHook(() => useSettleSplitMutation(queryClient), { wrapper });
     const tx = { account_uid: "a2", entry_reference: "r1" };
     queryClient.setQueryData(["splits"], [{ ...tx, owed_settled: false }]);
-    await act(() => result.current.mutateAsync({ tx, settled: true }));
+    await act(() => result.current.mutateAsync({ txs: [tx], settled: true }));
     expect(
       queryClient.getQueryData<Array<{ owed_settled: boolean }>>(["splits"])?.[0],
     ).toMatchObject({ owed_settled: true });
-    expect(calls[0]?.eq).toEqual(tx);
+    expect(calls[0]?.eq).toEqual({ account_uid: "a2" });
+    expect(calls[0]?.in).toEqual({ entry_reference: ["r1"] });
     // By hand, so no longer tied to a payment: undoing that payment leaves the bill alone.
     expect(calls[0]?.update).toMatchObject({
       owed_settled: true,
@@ -451,7 +452,7 @@ describe("transaction mutations are scoped to one account", () => {
       settled_by_account: null,
       settled_by_ref: null,
     });
-    await act(() => result.current.mutateAsync({ tx, settled: false }));
+    await act(() => result.current.mutateAsync({ txs: [tx], settled: false }));
     expect(calls[1]?.update).toEqual({
       owed_settled: false,
       settled_at: null,
@@ -459,6 +460,46 @@ describe("transaction mutations are scoped to one account", () => {
       settled_by_ref: null,
     });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["splits"] });
+  });
+
+  // H129: "Settle all" fired one mutation per bill and toasted before any finished; one failure
+  // rolled back the others' optimistic state, and the toast showed even when saving failed.
+  it("settles several bills in one mutation and announces only once saved", async () => {
+    const { queryClient, wrapper } = setup();
+    const { result } = renderHook(() => useSettleSplitMutation(queryClient), { wrapper });
+    const a = { account_uid: "a1", entry_reference: "r1" };
+    const b = { account_uid: "a1", entry_reference: "r2" };
+    queryClient.setQueryData(
+      ["splits"],
+      [
+        { ...a, owed_settled: false },
+        { ...b, owed_settled: false },
+      ],
+    );
+    const settled = () =>
+      queryClient
+        .getQueryData<Array<{ owed_settled: boolean }>>(["splits"])!
+        .map((r) => r.owed_settled);
+    const announce = vi.fn();
+
+    updateError = new Error("boom");
+    await act(() =>
+      result.current.mutateAsync({ txs: [a, b], settled: true, announce }).catch(() => {}),
+    );
+    expect(announce).not.toHaveBeenCalled();
+    expect(settled()).toEqual([false, false]);
+
+    updateError = null;
+    calls.length = 0;
+    let release: () => void = () => {};
+    updateGate = new Promise((r) => (release = r));
+    act(() => result.current.mutate({ txs: [a, b], settled: true, announce }));
+    await waitFor(() => expect(settled()).toEqual([true, true]));
+    expect(announce).not.toHaveBeenCalled();
+    release();
+    await waitFor(() => expect(announce).toHaveBeenCalledTimes(1));
+    // One request for both bills of the account.
+    expect(calls).toHaveLength(1);
   });
 
   it("bulk update sends one statement per account and changes only the chosen rows", async () => {
