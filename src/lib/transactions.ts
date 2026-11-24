@@ -1,5 +1,6 @@
 import { dateLocale, numberFormat } from "@/lib/locale";
 import { capitaliseName, cleanMerchantName } from "@/lib/merchant-name";
+import { formatDay } from "@/lib/date";
 
 export interface TransactionRow {
   entry_reference: string;
@@ -286,15 +287,8 @@ export function formatBookingDateShort(bookingDate: string | null, now: Date = n
   });
 }
 
-export function formatBookingDate(bookingDate: string | null): string {
-  return bookingDate
-    ? new Date(`${bookingDate}T00:00:00`).toLocaleDateString(dateLocale(), {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    : "—";
-}
+export const formatBookingDate = (bookingDate: string | null): string =>
+  bookingDate ? formatDay(bookingDate) : "—";
 
 export const UNCATEGORIZED = "__uncategorized__";
 
