@@ -80,7 +80,8 @@ export function CategoryPicker({
               type="button"
               onClick={() => {
                 setOpen(false);
-                if (c !== tx.category) onSelect(c);
+                // Every pick saves, the same category too: that is how you claim the AI's pick.
+                onSelect(c);
               }}
               className={`block min-h-11 w-full rounded-sm px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-accent ${
                 c === tx.category ? "font-medium text-primary" : "text-foreground"

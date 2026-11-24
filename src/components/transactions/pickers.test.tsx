@@ -59,3 +59,14 @@ describe("CategoryPicker with your own categories", () => {
     expect(screen.queryByRole("button", { name: "Taxes" })).toBeNull();
   });
 });
+
+// H371: picking the category already shown claims it (the AI's pick becomes yours), as with types.
+describe("CategoryPicker picking the current category", () => {
+  it("still saves it", async () => {
+    const onSelect = vi.fn();
+    render(<CategoryPicker tx={tx} onSelect={onSelect} saving={false} />);
+    await userEvent.click(screen.getByRole("button", { name: /change category/i }));
+    await userEvent.click(await screen.findByRole("button", { name: "Entertainment" }));
+    expect(onSelect).toHaveBeenCalledWith("Entertainment");
+  });
+});
