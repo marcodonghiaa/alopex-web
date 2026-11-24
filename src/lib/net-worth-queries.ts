@@ -1,6 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { readPages } from "./read-pages";
-import type { HistoryRow, NetWorthRow, ReconstructedRow } from "./net-worth";
+import { withHistory, type HistoryRow, type NetWorthRow, type ReconstructedRow } from "./net-worth";
 
 // The three sources behind every net worth view: live daily snapshots, months imported from the
 // sheet, and months rebuilt from statements. Merged by withHistory. Each has one row per date for
@@ -37,4 +39,19 @@ export function fetchReconstructed(): Promise<Array<ReconstructedRow>> {
       .order("snapshot_date", { ascending: true })
       .range(from, to),
   );
+}
+
+/** The three queries, under the keys every page shares, and `rows`: them merged by withHistory. */
+export function useNetWorthSources() {
+  const live = useQuery({ queryKey: ["net-worth-daily"], queryFn: fetchNetWorth });
+  const history = useQuery({ queryKey: ["net-worth-history"], queryFn: fetchHistory });
+  const reconstructed = useQuery({
+    queryKey: ["net-worth-reconstructed"],
+    queryFn: fetchReconstructed,
+  });
+  const rows = useMemo(
+    () => withHistory(history.data ?? [], live.data ?? [], undefined, reconstructed.data ?? []),
+    [history.data, live.data, reconstructed.data],
+  );
+  return { live, history, reconstructed, rows };
 }

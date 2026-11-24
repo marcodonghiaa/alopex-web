@@ -3,6 +3,7 @@
 import type { Database } from "@/integrations/supabase/types";
 import { readPages } from "@/lib/read-pages";
 import { dedupeKey, type StatementRow } from "./statement";
+import { isMissingFunction } from "@/lib/pg-errors";
 
 type ManualTransactionArgs = Database["public"]["Functions"]["add_manual_transaction"]["Args"];
 
@@ -134,10 +135,9 @@ export async function importStatement(
     added += results.filter((r) => !r.error).length;
     onProgress(added);
     if (failed?.error) {
-      const reason =
-        failed.error.code === "PGRST202"
-          ? "Importing needs a database update first: run supabase db push in the backend."
-          : failed.error.message;
+      const reason = isMissingFunction(failed.error)
+        ? "Importing needs a database update first: run supabase db push in the backend."
+        : failed.error.message;
       throw new Error(`${added} of ${rows.length} added, then: ${reason}`);
     }
   }

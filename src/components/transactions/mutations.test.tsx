@@ -984,6 +984,7 @@ describe("settling a To review group", () => {
     expect(calls[2]?.insert).toEqual({
       user_id: "u1",
       match_field: "creditor_name",
+      match_mode: "contains",
       match_text: "Revolut",
       set_category: null,
       set_flow_type: "transfer",

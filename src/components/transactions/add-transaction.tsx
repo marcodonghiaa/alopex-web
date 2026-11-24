@@ -19,6 +19,7 @@ import { parseQuantity } from "@/lib/holdings";
 import { TRANSACTION_QUERIES } from "@/lib/transactions";
 import { MAX_AMOUNT } from "@/lib/import/statement";
 import { ambiguousNumberHint, numberFormat } from "@/lib/locale";
+import { isMissingFunction } from "@/lib/pg-errors";
 
 type Direction = "DBIT" | "CRDT";
 
@@ -42,9 +43,8 @@ async function addTransaction(tx: NewTransaction): Promise<void> {
     p_source: tx.source,
   });
   if (error) {
-    // PGRST202: the function does not exist yet, so the backend migration was not applied.
     throw new Error(
-      (error as { code?: string }).code === "PGRST202"
+      isMissingFunction(error)
         ? "Adding needs a database update first: run supabase db push in the backend."
         : error.message,
     );
@@ -81,8 +81,7 @@ export function AddTransaction({ today }: { today: string }) {
     mutationFn: addTransaction,
     onSuccess: (_data, tx) => {
       toast.success(`${tx.description} added`);
-      for (const k of TRANSACTION_QUERIES)
-        void queryClient.invalidateQueries({ queryKey: [k] });
+      for (const k of TRANSACTION_QUERIES) void queryClient.invalidateQueries({ queryKey: [k] });
       setOpen(false);
       reset();
     },

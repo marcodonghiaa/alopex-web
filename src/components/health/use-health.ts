@@ -38,7 +38,7 @@ async function fetchAiCounts(): Promise<{ ai: number; stuck: number } | null> {
       .gte("booking_date", since)
       .is("deleted_at", null);
     return filter === "ai"
-      ? q.eq("category_source" as never, "ai")
+      ? q.eq("category_source", "ai")
       : q.is("category", null).lt("created_at", dayAgo);
   };
   const [ai, none] = await Promise.all([count("ai"), count("none")]);

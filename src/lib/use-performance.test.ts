@@ -7,19 +7,11 @@ const client = (result: unknown) =>
 describe("fetchPerformance", () => {
   it("asks for the range start and passes the rows through", async () => {
     const c = client({ data: [{ key: "A" }], error: null });
-    expect(await fetchPerformance(c, "2026-09-30", false)).toEqual({ rows: [{ key: "A" }] });
+    expect(await fetchPerformance(c, "2026-09-30", false)).toEqual([{ key: "A" }]);
     expect(c.rpc).toHaveBeenCalledWith("holding_performance", {
       p_from: "2026-09-30",
       p_last_move: false,
     });
-  });
-
-  it("treats a database without the function as not available yet, not as an error", async () => {
-    const c = client({
-      data: null,
-      error: { code: "PGRST202", message: "Could not find the function" },
-    });
-    expect(await fetchPerformance(c, "2026-09-30", false)).toEqual({ unavailable: true });
   });
 
   it("throws any other error", async () => {
@@ -31,7 +23,7 @@ describe("fetchPerformance", () => {
 
   it("no rows is an empty list", async () => {
     expect(await fetchPerformance(client({ data: null, error: null }), "2026-09-30", true)).toEqual(
-      { rows: [] },
+      [],
     );
   });
 });
@@ -54,15 +46,8 @@ describe("fetchTrades", () => {
       { data: [{ id: "last" }], error: null, count: 1001 },
     ]);
     const out = await fetchTrades(client);
-    expect("trades" in out && out.trades.length).toBe(1001);
+    expect(out.length).toBe(1001);
     expect(range).toHaveBeenCalledTimes(2);
-  });
-
-  it("treats a database without the table as not available yet", async () => {
-    const { client } = paged([
-      { data: null, error: { code: "PGRST205", message: "x" }, count: null },
-    ]);
-    expect(await fetchTrades(client)).toEqual({ unavailable: true });
   });
 
   it("throws on any other error", async () => {
@@ -143,7 +128,7 @@ describe("startPricesOf", () => {
     end_price_eur: 12,
     status,
   });
-  const data = { rows: [row("A", "ok"), row("B", "since"), { ...row("C", "ok"), kind: "crypto" }] };
+  const data = [row("A", "ok"), row("B", "since"), { ...row("C", "ok"), kind: "crypto" }];
 
   it("keeps every holding of the kind for the chip's start", () => {
     expect([...startPricesOf(data, "stock").keys()]).toEqual(["A", "B"]);
@@ -151,9 +136,5 @@ describe("startPricesOf", () => {
 
   it("on the day leaves out holdings first priced after it", () => {
     expect([...startPricesOf(data, "stock", true).keys()]).toEqual(["A"]);
-  });
-
-  it("is empty when the database can't answer yet", () => {
-    expect(startPricesOf({ unavailable: true }, "stock").size).toBe(0);
   });
 });

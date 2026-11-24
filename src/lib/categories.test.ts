@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { CATEGORIES, categoriesFor, categoryCode, categoryColor, categoryTone } from "./categories";
+import {
+  CATEGORIES,
+  categoriesFor,
+  categoryColor,
+  categoryTone,
+  checkCategoryName,
+} from "./categories";
 
 describe("categoryColor", () => {
   it("gives every built-in its own fixed colour", () => {
@@ -51,42 +57,27 @@ describe("categoryTone", () => {
   });
 });
 
-describe("categoryCode", () => {
-  it("gives each built-in its two-letter code", () => {
-    const expected: Record<string, string> = {
-      Housing: "HO",
-      Shopping: "SH",
-      Health: "HE",
-      "Dine Out": "DO",
-      Groceries: "GR",
-      Transports: "TR",
-      Entertainment: "EN",
-      Experiences: "EX",
-      Services: "SE",
-      Income: "IN",
-      Transfer: "TF",
-      Taxes: "TX",
-      Others: "OT",
-    };
-    for (const [c, code] of Object.entries(expected)) expect(categoryCode(c)).toBe(code);
-  });
-
-  it("is -- when there is no category", () => {
-    expect(categoryCode(null)).toBe("--");
-    expect(categoryCode(undefined)).toBe("--");
-    expect(categoryCode("Uncategorized")).toBe("--");
-  });
-
-  it("derives a code for your own categories", () => {
-    expect(categoryCode("Gym")).toBe("GY");
-    expect(categoryCode("Pet Care")).toBe("PC");
-    expect(categoryCode("x")).toBe("X-");
-  });
-});
-
 // Polish 2 #2: a category named like an Object key still gets a colour string.
 describe("categoryColor with prototype names", () => {
   it.each(["constructor", "toString", "hasOwnProperty", "__proto__"])("%s hashes", (name) => {
     expect(categoryColor(name)).toMatch(/^#[0-9a-f]{6}$/);
+  });
+});
+
+describe("checkCategoryName", () => {
+  it("tidies spaces and accepts a free name", () => {
+    expect(checkCategoryName("  Pet   care ", ["Groceries"])).toEqual({
+      name: "Pet care",
+      error: null,
+    });
+  });
+
+  it("refuses a blank, a too-long or a taken name, ignoring case", () => {
+    expect(checkCategoryName("   ", []).error).toBe("Type a name.");
+    expect(checkCategoryName("x".repeat(41), []).error).toBe("At most 40 characters.");
+    expect(checkCategoryName("x".repeat(40), []).error).toBeNull();
+    expect(checkCategoryName("groceries", ["Groceries"]).error).toBe(
+      '"groceries" is already in the list.',
+    );
   });
 });

@@ -23,8 +23,8 @@ import {
   sharePercent,
   type MonthlySpendRow,
 } from "@/lib/spending";
-import { monthNetWorth, withHistory } from "@/lib/net-worth";
-import { fetchHistory, fetchNetWorth, fetchReconstructed } from "@/lib/net-worth-queries";
+import { monthNetWorth } from "@/lib/net-worth";
+import { useNetWorthSources } from "@/lib/net-worth-queries";
 import { TONE_TEXT, toneOf, type Tone } from "@/lib/tone";
 import { MonthSwitcher } from "@/components/month-switcher";
 import { Alert } from "@/components/ui/alert";
@@ -110,16 +110,12 @@ function ReportsPage() {
   const endOfMonthISO = formatISODate(endOfMonth(month));
 
   // Same sources and keys as the Net Worth page: imported months, rebuilt months, live days.
-  const liveQuery = useQuery({ queryKey: ["net-worth-daily"], queryFn: fetchNetWorth });
-  const historyQuery = useQuery({ queryKey: ["net-worth-history"], queryFn: fetchHistory });
-  const rebuiltQuery = useQuery({
-    queryKey: ["net-worth-reconstructed"],
-    queryFn: fetchReconstructed,
-  });
-  const netWorthRows = useMemo(
-    () => withHistory(historyQuery.data ?? [], liveQuery.data ?? [], undefined, rebuiltQuery.data),
-    [historyQuery.data, liveQuery.data, rebuiltQuery.data],
-  );
+  const {
+    live: liveQuery,
+    history: historyQuery,
+    reconstructed: rebuiltQuery,
+    rows: netWorthRows,
+  } = useNetWorthSources();
   const incomeExpensesQuery = useQuery({
     queryKey: incomeExpensesKey(monthISO),
     queryFn: () => fetchIncomeExpenses(monthISO),

@@ -74,7 +74,6 @@ const trade = (trade_date: string, shares: number, key = "X") => ({
 });
 const perf = (over: Partial<Parameters<typeof rangeChip>[1]> = {}) => ({
   isPending: false,
-  unavailable: false,
   tradesByKey: new Map([["X", [trade("2025-06-01", 10), trade("2026-01-16", 10)]]]),
   measuredByKey: new Map([["X", { state: "ok" as const, gain: 0, base: 1, change: 0 }]]),
   summary: { gain: 1234, change: 0.25 },
@@ -121,9 +120,8 @@ describe("rangeChip", () => {
     expect(rangeChip(history(), perf(), undefined)).toBeUndefined();
   });
 
-  it("is absent while trades load, or when they can't", () => {
+  it("is absent while trades load", () => {
     expect(rangeChip(history(), perf({ isPending: true }), startPrices)).toBeUndefined();
-    expect(rangeChip(history(), perf({ unavailable: true }), startPrices)).toBeUndefined();
   });
 
   it("is absent when no trades are imported", () => {

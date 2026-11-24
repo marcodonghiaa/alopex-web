@@ -9,6 +9,7 @@ const rows: Record<string, Array<Record<string, unknown>>> = {};
 let tableData: Record<string, unknown> = {};
 // Every select the page sends, to check which columns each query asks for.
 const selects: Array<{ table: string; cols: string }> = [];
+const ins: Array<{ table: string; col: string; values: unknown }> = [];
 // Every or() and limit() filter, by table, to tell a search across months from a month's list.
 const ors: Array<{ table: string; expr: string }> = [];
 const limits: Array<{ table: string; n: number }> = [];
@@ -38,6 +39,10 @@ vi.mock("@/integrations/supabase/client", () => ({
       }
       q["or"] = (expr: string) => {
         ors.push({ table, expr });
+        return q;
+      };
+      q["in"] = (col: string, values: unknown) => {
+        ins.push({ table, col, values });
         return q;
       };
       q["limit"] = (n: number) => {
@@ -420,12 +425,15 @@ describe("Activity page", () => {
     await screen.findAllByText("€999.00");
     await userEvent.type(screen.getByLabelText("Search by merchant or note"), "rent");
     expect(await screen.findByText("All months")).toBeInTheDocument();
-    expect(ors).toContainEqual({
-      table: "v_transactions_eur",
-      expr: "creditor_name.ilike.*rent*,note.ilike.*rent*",
+    // The search query fires after typing settles, so on a slow runner it can land after the label.
+    await waitFor(() => {
+      expect(ors).toContainEqual({
+        table: "v_transactions_eur",
+        expr: "creditor_name.ilike.*rent*,note.ilike.*rent*",
+      });
+      expect(ors).toContainEqual({ table: "v_splitwise_eur", expr: "description.ilike.*rent*" });
+      expect(limits).toContainEqual({ table: "v_transactions_eur", n: 500 });
     });
-    expect(ors).toContainEqual({ table: "v_splitwise_eur", expr: "description.ilike.*rent*" });
-    expect(limits).toContainEqual({ table: "v_transactions_eur", n: 500 });
     // In/Out add up what was found, not the month's figures.
     expect(await screen.findByText("€50.00")).toBeInTheDocument();
     expect(screen.queryByText("€888.00")).toBeNull();
@@ -543,6 +551,17 @@ describe("Transactions page tag filter", () => {
     const views = selects.filter((s) => s.table === "v_transactions_eur").map((s) => s.cols);
     expect(views.length).toBeGreaterThan(1);
     expect(views.filter((c) => c.includes("note,tags"))).toHaveLength(1);
+  });
+
+  // protects=the month list shows spending and refunds, the transfers list only transfers
+  it("filters the two lists by flow type", async () => {
+    ins.length = 0;
+    renderPage();
+    await screen.findAllByText(/No transactions for/);
+    const flows = ins
+      .filter((i) => i.table === "v_transactions_eur" && i.col === "flow_type")
+      .map((i) => i.values);
+    expect(flows).toEqual(expect.arrayContaining([["spend", "refunded"], ["transfer"]]));
   });
 
   // protects=a failing tag-suggestions call is reported in the console, not hidden;

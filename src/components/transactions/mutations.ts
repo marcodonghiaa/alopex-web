@@ -4,6 +4,7 @@ import type { SplitRow } from "@/lib/splits";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { TablesUpdate } from "@/integrations/supabase/types";
+import { insertRule } from "@/lib/rules-query";
 import type { ReviewGroup, ReviewRow } from "@/lib/transfer-review";
 import { MAX_MATCH_TEXT } from "@/lib/rules";
 import {
@@ -408,9 +409,7 @@ export function useFlowMutation(queryClient: QueryClient, monthKey: string) {
 
   return useMutation<void, Error, Vars, Context>({
     mutationFn: async ({ tx }) => {
-      // `as never`: category_source is not in the generated types.
-      const patch = restorePatch(tx) as never;
-      const { error } = await forTx(supabase.from("transactions").update(patch), tx);
+      const { error } = await forTx(supabase.from("transactions").update(restorePatch(tx)), tx);
       if (error) throw error;
     },
     onMutate: async ({ tx }) => {
@@ -506,8 +505,6 @@ export function useReviewGroupMutation(queryClient: QueryClient) {
       }
       // Nothing a rule could match on, or a name longer than a rule can hold.
       if (!group.name || group.name.length > MAX_MATCH_TEXT) return;
-      const { data } = await supabase.auth.getUser();
-      if (!data.user) throw new Error("You are signed out. Sign in again.");
       // The sync reads "spend" and "income" alike as "not a transfer: count by direction".
       const setFlowType = choice === "transfer" ? "transfer" : restoredFlow(group.rows[0]!);
       // A second answer for the same name changes its rule instead of adding another.
@@ -520,15 +517,19 @@ export function useReviewGroupMutation(queryClient: QueryClient) {
         .limit(1);
       if (findError) throw findError;
       const id = existing?.[0]?.id;
-      const { error } = id
-        ? await supabase.from("category_rules").update({ set_flow_type: setFlowType }).eq("id", id)
-        : await supabase.from("category_rules").insert({
-            user_id: data.user.id,
-            match_field: "creditor_name",
-            match_text: group.name,
-            set_category: null,
-            set_flow_type: setFlowType,
-          });
+      if (!id) {
+        return insertRule({
+          match_field: "creditor_name",
+          match_mode: "contains",
+          match_text: group.name,
+          set_category: null,
+          set_flow_type: setFlowType,
+        });
+      }
+      const { error } = await supabase
+        .from("category_rules")
+        .update({ set_flow_type: setFlowType })
+        .eq("id", id);
       if (error) throw error;
     },
     // The group leaves the list at once; the saves and refetches run behind it.

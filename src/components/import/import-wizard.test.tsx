@@ -11,7 +11,10 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 
-import { ImportWizard } from "./import-wizard";
+import { ImportWizard, SAMPLE_CSV } from "./import-wizard";
+import { guessColumns } from "@/lib/import/guess-columns";
+import { parseCsv } from "@/lib/import/parse-csv";
+import { planNetWorth, planSpend } from "@/lib/import/plan";
 
 beforeEach(() => localStorage.clear());
 
@@ -135,5 +138,47 @@ describe("ImportWizard", () => {
     setup();
     upload("a,b\n1,2\n");
     expect(await screen.findByText(/Choose a column for: Month/)).toBeTruthy();
+  });
+
+  // protects=the helper says which columns each kind needs and where the data shows;
+  // fails_when=both kinds show the same text
+  it("explains each kind's columns and destination", () => {
+    setup();
+    expect(screen.getByText(/Month, then Total or Stocks, Bonds, Crypto and Cash/)).toBeTruthy();
+    expect(screen.getByText(/net worth chart, before your banks were linked/)).toBeTruthy();
+    expect(screen.getByText(/Nothing uploads until Import/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "Spending by month" }));
+    expect(screen.getByText(/Month, Category and Amount/)).toBeTruthy();
+    expect(screen.getByText(/Spending and Cash flow, for months with no bank data/)).toBeTruthy();
+    expect(screen.queryByText(/Stocks, Bonds/)).toBeNull();
+    expect(screen.getByText(/Nothing uploads until Import/)).toBeTruthy();
+  });
+
+  it("downloads the sample CSV for the chosen kind, made in the browser", async () => {
+    const blobs: Array<Blob> = [];
+    URL.createObjectURL = vi.fn((b: Blob) => (blobs.push(b), "blob:sample"));
+    URL.revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    setup();
+    fireEvent.click(screen.getByRole("radio", { name: "Spending by month" }));
+    fireEvent.click(screen.getByRole("button", { name: "Download a sample CSV" }));
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(await blobs[0]!.text()).toBe(SAMPLE_CSV.spend);
+    click.mockRestore();
+  });
+});
+
+describe("SAMPLE_CSV", () => {
+  // protects=the sample is a file the importer reads as is; fails_when=its headers or months
+  // aren't recognised, so a user copying it gets skipped rows
+  it("each sample has 3 example rows that import with none skipped", () => {
+    const nw = parseCsv(SAMPLE_CSV.net_worth);
+    const nwPlan = planNetWorth(nw.rows, guessColumns(nw.headers));
+    expect(nw.rows).toHaveLength(3);
+    expect(nwPlan.skipped).toEqual([]);
+    expect(nwPlan.rows).toHaveLength(3);
+    const sp = parseCsv(SAMPLE_CSV.spend);
+    expect(sp.rows).toHaveLength(3);
+    expect(planSpend(sp.rows, guessColumns(sp.headers)).skipped).toEqual([]);
   });
 });

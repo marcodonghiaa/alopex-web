@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { formatISODate } from "@/lib/date";
 import { changeTrade, latestPriceEur, recordTrade } from "@/lib/manual-trades";
+import { isMissingFunction } from "@/lib/pg-errors";
 
 export type { HoldingTarget } from "@/lib/holding-quantity";
 
@@ -23,9 +24,8 @@ async function deleteHolding(target: HoldingTarget): Promise<void> {
     p_source: target.kind === "crypto" ? target.source : null,
   });
   if (error) {
-    // PGRST202: the function does not exist yet, so the backend migration was not applied.
     throw new Error(
-      (error as { code?: string }).code === "PGRST202"
+      isMissingFunction(error)
         ? "Deleting needs a database update first: run supabase db push in the backend."
         : error.message,
     );

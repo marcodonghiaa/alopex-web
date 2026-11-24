@@ -55,7 +55,6 @@ const perf = (rows: Array<MeasuredRow>, over: Record<string, unknown> = {}) =>
       rows.filter((r) => r.measured.state !== "no_trades").map((r) => [r.row.key, [trade]]),
     ),
     isPending: false,
-    unavailable: false,
     error: null,
     ...over,
   }) as unknown as Parameters<typeof PerformanceNotice>[0]["perf"];
@@ -78,14 +77,9 @@ describe("PerformanceNotice", () => {
     expect(screen.queryByText(/since purchase|Best|Worst|holdings/)).not.toBeInTheDocument();
   });
 
-  it("shows a load error and the not-yet-migrated note", () => {
-    const { unmount } = renderWith(
-      <PerformanceNotice perf={perf([], { error: new Error("boom") })} />,
-    );
+  it("shows a load error", () => {
+    renderWith(<PerformanceNotice perf={perf([], { error: new Error("boom") })} />);
     expect(screen.getByRole("alert")).toHaveTextContent("boom");
-    unmount();
-    renderWith(<PerformanceNotice perf={perf([], { unavailable: true })} />);
-    expect(screen.getByText(/latest update/)).toBeInTheDocument();
   });
 });
 
@@ -96,8 +90,8 @@ describe("TradesImport", () => {
     expect(screen.getByRole("button", { name: "Import trades from CSV" })).toHaveClass("min-h-11");
   });
 
-  it("is left out while loading, before the migration, or on a load error", () => {
-    for (const over of [{ isPending: true }, { unavailable: true }, { error: new Error("x") }]) {
+  it("is left out while loading or on a load error", () => {
+    for (const over of [{ isPending: true }, { error: new Error("x") }]) {
       const { container, unmount } = renderWith(<TradesImport perf={perf([], over)} />);
       expect(container).toBeEmptyDOMElement();
       unmount();

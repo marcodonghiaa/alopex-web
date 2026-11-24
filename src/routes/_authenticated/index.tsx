@@ -10,15 +10,8 @@ import { HeadlineFigure } from "@/components/headline-figure";
 import { formatDay } from "@/lib/date";
 import { ValueChart } from "@/components/value-chart";
 import { SegmentedControl } from "@/components/segmented-control";
-import {
-  CHART_RANGES,
-  RANGE_LABEL,
-  chartPoints,
-  inRange,
-  withHistory,
-  type ChartRange,
-} from "@/lib/net-worth";
-import { fetchHistory, fetchNetWorth, fetchReconstructed } from "@/lib/net-worth-queries";
+import { CHART_RANGES, RANGE_LABEL, chartPoints, inRange, type ChartRange } from "@/lib/net-worth";
+import { useNetWorthSources } from "@/lib/net-worth-queries";
 import { TONE_TEXT, toneOf } from "@/lib/tone";
 import { Alert } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -76,16 +69,13 @@ function NetWorthPage() {
   const [currency, setCurrency] = useState<Currency>("EUR");
   const [range, setRange] = useState<ChartRange>("YTD");
 
-  const netWorthQuery = useQuery({
-    queryKey: ["net-worth-daily"],
-    queryFn: fetchNetWorth,
-  });
-  // Optional extra: absent table or empty history just means no pre-snapshot data.
-  const historyQuery = useQuery({ queryKey: ["net-worth-history"], queryFn: fetchHistory });
-  const reconstructedQuery = useQuery({
-    queryKey: ["net-worth-reconstructed"],
-    queryFn: fetchReconstructed,
-  });
+  // Empty history just means no pre-snapshot data.
+  const {
+    live: netWorthQuery,
+    history: historyQuery,
+    reconstructed: reconstructedQuery,
+    rows: allRows,
+  } = useNetWorthSources();
   const fxQuery = useQuery({
     queryKey: ["fx-rates-latest"],
     queryFn: fetchLatestFxRates,
@@ -93,10 +83,6 @@ function NetWorthPage() {
   });
 
   const snapshots = useMemo(() => netWorthQuery.data ?? [], [netWorthQuery.data]);
-  const allRows = useMemo(
-    () => withHistory(historyQuery.data ?? [], snapshots, undefined, reconstructedQuery.data ?? []),
-    [historyQuery.data, snapshots, reconstructedQuery.data],
-  );
   const chartData = useMemo(() => inRange(chartPoints(allRows), range), [allRows, range]);
   const chartFirst = chartData.at(0);
   const latest = snapshots.at(-1);

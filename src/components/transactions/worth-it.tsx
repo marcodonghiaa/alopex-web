@@ -7,52 +7,15 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  formatMoney,
-  isSplit,
-  isWorthItEligible,
-  myShare,
-  type TransactionRow,
-} from "@/lib/transactions";
+import { formatMoney, isSplit, myShare, type TransactionRow } from "@/lib/transactions";
 import { cleanMerchantName } from "@/lib/merchant-name";
 
-export function WorthItPrompt({
-  tx,
-  onAnswer,
-}: {
-  tx: TransactionRow;
-  onAnswer: (worthIt: "yes" | "no") => void;
-}) {
-  if (tx.worth_it) {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-        {tx.worth_it === "yes" ? (
-          <ThumbsUp className="size-3" />
-        ) : (
-          <ThumbsDown className="size-3" />
-        )}
-        {tx.worth_it === "yes" ? "Worth it" : "Not worth it"}
-      </span>
-    );
-  }
-  if (!isWorthItEligible(tx)) return null;
+/** The recorded answer, in the edit sheet's "Worth it" row (shown only once there is one). */
+export function WorthItPrompt({ tx }: { tx: TransactionRow }) {
   return (
-    // Sits in the edit sheet's "Worth it" row, which already asks the question.
-    <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-      <button
-        type="button"
-        onClick={() => onAnswer("yes")}
-        className="min-h-11 rounded-sm px-2 py-1 font-medium text-foreground transition-colors hover:bg-accent"
-      >
-        Yes
-      </button>
-      <button
-        type="button"
-        onClick={() => onAnswer("no")}
-        className="min-h-11 rounded-sm px-2 py-1 font-medium text-foreground transition-colors hover:bg-accent"
-      >
-        No
-      </button>
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+      {tx.worth_it === "yes" ? <ThumbsUp className="size-3" /> : <ThumbsDown className="size-3" />}
+      {tx.worth_it === "yes" ? "Worth it" : "Not worth it"}
     </span>
   );
 }

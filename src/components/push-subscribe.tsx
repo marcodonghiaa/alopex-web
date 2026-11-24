@@ -50,7 +50,7 @@ export async function forgetThisBrowserPush() {
     const sub = await reg?.pushManager.getSubscription();
     if (!sub) return;
     const { error } = await supabase
-      .from("push_subscriptions" as never)
+      .from("push_subscriptions")
       .delete()
       .eq("endpoint", sub.endpoint);
     // Row still there: keep the browser subscribed so the row stays deliverable.
@@ -89,7 +89,7 @@ export function PushSubscribeButton({ onSubscribed }: { onSubscribed?: () => voi
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
       const { data } = await supabase
-        .from("push_subscriptions" as never)
+        .from("push_subscriptions")
         .select("id")
         .eq("user_id", userData.user.id)
         .eq("endpoint", existing.endpoint)

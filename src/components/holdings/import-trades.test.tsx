@@ -11,14 +11,12 @@ const db = vi.hoisted(() => ({
   holdingsDown: false,
   /** Coin rows added for one test. */
   extraCoins: [] as Array<Record<string, unknown>>,
-  rpcMissing: false,
   /** match_broker_rows: how often it ran, and what it answers (null = an error, say an older backend). */
   matchCalls: 0,
   match: null as null | { matched: number; cleared: number; unmatched: number },
   /** Set, a write answers with this error (set_holding_quantity for rpcError). */
   insertError: null as null | Record<string, unknown>,
   rpcError: null as null | Record<string, unknown>,
-  updateError: null as null | Record<string, unknown>,
   upsertError: null as string | null,
   eventsDown: false,
   // The saved investment_events never arrive (still loading).
@@ -111,7 +109,7 @@ vi.mock("@/integrations/supabase/client", () => {
           db.updated.push([table, patch, where]);
           const chain = {
             eq: (c: string, v: unknown) => (where.push([c, v]), chain),
-            then: (resolve: (v: unknown) => void) => resolve({ error: db.updateError }),
+            then: (resolve: (v: unknown) => void) => resolve({ error: null }),
           };
           return chain;
         },
@@ -159,11 +157,7 @@ vi.mock("@/integrations/supabase/client", () => {
         }
         db.rpc.push([name, args]);
         return Promise.resolve(
-          db.rpcError
-            ? { data: null, error: db.rpcError }
-            : db.rpcMissing
-              ? { data: null, error: { code: "PGRST202", message: "not found" } }
-              : { data: 1, error: null },
+          db.rpcError ? { data: null, error: db.rpcError } : { data: 1, error: null },
         );
       },
       functions: {
@@ -269,7 +263,6 @@ describe("ImportTrades", () => {
     db.signedOut = false;
     db.rpc.length = 0;
     db.updated.length = 0;
-    db.rpcMissing = false;
     db.matchCalls = 0;
     db.match = null;
     db.rpcError = null;
@@ -285,7 +278,6 @@ describe("ImportTrades", () => {
     db.ratesDown = false;
     db.extraCoins.length = 0;
     db.insertError = null;
-    db.updateError = null;
     db.signedOut = false;
     db.ratesGate = null;
     db.ratesReads = 0;
@@ -418,25 +410,6 @@ describe("ImportTrades", () => {
     expect(db.rpc[0]![0]).toBe("set_holding_quantity");
     expect(db.rpc[0]![1]).toMatchObject({ p_kind: "stock", p_key: "XX0000000001", p_quantity: 4 });
     expect(db.updated).toHaveLength(0);
-  });
-
-  it("on a backend without set_holding_quantity the count is still set, on the holding itself", async () => {
-    db.rpcMissing = true;
-    open("crypto");
-    fireEvent.click(screen.getByRole("button", { name: /Ledger Live/ }));
-    const csv = readFileSync("src/lib/brokers/fixtures/ledger_live.csv", "utf8");
-    fireEvent.change(screen.getByLabelText("CSV file"), {
-      target: { files: [new File([csv], "ops.csv", { type: "text/csv" })] },
-    });
-    fireEvent.click(await screen.findByRole("button", { name: "Save 5 trades" }));
-    await waitFor(() => expect(db.updated).toHaveLength(1));
-    const [table, patch, where] = db.updated[0]!;
-    expect(table).toBe("crypto_holdings");
-    expect(patch["amount"]).toBeCloseTo(0.4988);
-    expect(where).toEqual([
-      ["asset_symbol", "eth"],
-      ["source", "Manual"],
-    ]);
   });
 
   it("a coin held on Ledger and added by hand too is corrected on its Ledger row", async () => {
@@ -1341,17 +1314,6 @@ describe("ImportTrades", () => {
     expect(screen.queryByText("Also saved: income, fees and cash")).toBeNull();
   });
 
-  it("on a backend without set_holding_quantity a stock's count is set on the holding itself", async () => {
-    db.rpcMissing = true;
-    open("stock");
-    fireEvent.click(await pickTradeRepublic());
-    await waitFor(() => expect(db.updated).toHaveLength(2));
-    expect(db.updated).toEqual([
-      ["portfolio_holdings", { shares: 4 }, [["isin", "XX0000000001"]]],
-      ["portfolio_holdings", { shares: 0 }, [["isin", "XX0000000002"]]],
-    ]);
-  });
-
   it("signed out, nothing is saved and it says to sign in", async () => {
     db.signedOut = true;
     open("stock");
@@ -1638,21 +1600,6 @@ describe("ImportTrades", () => {
       await saveFails("crypto", /permission denied/);
       expect(db.rpc).toHaveLength(1);
       expect(db.updated).toHaveLength(0);
-    });
-
-    it("the fallback count write fails", async () => {
-      db.rpcMissing = true;
-      db.updateError = { message: "update failed" };
-      await saveFails("crypto", /update failed/);
-      expect(db.updated).toHaveLength(1);
-    });
-
-    it("a stock count write fails", async () => {
-      db.rpcMissing = true;
-      db.updateError = { message: "update failed" };
-      await saveFails("stock", /update failed/);
-      expect(db.updated).toHaveLength(1);
-      expect(db.updated[0]![0]).toBe("portfolio_holdings");
     });
   });
 

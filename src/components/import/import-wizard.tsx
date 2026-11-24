@@ -27,6 +27,34 @@ const KINDS: Array<{ value: ImportKind; label: string }> = [
   { value: "spend", label: "Spending by month" },
 ];
 
+// Which columns each kind reads, and where its months show up.
+const HELP: Record<ImportKind, string> = {
+  net_worth:
+    "Columns: Month, then Total or Stocks, Bonds, Crypto and Cash. The months fill the net worth chart, before your banks were linked.",
+  spend:
+    "Columns: Month, Category and Amount. The months show in Spending and Cash flow, for months with no bank data.",
+};
+
+/** A file each kind imports as is: three example months. */
+export const SAMPLE_CSV: Record<ImportKind, string> = {
+  net_worth:
+    "Month,Stocks,Bonds,Crypto,Cash\n2024-01,12000,3000,800,5000\n2024-02,12400,3000,950,5200\n2024-03,12100,3050,900,5600\n",
+  spend:
+    "Month,Category,Amount\n2024-01,Groceries,320\n2024-01,Housing,850\n2024-02,Dine Out,140\n",
+};
+
+// Made in the browser: a blob link click, the download every browser honors.
+function downloadSample(kind: ImportKind) {
+  const url = URL.createObjectURL(new Blob([SAMPLE_CSV[kind]], { type: "text/csv" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = kind === "net_worth" ? "sample-net-worth.csv" : "sample-spending.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 const ROLES_BY_KIND: Record<ImportKind, Array<{ role: Role; label: string; required: boolean }>> = {
   net_worth: [
     { role: "month", label: "Month", required: true },
@@ -175,8 +203,15 @@ export function ImportWizard() {
           />
         </label>
         <p className="mt-1 text-sm text-muted-foreground">
-          CSV, amounts in EUR. Nothing uploads until Import.
+          {HELP[kind]} CSV, amounts in EUR. Nothing uploads until Import.
         </p>
+        <button
+          type="button"
+          onClick={() => downloadSample(kind)}
+          className="mt-1 min-h-11 text-sm font-medium text-primary underline-offset-4 hover:underline"
+        >
+          Download a sample CSV
+        </button>
         {error && (
           <p role="alert" className="mt-3 text-sm text-negative">
             {error}

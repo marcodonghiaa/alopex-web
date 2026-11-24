@@ -12,15 +12,7 @@ import type { Measured, Trade } from "@/lib/trades";
 import { incomeByKey } from "@/lib/investment-events";
 import type { EventRow, InvestmentEvent } from "@/lib/investment-events";
 
-export type PerformanceResult = { rows: Array<PerformanceRow> } | { unavailable: true };
 export type SavedTrade = Trade & { id: string };
-export type TradesResult = { trades: Array<SavedTrade> } | { unavailable: true };
-
-// PostgREST answers these when the function or table is not in the database: the dashboard was
-// deployed before the owner applied the migration. That is "not available yet", not a failure.
-const isMissingFunction = (error: { code?: string }) => error.code === "PGRST202";
-const isMissingTable = (error: { code?: string }) =>
-  error.code === "PGRST205" || error.code === "42P01";
 
 /**
  * The per-holding prices behind a range. One row per stock, fund or coin (about 25), so there is
@@ -30,21 +22,17 @@ export async function fetchPerformance(
   client: SupabaseClient<Database>,
   from: string,
   lastMove: boolean,
-): Promise<PerformanceResult> {
+): Promise<Array<PerformanceRow>> {
   const { data, error } = await client.rpc("holding_performance", {
     p_from: from,
     p_last_move: lastMove,
   });
-  if (error) {
-    if (isMissingFunction(error)) return { unavailable: true };
-    throw error;
-  }
-  return { rows: data ?? [] };
+  if (error) throw error;
+  return data ?? [];
 }
 
 /** Every trade, paged: savings plans over 25 holdings can pass the 1000-row limit. */
-export async function fetchTrades(client: SupabaseClient<Database>): Promise<TradesResult> {
-  let missing = false;
+export async function fetchTrades(client: SupabaseClient<Database>): Promise<Array<SavedTrade>> {
   const rows = await fetchAllRows("holding_trades", async (from, to) => {
     const { data, error, count } = await client
       .from("holding_trades")
@@ -56,13 +44,9 @@ export async function fetchTrades(client: SupabaseClient<Database>): Promise<Tra
       )
       .order("id")
       .range(from, to);
-    if (error && isMissingTable(error)) {
-      missing = true;
-      return { data: [], error: null, count: 0 };
-    }
     return { data: data as Array<ExportRow> | null, error, count };
   });
-  return missing ? { unavailable: true } : { trades: rows as unknown as Array<SavedTrade> };
+  return rows as unknown as Array<SavedTrade>;
 }
 
 export type SavedEvent = EventRow & Pick<InvestmentEvent, "source" | "external_id">;
@@ -105,16 +89,14 @@ export function usePerformance(lastIso: string | undefined, kind: "stock" | "cry
 
   const tradesByKey = useMemo(() => {
     const out = new Map<string, Array<SavedTrade>>();
-    if (saved.data && "trades" in saved.data) {
-      for (const t of saved.data.trades) {
-        if (t.kind === kind) out.set(t.key, [...(out.get(t.key) ?? []), t]);
-      }
+    for (const t of saved.data ?? []) {
+      if (t.kind === kind) out.set(t.key, [...(out.get(t.key) ?? []), t]);
     }
     return out;
   }, [saved.data, kind]);
 
   const measured = useMemo(() => {
-    const rows = ofKind(prices.data && "rows" in prices.data ? prices.data.rows : [], kind);
+    const rows = ofKind(prices.data ?? [], kind);
     // Trades of something no longer in your holdings: sold, so their profit still counts.
     const known = new Set(rows.map((r) => r.key));
     const sold: Array<PerformanceRow> = [...tradesByKey.keys()]
@@ -144,7 +126,7 @@ export function usePerformance(lastIso: string | undefined, kind: "stock" | "cry
 
   // Today's price per holding, for valuing what your trades hold now (the range chip).
   const endPrices = useMemo(() => {
-    const rows = ofKind(prices.data && "rows" in prices.data ? prices.data.rows : [], kind);
+    const rows = ofKind(prices.data ?? [], kind);
     return new Map(
       rows.flatMap((r) => (r.end_price_eur != null ? [[r.key, r.end_price_eur] as const] : [])),
     );
@@ -158,16 +140,13 @@ export function usePerformance(lastIso: string | undefined, kind: "stock" | "cry
     tradesByKey,
     events: events.data ?? [],
     isPending: prices.isPending || saved.isPending || events.isPending,
-    unavailable:
-      (prices.data != null && "unavailable" in prices.data) ||
-      (saved.data != null && "unavailable" in saved.data),
     error: prices.error ?? saved.error ?? events.error ?? null,
   };
 }
 
 /**
  * Each holding's price on `from` (the range's first day), for valuing what your trades held then.
- * Undefined while loading; empty when the database can't answer yet.
+ * Undefined while loading.
  */
 export function useStartPrices(from: string | undefined, kind: "stock" | "crypto") {
   const query = useQuery({
@@ -201,10 +180,12 @@ export function useDayPrices(
 }
 
 /** Each holding's start price; `onTheDay` leaves out holdings first priced after the day. */
-export function startPricesOf(data: PerformanceResult, kind: "stock" | "crypto", onTheDay = false) {
-  const rows = ("rows" in data ? ofKind(data.rows, kind) : []).filter(
-    (r) => !onTheDay || r.status !== "since",
-  );
+export function startPricesOf(
+  data: Array<PerformanceRow>,
+  kind: "stock" | "crypto",
+  onTheDay = false,
+) {
+  const rows = ofKind(data, kind).filter((r) => !onTheDay || r.status !== "since");
   return new Map(
     rows.flatMap((r) => (r.start_price_eur != null ? [[r.key, r.start_price_eur] as const] : [])),
   );

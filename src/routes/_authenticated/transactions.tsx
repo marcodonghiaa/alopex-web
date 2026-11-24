@@ -14,7 +14,7 @@ import { SectionTitle } from "@/components/ui/grouped-list";
 import { Alert } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
-import { formatISODate } from "@/lib/date";
+import { formatISODate, monthBounds } from "@/lib/date";
 import {
   UNCATEGORIZED,
   activeFilterCount,
@@ -112,44 +112,20 @@ function TransactionsRoute() {
 // What the list shows: one month, or a search through every month.
 type Scope = { month: Date } | { query: string };
 
-const monthBounds = (month: Date) => ({
-  start: formatISODate(startOfMonth(month)),
-  end: formatISODate(new Date(month.getFullYear(), month.getMonth() + 1, 1)),
-});
-
 // A search matches the merchant or the note, like the list's own filter, in any month.
 const searchOr = (query: string, columns: Array<string>) =>
   columns.map((c) => `${c}.ilike.${searchPattern(query)}`).join(",");
 
-async function fetchTransactions(scope: Scope): Promise<Array<TransactionRow>> {
-  let q = supabase
-    .from("v_transactions_eur")
-    .select(
-      "entry_reference,account_uid,booking_date,category,transaction_type,creditor_name,bank_creditor_name,currency,amount,signed_amount_eur,credit_debit_indicator,created_at,worth_it,personal_amount,owed_by,flow_type,refund_of,note,tags",
-    )
-    .in("flow_type", ["spend", "refunded"])
-    .neq("amount", 0);
-  if ("query" in scope) q = q.or(searchOr(scope.query, ["creditor_name", "note"]));
-  else {
-    const { start, end } = monthBounds(scope.month);
-    q = q.gte("booking_date", start).lt("booking_date", end);
-  }
-  const ordered = q
-    .order("booking_date", { ascending: false })
-    .order("entry_reference", { ascending: false });
-  const { data, error } = await ("query" in scope ? ordered.limit(SEARCH_LIMIT) : ordered);
-  if (error) throw error;
-  return (data ?? []) as Array<TransactionRow>;
-}
+const LIST_COLUMNS =
+  "entry_reference,account_uid,booking_date,category,transaction_type,creditor_name,bank_creditor_name,currency,amount,signed_amount_eur,credit_debit_indicator,created_at,worth_it,personal_amount,owed_by,flow_type,refund_of";
 
-// Transfers are left out of spending and income; they are listed on request so a wrong one can be moved back.
-async function fetchTransfers(scope: Scope): Promise<Array<TransferRow>> {
+// Spending (with refunds) or transfers, for one month or a search. Transfers are left out of
+// spending and income; they are listed on request so a wrong one can be moved back.
+async function fetchList<Row>(scope: Scope, transfers: boolean): Promise<Array<Row>> {
   let q = supabase
     .from("v_transactions_eur")
-    .select(
-      "entry_reference,account_uid,booking_date,category,transaction_type,creditor_name,bank_creditor_name,currency,amount,signed_amount_eur,credit_debit_indicator,created_at,worth_it,personal_amount,owed_by,flow_type,refund_of",
-    )
-    .eq("flow_type", "transfer")
+    .select(transfers ? LIST_COLUMNS : `${LIST_COLUMNS},note,tags`)
+    .in("flow_type", transfers ? ["transfer"] : ["spend", "refunded"])
     .neq("amount", 0);
   if ("query" in scope) q = q.or(searchOr(scope.query, ["creditor_name", "note"]));
   else {
@@ -161,7 +137,7 @@ async function fetchTransfers(scope: Scope): Promise<Array<TransferRow>> {
     .order("entry_reference", { ascending: false });
   const { data, error } = await ("query" in scope ? ordered.limit(SEARCH_LIMIT) : ordered);
   if (error) throw error;
-  return (data ?? []) as Array<TransferRow>;
+  return (data ?? []) as Array<Row>;
 }
 
 // Transfers the sync paired on its own, waiting for a yes or no.
@@ -334,13 +310,13 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
 
   const txQuery = useQuery({
     queryKey: ["transactions", listKey],
-    queryFn: () => fetchTransactions(scope),
+    queryFn: () => fetchList<TransactionRow>(scope, false),
     staleTime: 60_000,
   });
 
   const transfersQuery = useQuery({
     queryKey: ["transfers", listKey],
-    queryFn: () => fetchTransfers(scope),
+    queryFn: () => fetchList<TransferRow>(scope, true),
     staleTime: 60_000,
   });
   const transfers = transfersQuery.data ?? [];

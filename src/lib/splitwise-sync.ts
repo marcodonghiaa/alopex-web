@@ -4,6 +4,7 @@ import type { ClassifiedRow } from "@/lib/import/splitwise-classify";
 import { matchBank, type BankTx, type RateToEur } from "@/lib/import/splitwise-match";
 import { refreshKeys } from "@/lib/import/last-import";
 import { numberFormat } from "@/lib/locale";
+import { isMissingFunction, isMissingTable } from "@/lib/pg-errors";
 
 // The dashboard side of the Splitwise API sync: the connection's status, the two Edge Functions
 // (splitwise-connect, sync-splitwise) and the To link list (splitwise_review). The server does
@@ -41,9 +42,7 @@ export async function fetchConnection(): Promise<SplitwiseConnection> {
   const { data, error } = await supabase.rpc("get_splitwise_connection");
   // A backend without the sync (PostgREST: no such function) is simply not connected; any other
   // failure is an error, never "not connected" (that would offer to connect again).
-  const noSync =
-    error?.code === "PGRST202" || error?.message.startsWith("Could not find the function");
-  if (error && !noSync) throw new Error(error.message);
+  if (error && !isMissingFunction(error)) throw new Error(error.message);
   const row = error ? undefined : data?.[0];
   return {
     connected: row?.connected === true,
@@ -207,7 +206,7 @@ export async function fetchReviewCount(): Promise<number> {
     .from("splitwise_review")
     .select("id", { count: "exact", head: true })
     .eq("status", "pending");
-  if (error?.code === "PGRST205" || error?.code === "42P01") return 0;
+  if (error && isMissingTable(error)) return 0;
   if (error) throw new Error(error.message);
   return count ?? 0;
 }

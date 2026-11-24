@@ -1,7 +1,6 @@
 import { Icon, isIconName } from "@/components/icons/icon";
 import {
   CATEGORY_PALETTE,
-  categoryCode,
   categoryColor,
   categoryIconName,
   isPaletteColor,
@@ -44,7 +43,7 @@ export function CategoryAvatar({
         <span
           className={`font-semibold ${size === "sm" ? "text-[0.8125rem]" : size === "lg" ? "text-xl" : "text-[0.9375rem]"}`}
         >
-          {categoryCode(category).charAt(0)}
+          {(category?.trim().charAt(0) || "-").toUpperCase()}
         </span>
       )}
     </span>

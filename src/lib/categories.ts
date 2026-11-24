@@ -128,30 +128,20 @@ export function categoryColor(category: string | null | undefined): string {
   return CUSTOM_COLORS[hash % CUSTOM_COLORS.length]!;
 }
 
-const CATEGORY_CODES: Record<(typeof CATEGORIES)[number], string> = {
-  Shopping: "SH",
-  Entertainment: "EN",
-  Groceries: "GR",
-  "Dine Out": "DO",
-  Services: "SE",
-  Housing: "HO",
-  Transports: "TR",
-  Experiences: "EX",
-  Income: "IN",
-  Health: "HE",
-  Transfer: "TF",
-  Taxes: "TX",
-  Others: "OT",
-};
+export const MAX_CATEGORY_NAME = 40;
 
-/** Two-letter uppercase code for the category avatar; "--" when there is none. */
-export function categoryCode(category: string | null | undefined): string {
-  if (!category || category === "Uncategorized") return "--";
-  const builtIn = (CATEGORY_CODES as Record<string, string>)[category];
-  if (builtIn) return builtIn;
-  const words = category.trim().split(/\s+/).filter(Boolean);
-  const code = words.length >= 2 ? words[0]![0]! + words[1]![0]! : category.slice(0, 2);
-  return code.toUpperCase().padEnd(2, "-");
+/** A typed category name with spaces tidied, and why it can't be saved (null when it can).
+ * `taken` is every other category: renaming leaves the original out. */
+export function checkCategoryName(raw: string, taken: ReadonlyArray<string>) {
+  const name = raw.trim().replace(/\s+/g, " ");
+  const error = !name
+    ? "Type a name."
+    : name.length > MAX_CATEGORY_NAME
+      ? `At most ${MAX_CATEGORY_NAME} characters.`
+      : taken.some((c) => c.toLowerCase() === name.toLowerCase())
+        ? `"${name}" is already in the list.`
+        : null;
+  return { name, error };
 }
 
 /** Built-ins nobody may hide: transfers and income depend on them (the database refuses too). */

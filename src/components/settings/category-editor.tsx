@@ -11,6 +11,8 @@ import {
   CATEGORY_PALETTE,
   PALETTE_COLORS,
   categoryIconName,
+  checkCategoryName,
+  MAX_CATEGORY_NAME,
   pickedColor,
   type PaletteColor,
 } from "@/lib/categories";
@@ -110,14 +112,10 @@ export function CategoryEditor({
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    const next = name.trim().replace(/\s+/g, " ");
-    if (!next) return setError("Type a name.");
-    if (next.length > 40) return setError("At most 40 characters.");
-    const taken = categories.some(
-      (c) => c.name !== original && c.name.toLowerCase() === next.toLowerCase(),
-    );
     // Renaming onto another category merges the two: that is Delete, which says where things go.
-    if (taken) return setError(`"${next}" is already in the list.`);
+    const others = categories.filter((c) => c.name !== original).map((c) => c.name);
+    const { name: next, error: invalid } = checkCategoryName(name, others);
+    if (invalid) return setError(invalid);
     setError(null);
     save.mutate(next);
   }
@@ -174,7 +172,7 @@ export function CategoryEditor({
               <Input
                 aria-label="Name"
                 value={name}
-                maxLength={40}
+                maxLength={MAX_CATEGORY_NAME}
                 disabled={locked}
                 onChange={(e) => setName(e.target.value)}
                 className="flex-1 px-4"
