@@ -10,11 +10,10 @@ import { balancesFromFile } from "@/lib/import/splitwise-balances";
 import { classifyRows, summarize } from "@/lib/import/splitwise-classify";
 import { groupNames, newGroupProblem, type StoredGroupRow } from "@/lib/import/splitwise-group";
 import { fingerprintRows } from "@/lib/import/splitwise-match";
+import { MAX_GROUP } from "@/lib/import/splitwise-corrections";
 import { parseSplitwiseCsv, type SplitwiseFile } from "@/lib/import/splitwise-parse";
 import { hasErrors, validateSplitwise, type Issue } from "@/lib/import/splitwise-validate";
 import { plural } from "@/lib/plural";
-
-const GROUP_MAX = 100;
 
 const readError = (err: unknown) =>
   err instanceof Error ? err.message : "Could not read that file.";
@@ -317,7 +316,7 @@ export function SplitwisePanel({
               <input
                 aria-label="New group name"
                 value={newName}
-                maxLength={GROUP_MAX}
+                maxLength={MAX_GROUP}
                 placeholder="e.g. Lisbon trip"
                 onChange={(e) => setNewName(e.target.value)}
                 onBlur={() => setSettledName(newName.trim())}

@@ -6,8 +6,12 @@ import type { RpcClient } from "./splitwise-commit";
 // Compares a Splitwise file with what earlier imports stored, inside the dates the file covers,
 // and turns the rows the user ticks into one database call. Pure except runCorrections.
 
-const MAX_DESCRIPTION = 300;
-const MAX_FINGERPRINT = 500;
+// Limits mirror the database checks (splitwise_expenses), so a bad row is reported in plain words.
+export const MAX_GROUP = 100;
+export const MAX_DESCRIPTION = 300;
+export const MAX_FINGERPRINT = 500;
+
+export const euros = (cents: number) => cents / 100;
 
 /** A row an earlier import stored for this group. */
 export interface StoredShare {
@@ -158,8 +162,6 @@ export interface CorrectionInput {
   rate: RateToEur;
   categoryFor: (row: ClassifiedRow) => string | null;
 }
-
-const euros = (cents: number) => cents / 100;
 
 /** Builds the database call for the ticked rows only. */
 export function planCorrections(input: CorrectionInput): CorrectionPlan {

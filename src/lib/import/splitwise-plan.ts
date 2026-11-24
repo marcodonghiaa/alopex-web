@@ -2,7 +2,11 @@ import { cutChars } from "@/lib/transactions";
 import type { ClassifiedRow } from "./splitwise-classify";
 import {
   diffStored,
+  euros,
   isShareRow,
+  MAX_DESCRIPTION,
+  MAX_FINGERPRINT,
+  MAX_GROUP,
   missingRates,
   type EditedRow,
   type FileRow,
@@ -12,11 +16,7 @@ import { txKey, type BankMatch, type RateToEur } from "./splitwise-match";
 
 // Turns a reviewed Splitwise import into exactly what will be written: my shares, and the
 // confirmed changes to bank transactions. Pure; the caller sends the result to the database.
-// Limits mirror the database checks so a bad plan is reported here, in plain words.
-
-const MAX_GROUP = 100;
-const MAX_DESCRIPTION = 300;
-const MAX_FINGERPRINT = 500;
+// Limits (from splitwise-corrections) mirror the database checks so a bad plan is reported here.
 
 export interface ShareRow {
   fingerprint: string;
@@ -141,8 +141,6 @@ const ACTION_FOR_KIND: Record<string, LinkRow["action"] | undefined> = {
   settle_out: "mark_transfer",
   settle_in: "mark_transfer",
 };
-
-const euros = (cents: number) => cents / 100;
 
 function checkMatches(
   rows: Array<ClassifiedRow>,
