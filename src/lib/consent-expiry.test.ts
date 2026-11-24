@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { consentAlerts } from "./consent-expiry";
+import { accessText, consentAlerts } from "./consent-expiry";
 
 const TODAY = new Date("2026-10-23T09:00:00");
 const acc = (label: string, consent_valid_until: string | null) => ({ label, consent_valid_until });
@@ -70,5 +70,16 @@ describe("consentAlerts", () => {
       TODAY,
     );
     expect(alerts).toEqual([{ bank: "Revolut", daysLeft: 1 }]);
+  });
+});
+
+describe("accessText", () => {
+  it("words expired, today and days left, with or without the bank", () => {
+    expect(accessText(-1, "Revolut")).toBe(
+      "Bank access to Revolut has expired, so it no longer syncs.",
+    );
+    expect(accessText(0)).toBe("Bank access ends today.");
+    expect(accessText(1)).toBe("Bank access ends in 1 day.");
+    expect(accessText(3, "Revolut")).toBe("Bank access to Revolut ends in 3 days.");
   });
 });

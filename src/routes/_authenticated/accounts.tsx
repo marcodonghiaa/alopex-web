@@ -22,7 +22,7 @@ import {
   renewTarget,
 } from "@/lib/bank-link";
 import { functionErrorMessage } from "@/lib/function-error";
-import { consentAlerts, type ConsentAlert } from "@/lib/consent-expiry";
+import { accessText, consentAlerts, type ConsentAlert } from "@/lib/consent-expiry";
 import { syncAlerts, type SyncAlert } from "@/lib/sync-error";
 import { asOf, countsInTotal, formatISODate } from "@/lib/date";
 import { AccountBadge, accountName, bankOf } from "@/components/bank-badge";
@@ -91,12 +91,6 @@ const menuAccount = (a: BankAccountRow): MenuAccount => ({
   manual: a.manual,
   amount: a.amount,
 });
-
-function consentMessage({ bank, daysLeft }: ConsentAlert): string {
-  if (daysLeft < 0) return `Bank access to ${bank} has expired, so it no longer syncs.`;
-  if (daysLeft === 0) return `Bank access to ${bank} ends today.`;
-  return `Bank access to ${bank} ends in ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`;
-}
 
 function AccountsPage() {
   const queryClient = useQueryClient();
@@ -356,7 +350,7 @@ function AccountsPage() {
               role="status"
               className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-warning/10 px-4 py-3 text-sm text-foreground"
             >
-              <span>{consentMessage(renew)}</span>
+              <span>{accessText(renew.daysLeft, renew.bank)}</span>
               <Button
                 variant="ghost"
                 onClick={() => connectAgain(renew.bank)}
