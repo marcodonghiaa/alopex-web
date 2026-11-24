@@ -70,8 +70,10 @@ vi.mock("recharts", async (importOriginal) => ({
 import { Route } from "./cash-flow";
 
 const Page = Route.options.component as () => React.JSX.Element;
-let search: { month?: string } = {};
+let search: { month?: string; period?: string } = {};
 vi.spyOn(Route, "useSearch").mockImplementation((() => search) as never);
+const navigate = vi.fn();
+vi.spyOn(Route, "useNavigate").mockImplementation((() => navigate) as never);
 
 function renderPage(client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return render(
@@ -86,6 +88,7 @@ const row = (label: string) => screen.getByText(label).closest("li") as HTMLElem
 beforeEach(() => {
   failTable = null;
   search = {};
+  navigate.mockReset();
   tables = {
     v_income_vs_expenses_monthly: [
       { month: monthISO(-1), income_eur: 1000, expenses_eur: 1500 },
@@ -102,6 +105,45 @@ beforeEach(() => {
 });
 
 describe("Cash flow page", () => {
+  // H330: reload, Back and the sidebar link lost the month and period chosen.
+  it("keeps the month and period in the URL", async () => {
+    renderPage();
+    await waitFor(() => expect(row("Income")).toHaveTextContent("€3,000.00"));
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(navigate).toHaveBeenLastCalledWith({ search: { month: monthISO(-1).slice(0, 7) } });
+    fireEvent.click(screen.getByRole("radio", { name: "Quarter" }));
+    expect(navigate).toHaveBeenLastCalledWith({
+      search: expect.objectContaining({ period: "quarter" }),
+    });
+  });
+
+  it("opens on the period and month in the URL, and follows the URL when it changes", async () => {
+    search = { month: monthISO(-1).slice(0, 7), period: "year" };
+    const { rerender } = renderPage();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      `Cash flow for ${new Date(monthISO(-1)).getFullYear()}`,
+    );
+    // Back, or the sidebar link to the plain page.
+    search = {};
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <Page />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole("radio", { name: "Month" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "Next month" })).toBeDisabled();
+  });
+
+  it("reads only a known period from the URL", () => {
+    const validate = Route.options.validateSearch as (s: Record<string, unknown>) => unknown;
+    expect(validate({ month: "2026-05", period: "quarter" })).toEqual({
+      month: "2026-05",
+      period: "quarter",
+    });
+    expect(validate({ period: "week" })).toEqual({});
+    expect(validate({ period: "month" })).toEqual({});
+  });
+
   // protects=income, spending, saved and savings rate for the month agree with the totals view
   it("shows the month's income, spending and savings rate", async () => {
     renderPage();
