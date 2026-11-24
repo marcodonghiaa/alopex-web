@@ -2,6 +2,7 @@ import { bankOf } from "@/components/bank-badge";
 import { consentAlerts } from "@/lib/consent-expiry";
 import { plural } from "@/lib/plural";
 import { maskIban } from "@/lib/iban";
+import { syncErrorKind, syncErrorMessage } from "@/lib/sync-error";
 
 export type HealthState = "ok" | "warn" | "bad";
 
@@ -26,6 +27,8 @@ export interface HealthAccount {
   iban?: string | null;
   consent_valid_until: string | null;
   snapshot_date: string | null;
+  // What the last sync hit (absent on a database without the bank-sync-health migration).
+  sync_error?: string | null;
 }
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -91,33 +94,72 @@ export function accessRows(accounts: Array<HealthAccount>, today: Date): Array<H
   });
 }
 
-/** One row per connected account: when its balance last updated. */
-export function syncRows(accounts: Array<HealthAccount>, now: Date): Array<HealthRow> {
+/**
+ * One row per connected account: when its balance last updated and, when that is late or the
+ * last sync failed, why and the one fix for it. `projectUrl` (this dashboard's Supabase URL)
+ * links the sync logs and secrets; without a supabase.co address those rows have no link.
+ */
+export function syncRows(
+  accounts: Array<HealthAccount>,
+  now: Date,
+  projectUrl?: string,
+): Array<HealthRow> {
+  const secrets = supabaseSecretsUrl(projectUrl);
+  const logs = supabaseDashboardUrl(projectUrl, "functions/sync-bank/logs");
+  const logsFix = logs ? { fix: { label: "Open sync logs", href: logs } } : {};
   return connected(accounts).map((a) => {
     const id = `sync:${a.uid ?? a.label}`;
     const bank = bankOf(a);
     const title = `${[bank, a.currency].filter(Boolean).join(" ")} sync`;
     const account = a.iban ? maskIban(a.iban) : (a.label ?? undefined);
+    const base = { id, title, bank, ...(account && { account }) };
+    const ended = Date.parse(a.consent_valid_until!) <= now.getTime();
+    if (ended || (a.sync_error && syncErrorKind(a.sync_error) === "consent")) {
+      return {
+        ...base,
+        state: "bad",
+        detail: `${bank} access ended, so this account no longer syncs. Renew it to start again.`,
+        fix: { label: "Renew access", to: "/accounts" },
+      };
+    }
+    const kind = a.sync_error ? syncErrorKind(a.sync_error) : null;
+    const why = a.sync_error ? syncErrorMessage(a.sync_error, bank) : null;
+    // Waiting doesn't fix these, so they show even while the balance is still fresh.
+    if (kind === "reconnect" && why) {
+      return {
+        ...base,
+        state: "warn",
+        detail: why,
+        fix: { label: "Connect again", to: "/accounts" },
+      };
+    }
+    if (kind === "setup" && why) {
+      return {
+        ...base,
+        state: "warn",
+        detail: why,
+        ...(secrets && { fix: { label: "Open Supabase secrets", href: secrets } }),
+      };
+    }
     if (!a.snapshot_date) {
       return {
-        id,
-        title,
-        bank,
-        ...(account && { account }),
+        ...base,
         state: "warn",
-        detail: "No balance synced yet.",
+        detail: why ?? "No balance synced yet.",
+        ...(why && logsFix),
       };
     }
     const age = syncAgeHours(a.snapshot_date, now);
     const state = syncState(age);
+    const last = `Last synced ${ageText(age)}.`;
+    if (state === "ok") return { ...base, state, detail: last };
     return {
-      id,
-      title,
-      bank,
-      ...(account && { account }),
+      ...base,
       state,
-      detail: `Last synced ${ageText(age)}.`,
-      ...(state !== "ok" && { fix: { label: "Check access", to: "/accounts" } as const }),
+      detail: why
+        ? `${last} ${why}`
+        : `${last} The last sync reported no error, so the scheduled sync may not have run since. The sync-bank logs in Supabase show each run.`,
+      ...logsFix,
     };
   });
 }
@@ -164,11 +206,15 @@ export function originRow(registered: number | null): HealthRow | null {
       };
 }
 
-// The Edge Function secrets page of this dashboard's own Supabase project ("https://<ref>.supabase.co").
-export function supabaseSecretsUrl(projectUrl: string | undefined): string | null {
+// A page of this dashboard's own Supabase project ("https://<ref>.supabase.co") in its dashboard.
+function supabaseDashboardUrl(projectUrl: string | undefined, path: string): string | null {
   const ref = projectUrl?.match(/^https:\/\/([a-z0-9]+)\.supabase\.co\/?$/)?.[1];
-  return ref ? `https://supabase.com/dashboard/project/${ref}/functions/secrets` : null;
+  return ref ? `https://supabase.com/dashboard/project/${ref}/${path}` : null;
 }
+
+// The Edge Function secrets page of this dashboard's own Supabase project.
+export const supabaseSecretsUrl = (projectUrl: string | undefined) =>
+  supabaseDashboardUrl(projectUrl, "functions/secrets");
 
 /**
  * Whether AI categorization works, read from what it did: the key itself never reaches the

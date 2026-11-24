@@ -73,8 +73,57 @@ describe("syncRows", () => {
       NOW,
     );
     expect(fresh?.fix).toBeUndefined();
-    expect(stale).toMatchObject({ state: "bad", detail: "Last synced 8 days ago." });
-    expect(stale?.fix).toEqual({ label: "Check access", to: "/accounts" });
+    expect(stale).toMatchObject({ state: "bad" });
+    expect(stale?.detail).toMatch(/^Last synced 8 days ago\. /);
+  });
+
+  // Marco 2026-11-24: "Check access" only opened Accounts, which said nothing about what was wrong.
+  // Each stale or failing account now names its cause and the one fix for it.
+  const URL = "https://abcref.supabase.co";
+  const one = (over: Partial<HealthAccount>, url: string | undefined = URL) =>
+    syncRows([acct(over)], NOW, url)[0]!;
+
+  it("stale with no error: says no sync reached it and links the sync logs", () => {
+    const row = one({ snapshot_date: "2026-10-25" });
+    expect(row.detail).toMatch(/no error/i);
+    expect(row.fix).toEqual({
+      label: "Open sync logs",
+      href: "https://supabase.com/dashboard/project/abcref/functions/sync-bank/logs",
+    });
+  });
+
+  it("ended access: says so and offers Renew access", () => {
+    const row = one({ consent_valid_until: "2026-10-01", snapshot_date: "2026-09-30" });
+    expect(row).toMatchObject({ state: "bad", fix: { label: "Renew access", to: "/accounts" } });
+    expect(row.detail).toMatch(/access ended/i);
+  });
+
+  it("bank stopped sharing the account: names it and offers Connect again, even when fresh", () => {
+    const row = one({ sync_error: "ASPSP_ACCOUNT_NOT_ACCESSIBLE" });
+    expect(row.state).toBe("warn");
+    expect(row.detail).toMatch(/no longer shares/);
+    expect(row.fix).toEqual({ label: "Connect again", to: "/accounts" });
+  });
+
+  it("bad key: explains it and links the Supabase secrets", () => {
+    const row = one({ sync_error: "KEY_INVALID" });
+    expect(row.state).toBe("warn");
+    expect(row.detail).toMatch(/ENABLE_BANKING_PRIVATE_KEY/);
+    expect(row.fix).toEqual({
+      label: "Open Supabase secrets",
+      href: "https://supabase.com/dashboard/project/abcref/functions/secrets",
+    });
+  });
+
+  it("a bank hiccup on fresh data is fine; on stale data it says it retries", () => {
+    expect(one({ sync_error: "ASPSP_RATE_LIMIT_EXCEEDED" }).state).toBe("ok");
+    const row = one({ sync_error: "HTTP_503", snapshot_date: "2026-10-25" });
+    expect(row.detail).toMatch(/^Last synced 3 days ago\. Revolut didn't answer/);
+    expect(row.fix).toMatchObject({ label: "Open sync logs" });
+  });
+
+  it("leaves a link out when the project address isn't a supabase.co one", () => {
+    expect(one({ snapshot_date: "2026-10-25" }, "http://localhost:54321").fix).toBeUndefined();
   });
 });
 

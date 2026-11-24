@@ -26,6 +26,17 @@ const APP_REFUSED = new Set([
 ]);
 // The bank stopped sharing this account with the consent: linking the bank again fixes it.
 const NOT_SHARED = new Set(["ASPSP_ACCOUNT_NOT_ACCESSIBLE", "ACCOUNT_DOES_NOT_EXIST", "HTTP_404"]);
+/**
+ * What fixes a sync error: renew the bank's access, connect the bank again, fix the backend's
+ * Enable Banking setup (secrets or app), or nothing (the next sync retries).
+ */
+export function syncErrorKind(code: string): "consent" | "reconnect" | "setup" | "retry" {
+  if (CONSENT_ENDED.has(code)) return "consent";
+  if (NOT_SHARED.has(code)) return "reconnect";
+  if (APP_REFUSED.has(code) || code === "KEY_INVALID") return "setup";
+  return "retry";
+}
+
 const RETRY = "Nothing to do: Alopex tries again at the next sync, within 6 hours.";
 
 // `account` names the account when the bank stopped sharing one of several.
