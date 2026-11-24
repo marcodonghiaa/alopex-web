@@ -1,5 +1,5 @@
 import { parseAmount, parseMonth } from "./normalize";
-import { suggestCategory, type AppCategory } from "./suggest-category";
+import { suggestCategory } from "./suggest-category";
 
 export interface Skipped {
   line: number;
@@ -31,7 +31,8 @@ export interface Plan<T> {
 /** A category as written in the file, and the app category its rows are saved under. */
 export interface CategoryMapping {
   source: string;
-  category: AppCategory;
+  /** One of your categories (a suggested built-in until you pick). */
+  category: string;
 }
 
 type Columns<K extends string> = Record<K, number | null>;
@@ -122,13 +123,13 @@ const NOT_SPEND = new Set(["Income", "Transfer"]);
 export function planSpend(
   rows: Array<Array<string>>,
   columns: Columns<"month" | "category" | "amount" | "currency">,
-  overrides: Partial<Record<string, AppCategory>> = {},
+  overrides: Partial<Record<string, string>> = {},
   lines?: Array<number>,
 ): Plan<SpendPlanRow> & { categories: Array<CategoryMapping> } {
   const totals = new Map<string, SpendPlanRow>();
   const skipped: Array<Skipped> = [];
   // Every file category once, so the user sees (and can change) where its rows go.
-  const mapped = new Map<string, AppCategory>();
+  const mapped = new Map<string, string>();
   const categoryOf = (source: string) => {
     // hasOwn: a file category named "constructor" must not read Object.prototype.
     const category =

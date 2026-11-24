@@ -15,9 +15,8 @@ import {
 } from "@/lib/import/last-import";
 import { guessColumns, type Role } from "@/lib/import/guess-columns";
 import { parseCsv, readCsvFile, type ParsedCsv } from "@/lib/import/parse-csv";
-import { CATEGORIES } from "@/lib/categories";
 import { planNetWorth, planSpend } from "@/lib/import/plan";
-import type { AppCategory } from "@/lib/import/suggest-category";
+import { useCategories } from "@/lib/use-categories";
 import { STOCKS_LABEL } from "@/lib/net-worth";
 import { formatEur } from "@/lib/transactions";
 import { plural } from "@/lib/plural";
@@ -111,7 +110,8 @@ export function ImportWizard() {
   const [userId, setUserId] = useState<string | null>(null);
   const [last, setLast] = useState<LastImport | null>(null);
   // Spending import: categories the user re-assigned, by the name used in the file.
-  const [overrides, setOverrides] = useState<Partial<Record<string, AppCategory>>>({});
+  const [overrides, setOverrides] = useState<Partial<Record<string, string>>>({});
+  const choices = useCategories().list;
 
   useEffect(() => {
     void supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
@@ -267,12 +267,11 @@ export function ImportWizard() {
                 </span>
                 <select
                   value={category}
-                  onChange={(e) =>
-                    setOverrides({ ...overrides, [source]: e.target.value as AppCategory })
-                  }
+                  onChange={(e) => setOverrides({ ...overrides, [source]: e.target.value })}
                   className="w-full rounded-lg border bg-background px-3 py-2 text-base focus:ring-2 focus:ring-ring focus:outline-none"
                 >
-                  {CATEGORIES.map((c) => (
+                  {/* Your categories; a suggestion you hid still shows, so the pick reads true. */}
+                  {(choices.includes(category) ? choices : [category, ...choices]).map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>
