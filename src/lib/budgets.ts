@@ -50,8 +50,8 @@ export function parseAmount(text: string): number | null {
   const grouped = /^[1-9]\d{0,2}([.,])\d{3}(\1\d{3})*$/.test(t);
   const v = parseTypedAmount(grouped ? t.replace(/[.,]/g, "") : t);
   if (v == null) return null;
-  const cents = Math.round(v * 100) / 100;
-  return cents < MAX_BUDGET ? cents : null;
+  const rounded = cents(v);
+  return rounded < MAX_BUDGET ? rounded : null;
 }
 
 /** "YYYY-MM-01" of the month `offset` months after `month`. */

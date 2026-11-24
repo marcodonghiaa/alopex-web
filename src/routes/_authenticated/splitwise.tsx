@@ -143,10 +143,11 @@ function SplitwisePage() {
     }
   };
 
+  const people = useMemo(() => peopleFrom(splits.data ?? []), [splits.data]);
   const totals = useMemo(() => {
     let owedToYou = 0;
     let youOwe = 0;
-    for (const p of peopleFrom(splits.data ?? [])) {
+    for (const p of people) {
       if (p.open > 0) owedToYou += p.open;
       else youOwe -= p.open;
     }
@@ -163,14 +164,11 @@ function SplitwisePage() {
       }
     }
     return { owedToYou, youOwe, missingRate };
-  }, [groups, rate, splits.data]);
+  }, [groups, rate, people]);
 
   const net = netOwed(totals.owedToYou, totals.youOwe);
 
-  const debtors = useMemo(
-    () => debtorsFrom(peopleFrom(splits.data ?? []), groups, rate),
-    [splits.data, groups, rate],
-  );
+  const debtors = useMemo(() => debtorsFrom(people, groups, rate), [people, groups, rate]);
   // Asked only once debts (with their euro rates) and payments are in: a half-loaded list would
   // guess wrong.
   const ready =

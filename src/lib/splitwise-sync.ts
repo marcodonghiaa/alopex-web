@@ -193,7 +193,6 @@ export const canCount = (kind: ReviewKind) => kind === "paid_by_me" || kind === 
 export const directionOf = (kind: ReviewKind): BankTx["direction"] =>
   kind === "settle_in" ? "CRDT" : "DBIT";
 
-/** The newest pending items (at most 500), and how many are pending in all. */
 /** For the nav badge: how many expenses wait on To link, as a head-only count (no rows). */
 export const REVIEW_COUNT_KEY = [...REVIEW_KEY, "count"];
 
@@ -211,6 +210,7 @@ export async function fetchReviewCount(): Promise<number> {
   return count ?? 0;
 }
 
+/** The newest pending items (at most 500), and how many are pending in all. */
 export async function fetchReview(): Promise<{ items: Array<ReviewItem>; total: number }> {
   const { data, error, count } = await supabase
     .from("splitwise_review")
