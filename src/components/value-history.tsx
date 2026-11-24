@@ -19,7 +19,7 @@ type RangeChangeProps = Pick<ValueHistory, "delta" | "change" | "range"> &
 
 type ChipPerformance = Pick<
   ReturnType<typeof usePerformance>,
-  "isPending" | "unavailable" | "tradesByKey" | "measuredByKey" | "endPrices"
+  "isPending" | "tradesByKey" | "measuredByKey" | "endPrices"
 > & { kind?: "stock" | "crypto" } & { events?: Array<EventRow> } & {
   summary: Pick<ReturnType<typeof usePerformance>["summary"], "gain" | "change">;
 };
@@ -54,7 +54,7 @@ export function rangeChip(
 ): HeadlineChange | undefined {
   const end = chartData.at(-1);
   if (first == null || end == null || scrubbed != null) return undefined;
-  if (perf.isPending || perf.unavailable || !tradesUsable(perf)) return undefined;
+  if (perf.isPending || !tradesUsable(perf)) return undefined;
   if (range === "ALL") return chip(perf.summary.gain, perf.summary.change);
   if (startPrices == null) return undefined;
   const trades = [...perf.tradesByKey.values()].flat();
@@ -100,7 +100,7 @@ export function ValueHistoryChart({
   perf?: ChipPerformance;
 }) {
   const { chartData, key, range, setRange, setScrubIndex } = history;
-  const onReturn = perf != null && !perf.isPending && !perf.unavailable && tradesUsable(perf);
+  const onReturn = perf != null && !perf.isPending && tradesUsable(perf);
   const picked = sampleIndices(chartData.length, RETURN_DAYS);
   // The last day is today: today's prices, as the chip.
   const prices = useDayPrices(

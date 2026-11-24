@@ -107,13 +107,6 @@ describe("EditHolding delete", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it("falls back to changing the quantity alone before the backend migration", async () => {
-    rpc.mockResolvedValue({ data: null, error: { code: "PGRST202", message: "missing" } });
-    setup({ kind: "stock", isin: "IE00TEST" });
-    fireEvent.click(screen.getByRole("button", { name: "Mark as sold" }));
-    await waitFor(() => expect(update).toHaveBeenCalledWith({ shares: 0 }));
-  });
-
   it("a new quantity refreshes returns too, which compare trades with it", async () => {
     rpc.mockResolvedValue({ data: 1, error: null });
     const { invalidate } = setup({ kind: "stock", isin: "IE00TEST" });
