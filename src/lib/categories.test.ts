@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   CATEGORIES,
   categoriesFor,
-  categoryCode,
   categoryColor,
   categoryTone,
   checkCategoryName,
@@ -55,39 +54,6 @@ describe("categoryTone", () => {
     expect(categoryTone(4)).toBe("var(--color-chart-5)");
     expect(categoryTone(12)).toBe("var(--color-chart-5)");
     expect(categoryTone(-1)).toBe("var(--color-chart-1)");
-  });
-});
-
-describe("categoryCode", () => {
-  it("gives each built-in its two-letter code", () => {
-    const expected: Record<string, string> = {
-      Housing: "HO",
-      Shopping: "SH",
-      Health: "HE",
-      "Dine Out": "DO",
-      Groceries: "GR",
-      Transports: "TR",
-      Entertainment: "EN",
-      Experiences: "EX",
-      Services: "SE",
-      Income: "IN",
-      Transfer: "TF",
-      Taxes: "TX",
-      Others: "OT",
-    };
-    for (const [c, code] of Object.entries(expected)) expect(categoryCode(c)).toBe(code);
-  });
-
-  it("is -- when there is no category", () => {
-    expect(categoryCode(null)).toBe("--");
-    expect(categoryCode(undefined)).toBe("--");
-    expect(categoryCode("Uncategorized")).toBe("--");
-  });
-
-  it("derives a code for your own categories", () => {
-    expect(categoryCode("Gym")).toBe("GY");
-    expect(categoryCode("Pet Care")).toBe("PC");
-    expect(categoryCode("x")).toBe("X-");
   });
 });
 

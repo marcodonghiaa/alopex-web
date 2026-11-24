@@ -20,6 +20,11 @@ describe("CategoryAvatar", () => {
     expect(container.textContent).toBe("P");
   });
 
+  it("capitalises the initial and skips leading spaces", () => {
+    const { container } = render(<CategoryAvatar category="  pet care" />);
+    expect(container.textContent).toBe("P");
+  });
+
   it("shows a dashed circle when there is no category", () => {
     for (const c of [null, "Uncategorized"]) {
       const { container, unmount } = render(<CategoryAvatar category={c} />);
