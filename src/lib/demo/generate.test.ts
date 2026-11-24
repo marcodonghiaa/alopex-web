@@ -25,6 +25,11 @@ describe("generateDemoData: coverage", () => {
     expect(empty).toEqual([...DEMO_EXEMPT_TABLES].sort());
   });
 
+  // H108: the backend dropped v_cd_holdings; the demo must not model a view real installs lack.
+  it("has no dropped view", () => {
+    expect(Object.keys(db)).not.toContain("v_cd_holdings");
+  });
+
   it("covers every transaction flow the screens filter on", () => {
     const flows = new Set(db.transactions.map((t) => t.flow_type));
     for (const f of ["spend", "income", "refunded", "transfer"]) expect(flows).toContain(f);

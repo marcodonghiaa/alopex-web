@@ -666,7 +666,6 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
     ],
     transactions,
     v_bank_accounts_latest,
-    v_cd_holdings: [],
     v_crypto_latest: [],
     v_spend_by_category_monthly: [],
     v_income_vs_expenses_monthly: [],
