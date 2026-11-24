@@ -4,12 +4,20 @@ import * as React from "react";
 // Opening adds a history entry on the same address (the router's state kept, so it sees no new
 // page); Back pops it. Closing another way (X, Esc, overlay) takes the entry out again, unless the
 // app has already moved to another entry (a link inside), so that page is never undone.
-// shortcut: Forward after Back re-enters the closed overlay's entry with nothing open, so the next
-// Back looks like it does nothing. Re-opening it on Forward is not worth the code.
+// A reload on an overlay's entry, or Forward back onto a closed one's, lands on an entry with
+// nothing open: it is stepped back over, so the next Back isn't one that seems to do nothing.
 
 // How many sheets and dialogs are open: "Make a rule" from over one replaces its history entry.
 let openOverlays = 0;
 export const isOverlayOpen = () => openOverlays > 0;
+
+const stepOverStale = () => {
+  if (openOverlays === 0 && window.history.state?.__sheet) window.history.back();
+};
+if (typeof window !== "undefined") {
+  stepOverStale();
+  window.addEventListener("popstate", stepOverStale);
+}
 
 export function useCloseOnBack(open: boolean, close: () => void) {
   const closeRef = React.useRef(close);
