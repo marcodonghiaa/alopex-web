@@ -114,9 +114,15 @@ export function PushSubscribeButton({ onSubscribed }: { onSubscribed?: () => voi
       // register() can resolve before the worker is actually active -- pushManager.subscribe
       // needs an active worker, so wait for the ready promise rather than the raw registration.
       const registration = await navigator.serviceWorker.ready;
+      const key = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+      // A subscription made with an older VAPID key makes subscribe() throw, so drop it.
+      // Some browsers don't expose the key (null): leave those alone.
+      const old = await registration.pushManager.getSubscription();
+      const oldKey = old?.options.applicationServerKey;
+      if (oldKey && new Uint8Array(oldKey).join() !== key.join()) await old.unsubscribe();
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        applicationServerKey: key,
       });
 
       // H018: the endpoint is unique per browser, so a plain insert failed when another
