@@ -1,4 +1,4 @@
-export const MIN_PASSWORD_LENGTH = 8;
+export const MIN_PASSWORD_LENGTH = 12;
 
 /** The one rule for a new password, shared by reset and change. Null when valid. */
 export function validateNewPassword(password: string, confirmation?: string): string | null {
