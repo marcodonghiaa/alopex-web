@@ -13,6 +13,7 @@ const ins: Array<{ table: string; col: string; values: unknown }> = [];
 // Every or() and limit() filter, by table, to tell a search across months from a month's list.
 const ors: Array<{ table: string; expr: string }> = [];
 const limits: Array<{ table: string; n: number }> = [];
+const cap = vi.hoisted(() => ({ rows: 1000 }));
 let rpcResult: { data: unknown; error: { message: string } | null } = { data: [], error: null };
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@/integrations/supabase/client", () => ({
@@ -53,12 +54,27 @@ vi.mock("@/integrations/supabase/client", () => ({
         selects.push({ table, cols });
         return q;
       };
-      q["then"] = (resolve: (v: unknown) => void) =>
-        resolve(
+      // range() pages; every answer stops at the server's row cap (PostgREST's default is 1000).
+      let from = 0;
+      let to = Infinity;
+      q["range"] = (a: number, b: number) => {
+        from = a;
+        to = b;
+        return q;
+      };
+      q["then"] = (resolve: (v: unknown) => void) => {
+        const data = table in tableData ? tableData[table] : (rows[table] ?? []);
+        return resolve(
           table === failTable
             ? { data: null, error: { message: "boom" } }
-            : { data: table in tableData ? tableData[table] : (rows[table] ?? []), error: null },
+            : {
+                data: Array.isArray(data)
+                  ? data.slice(from, Math.min(to + 1, from + cap.rows))
+                  : data,
+                error: null,
+              },
         );
+      };
       return q;
     },
   },
@@ -327,6 +343,24 @@ const row = (ref: string, over: Record<string, unknown> = {}) => ({
 describe("Activity page", () => {
   afterEach(() => {
     tableData = {};
+  });
+
+  // H373: a month past the server's row cap lost its oldest rows without a word.
+  it("lists every row of a month past the server's row cap", async () => {
+    cap.rows = 2;
+    tableData = {
+      v_transactions_eur: [
+        row("r1", { creditor_name: "Corner shop" }),
+        row("r2", { creditor_name: "Bakery" }),
+        row("r3", { creditor_name: "Oldest Cafe" }),
+      ],
+    };
+    try {
+      renderPage();
+      expect((await screen.findAllByText("Oldest Cafe")).length).toBeGreaterThan(0);
+    } finally {
+      cap.rows = 1000;
+    }
   });
 
   it("shows the month's money in and out under the month", async () => {

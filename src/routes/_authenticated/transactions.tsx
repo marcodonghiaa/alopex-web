@@ -14,6 +14,7 @@ import { SectionTitle } from "@/components/ui/grouped-list";
 import { Alert } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
+import { readPages } from "@/lib/read-pages";
 import { formatISODate, monthBounds } from "@/lib/date";
 import {
   UNCATEGORIZED,
@@ -122,22 +123,30 @@ const LIST_COLUMNS =
 // Spending (with refunds) or transfers, for one month or a search. Transfers are left out of
 // spending and income; they are listed on request so a wrong one can be moved back.
 async function fetchList<Row>(scope: Scope, transfers: boolean): Promise<Array<Row>> {
-  let q = supabase
-    .from("v_transactions_eur")
-    .select(transfers ? LIST_COLUMNS : `${LIST_COLUMNS},note,tags`)
-    .in("flow_type", transfers ? ["transfer"] : ["spend", "refunded"])
-    .neq("amount", 0);
-  if ("query" in scope) q = q.or(searchOr(scope.query, ["creditor_name", "note"]));
-  else {
-    const { start, end } = monthBounds(scope.month);
-    q = q.gte("booking_date", start).lt("booking_date", end);
+  const query = () => {
+    let q = supabase
+      .from("v_transactions_eur")
+      .select(transfers ? LIST_COLUMNS : `${LIST_COLUMNS},note,tags`)
+      .in("flow_type", transfers ? ["transfer"] : ["spend", "refunded"])
+      .neq("amount", 0);
+    if ("query" in scope) q = q.or(searchOr(scope.query, ["creditor_name", "note"]));
+    else {
+      const { start, end } = monthBounds(scope.month);
+      q = q.gte("booking_date", start).lt("booking_date", end);
+    }
+    // A total order (a reference is unique only within its account), so pages don't overlap.
+    return q
+      .order("booking_date", { ascending: false })
+      .order("entry_reference", { ascending: false })
+      .order("account_uid", { ascending: false });
+  };
+  if ("query" in scope) {
+    const { data, error } = await query().limit(SEARCH_LIMIT);
+    if (error) throw error;
+    return (data ?? []) as Array<Row>;
   }
-  const ordered = q
-    .order("booking_date", { ascending: false })
-    .order("entry_reference", { ascending: false });
-  const { data, error } = await ("query" in scope ? ordered.limit(SEARCH_LIMIT) : ordered);
-  if (error) throw error;
-  return (data ?? []) as Array<Row>;
+  // A month is read page by page: past the server's row cap its oldest days would go missing.
+  return readPages<Row>((from, to) => query().range(from, to));
 }
 
 // Transfers the sync paired on its own, waiting for a yes or no.
