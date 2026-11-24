@@ -8,9 +8,8 @@ export type DemoDb = { [K in keyof Sources]: Array<Sources[K]["Row"]> };
 export type Tx = DemoDb["transactions"][number];
 
 export const DEMO_USER_ID = "00000000-0000-4000-8000-00000000demo";
-// Not UI sections: bank-consent handshakes, browser push endpoints and past market prices that only
-// the holding_performance database function reads (the demo answers that from its snapshots).
-// Empty on purpose.
+// Not UI sections: bank-consent handshakes, browser push endpoints and the deprecated past market
+// prices nothing reads any more (holding_performance uses snapshots only). Empty on purpose.
 // Certificates of deposit left the app; their table (kept for the export) goes in a later release.
 export const DEMO_EXEMPT_TABLES = [
   // A demo visitor sets their own budgets: the page starts empty, like a new install.
