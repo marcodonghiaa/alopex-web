@@ -64,7 +64,9 @@ async function load(rows: Array<ClassifiedRow>, group: string): Promise<Loaded> 
     supabase
       .from("category_rules")
       .select("match_text, match_mode, set_category, priority")
-      .order("priority", { ascending: true }),
+      // The Rules page's order: on a tie the older rule wins.
+      .order("priority", { ascending: true })
+      .order("created_at", { ascending: true }),
   ]);
 
   const failed = stored.error ?? rules.error;
