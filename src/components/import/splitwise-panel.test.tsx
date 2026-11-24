@@ -30,9 +30,19 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (table: string) => {
       const chain: Record<string, unknown> = {};
-      for (const m of ["select", "limit", "eq"]) chain[m] = () => chain;
+      // Like PostgREST: a range gets at most 1000 rows of it.
+      let page = (rows: unknown[]) => rows.slice(0, 1000);
+      for (const m of ["select", "limit", "eq", "order"]) chain[m] = () => chain;
+      chain["range"] = (from: number, to: number) => {
+        page = (rows) => rows.slice(from, Math.min(to + 1, from + 1000));
+        return chain;
+      };
       chain["then"] = (resolve: (v: unknown) => unknown) =>
-        resolve(table === "splitwise_balances" ? { ...balances, error: null } : answer);
+        resolve(
+          table === "splitwise_balances"
+            ? { ...balances, error: null }
+            : { ...answer, data: answer.error ? null : page(answer.data) },
+        );
       return chain;
     },
   },
@@ -149,11 +159,20 @@ describe("SplitwisePanel", () => {
     expect(screen.queryByText(/review of/)).toBeNull();
   });
 
-  it("refuses when the stored rows may be cut at the page limit", async () => {
-    answer.data = Array.from({ length: 1000 }, () => ({ group_name: "a", fingerprint: "x" }));
+  // H146: with 1000 Splitwise expenses stored the import refused outright ("Too many stored
+  // expenses"); every page is read now, so a group past the first page still shows.
+  it("reads every stored row past the 1000-row page", async () => {
+    answer.data = [
+      ...Array.from({ length: 1000 }, (_, i) => ({ group_name: "berkeley", fingerprint: `${i}` })),
+      ...groups("trip"),
+    ];
     render(<SplitwisePanel />);
     upload(CSV);
-    expect((await screen.findByRole("alert")).textContent).toMatch(/Too many stored/);
+    const select = (await screen.findByLabelText(/^Group$/)) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.value)).toEqual(
+      expect.arrayContaining(["berkeley", "trip"]),
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   // protects=the summary numbers shown to the user; fails_when=share or totals are wrong

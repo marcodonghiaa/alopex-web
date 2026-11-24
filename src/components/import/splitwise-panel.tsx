@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, FileUp, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { readCsvFile } from "@/lib/import/parse-csv";
+import { readPages } from "@/lib/read-pages";
 import { SplitwiseReview, type ImportDone } from "@/components/import/splitwise-review";
 import { CTA, Group, LINK, Steps } from "@/components/import/splitwise-ui";
 import { money as amount } from "@/lib/import/splitwise-format";
@@ -18,20 +19,18 @@ const GROUP_MAX = 100;
 const readError = (err: unknown) =>
   err instanceof Error ? err.message : "Could not read that file.";
 const NEW_GROUP = "__new__";
-const STORED_LIMIT = 1000;
-
-async function loadStored(): Promise<Array<StoredGroupRow>> {
-  const { data, error } = await supabase
-    .from("splitwise_expenses")
-    .select("group_name, fingerprint")
-    .limit(STORED_LIMIT);
-  if (error) throw new Error(error.message);
-  // A cut list could hide a group, which is what these checks rely on.
-  // ponytail: refuses at 1000 rows across groups, page through them if an install gets there.
-  if ((data ?? []).length >= STORED_LIMIT) {
-    throw new Error("Too many stored expenses to choose a group safely.");
-  }
-  return data ?? [];
+// Every row, page by page in a stable order: a cut list could hide a group, which is what these
+// checks rely on.
+function loadStored(): Promise<Array<StoredGroupRow>> {
+  return readPages<StoredGroupRow>((from, to) =>
+    supabase
+      .from("splitwise_expenses")
+      .select("group_name, fingerprint")
+      .order("id")
+      .range(from, to),
+  ).catch((error: { message: string }) => {
+    throw new Error(error.message);
+  });
 }
 
 interface Loaded {
