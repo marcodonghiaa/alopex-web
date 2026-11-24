@@ -3,6 +3,7 @@ import {
   CATEGORIES,
   categoriesFor,
   categoryColor,
+  categoryIconName,
   categoryTone,
   checkCategoryName,
 } from "./categories";
@@ -24,6 +25,27 @@ describe("categoryColor", () => {
 });
 
 // A self-hoster wanted their own categories instead of the built-in ones.
+describe("built-in looks", () => {
+  it("keeps each built-in's colour and icon", () => {
+    expect(CATEGORIES.map((c) => [c, categoryColor(c), categoryIconName(c)])).toEqual([
+      ["Shopping", "#ec4899", "shopping"],
+      ["Entertainment", "#8b5cf6", "entertainment"],
+      ["Groceries", "#6366f1", "groceries"],
+      ["Dine Out", "#f97316", "dine-out"],
+      ["Services", "#3b82f6", "services"],
+      ["Housing", "#14b8a6", "housing"],
+      ["Transports", "#eab308", "transports"],
+      ["Experiences", "#06b6d4", "experiences"],
+      ["Income", "#84cc16", "income"],
+      ["Health", "#d946ef", "health"],
+      ["Transfer", "#64748b", "transfer"],
+      ["Taxes", "#a16207", "taxes"],
+      ["Others", "#94a3b8", "others"],
+    ]);
+    expect(categoryIconName("constructor")).toBeNull();
+  });
+});
+
 describe("categoriesFor", () => {
   it("drops the built-ins you hid and adds your own at the end", () => {
     const list = categoriesFor([
