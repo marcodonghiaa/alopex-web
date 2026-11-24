@@ -76,7 +76,8 @@ export function textMatches(field: string, text: string, mode: string | null | u
   return new RegExp(before + escapeRegExp(t) + after, "u").test(field);
 }
 
-// Case and accents folded, as textMatches expects ("Café" and "CAFE" are the same).
+// Case, accents and apostrophes folded, as textMatches expects ("Café" and "CAFE" are the same).
+// Same fold as the sync (alopex _shared/rules.ts): keep the two and rules.cases.json in sync.
 export const foldText = (s: string) =>
   s
     .normalize("NFD")

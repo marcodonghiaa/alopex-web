@@ -1,0 +1,21 @@
+{
+  "_": "How rule text matches a bank name: [name, rule text, mode, matches]. Case, accents and apostrophes are ignored. Same file in alopex (backend) and alopex-web: keep both in sync.",
+  "match": [
+    ["CAFÉ ROMA", "cafe", "word", true],
+    ["Cafe Roma", "café", "word", true],
+    ["Café Roma", "cafe", "word", true],
+    ["McDonald's", "mcdonalds", "word", true],
+    ["McDonald’s 123", "mcdonalds", "contains", true],
+    ["MCDONALDS", "McDonald's", "exact", true],
+    ["Café Roma", "caf", "word", false],
+    ["Élan Vital", "lan", "word", false],
+    ["Bàrbara", "bar", "word", false],
+    ["BARCLAYS UK", "bar", "word", false],
+    ["BARCLAYS UK", "bar", "contains", true],
+    ["PAYPAL *BAR-ROMA", "bar", "word", true],
+    ["AMAZON.IT", "amazon.", "word", true],
+    ["NETFLIX ", " Netflix ", "exact", true],
+    ["NETFLIX.COM", "netflix", "exact", false],
+    ["NETFLIX.COM", " netflix", "contains", false]
+  ]
+}

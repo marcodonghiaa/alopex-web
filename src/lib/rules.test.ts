@@ -6,11 +6,22 @@ import {
   previewLine,
   quoteText,
   ruleCondition,
+  foldText,
   textMatches,
 } from "./rules";
+import cases from "./rules.cases.json";
 import { createElement } from "react";
 import { render } from "@testing-library/react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+
+// H106: same cases as the sync's copy (alopex _shared/rules.cases.json), so both match alike.
+describe("rule matching shared with the sync", () => {
+  it.each(cases.match)("%s / %s / %s -> %s", (name, text, mode, expected) => {
+    expect(textMatches(foldText(name as string), foldText(text as string), mode as string)).toBe(
+      expected,
+    );
+  });
+});
 
 describe("textMatches (same as the sync's matcher)", () => {
   it("word: the text on its own, never inside another word", () => {
