@@ -2,7 +2,7 @@ import { bankOf } from "@/components/bank-badge";
 import { maskIban } from "@/lib/iban";
 
 // Why a bank stopped updating, from accounts.sync_error (what the last sync-bank run hit: Enable
-// Banking's error name, or HTTP_<status> / TIMEOUT / NETWORK / SAVE_FAILED). Cleared by the next
+// Banking's error name, or HTTP_<status> / TIMEOUT / NETWORK / SAVE_FAILED / KEY_INVALID). Cleared by the next
 // good run. An ended consent is left to the Renew banner, which already says it.
 
 export interface SyncErrorAccount {
@@ -42,6 +42,9 @@ export function syncErrorMessage(
     return `${bank} no longer shares ${account}. Connect ${bank} again and include it when the bank asks which accounts to share.`;
   }
   if (APP_REFUSED.has(code)) return refusedMessage([bank]);
+  // The backend's own key can't sign a request, so every bank stops: one message, no bank name.
+  if (code === "KEY_INVALID")
+    return "Bank sync can't sign in to Enable Banking: the ENABLE_BANKING_PRIVATE_KEY Edge Function secret is missing or isn't a valid key. Run npx create-alopex@latest again with your .pem file.";
   if (code === "SAVE_FAILED")
     return `${bank} synced, but the transactions couldn't be saved. Alopex tries again at the next sync, within 6 hours. If it keeps happening, check the sync-bank function's logs in Supabase.`;
   if (
