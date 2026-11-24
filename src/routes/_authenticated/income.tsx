@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { ArrowDownLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { formatISODate, monthBounds } from "@/lib/date";
+import { formatDayMonth, formatISODate, monthBounds } from "@/lib/date";
 import {
   categoryRepeatsTitle,
   formatMoney,
@@ -121,12 +121,7 @@ function IncomeList({ rows, mark }: { rows: Array<IncomeRow>; mark?: MarkProps }
             <div className="min-w-0">
               <div className="truncate font-medium text-foreground">{incomeTitle(r)}</div>
               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                {r.booking_date
-                  ? new Date(`${r.booking_date}T00:00:00`).toLocaleDateString(dateLocale(), {
-                      day: "numeric",
-                      month: "short",
-                    })
-                  : "—"}
+                {formatDayMonth(r.booking_date)}
                 {!categoryRepeatsTitle(r) && (
                   <CategoryPicker
                     tx={r}

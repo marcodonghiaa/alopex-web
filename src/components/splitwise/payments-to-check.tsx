@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { dateLocale } from "@/lib/locale";
+import { formatDayMonth as day } from "@/lib/date";
 import { money } from "@/lib/splits";
 import { txId } from "@/lib/transactions";
 import {
@@ -12,9 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/field";
 import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
 import { Initial } from "@/components/splitwise/owed-view";
-
-const day = (iso: string) =>
-  new Date(`${iso}T00:00:00`).toLocaleDateString(dateLocale(), { day: "numeric", month: "short" });
 
 // Why we ask, and what they owe (left out when the payment is exactly that: it's right above).
 const why = (s: PaybackSuggestion, owes: string) => {
