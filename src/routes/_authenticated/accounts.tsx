@@ -76,6 +76,8 @@ interface BankGroup {
   bank: string;
   main: BankAccountRow;
   subAccounts: Array<BankAccountRow>;
+  // Every account at the bank, zero balances too: the menu is the only place to set their type.
+  menuAccounts: Array<BankAccountRow>;
   subtotalEur: number;
   // The part of the subtotal in the bank total (balances under 30 days old): its share.
   countedEur: number;
@@ -242,7 +244,12 @@ function AccountsPage() {
         const countedEur = [main, ...subAccounts]
           .filter(counted)
           .reduce((sum, a) => sum + (a.amount_eur ?? 0), 0);
-        return { bank, main, subAccounts, subtotalEur, countedEur };
+        const menuAccounts = [
+          main,
+          ...subAccounts,
+          ...accountsForBank.filter((a) => a.uid !== main.uid && !subAccounts.includes(a)),
+        ];
+        return { bank, main, subAccounts, menuAccounts, subtotalEur, countedEur };
       })
       .sort((a, b) => b.subtotalEur - a.subtotalEur);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `counted` only changes with `today`
@@ -445,7 +452,7 @@ function AccountsPage() {
                       </div>
                       <AccountMenu
                         title={group.bank}
-                        accounts={[group.main, ...group.subAccounts].map(menuAccount)}
+                        accounts={group.menuAccounts.map(menuAccount)}
                       />
                     </div>
 
