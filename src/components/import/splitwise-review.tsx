@@ -227,7 +227,7 @@ export function SplitwiseReview({
       };
       const { error } = await supabase
         .from("category_rules")
-        .insert({ ...rule, match_field: "any", user_id: userId });
+        .insert({ ...rule, match_field: "any", match_mode: "contains", user_id: userId });
       if (error) throw new Error(error.message);
       return { row: row.row, rule };
     },

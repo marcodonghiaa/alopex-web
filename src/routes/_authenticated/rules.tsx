@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ApplyToPast } from "@/components/rules/apply-to-past";
 import { invalidateAfterReapply, reapply, type RetiredRule } from "@/lib/reapply-rules";
-import { rulesQuery as rulesQueryOptions, type RuleRow } from "@/lib/rules-query";
+import { insertRule, rulesQuery as rulesQueryOptions, type RuleRow } from "@/lib/rules-query";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/field";
 import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
@@ -191,16 +191,7 @@ function RuleForm({
       match_text: string;
       set_category: string | null;
       set_transaction_type: string | null;
-    }) => {
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData.user) throw userError ?? new Error("Not signed in");
-      const { error } = await supabase.from("category_rules").insert({
-        ...rule,
-        user_id: userData.user.id,
-        priority: 100,
-      });
-      if (error) throw error;
-    },
+    }) => insertRule({ ...rule, priority: 100 }),
     onSuccess: (_data, rule) => {
       toast.success("Rule added");
       void queryClient.invalidateQueries({ queryKey: ["category-rules"] });
@@ -411,14 +402,7 @@ function RuleList({ rules, previewKey = 0 }: { rules: RuleRow[]; previewKey?: nu
   // Undo after a delete saves the same rule again: a new id, but its old date keeps its place in
   // the list (the list, and which rule wins, go by priority then date).
   const restoreRule = useMutation({
-    mutationFn: async ({ id: _id, ...rule }: RuleRow) => {
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData.user) throw userError ?? new Error("Not signed in");
-      const { error } = await supabase
-        .from("category_rules")
-        .insert({ ...rule, user_id: userData.user.id });
-      if (error) throw error;
-    },
+    mutationFn: ({ id: _id, ...rule }: RuleRow) => insertRule(rule),
     onError: () => toast.error("Couldn't restore the rule. Add it again."),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ["category-rules"] }),
   });
