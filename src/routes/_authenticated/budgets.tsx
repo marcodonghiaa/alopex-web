@@ -234,9 +234,7 @@ function BudgetsPage() {
     : null;
 
   const monthLabel = month.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
-  const canGoNext =
-    startOfMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1)) <=
-    startOfMonth(new Date());
+  const canGoNext = month < startOfMonth(new Date());
   // Back as far as a year, or the first budget if that is older: not into years without data.
   const thisMonthIso = formatISODate(startOfMonth(new Date()));
   const earliestMonth = rows.reduce(

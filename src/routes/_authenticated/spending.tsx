@@ -159,9 +159,7 @@ function SpendingPage() {
   const prevMonthName = prevMonth.toLocaleDateString("en-GB", { month: "long" });
   const goToPrevMonth = () => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1));
 
-  const canGoNext =
-    startOfMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1)) <=
-    startOfMonth(new Date());
+  const canGoNext = month < startOfMonth(new Date());
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8 md:py-12">
