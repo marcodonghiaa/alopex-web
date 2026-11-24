@@ -26,7 +26,11 @@ export const Select = forwardRef<
   return <select ref={ref} className={cn(fieldClass(onGround), className)} {...props} />;
 });
 
-// The sign-in pages' larger field, spaced out for a 6-digit code.
+// The sign-in pages' larger field.
+export const LARGE_FIELD_CLASS =
+  "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/60 focus:ring-2 focus:ring-ring";
+
+// The same, spaced out for a 6-digit code.
 const LARGE_CODE_CLASS =
   "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-center font-mono text-lg tracking-[0.3em] text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/60 focus:ring-2 focus:ring-ring";
 

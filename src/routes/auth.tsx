@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Github, Loader2, LockKeyhole } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { TrustNote } from "@/components/trust-note";
-import { CodeInput } from "@/components/ui/field";
+import { CodeInput, LARGE_FIELD_CLASS } from "@/components/ui/field";
 import { resumeRealClient, supabase } from "@/integrations/supabase/client";
 import { exitDemoMode } from "@/lib/demo/mode";
 import { resetPasswordUrl } from "./reset-password";
@@ -190,7 +190,7 @@ function AuthPage() {
                     spellCheck={false}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/60 focus:ring-2 focus:ring-ring"
+                    className={LARGE_FIELD_CLASS}
                     placeholder="you@example.com"
                   />
                 </div>
@@ -219,7 +219,7 @@ function AuthPage() {
                     autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/60 focus:ring-2 focus:ring-ring"
+                    className={LARGE_FIELD_CLASS}
                     placeholder="••••••••"
                   />
                 </div>

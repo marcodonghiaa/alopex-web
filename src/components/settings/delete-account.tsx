@@ -3,6 +3,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { Loader2, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { functionErrorMessage } from "@/lib/function-error";
+import { LARGE_FIELD_CLASS } from "@/components/ui/field";
+import { cn } from "@/lib/utils";
 
 const CONFIRM_WORD = "DELETE";
 
@@ -54,7 +56,7 @@ export function DeleteAccount() {
           autoComplete="off"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
-          className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base text-foreground outline-none transition-colors focus:border-negative/60 focus:ring-2 focus:ring-ring"
+          className={cn(LARGE_FIELD_CLASS, "focus:border-negative/60")}
         />
       </div>
       <div className="space-y-1.5">
@@ -67,7 +69,7 @@ export function DeleteAccount() {
           autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base text-foreground outline-none transition-colors focus:border-negative/60 focus:ring-2 focus:ring-ring"
+          className={cn(LARGE_FIELD_CLASS, "focus:border-negative/60")}
         />
       </div>
       {error && (
