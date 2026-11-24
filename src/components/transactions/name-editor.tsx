@@ -48,7 +48,7 @@ export function NameEditor({
           type="button"
           aria-label={`Rename ${name ?? "transaction"}`}
           disabled={saving}
-          className="max-w-full cursor-pointer truncate text-left font-medium text-foreground decoration-dotted underline-offset-4 hover:underline disabled:opacity-60"
+          className="-my-3 max-w-full cursor-pointer truncate py-3 text-left font-medium text-foreground decoration-dotted underline-offset-4 hover:underline disabled:opacity-60"
         >
           {name ?? "—"}
         </button>

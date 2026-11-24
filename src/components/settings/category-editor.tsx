@@ -184,7 +184,7 @@ export function CategoryEditor({
               <div
                 role="radiogroup"
                 aria-label="Icon"
-                className="grid grid-cols-7 gap-1.5 sm:grid-cols-8"
+                className="grid grid-cols-6 gap-1.5 sm:grid-cols-8"
               >
                 <Choice
                   label="First letter"
@@ -288,7 +288,7 @@ function Choice({
       aria-label={label}
       title={label}
       onClick={onSelect}
-      className={`flex items-center justify-center text-foreground transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${round ? "size-9 rounded-full" : "aspect-square min-h-9 rounded-md"} ${selected ? "bg-accent ring-2 ring-foreground" : ""}`}
+      className={`flex items-center justify-center text-foreground transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${round ? "size-11 rounded-full" : "aspect-square min-h-11 rounded-md"} ${selected ? "bg-accent ring-2 ring-foreground" : ""}`}
     >
       {children}
     </button>

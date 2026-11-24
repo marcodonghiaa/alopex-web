@@ -18,4 +18,17 @@ describe("PopoverContent", () => {
     render(<PopoverContent />);
     expect(seen.at(-1)?.["collisionPadding"]).toBe(16);
   });
+
+  it("keeps the same padding object across renders, or Radix repositions forever", () => {
+    const bar = document.createElement("div");
+    bar.setAttribute("data-phone-bar", "bottom");
+    bar.getBoundingClientRect = () => ({ height: 86, top: 700, bottom: 786 }) as DOMRect;
+    document.body.append(bar);
+    const { rerender } = render(<PopoverContent />);
+    const first = seen.at(-1)?.["collisionPadding"];
+    rerender(<PopoverContent className="x" />);
+    expect(typeof first).toBe("object");
+    expect(seen.at(-1)?.["collisionPadding"]).toBe(first);
+    bar.remove();
+  });
 });
