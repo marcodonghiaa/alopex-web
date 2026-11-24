@@ -164,6 +164,29 @@ describe("SplitwiseReview", () => {
     expect(((await importButton()) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  // protects=the headline agrees with the list; fails_when=it says "0 expenses" and an empty
+  // "Your share" while an expense waits for a decision
+  it("counts an expense waiting for a decision in the headline", async () => {
+    tables.transactions = { data: [], error: null };
+    const taxiOnly = classifyRows(
+      parseSplitwiseCsv(
+        [
+          "Date,Description,Category,Cost,Currency,Ann,Bob",
+          "2026-08-17,Taxi,Taxi,20.00,USD,10.00,-10.00",
+        ].join("\n"),
+      ),
+      0,
+    );
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <SplitwiseReview rows={taxiOnly} group="berkeley" onBack={onBack} onImported={onImported} />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByRole("heading", { name: "1 expense" })).toBeInTheDocument();
+    expect(screen.queryByText(/Your share/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Decide on 1 expense to continue" })).toBeTruthy();
+  });
+
   // protects=nothing is blocked silently; fails_when=a missing exchange rate is not shown
   it("shows a problem when an exchange rate is missing", async () => {
     tables.fx_rates = { data: [], error: null };
