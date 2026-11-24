@@ -1,4 +1,4 @@
-import { useMutation, type QueryClient } from "@tanstack/react-query";
+import { useMutation, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import type { PaybackResult } from "@/lib/payback";
 import type { SplitRow } from "@/lib/splits";
 import { toast } from "sonner";
@@ -20,6 +20,27 @@ import {
 // Picking the Transfer category also moves the row out of spending and income (flow_type),
 // the same way the bank sync marks a transfer: it then shows in the Transfers list. A flow the
 // user picked is marked as theirs (flow_source "user"), so the next sync leaves it alone.
+
+/** An optimistic edit: stops refetches of `key`, applies `update`, and returns what to roll back to. */
+export async function patchCache<T>(
+  queryClient: QueryClient,
+  key: QueryKey,
+  update: (old: Array<T> | undefined) => Array<T> | undefined,
+): Promise<{ previous: Array<T> | undefined }> {
+  await queryClient.cancelQueries({ queryKey: key });
+  const previous = queryClient.getQueryData<Array<T>>(key);
+  queryClient.setQueryData<Array<T>>(key, update);
+  return { previous };
+}
+
+/** Puts back what patchCache saved, when it saved anything. */
+export function rollback(
+  queryClient: QueryClient,
+  key: QueryKey,
+  context: { previous: unknown } | undefined,
+) {
+  if (context?.previous) queryClient.setQueryData(key, context.previous);
+}
 
 /**
  * A save error in plain words for the toast. The database's own text ("new row for relation ...
@@ -225,22 +246,16 @@ export function useSplitMutation(queryClient: QueryClient, monthKey: string) {
       );
       if (error) throw error;
     },
-    onMutate: async ({ tx, personalAmount, owedBy }) => {
-      await queryClient.cancelQueries({ queryKey: ["transactions", monthKey] });
-      const previous = queryClient.getQueryData<Array<TransactionRow>>(["transactions", monthKey]);
-      queryClient.setQueryData<Array<TransactionRow>>(["transactions", monthKey], (old) =>
-        old
-          ? old.map((row) =>
-              txId(row) === txId(tx)
-                ? { ...row, personal_amount: personalAmount, owed_by: owedBy }
-                : row,
-            )
-          : old,
-      );
-      return { previous };
-    },
+    onMutate: ({ tx, personalAmount, owedBy }) =>
+      patchCache<TransactionRow>(queryClient, ["transactions", monthKey], (old) =>
+        old?.map((row) =>
+          txId(row) === txId(tx)
+            ? { ...row, personal_amount: personalAmount, owed_by: owedBy }
+            : row,
+        ),
+      ),
     onError: (error, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(["transactions", monthKey], context.previous);
+      rollback(queryClient, ["transactions", monthKey], context);
       saveFailed("Couldn't save split", error);
     },
     onSuccess: () => toast.success("Split saved"),
@@ -374,16 +389,12 @@ export function useShareMutation(queryClient: QueryClient, monthKey: string) {
       const { error } = await supabase.from("splitwise_expenses").update(patch).eq("id", id);
       if (error) throw error;
     },
-    onMutate: async ({ id, patch }) => {
-      await queryClient.cancelQueries({ queryKey: key });
-      const previous = queryClient.getQueryData<Array<SplitwiseShare>>(key);
-      queryClient.setQueryData<Array<SplitwiseShare>>(key, (old) =>
+    onMutate: ({ id, patch }) =>
+      patchCache<SplitwiseShare>(queryClient, key, (old) =>
         old?.map((share) => (share.id === id ? { ...share, ...patch } : share)),
-      );
-      return { previous };
-    },
+      ),
     onError: (error, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(key, context.previous);
+      rollback(queryClient, key, context);
       saveFailed("Couldn't save change", error);
     },
     onSettled: () => {
@@ -415,16 +426,12 @@ export function useFlowMutation(queryClient: QueryClient, monthKey: string) {
       const { error } = await forTx(supabase.from("transactions").update(restorePatch(tx)), tx);
       if (error) throw error;
     },
-    onMutate: async ({ tx }) => {
-      await queryClient.cancelQueries({ queryKey: key });
-      const previous = queryClient.getQueryData<Array<TransactionRow>>(key);
-      queryClient.setQueryData<Array<TransactionRow>>(key, (old) =>
+    onMutate: ({ tx }) =>
+      patchCache<TransferRow>(queryClient, key, (old) =>
         old?.filter((row) => txId(row) !== txId(tx)),
-      );
-      return { previous };
-    },
+      ),
     onError: (error, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(key, context.previous);
+      rollback(queryClient, key, context);
       saveFailed("Couldn't move transaction", error);
     },
     onSuccess: (_data, { tx }) => {
@@ -451,18 +458,15 @@ export function useSettleSplitMutation(queryClient: QueryClient) {
         settled_by_account: null,
         settled_by_ref: null,
       }),
-    onMutate: async ({ txs, settled }) => {
-      await queryClient.cancelQueries({ queryKey: ["splits"] });
-      const previous = queryClient.getQueryData<Array<SplitRow>>(["splits"]);
+    onMutate: ({ txs, settled }) => {
       const ids = new Set(txs.map(txId));
-      queryClient.setQueryData<Array<SplitRow>>(["splits"], (old) =>
+      return patchCache<SplitRow>(queryClient, ["splits"], (old) =>
         old?.map((r) => (ids.has(txId(r)) ? { ...r, owed_settled: settled } : r)),
       );
-      return { previous };
     },
     onSuccess: (_data, vars) => vars.announce?.(),
     onError: (error, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(["splits"], context.previous);
+      rollback(queryClient, ["splits"], context);
       saveFailed("Couldn't save", error);
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["splits"] }),
@@ -536,17 +540,14 @@ export function useReviewGroupMutation(queryClient: QueryClient) {
       if (error) throw error;
     },
     // The group leaves the list at once; the saves and refetches run behind it.
-    onMutate: async ({ group }) => {
-      await queryClient.cancelQueries({ queryKey: ["transfer-review"] });
-      const previous = queryClient.getQueryData<Array<ReviewRow>>(["transfer-review"]);
+    onMutate: ({ group }) => {
       const ids = new Set(group.rows.map(txId));
-      queryClient.setQueryData<Array<ReviewRow>>(["transfer-review"], (old) =>
+      return patchCache<ReviewRow>(queryClient, ["transfer-review"], (old) =>
         old?.filter((r) => !ids.has(txId(r))),
       );
-      return { previous };
     },
     onError: (error, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(["transfer-review"], context.previous);
+      rollback(queryClient, ["transfer-review"], context);
       saveFailed("Couldn't save", error);
     },
     onSuccess: (_data, { group }) =>

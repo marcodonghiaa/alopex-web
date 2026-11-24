@@ -95,7 +95,30 @@ import {
   useSplitMutation,
   saveErrorText,
   useTransactionFieldMutation,
+  patchCache,
+  rollback,
 } from "./mutations";
+
+describe("patchCache and rollback", () => {
+  it("applies the edit, then puts the saved list back", async () => {
+    const qc = new QueryClient();
+    qc.setQueryData(["k"], [1, 2]);
+    const context = await patchCache<number>(qc, ["k"], (old) => old?.filter((n) => n !== 1));
+    expect(qc.getQueryData(["k"])).toEqual([2]);
+    rollback(qc, ["k"], context);
+    expect(qc.getQueryData(["k"])).toEqual([1, 2]);
+  });
+
+  it("leaves the cache alone when nothing was saved", async () => {
+    const qc = new QueryClient();
+    const context = await patchCache<number>(qc, ["k"], (old) => old);
+    expect(context.previous).toBeUndefined();
+    qc.setQueryData(["k"], [3]);
+    rollback(qc, ["k"], context);
+    rollback(qc, ["k"], undefined);
+    expect(qc.getQueryData(["k"])).toEqual([3]);
+  });
+});
 
 const MONTH = "2026-10-01";
 const row = (account_uid: string, entry_reference: string): TransactionRow => ({
