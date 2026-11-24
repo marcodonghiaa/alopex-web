@@ -1,4 +1,4 @@
-import { normalizeNumber } from "@/lib/locale";
+import { parseTypedAmount } from "@/lib/trades";
 // Shared by the Portfolio and Crypto pages and their add/edit controls.
 
 export interface SnapshotValue {
@@ -31,10 +31,8 @@ export function priceEur({ price, valueAtPrice, valueEur }: Omit<SnapshotValue, 
 
 // "3,5" and "3.5" both mean three and a half. Null for anything that isn't a positive number.
 export function parseQuantity(input: string): number | null {
-  const text = normalizeNumber(input);
-  if (!/^\d+(\.\d+)?$/.test(text)) return null;
-  const value = Number(text);
-  return Number.isFinite(value) && value > 0 ? value : null;
+  const value = parseTypedAmount(input);
+  return value != null && value > 0 ? value : null;
 }
 
 // Coinbase amounts are overwritten by the sync, so only coins entered by hand can be edited.
