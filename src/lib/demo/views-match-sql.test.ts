@@ -81,4 +81,34 @@ describe("demo views follow the SQL definitions", () => {
     ];
     expect(deriveViews(db).v_splitwise_eur.map((s) => s.id)).toEqual(["free"]);
   });
+
+  it("counts only my share of money out as spend; a share of 0 or a credit keeps the import", () => {
+    const db = generateDemoData(NOW);
+    db.transactions = [
+      base({
+        entry_reference: "for-others",
+        booking_date: "2026-09-05",
+        amount: 30,
+        personal_amount: 0,
+        flow_type: "spend",
+        category: "Dining",
+      }),
+      base({
+        entry_reference: "credit",
+        booking_date: "2026-09-06",
+        amount: 20,
+        credit_debit_indicator: "CRDT",
+        flow_type: "spend",
+        category: "Dining",
+      }),
+    ];
+    db.splitwise_expenses = [];
+    db.spend_history = [
+      { ...db.spend_history[0]!, month: "2026-09-01", category: "Rent", spend_eur: 500 },
+    ];
+    const sept = deriveViews(db).v_spend_by_category_monthly.filter(
+      (r) => r.month === "2026-09-01",
+    );
+    expect(sept.map((r) => [r.category, r.spend_eur])).toEqual([["Rent", 500]]);
+  });
 });

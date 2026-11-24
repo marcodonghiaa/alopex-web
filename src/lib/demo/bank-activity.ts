@@ -371,6 +371,10 @@ export function buildSubscriptions(
   });
 }
 
+// Like the real view: spend is my share of money out on a row flagged spend.
+const isMySpend = (t: DemoDb["v_transactions_eur"][number]) =>
+  t.flow_type === "spend" && (t.personal_signed_amount_eur ?? 0) < 0;
+
 // Like the real views: my Splitwise shares count as spend, imported history only fills the
 // months that have no live bank spend, and a month's expenses are its category spend.
 export function buildMonthly(
@@ -386,18 +390,17 @@ export function buildMonthly(
     // Like the real view: my share of money in only.
     const mineIn = t.personal_signed_amount_eur ?? 0;
     if (t.flow_type === "income" && mineIn > 0) cell.income += mineIn;
-    if (t.flow_type === "spend") {
-      const mine = Math.abs(t.personal_signed_amount_eur ?? t.signed_amount_eur!);
-      const key = `${month}|${t.category}`;
-      const row = spendByKey.get(key) ?? { month, category: t.category!, spend: 0 };
-      row.spend += mine;
+    if (isMySpend(t)) {
+      const category = t.category ?? "Uncategorized";
+      const key = `${month}|${category}`;
+      const row = spendByKey.get(key) ?? { month, category, spend: 0 };
+      row.spend -= t.personal_signed_amount_eur!;
       spendByKey.set(key, row);
     }
     byMonth.set(month, cell);
   }
-  const spendMonths = new Set(
-    view.filter((t) => t.flow_type === "spend").map((t) => monthStart(t.booking_date!)),
-  );
+  // An imported month gives way only to spend counted above, like the real view.
+  const spendMonths = new Set(view.filter(isMySpend).map((t) => monthStart(t.booking_date!)));
   const addSpend = (month: string, category: string, amount: number) => {
     const key = `${month}|${category}`;
     const row = spendByKey.get(key) ?? { month, category, spend: 0 };
