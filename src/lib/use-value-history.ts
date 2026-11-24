@@ -1,7 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { chartPoints, inRange, withHistory, type ChartRange } from "@/lib/net-worth";
-import { fetchHistory, fetchNetWorth, fetchReconstructed } from "@/lib/net-worth-queries";
+import { chartPoints, inRange, type ChartRange } from "@/lib/net-worth";
+import { useNetWorthSources } from "@/lib/net-worth-queries";
 
 type ValueKey = "portfolio_total_eur" | "crypto_total_eur";
 
@@ -11,24 +10,9 @@ type ValueKey = "portfolio_total_eur" | "crypto_total_eur";
  */
 export function useValueHistory(key: ValueKey, todayEur: number) {
   const [range, setRange] = useState<ChartRange>("YTD");
-  const netWorthQuery = useQuery({ queryKey: ["net-worth-daily"], queryFn: fetchNetWorth });
-  const historyQuery = useQuery({ queryKey: ["net-worth-history"], queryFn: fetchHistory });
-  const reconstructedQuery = useQuery({
-    queryKey: ["net-worth-reconstructed"],
-    queryFn: fetchReconstructed,
-  });
-  const chartData = useMemo(() => {
-    const points = chartPoints(
-      withHistory(
-        historyQuery.data ?? [],
-        netWorthQuery.data ?? [],
-        undefined,
-        reconstructedQuery.data ?? [],
-      ),
-    );
-    // Same ranges as Net Worth. No 1D: history is one point a day, so a day is a two-point line.
-    return inRange(points, range);
-  }, [historyQuery.data, netWorthQuery.data, reconstructedQuery.data, range]);
+  const { live, history, reconstructed, rows } = useNetWorthSources();
+  // Same ranges as Net Worth. No 1D: history is one point a day, so a day is a two-point line.
+  const chartData = useMemo(() => inRange(chartPoints(rows), range), [rows, range]);
   const [scrubIndex, setScrubIndex] = useState<number | null>(null);
   const scrubbed = scrubIndex != null ? chartData.at(scrubIndex) : undefined;
   const first = chartData.at(0);
@@ -36,7 +20,7 @@ export function useValueHistory(key: ValueKey, todayEur: number) {
   const shownEur = scrubbed?.[key] ?? todayEur;
   const delta = first ? shownEur - first[key] : null;
   const change = delta != null && first && first[key] !== 0 ? delta / Math.abs(first[key]) : null;
-  const error = [netWorthQuery, historyQuery, reconstructedQuery].find((q) => q.isError)?.error;
+  const error = [live, history, reconstructed].find((q) => q.isError)?.error;
 
   return {
     key,
