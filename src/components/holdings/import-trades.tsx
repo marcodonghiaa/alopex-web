@@ -601,9 +601,6 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     toAdd.length === 0;
   // Without the holdings or the rates the file can't be read: no spinner next to the error.
   const stuck = !parsed && (keys.isError || (rates.isError && !retrying));
-  // Counts in the reader's locale (1,234).
-  const counted = (n: number, word: string) =>
-    `${numberFormat().format(n)} ${word}${n === 1 ? "" : "s"}`;
   const title =
     from === null
       ? "Import trades"
@@ -992,8 +989,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                   <span className="flex-1">Already saved, skipped</span>
                   <span className="font-figure">
                     {[
-                      skippedTrades > 0 && counted(skippedTrades, "trade"),
-                      skippedEvents > 0 && counted(skippedEvents, "row"),
+                      skippedTrades > 0 && plural(skippedTrades, "trade"),
+                      skippedEvents > 0 && plural(skippedEvents, "row"),
                     ]
                       .filter(Boolean)
                       .join(", ")}

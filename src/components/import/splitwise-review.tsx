@@ -6,7 +6,12 @@ import { Switch } from "@/components/ui/switch";
 import { CategoryTable } from "@/components/import/splitwise-category-table";
 import { FindInBank } from "@/components/import/find-in-bank";
 import { CTA, Group, LINK, PRIMARY, Steps, TINTED } from "@/components/import/splitwise-ui";
-import { moneyFromCents as amount, shortDate, moneyAmount } from "@/lib/import/splitwise-format";
+import {
+  expenses,
+  moneyFromCents as amount,
+  shortDate,
+  moneyAmount,
+} from "@/lib/import/splitwise-format";
 import type { ClassifiedRow } from "@/lib/import/splitwise-classify";
 import { refreshKeys } from "@/lib/import/last-import";
 import { IMPORT_KEY, runSplitwiseImport, type RpcClient } from "@/lib/import/splitwise-commit";
@@ -30,8 +35,6 @@ import { fetchBankWindow, withFileRates } from "@/lib/import/splitwise-bank";
 
 // Stored shares: the database returns at most 1000 rows per call, so more than that is refused.
 const PAGE_LIMIT = 1000;
-
-const expenses = (n: number) => (n === 1 ? "1 expense" : `${n} expenses`);
 
 /** "$113.45", or one amount per currency: shares are never added across currencies. */
 function sharesTotal(shares: Array<{ amount: number; currency: string }>): string {
