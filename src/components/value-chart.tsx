@@ -1,5 +1,14 @@
-import { useRef } from "react";
-import { ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useId, useRef } from "react";
+import {
+  Area,
+  ComposedChart,
+  Line,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { axisDateFormatter, formatISODate } from "@/lib/date";
 
 interface ValueChartProps<T extends { ts: number; snapshot_date: string }> {
@@ -23,6 +32,15 @@ export function isVerticalSwipe(
   return dy > 6 && dy > dx;
 }
 
+/** The range's first value, for the faint baseline the line is read against. */
+export function startValue<T>(data: Array<T>, key: keyof T & string): number | undefined {
+  for (const row of data) {
+    const v = row[key];
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+  }
+  return undefined;
+}
+
 /** Marks the latest value only: an Ember dot in a soft Ember halo. */
 export function latestDot(last: number) {
   return function LatestDot({ cx, cy, index }: { cx?: number; cy?: number; index?: number }) {
@@ -36,7 +54,8 @@ export function latestDot(last: number) {
   };
 }
 
-// One line, no grid, no y-axis: hovering scrubs it and hands the day back to the page.
+// One line over a faint fill, a dashed baseline at the range's start, no grid, no y-axis:
+// hovering scrubs it and hands the day back to the page.
 export function ValueChart<T extends { ts: number; snapshot_date: string }>({
   data,
   dataKey,
@@ -47,6 +66,9 @@ export function ValueChart<T extends { ts: number; snapshot_date: string }>({
   const formatTick = axisDateFormatter(data.at(0)?.snapshot_date, data.at(-1)?.snapshot_date);
   // A finger moving mostly up or down is scrolling the page past the chart, not scrubbing it.
   const touch = useRef<{ x: number; y: number; scroll: boolean } | null>(null);
+  // useId's colons break url(#…) references.
+  const fillId = `value-fill-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const start = startValue(data, dataKey);
   return (
     // A lifted finger ends the scrub: recharts' touch end never calls onMouseLeave.
     <div
@@ -99,6 +121,32 @@ export function ValueChart<T extends { ts: number; snapshot_date: string }>({
             interval="preserveStartEnd"
           />
           <YAxis hide domain={["auto", "auto"]} />
+          <defs>
+            <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--color-foreground)" stopOpacity={0.14} />
+              <stop offset="100%" stopColor="var(--color-foreground)" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          {start != null && (
+            <ReferenceLine
+              y={start}
+              stroke="var(--color-muted-foreground)"
+              strokeOpacity={0.5}
+              strokeWidth={1}
+              strokeDasharray="2 4"
+              ifOverflow="extendDomain"
+            />
+          )}
+          <Area
+            type="monotone"
+            dataKey={dataKey}
+            baseValue="dataMin"
+            isAnimationActive={false}
+            stroke="none"
+            fill={`url(#${fillId})`}
+            activeDot={false}
+            tooltipType="none"
+          />
           <Tooltip
             content={() => null}
             cursor={{ stroke: "var(--color-foreground)", strokeWidth: 1, strokeDasharray: "2 3" }}
