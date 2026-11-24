@@ -1219,24 +1219,6 @@ export type Database = {
         };
         Relationships: [];
       };
-      v_cd_holdings: {
-        Row: {
-          annual_rate: number | null;
-          bank_label: string | null;
-          currency: string | null;
-          current_value_eur: number | null;
-          current_value_native: number | null;
-          days_elapsed: number | null;
-          id: string | null;
-          is_matured: boolean | null;
-          label: string | null;
-          maturity_date: string | null;
-          principal: number | null;
-          start_date: string | null;
-          user_id: string | null;
-        };
-        Relationships: [];
-      };
       v_crypto_latest: {
         Row: {
           amount: number | null;

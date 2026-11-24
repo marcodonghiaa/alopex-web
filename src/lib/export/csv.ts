@@ -86,7 +86,6 @@ const NET_WORTH_COLUMNS = [
   "account_uid",
   "currency",
   "amount",
-  "eur_equivalent",
 ] as const;
 
 // Three sources side by side, told apart by `source`; nothing is added up.
