@@ -11,6 +11,12 @@ export function cleanCode(input: string): string | null {
   return /^\d{6}$/.test(digits) ? digits : null;
 }
 
+const requireCode = (input: string): string => {
+  const code = cleanCode(input);
+  if (!code) throw new Error("Enter the 6-digit code from your authenticator app.");
+  return code;
+};
+
 // Supabase's English error texts for these cases, in the app's own words.
 const OWN_WORDS: Record<string, string> = {
   mfa_verification_failed: "That code didn't work. Try the next one.",
@@ -39,8 +45,7 @@ export async function needsMfaCode(): Promise<boolean> {
 
 /** Raise this session to aal2 with a code from any of the user's authenticators. */
 export async function verifyMfaCode(input: string): Promise<void> {
-  const code = cleanCode(input);
-  if (!code) throw new Error("Enter the 6-digit code from your authenticator app.");
+  const code = requireCode(input);
   const { data, error } = await supabase.auth.mfa.listFactors();
   if (error) throw error;
   const factors = data.totp;
@@ -54,9 +59,7 @@ export async function verifyMfaCode(input: string): Promise<void> {
     });
     if (!verifyError) return;
     // Supabase allows about 15 code checks a minute per IP: stop instead of spending more.
-    if (verifyError.status === 429) {
-      throw new Error(TOO_MANY_TRIES);
-    }
+    if (verifyError.status === 429) throw inOwnWords(verifyError);
     last = verifyError;
   }
   throw inOwnWords(last);
@@ -109,8 +112,7 @@ export async function startEnrollment(name: string): Promise<Enrollment> {
 }
 
 export async function finishEnrollment(factorId: string, input: string): Promise<void> {
-  const code = cleanCode(input);
-  if (!code) throw new Error("Enter the 6-digit code from your authenticator app.");
+  const code = requireCode(input);
   const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
   if (error) throw inOwnWords(error);
 }
