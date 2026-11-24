@@ -60,3 +60,15 @@ describe("error page Try again", () => {
     expect(reload).not.toHaveBeenCalled();
   });
 });
+
+// H351: og:image and twitter:image named the author's domain on every self-hosted copy.
+describe("link-preview tags", () => {
+  it("never point at another site's domain", () => {
+    const head = (Route.options.head as () => { meta: Array<Record<string, string>> })();
+    const images = head.meta.filter(
+      (m) => m["property"] === "og:image" || m["name"] === "twitter:image",
+    );
+    expect(images).toHaveLength(2);
+    for (const m of images) expect(m["content"]).toMatch(/^\/og-image\.png$/);
+  });
+});
