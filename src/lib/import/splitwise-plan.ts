@@ -1,3 +1,4 @@
+import { addDays } from "@/lib/date";
 import { cutChars } from "@/lib/transactions";
 import type { ClassifiedRow } from "./splitwise-classify";
 import {
@@ -119,9 +120,6 @@ export function splitAtCheckpoint(
   return split;
 }
 
-const nextDay = (iso: string) =>
-  new Date(Date.parse(`${iso}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
-
 interface PlanInput {
   group: string;
   /** The whole file. */
@@ -228,7 +226,7 @@ export function planWrite(input: PlanInput): WritePlan {
   // After a checkpoint the range starts the next day, so the delete step cannot reach a stored
   // row; a checkpoint-day addition is inserted regardless, since inserts ignore the range.
   const dates = rows.map((r) => r.date).sort();
-  const from = checkpoint === null ? (dates[0] ?? "") : nextDay(checkpoint);
+  const from = checkpoint === null ? (dates[0] ?? "") : addDays(checkpoint, 1);
   const last = dates[dates.length - 1] ?? "";
   return {
     group,

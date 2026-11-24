@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { addDays } from "@/lib/date";
 import type { BankTx } from "./splitwise-match";
 import { makeRate, type FxRow } from "@/lib/fx";
 import { loadRates } from "@/lib/brokers/rates";
@@ -15,9 +16,6 @@ const FX_DAYS_BEFORE = 14;
 // PostgREST returns at most 1000 rows per call: read page by page, up to 10 000 rows each.
 const PAGE = 1000;
 const MAX_PAGES = 10;
-
-const addDays = (iso: string, days: number) =>
-  new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 
 interface BankWindow {
   bank: Array<BankTx>;
