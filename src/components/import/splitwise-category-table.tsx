@@ -1,7 +1,7 @@
-import { CATEGORIES } from "@/lib/categories";
 import type { ClassifiedRow } from "@/lib/import/splitwise-classify";
 import { ruleTextFor } from "@/lib/import/splitwise-categorize";
 import { money, shortDate } from "@/lib/import/splitwise-format";
+import { useCategories } from "@/lib/use-categories";
 
 interface Props {
   rows: Array<ClassifiedRow>;
@@ -25,6 +25,7 @@ export function CategoryTable({
   onRemember,
   saving,
 }: Props) {
+  const choices = useCategories().list;
   const ordered = [...rows].sort(
     (a, b) =>
       Number(categoryOf.get(a.row) !== null) - Number(categoryOf.get(b.row) !== null) ||
@@ -62,7 +63,11 @@ export function CategoryTable({
                   }`}
                 >
                   <option value="">Choose category</option>
-                  {CATEGORIES.map((c) => (
+                  {/* Your categories; one a rule set that you hid still shows, so the pick reads true. */}
+                  {(category === null || choices.includes(category)
+                    ? choices
+                    : [category, ...choices]
+                  ).map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>

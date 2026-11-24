@@ -30,6 +30,16 @@ describe("categorizeRow", () => {
     );
   });
 
+  // Regression: a rule was applied only when it set a built-in category, so one that sets your
+  // own category was skipped and the expense fell through to keywords.
+  it("applies a rule that sets one of your own categories", () => {
+    const rules = [rule({ match_text: "climbing", set_category: "Gym" })];
+    expect(categorizeRow({ description: "Climbing gym", category: "Sports" }, rules)).toEqual({
+      category: "Gym",
+      source: "rule",
+    });
+  });
+
   // Regression: Splitwise import matched every rule anywhere, ignoring its mode.
   it("follows each rule's match mode, like the sync", () => {
     const word = [rule({ match_text: "bar", match_mode: "word", set_category: "Dine Out" })];

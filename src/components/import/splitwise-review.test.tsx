@@ -12,8 +12,10 @@ const tables: {
   fx_rates: Answer;
   splitwise_expenses: Answer;
   category_rules: Answer;
+  user_categories: Answer;
 } = {
   category_rules: { data: [], error: null },
+  user_categories: { data: [], error: null },
   transactions: { data: [], error: null },
   fx_rates: { data: [], error: null },
   splitwise_expenses: { data: [], error: null },
@@ -111,6 +113,7 @@ beforeEach(() => {
   };
   tables.splitwise_expenses = { data: [], error: null };
   tables.category_rules = { data: [], error: null };
+  tables.user_categories = { data: [], error: null };
   insertRule.mockReset();
   onImported.mockReset();
   loadRates.mockReset();
@@ -335,6 +338,26 @@ describe("SplitwiseReview", () => {
     expect(((await screen.findByLabelText("Category for Dinner")) as HTMLSelectElement).value).toBe(
       "Housing",
     );
+  });
+
+  // Regression: a rule setting one of your own categories was ignored, and the picker offered
+  // only the built-in ones.
+  it("applies a rule that sets one of your own categories, and sends it on Import", async () => {
+    tables.category_rules = {
+      data: [{ match_text: "dinner", set_category: "Date night", priority: 100 }],
+      error: null,
+    };
+    tables.user_categories = { data: [{ name: "Date night", hidden: false }], error: null };
+    show();
+    const select = (await screen.findByLabelText("Category for Dinner")) as HTMLSelectElement;
+    await waitFor(() => expect(select.value).toBe("Date night"));
+    expect([...select.options].map((o) => o.value)).toContain("Date night");
+    await clickImport();
+    await waitFor(() => expect(rpc).toHaveBeenCalledTimes(1));
+    const shares = (
+      rpc.mock.calls[0]?.[1] as { p_shares: Array<{ description: string; category: string }> }
+    ).p_shares;
+    expect(shares.find((s) => s.description === "Dinner")?.category).toBe("Date night");
   });
 
   it("lets a category be changed and sends the chosen one on Import", async () => {

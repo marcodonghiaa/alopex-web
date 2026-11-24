@@ -14,7 +14,8 @@ export interface UserRule {
 }
 
 export interface Guess {
-  category: AppCategory | null;
+  /** A built-in category, or one of yours when a rule sets it. */
+  category: string | null;
   source: "rule" | "keyword" | "splitwise" | null;
 }
 
@@ -51,8 +52,9 @@ const KEYWORDS: Array<[AppCategory, RegExp]> = [
 
 const norm = foldText;
 
-const isAppCategory = (value: string | null): value is AppCategory =>
-  value !== null && suggestCategory(value) === value;
+// Any category a rule sets counts, your own too: renames and deletes move rules along with it.
+const setsCategory = (value: string | null): value is string =>
+  value !== null && value.trim() !== "";
 
 /** Category for one row, and where it came from. */
 export function categorizeRow(
@@ -64,7 +66,7 @@ export function categorizeRow(
   // Spaces around a rule's text never counted here (the import trimmed before match modes).
   for (const r of rules) {
     if (
-      isAppCategory(r.set_category) &&
+      setsCategory(r.set_category) &&
       textMatches(text, norm(r.match_text).trim(), r.match_mode)
     ) {
       return { category: r.set_category, source: "rule" };
