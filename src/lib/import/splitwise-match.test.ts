@@ -7,8 +7,18 @@ import {
   manualSplit,
   matchBank,
   nearbyPayments,
+  txKey,
   type BankTx,
 } from "./splitwise-match";
+import { txId } from "@/lib/transactions";
+
+describe("txKey", () => {
+  it("is the same key txId gives the bank row", () => {
+    expect(txKey({ accountUid: "a1", entryReference: "r1" })).toBe(
+      txId({ account_uid: "a1", entry_reference: "r1" }),
+    );
+  });
+});
 
 const row = (over: Partial<SplitwiseRow> = {}): SplitwiseRow => ({
   row: 1,

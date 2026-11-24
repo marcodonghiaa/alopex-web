@@ -163,7 +163,8 @@ export function matchBank(
 const PICK_DAYS_BEFORE = 3;
 const PICK_DAYS_AFTER = 7;
 
-const txKey = (t: { accountUid: string; entryReference: string }) =>
+/** A bank payment's identity, "accountUid|entryReference": the same string txId() gives. */
+export const txKey = (t: { accountUid: string; entryReference: string }) =>
   `${t.accountUid}|${t.entryReference}`;
 
 /**

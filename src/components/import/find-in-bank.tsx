@@ -7,10 +7,9 @@ import {
   manualSplit,
   nearbyPayments,
   type BankTx,
+  txKey as key,
   type RateToEur,
 } from "@/lib/import/splitwise-match";
-
-const key = (t: BankTx) => `${t.accountUid}|${t.entryReference}`;
 
 /**
  * A sheet listing the payments around an expense I paid, so the user can say which one it was

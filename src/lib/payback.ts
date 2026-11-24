@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { GroupSummary } from "@/lib/import/splitwise-balances";
 import { NO_NAME, type SplitPerson } from "@/lib/splits";
 import { txId, type TxKey } from "@/lib/transactions";
+import { txKey } from "@/lib/import/splitwise-match";
 
 /** A recent incoming payment nobody has checked yet (see payback_candidates in the backend). */
 export interface PaybackCandidate extends TxKey {
@@ -193,7 +194,7 @@ export function withoutToLink(
   payments: Array<PaybackCandidate>,
   suggested: Array<{ accountUid: string; entryReference: string }>,
 ): Array<PaybackCandidate> {
-  const taken = new Set(suggested.map((t) => `${t.accountUid}|${t.entryReference}`));
+  const taken = new Set(suggested.map(txKey));
   return payments.filter((p) => !taken.has(txId(p)));
 }
 

@@ -8,7 +8,7 @@ import {
   type FileRow,
   type StoredShare,
 } from "./splitwise-corrections";
-import type { BankMatch, RateToEur } from "./splitwise-match";
+import { txKey, type BankMatch, type RateToEur } from "./splitwise-match";
 
 // Turns a reviewed Splitwise import into exactly what will be written: my shares, and the
 // confirmed changes to bank transactions. Pure; the caller sends the result to the database.
@@ -143,7 +143,6 @@ const ACTION_FOR_KIND: Record<string, LinkRow["action"] | undefined> = {
 };
 
 const euros = (cents: number) => cents / 100;
-const txKey = (m: BankMatch) => `${m.accountUid}|${m.entryReference}`;
 
 function checkMatches(
   rows: Array<ClassifiedRow>,

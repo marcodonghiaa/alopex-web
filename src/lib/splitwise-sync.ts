@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { functionErrorBody } from "@/lib/function-error";
 import type { ClassifiedRow } from "@/lib/import/splitwise-classify";
-import { matchBank, type BankTx, type RateToEur } from "@/lib/import/splitwise-match";
+import { matchBank, txKey, type BankTx, type RateToEur } from "@/lib/import/splitwise-match";
 import { refreshKeys } from "@/lib/import/last-import";
 import { numberFormat } from "@/lib/locale";
 import { isMissingFunction, isMissingTable } from "@/lib/pg-errors";
@@ -275,7 +275,7 @@ export function suggestMatches(
   rate: RateToEur,
 ): Map<string, Suggestion> {
   const rows = items.map(reviewRow);
-  const byKey = new Map(bank.map((t) => [`${t.accountUid}|${t.entryReference}`, t]));
+  const byKey = new Map(bank.map((t) => [txKey(t), t]));
   const rejected = (r: ClassifiedRow, tx: BankTx) =>
     items[r.row - 1]!.rejected_entry_references.includes(tx.entryReference);
   const names = items.map((i) => words(i.counterparty ?? ""));
@@ -287,7 +287,7 @@ export function suggestMatches(
   };
   const out = new Map<string, Suggestion>();
   for (const m of matchBank(rows, bank, rate, rejected, named)) {
-    const tx = byKey.get(`${m.accountUid}|${m.entryReference}`);
+    const tx = byKey.get(txKey(m));
     if (tx) out.set(items[m.row - 1]!.id, { tx, confidence: m.confidence });
   }
   return out;

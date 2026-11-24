@@ -15,6 +15,7 @@ import {
   manualMatch,
   manualSplit,
   matchBank,
+  txKey,
   type BankMatch,
   type BankTx,
 } from "@/lib/import/splitwise-match";
@@ -98,9 +99,6 @@ export interface ImportDone {
   /** Set when the shares are saved but the friends' balances are not. */
   balancesError: string | null;
 }
-
-const txKey = (t: { accountUid: string; entryReference: string }) =>
-  `${t.accountUid}|${t.entryReference}`;
 
 export function SplitwiseReview({
   rows,
