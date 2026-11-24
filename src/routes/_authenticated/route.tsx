@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { Icon, iconOf, type IconComponent } from "@/components/icons/icon";
 import { useCategories } from "@/lib/use-categories";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { loadDemoClient, supabase } from "@/integrations/supabase/client";
+import { loadDemoClient, recoverySignIn, supabase } from "@/integrations/supabase/client";
 import { isDemoMode } from "@/lib/demo/mode";
 import { needsMfaCode } from "@/lib/mfa";
 import { backHereSearch } from "@/lib/next-url";
@@ -52,6 +52,9 @@ export const Route = createFileRoute("/_authenticated")({
       if (error || !data.session) {
         throw toAuth();
       }
+      // A recovery link that landed here (Supabase sends it to the Site URL when this address isn't
+      // allowed) opens the new-password form, which also asks for the authenticator code.
+      if (!isDemoMode() && (await recoverySignIn())) throw redirect({ to: "/reset-password" });
       // Signed in with the password but not yet the authenticator code: the sign-in page asks for it.
       if (!isDemoMode() && (await needsMfaCode())) throw toAuth();
       return { user: data.session.user };
