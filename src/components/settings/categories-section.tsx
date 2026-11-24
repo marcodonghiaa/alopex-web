@@ -126,7 +126,8 @@ export function CategoriesSection() {
                         variant="ghost"
                         className="px-3"
                         disabled={busy}
-                        onClick={() => remove.mutate(c)}
+                        // Unhide only: the row may also carry the category's icon and colour.
+                        onClick={() => save.mutate({ name: c, hidden: false })}
                       >
                         Show
                       </Button>

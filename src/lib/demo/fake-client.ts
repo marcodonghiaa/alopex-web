@@ -21,6 +21,8 @@ interface Result {
 }
 
 const DISABLED = { message: "Disabled in the demo." };
+// Primary keys an upsert without onConflict matches on (user_id is always the demo user's).
+const PRIMARY_KEYS: Record<string, Array<string>> = { user_categories: ["name"] };
 // Tables a write can change a view of.
 const FEEDS_VIEWS = new Set([
   "transactions",
@@ -895,7 +897,8 @@ class Query implements PromiseLike<Result> {
   upsert(rows: Row | Array<Row>, opts?: { onConflict?: string; ignoreDuplicates?: boolean }) {
     this.mode = "upsert";
     this.payload = [rows].flat();
-    this.conflict = opts?.onConflict?.split(",") ?? [];
+    // Like Postgres: without onConflict an upsert matches on the primary key.
+    this.conflict = opts?.onConflict?.split(",") ?? PRIMARY_KEYS[this.table] ?? [];
     this.ignoreDuplicates = !!opts?.ignoreDuplicates;
     return this;
   }

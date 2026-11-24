@@ -204,8 +204,12 @@ describe("CategoriesSection", () => {
     await waitFor(() =>
       expect(upsert).toHaveBeenCalledWith({ name: "Shopping", hidden: true }, undefined),
     );
+    // H136: Show deleted the row, wiping a custom icon and colour; it only unhides it now.
     fireEvent.click(within(await row("Taxes")).getByRole("button", { name: "Show" }));
-    await waitFor(() => expect(del).toHaveBeenCalledWith("name", "Taxes"));
+    await waitFor(() =>
+      expect(upsert).toHaveBeenCalledWith({ name: "Taxes", hidden: false }, undefined),
+    );
+    expect(del).not.toHaveBeenCalled();
   });
 
   it("refuses a name already in the list", async () => {
