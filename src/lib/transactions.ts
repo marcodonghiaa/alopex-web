@@ -30,7 +30,7 @@ export interface TransactionRow {
 export type TransferRow = Omit<TransactionRow, "note" | "tags">;
 
 // The euro columns of v_transactions_eur; `amount` and `personal_amount` are in the card's own currency.
-export interface EurRow {
+interface EurRow {
   personal_signed_amount_eur: number | null;
   signed_amount_eur: number | null;
 }
@@ -305,7 +305,7 @@ export function listCategories(transactions: Array<TransactionRow>) {
   };
 }
 
-export type TransactionFilters = {
+type TransactionFilters = {
   /** Bank name to keep, or "all". */
   bank?: string;
   /** Bank name of an account uid; needed only with a bank filter. */

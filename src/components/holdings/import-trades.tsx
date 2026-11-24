@@ -42,8 +42,8 @@ import {
   parseTradesCsv,
   shareUpdates,
   summarizeImport,
-  type CsvResult,
 } from "@/lib/trades-csv";
+import type { CsvResult } from "@/lib/brokers";
 import { readCsvFile } from "@/lib/import/parse-csv";
 import { newEvents } from "@/lib/investment-events";
 import { fetchEvents } from "@/lib/use-performance";

@@ -71,7 +71,7 @@ const saveFailed = (title: string, error: unknown) => {
   toast.error(title, { description: saveErrorText(error) });
 };
 
-export const TRANSFER_CATEGORY = "Transfer";
+const TRANSFER_CATEGORY = "Transfer";
 export function categoryPatch(category: string | null): TablesUpdate<"transactions"> {
   // A pick is yours, the same category too: the server marks it only when the category changes,
   // and that is how you claim a category the AI set (rules and Apply to past then leave it).

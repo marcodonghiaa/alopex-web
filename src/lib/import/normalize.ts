@@ -1,7 +1,7 @@
 // Turns the messy text people have in spreadsheets into clean values for the import.
 
 // Lower-case, accents removed. English, Italian, German, French, Spanish, Dutch.
-export const MONTH_NAMES: Array<Array<string>> = [
+const MONTH_NAMES: Array<Array<string>> = [
   ["jan", "january", "gen", "gennaio", "januar", "janv", "janvier", "ene", "enero", "januari"],
   ["feb", "february", "febbraio", "februar", "fevr", "fevrier", "febrero", "februari"],
   ["mar", "march", "marzo", "marz", "mrz", "mars", "maart", "mrt"],
@@ -60,8 +60,8 @@ export function parseMonth(raw: string): string | null {
 
   m = /^([a-z]+)\.?\s+(\d{4})$/.exec(s);
   if (m) {
-    const index = MONTH_NAMES.findIndex((names) => names.includes(m[1] ?? ""));
-    return index === -1 ? null : ym(Number(m[2]), index + 1);
+    const month = monthNumber(m[1] ?? "");
+    return month === null ? null : ym(Number(m[2]), month);
   }
 
   const d = excelDay(s);

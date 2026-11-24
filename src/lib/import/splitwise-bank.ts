@@ -19,7 +19,7 @@ const MAX_PAGES = 10;
 const addDays = (iso: string, days: number) =>
   new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 
-export interface BankWindow {
+interface BankWindow {
   bank: Array<BankTx>;
   fx: Array<FxRow>;
   /** Too many rows to read them all: the bank payments are complete from `completeFrom` on. */

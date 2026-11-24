@@ -198,7 +198,7 @@ export function nearbyPayments(
     );
 }
 
-export interface ManualSplit {
+interface ManualSplit {
   /** What the others owe me for this expense, in the bank transaction's currency. */
   othersOweCents: number;
   /** What stays my spending: the bank amount minus what the others owe, never below zero. */

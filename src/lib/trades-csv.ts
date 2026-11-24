@@ -10,8 +10,6 @@ import type { Trade } from "@/lib/trades";
 // Separated by comma, semicolon or tab. Prices are per share in EUR. Dates are 2026-10-30 or 30/10/2026.
 // A broker export Alopex knows (src/lib/brokers) is recognised by its columns and read as it comes.
 
-export type { CsvResult } from "@/lib/brokers";
-
 function readHeader(firstLine: string) {
   const headerLine = firstLine.replace(/^\uFEFF/, "");
   const separator = [";", "\t", ","].find((s) => headerLine.includes(s)) ?? ",";

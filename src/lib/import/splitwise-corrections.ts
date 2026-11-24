@@ -36,7 +36,7 @@ export interface EditedRow extends FileRow {
   stored: StoredShare;
 }
 
-export interface StoredDiff {
+interface StoredDiff {
   edited: Array<EditedRow>;
   /** Stored rows gone from the file, inside its dates, with no sure replacement. */
   removed: Array<StoredShare>;
@@ -146,14 +146,14 @@ interface RemoveItem {
   old_fingerprint: string;
 }
 
-export interface CorrectionPlan {
+interface CorrectionPlan {
   add: Array<AddItem>;
   edit: Array<EditItem>;
   remove: Array<RemoveItem>;
   problems: Array<string>;
 }
 
-export interface CorrectionInput {
+interface CorrectionInput {
   older: Array<FileRow>;
   edited: Array<EditedRow>;
   removed: Array<StoredShare>;
@@ -213,7 +213,7 @@ export function planCorrections(input: CorrectionInput): CorrectionPlan {
   return { add, edit, remove, problems: [...problems, ...missingRates(noRate)] };
 }
 
-export interface CorrectionCounts {
+interface CorrectionCounts {
   added: number;
   edited: number;
   removed: number;

@@ -19,7 +19,7 @@ export interface PageResult {
   count: number | null;
 }
 export type PageFetcher = (from: number, to: number) => PromiseLike<PageResult>;
-export type Progress = (table: string, done: number, total: number) => void;
+type Progress = (table: string, done: number, total: number) => void;
 
 /**
  * Every row of one table, a page at a time. The server's exact row count decides when to stop

@@ -13,7 +13,7 @@ export interface UserRule {
   priority: number;
 }
 
-export interface Guess {
+interface Guess {
   /** A built-in category, or one of yours when a rule sets it. */
   category: string | null;
   source: "rule" | "keyword" | "splitwise" | null;

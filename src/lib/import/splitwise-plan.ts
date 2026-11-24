@@ -49,7 +49,7 @@ export interface WritePlan {
   problems: Array<string>;
 }
 
-export interface CheckpointSplit {
+interface CheckpointSplit {
   /** The newest date stored for the group; null on a first import. */
   checkpoint: string | null;
   /** The rows this import may touch, and their ids. */
@@ -122,7 +122,7 @@ export function splitAtCheckpoint(
 const nextDay = (iso: string) =>
   new Date(Date.parse(`${iso}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 
-export interface PlanInput {
+interface PlanInput {
   group: string;
   /** The whole file. */
   rows: Array<ClassifiedRow>;

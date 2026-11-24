@@ -1,12 +1,12 @@
 import { parseAmount, parseMonth } from "./normalize";
 import { suggestCategory } from "./suggest-category";
 
-export interface Skipped {
+interface Skipped {
   line: number;
   reason: string;
 }
 
-export interface NetWorthPlanRow {
+interface NetWorthPlanRow {
   snapshot_date: string;
   stocks_eur: number;
   bonds_eur: number;
@@ -17,19 +17,19 @@ export interface NetWorthPlanRow {
   total_eur: number;
 }
 
-export interface SpendPlanRow {
+interface SpendPlanRow {
   month: string;
   category: string;
   spend_eur: number;
 }
 
-export interface Plan<T> {
+interface Plan<T> {
   rows: Array<T>;
   skipped: Array<Skipped>;
 }
 
 /** A category as written in the file, and the app category its rows are saved under. */
-export interface CategoryMapping {
+interface CategoryMapping {
   source: string;
   /** One of your categories (a suggested built-in until you pick). */
   category: string;
