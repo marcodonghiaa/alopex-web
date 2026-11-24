@@ -11,6 +11,7 @@ vi.mock("@/integrations/supabase/client", () => ({
       let filter = "";
       const q: Record<string, unknown> = {
         select: () => q,
+        order: () => q,
         gte: () => q,
         lt: () => q,
         eq: () => ((filter = "ai"), q),

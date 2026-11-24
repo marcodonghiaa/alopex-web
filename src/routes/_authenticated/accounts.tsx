@@ -30,6 +30,7 @@ import { formatEur, formatMoney } from "@/lib/transactions";
 import { HeadlineFigure } from "@/components/headline-figure";
 import { AccountMenu, AddDebt, type MenuAccount } from "@/components/accounts/account-menu";
 import { accountTypeLabel, debtEur, isDebt } from "@/lib/account-types";
+import { fetchBankAccounts } from "@/components/health/use-health";
 
 export const Route = createFileRoute("/_authenticated/accounts")({
   head: () => ({
@@ -83,16 +84,6 @@ interface BankGroup {
   countedEur: number;
 }
 
-async function fetchBankAccounts(): Promise<Array<BankAccountRow>> {
-  const { data, error } = await supabase
-    .from("v_bank_accounts_latest")
-    // "*" rather than a column list, so the page still loads on a database without bank_name/bank_logo.
-    .select("*")
-    .order("amount_eur", { ascending: false });
-  if (error) throw error;
-  return (data ?? []) as Array<BankAccountRow>;
-}
-
 const menuAccount = (a: BankAccountRow): MenuAccount => ({
   uid: a.uid,
   name: accountName(a),
@@ -111,7 +102,7 @@ function AccountsPage() {
   const queryClient = useQueryClient();
   const bankQuery = useQuery({
     queryKey: ["bank-accounts-latest"],
-    queryFn: fetchBankAccounts,
+    queryFn: () => fetchBankAccounts<BankAccountRow>(),
   });
 
   // Landed here from the bank-consent-callback redirect after connecting a bank. The redirect

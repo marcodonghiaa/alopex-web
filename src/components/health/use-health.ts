@@ -17,10 +17,15 @@ import {
   type HealthRow,
 } from "@/lib/health";
 
-async function fetchAccounts(): Promise<Array<HealthAccount>> {
-  const { data, error } = await supabase.from("v_bank_accounts_latest").select("*");
+/** Every bank account's latest balance, largest first: the one queryFn of ["bank-accounts-latest"]. */
+export async function fetchBankAccounts<T = HealthAccount>(): Promise<Array<T>> {
+  const { data, error } = await supabase
+    .from("v_bank_accounts_latest")
+    // "*" rather than a column list, so the page still loads on a database without bank_name/bank_logo.
+    .select("*")
+    .order("amount_eur", { ascending: false });
   if (error) throw error;
-  return (data ?? []) as Array<HealthAccount>;
+  return (data ?? []) as Array<T>;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -54,7 +59,10 @@ async function fetchPushSubscribed(): Promise<boolean> {
 
 /** Everything Settings needs from the health checks: the rows, split so push shows under Notifications. */
 export function useHealth() {
-  const accounts = useQuery({ queryKey: ["bank-accounts-latest"], queryFn: fetchAccounts });
+  const accounts = useQuery({
+    queryKey: ["bank-accounts-latest"],
+    queryFn: () => fetchBankAccounts(),
+  });
   const origin = useQuery(originStatusQuery(() => supabase.rpc("register_dashboard_origin")));
   const ai = useQuery({ queryKey: ["ai-categorized"], queryFn: fetchAiCounts });
   // Client-only: pushSupport() reads window, and SSR must render the same first pass.
@@ -91,7 +99,10 @@ export function useHealth() {
 
 /** Just the freshness line for Net Worth: shares the accounts query with Settings › Health. */
 export function useSyncStatus() {
-  const accounts = useQuery({ queryKey: ["bank-accounts-latest"], queryFn: fetchAccounts });
+  const accounts = useQuery({
+    queryKey: ["bank-accounts-latest"],
+    queryFn: () => fetchBankAccounts(),
+  });
   return useMemo(
     () => (accounts.data ? syncStatus(accounts.data, new Date()) : null),
     [accounts.data],
