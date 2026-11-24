@@ -155,6 +155,22 @@ export function categoryCode(category: string | null | undefined): string {
 }
 
 /** Built-ins nobody may hide: transfers and income depend on them (the database refuses too). */
+export const MAX_CATEGORY_NAME = 40;
+
+/** A typed category name with spaces tidied, and why it can't be saved (null when it can).
+ * `taken` is every other category: renaming leaves the original out. */
+export function checkCategoryName(raw: string, taken: ReadonlyArray<string>) {
+  const name = raw.trim().replace(/\s+/g, " ");
+  const error = !name
+    ? "Type a name."
+    : name.length > MAX_CATEGORY_NAME
+      ? `At most ${MAX_CATEGORY_NAME} characters.`
+      : taken.some((c) => c.toLowerCase() === name.toLowerCase())
+        ? `"${name}" is already in the list.`
+        : null;
+  return { name, error };
+}
+
 export const ALWAYS_SHOWN: ReadonlyArray<string> = ["Transfer", "Income"];
 
 /** Your list: the built-in categories minus the ones you hid, plus your own (user_categories). */

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { ALWAYS_SHOWN, CATEGORIES } from "@/lib/categories";
+import { ALWAYS_SHOWN, CATEGORIES, checkCategoryName, MAX_CATEGORY_NAME } from "@/lib/categories";
 import { CATEGORIES_KEY, useCategories } from "@/lib/use-categories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
@@ -47,11 +47,8 @@ export function CategoriesSection() {
 
   function add(e: React.FormEvent) {
     e.preventDefault();
-    const next = name.trim().replace(/\s+/g, " ");
-    if (!next) return setError("Type a name.");
-    if (next.length > 40) return setError("At most 40 characters.");
-    const taken = [...builtIn, ...own].some((c) => c.toLowerCase() === next.toLowerCase());
-    if (taken) return setError(`"${next}" is already in the list.`);
+    const { name: next, error: invalid } = checkCategoryName(name, [...builtIn, ...own]);
+    if (invalid) return setError(invalid);
     setError(null);
     // With icons available, Add opens the editor to pick the look; the category is saved there.
     if (looksAvailable) {
@@ -88,7 +85,7 @@ export function CategoriesSection() {
               aria-label="New category"
               placeholder="New category"
               value={name}
-              maxLength={40}
+              maxLength={MAX_CATEGORY_NAME}
               onChange={(e) => setName(e.target.value)}
               className="flex-1 px-4"
             />

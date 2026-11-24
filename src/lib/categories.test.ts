@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { CATEGORIES, categoriesFor, categoryCode, categoryColor, categoryTone } from "./categories";
+import {
+  CATEGORIES,
+  categoriesFor,
+  categoryCode,
+  categoryColor,
+  categoryTone,
+  checkCategoryName,
+} from "./categories";
 
 describe("categoryColor", () => {
   it("gives every built-in its own fixed colour", () => {
@@ -88,5 +95,23 @@ describe("categoryCode", () => {
 describe("categoryColor with prototype names", () => {
   it.each(["constructor", "toString", "hasOwnProperty", "__proto__"])("%s hashes", (name) => {
     expect(categoryColor(name)).toMatch(/^#[0-9a-f]{6}$/);
+  });
+});
+
+describe("checkCategoryName", () => {
+  it("tidies spaces and accepts a free name", () => {
+    expect(checkCategoryName("  Pet   care ", ["Groceries"])).toEqual({
+      name: "Pet care",
+      error: null,
+    });
+  });
+
+  it("refuses a blank, a too-long or a taken name, ignoring case", () => {
+    expect(checkCategoryName("   ", []).error).toBe("Type a name.");
+    expect(checkCategoryName("x".repeat(41), []).error).toBe("At most 40 characters.");
+    expect(checkCategoryName("x".repeat(40), []).error).toBeNull();
+    expect(checkCategoryName("groceries", ["Groceries"]).error).toBe(
+      '"groceries" is already in the list.',
+    );
   });
 });
