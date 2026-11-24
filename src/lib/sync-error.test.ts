@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Database } from "@/integrations/supabase/types";
-import { syncAlerts, syncErrorMessage } from "./sync-error";
+import { syncAlerts, syncErrorKind, syncErrorMessage } from "./sync-error";
 
 const texts = (...args: Parameters<typeof syncAlerts>) => syncAlerts(...args).map((a) => a.text);
 
@@ -76,6 +76,14 @@ describe("syncErrorMessage", () => {
     );
     // It gives a next step, so it can't also say there is nothing to do.
     expect(syncErrorMessage("SAVE_FAILED", "N26")).not.toMatch(/Nothing to do/);
+  });
+
+  it("says plainly that the bank kept sending the same page, and that the next sync retries", () => {
+    const text = syncErrorMessage("PAGING_LOOP", "N26");
+    expect(text).toMatch(/^N26 kept sending the same page of transactions/);
+    expect(text).toMatch(/Nothing to do: Alopex tries again at the next sync/);
+    expect(text).not.toMatch(/PAGING_LOOP/);
+    expect(syncErrorKind("PAGING_LOOP")).toBe("retry");
   });
 
   it("names an unknown code instead of hiding it", () => {
