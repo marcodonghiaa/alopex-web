@@ -28,7 +28,7 @@ import {
   type MonthlyFlowRow,
   type Period,
 } from "@/lib/cash-flow";
-import { formatEur, monthFromParam, monthParam, parseTransactionsSearch } from "@/lib/transactions";
+import { formatEur, monthFromParam, monthParam, monthSearch } from "@/lib/transactions";
 import { TONE_TEXT, toneOf } from "@/lib/tone";
 import { FlowSankey } from "@/components/cash-flow/flow-sankey";
 import { TrendBars } from "@/components/cash-flow/trend-bars";
@@ -58,9 +58,8 @@ export const Route = createFileRoute("/_authenticated/cash-flow")({
   // ?month=YYYY-MM: the month to open on (Reports links here with the month it shows).
   // ?period=quarter|year: the period shown (month when left out).
   validateSearch: (s: Record<string, unknown>): { month?: string; period?: Period } => {
-    const { month } = parseTransactionsSearch(s);
     const period = s["period"] === "quarter" || s["period"] === "year" ? s["period"] : undefined;
-    return { ...(month ? { month } : {}), ...(period ? { period } : {}) };
+    return { ...monthSearch(s), ...(period ? { period } : {}) };
   },
   component: CashFlowPage,
 });

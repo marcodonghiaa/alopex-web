@@ -16,7 +16,7 @@ import {
   formatEur,
   monthFromParam,
   monthParam,
-  parseTransactionsSearch,
+  monthSearch,
   personalAmountEur,
   startOfMonth,
 } from "@/lib/transactions";
@@ -47,10 +47,7 @@ export const Route = createFileRoute("/_authenticated/spending")({
     ],
   }),
   // ?month=YYYY-MM: the month to open on (Cash flow's rows link here with the month they show).
-  validateSearch: (s: Record<string, unknown>): { month?: string } => {
-    const { month } = parseTransactionsSearch(s);
-    return month ? { month } : {};
-  },
+  validateSearch: monthSearch,
   component: SpendingPage,
 });
 

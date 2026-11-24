@@ -11,7 +11,7 @@ import {
   formatSignedEur,
   incomeTitle,
   monthFromParam,
-  parseTransactionsSearch,
+  monthSearch,
   startOfMonth,
 } from "@/lib/transactions";
 import { fetchIncomeExpenses, incomeExpensesKey, netAfterSpending } from "@/lib/income-expenses";
@@ -51,10 +51,7 @@ export const Route = createFileRoute("/_authenticated/income")({
     ],
   }),
   // ?month=YYYY-MM: the month to open on (Cash flow's rows link here with the month they show).
-  validateSearch: (s: Record<string, unknown>): { month?: string } => {
-    const { month } = parseTransactionsSearch(s);
-    return month ? { month } : {};
-  },
+  validateSearch: monthSearch,
   component: IncomePage,
 });
 

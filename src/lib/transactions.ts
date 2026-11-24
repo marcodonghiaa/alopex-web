@@ -196,6 +196,12 @@ export function parseTransactionsSearch(raw: Record<string, unknown>): Transacti
   return out;
 }
 
+/** validateSearch for a month page: only a well-formed ?month= is kept. */
+export function monthSearch(raw: Record<string, unknown>): { month?: string } {
+  const { month } = parseTransactionsSearch(raw);
+  return month ? { month } : {};
+}
+
 /** The query string with the one-shot `highlight` removed and every other param kept. */
 export function withoutHighlight(search: string): string {
   const params = new URLSearchParams(search);
