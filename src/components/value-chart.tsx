@@ -33,7 +33,12 @@ export function ValueChart<T extends { ts: number; snapshot_date: string }>({
 }: ValueChartProps<T>) {
   const formatTick = axisDateFormatter(data.at(0)?.snapshot_date, data.at(-1)?.snapshot_date);
   return (
-    <div className="h-full w-full">
+    // A lifted finger ends the scrub: recharts' touch end never calls onMouseLeave.
+    <div
+      className="h-full w-full"
+      onTouchEnd={() => onScrub(null)}
+      onTouchCancel={() => onScrub(null)}
+    >
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
           data={data}
