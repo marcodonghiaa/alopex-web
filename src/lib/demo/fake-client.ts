@@ -869,6 +869,8 @@ class Store {
     const sample = this.shapes.get(table);
     const out = { ...row };
     if (sample && "id" in sample && out["id"] == null) out["id"] = `demo-new-${this.nextId++}`;
+    // The database fills user_id from the session (auth.uid()).
+    if (sample && "user_id" in sample && out["user_id"] == null) out["user_id"] = DEMO_USER_ID;
     if (sample && "created_at" in sample && out["created_at"] == null)
       out["created_at"] = new Date().toISOString();
     return out;
@@ -1023,11 +1025,14 @@ class Query implements PromiseLike<Result> {
 
   // Like Postgres: a null in the key never matches (nulls are distinct), and ignoreDuplicates
   // leaves the saved row alone and doesn't return it.
+  // The key is matched with the columns the database fills (user_id) filled in.
   private upsertRow(rows: Array<Row>, p: Row): Row | null {
+    const full = this.store.withDefaults(this.table, p);
     const hit = rows.find(
-      (r) => this.conflict.length > 0 && this.conflict.every((c) => p[c] != null && r[c] === p[c]),
+      (r) =>
+        this.conflict.length > 0 && this.conflict.every((c) => full[c] != null && r[c] === full[c]),
     );
-    if (!hit) return this.insertRow(rows, p);
+    if (!hit) return this.insertRow(rows, full);
     return this.ignoreDuplicates ? null : Object.assign(hit, p);
   }
 
