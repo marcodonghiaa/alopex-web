@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/field";
 import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
 import { Skeleton } from "@/components/ui/skeleton";
+import { isMissingTable } from "@/lib/pg-errors";
 
 export const Route = createFileRoute("/_authenticated/budgets")({
   head: () => ({
@@ -110,10 +111,8 @@ const loadFailure = (what: string, message: string) =>
     ? `Couldn't load ${what}. ${UNREACHABLE}`
     : `Couldn't load ${what}: ${message}.`;
 /** The budgets table isn't there yet: an install or update that skipped the migration. */
-const isMissingTable = (error: { code?: string; message: string }) =>
-  error.code === "PGRST205" ||
-  error.code === "42P01" ||
-  /does not exist|schema cache/i.test(error.message);
+const isMissingBudgets = (error: { code?: string; message: string }) =>
+  isMissingTable(error) || /does not exist|schema cache/i.test(error.message);
 
 /** Stable, so React calls it when the editor opens and not on every render. */
 const bringIntoView = (el: HTMLElement | null) => el?.scrollIntoView?.({ block: "nearest" });
@@ -281,7 +280,7 @@ function BudgetsPage() {
       {error && (
         <Alert className="mb-6">
           {budgetsQuery.error
-            ? isMissingTable(budgetsQuery.error)
+            ? isMissingBudgets(budgetsQuery.error)
               ? `Couldn't load budgets: ${error.message}. If this is a new install or an update, apply the latest database migration (see UPGRADING.md in the Alopex backend repository).`
               : loadFailure("budgets", error.message)
             : loadFailure("spending", error.message)}

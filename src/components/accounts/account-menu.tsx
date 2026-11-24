@@ -14,6 +14,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { ACCOUNT_TYPES, isDebt, parseOwed } from "@/lib/account-types";
+import { isMissingFunction } from "@/lib/pg-errors";
 
 export interface MenuAccount {
   uid: string;
@@ -26,10 +27,9 @@ export interface MenuAccount {
 const field =
   "h-11 w-full min-w-0 rounded-full border bg-background px-4 text-base focus:ring-2 focus:ring-ring focus:outline-none";
 
-// PGRST202: the function does not exist yet, so the backend migration was not applied.
 function rpcError(error: { message: string; code?: string }): Error {
   return new Error(
-    error.code === "PGRST202"
+    isMissingFunction(error)
       ? "This needs a database update first: run supabase db push in the backend."
       : error.message,
   );
