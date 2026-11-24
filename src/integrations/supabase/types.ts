@@ -942,6 +942,7 @@ export type Database = {
           updated_at: string | null;
           user_cadence: string | null;
           user_id: string;
+          prev_user_status: string | null;
           user_status: string | null;
         };
         Insert: {
@@ -968,6 +969,7 @@ export type Database = {
           updated_at?: string | null;
           user_cadence?: string | null;
           user_id: string;
+          prev_user_status?: string | null;
           user_status?: string | null;
         };
         Update: {
@@ -994,6 +996,7 @@ export type Database = {
           updated_at?: string | null;
           user_cadence?: string | null;
           user_id?: string;
+          prev_user_status?: string | null;
           user_status?: string | null;
         };
         Relationships: [];
@@ -1358,6 +1361,7 @@ export type Database = {
         Row: {
           account_uid: string | null;
           amount: number | null;
+          bank_creditor_name: string | null;
           booking_date: string | null;
           category: string | null;
           created_at: string | null;

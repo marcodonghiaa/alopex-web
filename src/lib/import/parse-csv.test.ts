@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { decodeCsv, MAX_ROWS, parseCsv } from "./parse-csv";
+import { describe, expect, it, vi } from "vitest";
+import { decodeCsv, MAX_CHARS, MAX_ROWS, parseCsv, readCsvFile } from "./parse-csv";
 
 describe("parseCsv", () => {
   // protects=the same table comes out however the spreadsheet app saved it; fails_when=a
@@ -83,5 +83,21 @@ describe("decodeCsv", () => {
     const be = new Uint8Array([0xfe, 0xff, 0x00, 0x41, 0x00, 0xe9]);
     expect(decodeCsv(le)).toBe("Aé");
     expect(decodeCsv(be)).toBe("Aé");
+  });
+});
+
+// H144: the spreadsheet and Splitwise imports read files as UTF-8 only, so a Windows-1252
+// export (the usual default on EU Windows) turned "€" and accents into "\uFFFD".
+describe("readCsvFile", () => {
+  it("decodes a Windows-1252 file", async () => {
+    const file = new File([new Uint8Array([0x43, 0x61, 0x66, 0xe9, 0x3b, 0x80, 0x35])], "a.csv");
+    expect(await readCsvFile(file)).toBe("Café;€5");
+  });
+
+  it("refuses a file over the limit without reading it", async () => {
+    const arrayBuffer = vi.fn();
+    const big = { size: MAX_CHARS * 4 + 1, arrayBuffer } as unknown as Blob;
+    await expect(readCsvFile(big)).rejects.toThrow(/too large/i);
+    expect(arrayBuffer).not.toHaveBeenCalled();
   });
 });

@@ -15,7 +15,7 @@ import { CategoryEditor, type EditTarget } from "./category-editor";
 // the transactions that have it; deleting one of yours moves them to a category you pick.
 export function CategoriesSection() {
   const queryClient = useQueryClient();
-  const { list, settings, available, looksAvailable, isPending } = useCategories();
+  const { list, settings, available, looksAvailable, isPending, isError } = useCategories();
   const [name, setName] = useState("");
   const [editing, setEditing] = useState<EditTarget | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +72,11 @@ export function CategoriesSection() {
       <h2 id="categories-heading" className="mb-4 text-lg font-semibold text-foreground">
         Categories
       </h2>
-      {!isPending && !available ? (
+      {isError ? (
+        <p role="alert" className="text-sm text-muted-foreground">
+          Couldn't load categories. Check your connection and reload the page.
+        </p>
+      ) : !isPending && !available ? (
         <p className="text-sm text-muted-foreground">
           Your own categories need a database update first: run supabase db push --linked in the
           backend.
@@ -126,7 +130,8 @@ export function CategoriesSection() {
                         variant="ghost"
                         className="px-3"
                         disabled={busy}
-                        onClick={() => remove.mutate(c)}
+                        // Unhide only: the row may also carry the category's icon and colour.
+                        onClick={() => save.mutate({ name: c, hidden: false })}
                       >
                         Show
                       </Button>

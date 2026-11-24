@@ -374,6 +374,36 @@ describe("Subscriptions page", () => {
     });
   });
 
+  // H127: Undo used to drop a confirmed suggestion back to To review (or hide it when stale).
+  // The page shows the status it had before (prev_user_status) at once, before the server answers.
+  it("Undo after removing a confirmed suggestion brings it back to the active total", async () => {
+    db.rows = [
+      stream({
+        id: "c1",
+        display_name: "Gym",
+        detected_status: "suggested",
+        user_status: "confirmed",
+      }),
+    ];
+    rpc.mockImplementation((_fn: string, p: { p_action: string }) => {
+      if (p.p_action === "undismiss") return new Promise(() => {}); // only the optimistic state shows
+      db.rows = db.rows.map((r) => ({
+        ...r,
+        user_status: "dismissed",
+        prev_user_status: "confirmed",
+      }));
+      return Promise.resolve({ error: null });
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Gym" }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText("Dismissed (1)")).toBeInTheDocument());
+    toast.success.mock.calls[0]![1].action.onClick();
+    await waitFor(() => expect(screen.queryByText(/Dismissed \(/)).not.toBeInTheDocument());
+    expect(screen.queryByRole("region", { name: "To review" })).toBeNull();
+    expect(screen.getByLabelText("Estimated monthly cost")).toHaveTextContent("€10.00");
+  });
+
   it("the trash button dismisses an active stream with an Undo toast", async () => {
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Remove Streamflix" }));
@@ -454,6 +484,9 @@ describe("Subscriptions page", () => {
     db.error = new Error("boom");
     renderPage();
     expect(await screen.findByRole("alert")).toHaveTextContent("boom");
+    // H128: the failed load also said "No subscription charges found yet." as if there were none.
+    expect(screen.queryByText(/No subscription charges found yet/)).toBeNull();
+    expect(screen.queryByText(/No active subscriptions/)).toBeNull();
   });
 
   it("shows the pencil only for a manual cadence, not after plain Confirm", async () => {

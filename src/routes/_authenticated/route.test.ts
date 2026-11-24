@@ -5,9 +5,11 @@ const { getSession, getUser, aal } = vi.hoisted(() => ({
   getUser: vi.fn(),
   aal: vi.fn(),
 }));
+const recovery = vi.hoisted(() => ({ on: false }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: { auth: { getSession, getUser, mfa: { getAuthenticatorAssuranceLevel: aal } } },
   loadDemoClient: async () => {},
+  recoverySignIn: async () => recovery.on,
 }));
 const demo = vi.hoisted(() => ({ on: false }));
 vi.mock("@/lib/demo/mode", async (importOriginal) => ({
@@ -58,6 +60,19 @@ describe("authenticated layout guard", () => {
     getSession.mockResolvedValue({ data: { session: { user: { id: "u1" } } }, error: null });
     await expect(beforeLoad()).resolves.toEqual({ user: { id: "u1" } });
     expect(getUser).not.toHaveBeenCalled();
+  });
+
+  // H114: a recovery link that lands on the dashboard (Supabase falls back to the Site URL) must
+  // still open the new-password form, before the authenticator check (that page asks for it).
+  it("sends a password-recovery sign-in to the new-password form", async () => {
+    getSession.mockResolvedValue({ data: { session: { user: { id: "u1" } } }, error: null });
+    aal.mockResolvedValue({ data: { currentLevel: "aal1", nextLevel: "aal2" }, error: null });
+    recovery.on = true;
+    try {
+      await expect(beforeLoad()).rejects.toMatchObject({ options: { to: "/reset-password" } });
+    } finally {
+      recovery.on = false;
+    }
   });
 
   it("sends a visitor without a session to the sign-in page", async () => {

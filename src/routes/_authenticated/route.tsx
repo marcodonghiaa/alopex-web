@@ -8,14 +8,15 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { LogOut, Download, MoreHorizontal, ChevronRight } from "lucide-react";
+import { toast } from "sonner";
 import { Icon, iconOf, type IconComponent } from "@/components/icons/icon";
 import { useCategories } from "@/lib/use-categories";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { loadDemoClient, supabase } from "@/integrations/supabase/client";
+import { loadDemoClient, recoverySignIn, supabase } from "@/integrations/supabase/client";
 import { isDemoMode } from "@/lib/demo/mode";
 import { needsMfaCode } from "@/lib/mfa";
 import { backHereSearch } from "@/lib/next-url";
-import { registerDashboardOrigin } from "@/lib/register-origin";
+import { originStatusQuery } from "@/lib/register-origin";
 import { MadeWith } from "@/components/made-with";
 import { forgetThisBrowserPush } from "@/components/push-subscribe";
 import { cn } from "@/lib/utils";
@@ -51,6 +52,9 @@ export const Route = createFileRoute("/_authenticated")({
       if (error || !data.session) {
         throw toAuth();
       }
+      // A recovery link that landed here (Supabase sends it to the Site URL when this address isn't
+      // allowed) opens the new-password form, which also asks for the authenticator code.
+      if (!isDemoMode() && (await recoverySignIn())) throw redirect({ to: "/reset-password" });
       // Signed in with the password but not yet the authenticator code: the sign-in page asks for it.
       if (!isDemoMode() && (await needsMfaCode())) throw toAuth();
       return { user: data.session.user };
@@ -255,10 +259,9 @@ function AuthenticatedLayout() {
     0,
   );
 
-  // Once per page load: tells the backend this address is the dashboard (setup no longer asks for it).
-  useEffect(() => {
-    void registerDashboardOrigin(() => supabase.rpc("register_dashboard_origin"));
-  }, []);
+  // Once per page load: tells the backend this address is the dashboard (setup no longer asks for
+  // it). Health shows the answer.
+  useQuery(originStatusQuery(() => supabase.rpc("register_dashboard_origin")));
 
   // Keep route data in sync with auth transitions (e.g. token expiry).
   useEffect(() => {
@@ -278,7 +281,15 @@ function AuthenticatedLayout() {
   async function handleSignOut() {
     setSigningOut(true);
     await forgetThisBrowserPush();
-    await supabase.auth.signOut();
+    // This device only, and its stored session goes before the network call, so signing out
+    // offline still works. The default (global) would also sign out the user's other devices.
+    const { error } = await supabase.auth.signOut({ scope: "local" });
+    // Still signed in: /auth would only send the user back here.
+    if (error && (await supabase.auth.getSession()).data.session) {
+      setSigningOut(false);
+      toast.error("Couldn't sign out", { description: error.message });
+      return;
+    }
     await navigate({ to: "/auth", replace: true });
   }
 

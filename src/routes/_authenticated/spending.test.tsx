@@ -120,6 +120,27 @@ describe("Spending page when the 'not worth it' answers fail to load", () => {
   });
 });
 
+// H128: a failed spending query showed "No spending recorded" under the error, as if the
+// month had none.
+describe("Spending page when spending fails to load", () => {
+  it("shows the error and no empty state", async () => {
+    failTable = "v_spend_by_category_monthly";
+    try {
+      render(
+        <QueryClientProvider
+          client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+        >
+          <Page />
+        </QueryClientProvider>,
+      );
+      expect((await screen.findByRole("alert")).textContent).toContain("boom");
+      expect(screen.queryByText(/No spending recorded/)).toBeNull();
+    } finally {
+      failTable = null;
+    }
+  });
+});
+
 const renderPage = () =>
   render(
     <QueryClientProvider client={new QueryClient()}>

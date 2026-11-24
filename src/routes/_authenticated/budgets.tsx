@@ -5,6 +5,7 @@ import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { formatISODate } from "@/lib/date";
+import { readPages } from "@/lib/read-pages";
 import { formatEur, startOfMonth } from "@/lib/transactions";
 import {
   AVERAGE_MONTHS,
@@ -44,23 +45,17 @@ const BUDGETS_KEY = ["category-budgets"];
 const ADD_CATEGORY_ID = "add-budget-category";
 const SPREAD_KEY = "alopex.budgets.spreadIncome";
 
-const PAGE_SIZE = 1000; // PostgREST returns at most 1000 rows per request
-
 /** Every budget row, read page by page: each change in a month adds a row, so they add up. */
 async function fetchBudgets(): Promise<Array<BudgetRow>> {
-  const out: Array<BudgetRow> = [];
-  for (let start = 0; ; start += PAGE_SIZE) {
-    const { data, error } = await supabase
+  const rows = await readPages<BudgetRow>((from, to) =>
+    supabase
       .from("category_budgets")
       .select("category,month,amount,rollover")
       .order("month")
       .order("category")
-      .range(start, start + PAGE_SIZE - 1);
-    if (error) throw error;
-    const page = (data ?? []) as Array<BudgetRow>;
-    for (const r of page) out.push({ ...r, amount: Number(r.amount) });
-    if (page.length < PAGE_SIZE) return out;
-  }
+      .range(from, to),
+  );
+  return rows.map((r) => ({ ...r, amount: Number(r.amount) }));
 }
 
 /**
@@ -73,32 +68,24 @@ async function fetchSpend(
   categories?: ReadonlyArray<string>,
 ): Promise<Array<MonthSpend>> {
   if (from > to || categories?.length === 0) return [];
-  const out: Array<MonthSpend> = [];
-  for (let start = 0; ; start += PAGE_SIZE) {
+  const rows = await readPages<{
+    month: string;
+    category: string | null;
+    spend_eur: number | null;
+  }>((start, end) => {
     let q = supabase
       .from("v_spend_by_category_monthly")
       .select("month,category,spend_eur")
       .gte("month", from)
       .lte("month", to);
     if (categories) q = q.in("category", [...categories]);
-    const { data, error } = await q
-      .order("month")
-      .order("category")
-      .range(start, start + PAGE_SIZE - 1);
-    if (error) throw error;
-    const page = (data ?? []) as Array<{
-      month: string;
-      category: string | null;
-      spend_eur: number | null;
-    }>;
-    for (const r of page)
-      out.push({
-        month: String(r.month),
-        category: r.category ?? "Uncategorized",
-        spend_eur: Number(r.spend_eur ?? 0),
-      });
-    if (page.length < PAGE_SIZE) return out;
-  }
+    return q.order("month").order("category").range(start, end);
+  });
+  return rows.map((r) => ({
+    month: String(r.month),
+    category: r.category ?? "Uncategorized",
+    spend_eur: Number(r.spend_eur ?? 0),
+  }));
 }
 
 // Same income as Reports: my share of money in, per month (transfers and refunds excluded).

@@ -13,11 +13,14 @@ const rpc = vi.fn(async (_fn: string, _args: unknown) => ({
 let rows: Array<Record<string, unknown>> = [];
 let oldBackend = false;
 let broken = false;
+let offline = false;
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: () => ({
       select: async (cols: string) => {
         if (broken) return { data: null, error: { code: "PGRST205", message: "missing" } };
+        if (offline)
+          return { data: null, error: { code: "", message: "TypeError: Failed to fetch" } };
         if (oldBackend && cols.includes("icon"))
           return { data: null, error: { code: "42703", message: "column icon does not exist" } };
         return { data: rows, error: null };
@@ -49,6 +52,7 @@ beforeEach(() => {
   for (const m of [upsert, insert, del, rpc]) m.mockClear();
   oldBackend = false;
   broken = false;
+  offline = false;
   rows = [
     { name: "Gym", hidden: false, icon: "fitness", color: "teal" },
     { name: "Holiday", hidden: false, icon: null, color: null },
@@ -204,8 +208,12 @@ describe("CategoriesSection", () => {
     await waitFor(() =>
       expect(upsert).toHaveBeenCalledWith({ name: "Shopping", hidden: true }, undefined),
     );
+    // H136: Show deleted the row, wiping a custom icon and colour; it only unhides it now.
     fireEvent.click(within(await row("Taxes")).getByRole("button", { name: "Show" }));
-    await waitFor(() => expect(del).toHaveBeenCalledWith("name", "Taxes"));
+    await waitFor(() =>
+      expect(upsert).toHaveBeenCalledWith({ name: "Taxes", hidden: false }, undefined),
+    );
+    expect(del).not.toHaveBeenCalled();
   });
 
   it("refuses a name already in the list", async () => {
@@ -230,6 +238,15 @@ describe("CategoriesSection", () => {
     );
     fireEvent.click(within(await row("Gym")).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(del).toHaveBeenCalledWith("name", "Gym"));
+  });
+
+  // H137: any read error (a network drop, a 5xx) said "need a database update" and was cached as
+  // if the table were missing; only a missing table or column means that.
+  it("says it couldn't load the categories when the read fails for another reason", async () => {
+    offline = true;
+    renderSection();
+    expect(await screen.findByText(/Couldn't load categories/)).toBeInTheDocument();
+    expect(screen.queryByText(/database update/i)).toBeNull();
   });
 
   it("says a database update is needed before the categories migration", async () => {

@@ -1219,6 +1219,14 @@ describe("fake client: stream_action", () => {
     expect((await grouped(c)).active.some((s) => s.id === toReview.id)).toBe(true);
     await act(c, toReview.id, "dismiss");
     expect((await grouped(c)).dismissed.some((s) => s.id === toReview.id)).toBe(true);
+    // H127: undismiss puts back the status from before the dismiss, here confirmed.
+    await act(c, toReview.id, "undismiss");
+    expect((await grouped(c)).active.some((s) => s.id === toReview.id)).toBe(true);
+  });
+
+  it("undismiss of a suggestion never confirmed puts it back to review", async () => {
+    const { c, toReview } = await setup();
+    await act(c, toReview.id, "dismiss");
     await act(c, toReview.id, "undismiss");
     expect((await grouped(c)).toReview.some((s) => s.id === toReview.id)).toBe(true);
   });
@@ -1661,6 +1669,17 @@ describe("fake client: move_category", () => {
     expect((await move(c, "Pets", "others")).error).toBeNull();
     const { data: after } = await c.from("user_categories").select("name");
     expect(after!.map((r) => r.name)).not.toContain("Pets");
+  });
+
+  // H136: Show on a hidden category upserts {name, hidden: false}; without onConflict Postgres
+  // uses the primary key, so the demo must update that row (and keep its look), not add a copy.
+  it("an upsert without onConflict updates the category row by its key", async () => {
+    const c = fresh();
+    await c.from("user_categories").upsert({ name: "Pets", hidden: true });
+    await c.from("user_categories").upsert({ name: "Pets", hidden: false });
+    const { data } = await c.from("user_categories").select("name,hidden,icon").eq("name", "Pets");
+    expect(data).toHaveLength(1);
+    expect(data![0]).toMatchObject({ hidden: false, icon: "pets" });
   });
 
   it("refuses what the database refuses", async () => {

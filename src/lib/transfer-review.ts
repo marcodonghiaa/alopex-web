@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { readPages } from "@/lib/read-pages";
 import { restoredFlow, txId, type TxKey } from "@/lib/transactions";
 
 // Who decided a row's flow_type. "user", "rule", "pair" and "own_account" are decisions to keep;
@@ -86,15 +87,11 @@ export function reviewGroups(rows: Array<ReviewRow>): Array<ReviewGroup> {
     .sort((a, b) => b.rows.length - a.rows.length || a.key.localeCompare(b.key));
 }
 
-// PostgREST returns at most this many rows per request.
-const PAGE = 1000;
-
 /** Every row whose category could disagree with how it counts (reviewGroups filters further).
  * The table, not the view: rules match the bank's name and rows group by merchant_key. */
-export async function fetchReviewRows(): Promise<Array<ReviewRow>> {
-  const rows: Array<ReviewRow> = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
+export function fetchReviewRows(): Promise<Array<ReviewRow>> {
+  return readPages<ReviewRow>((from, to) =>
+    supabase
       .from("transactions")
       .select(
         "entry_reference,account_uid,booking_date,category,creditor_name,merchant_key,currency,amount,credit_debit_indicator,flow_type,flow_source",
@@ -104,9 +101,6 @@ export async function fetchReviewRows(): Promise<Array<ReviewRow>> {
       .order("booking_date", { ascending: false })
       .order("account_uid", { ascending: true })
       .order("entry_reference", { ascending: true })
-      .range(from, from + PAGE - 1);
-    if (error) throw error;
-    rows.push(...(data ?? []));
-    if ((data ?? []).length < PAGE) return rows;
-  }
+      .range(from, to),
+  );
 }

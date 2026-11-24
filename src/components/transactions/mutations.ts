@@ -78,7 +78,7 @@ function forTx<Q extends { eq: (c: string, v: string) => Q; is: (c: string, v: n
 // on one transaction, with optimistic cache update + rollback. (Renames go through
 // useRenameMerchantMutation, which renames the merchant's other rows too.)
 // The row being edited; its name feeds a success action such as "Make a rule".
-type MutatedTx = TxKey & Partial<Pick<TransactionRow, "creditor_name">>;
+type MutatedTx = TxKey & Partial<Pick<TransactionRow, "creditor_name" | "bank_creditor_name">>;
 
 export function useTransactionFieldMutation<
   K extends "category" | "transaction_type" | "worth_it" | "note" | "tags",
@@ -314,7 +314,7 @@ export function useDeleteMutation(queryClient: QueryClient, onDone: () => void) 
     mutationFn: ({ txs, deleted }: { txs: Array<TxKey>; deleted: boolean }) =>
       updateTxs(txs, { deleted_at: deleted ? new Date().toISOString() : null }),
     onSuccess: (_data, vars) => {
-      void queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      refetchFlows(queryClient);
       if (!vars.deleted) return;
       onDone();
       toast.success(`Deleted ${vars.txs.length} transaction${vars.txs.length === 1 ? "" : "s"}`, {
@@ -435,31 +435,30 @@ export function useFlowMutation(queryClient: QueryClient, monthKey: string) {
 // Marks a split as settled (or not): it then drops out of the open total on the Splitwise page.
 // Optimistic, so the button flips at once and a quick second tap reads the new state.
 export function useSettleSplitMutation(queryClient: QueryClient) {
-  type Vars = { tx: TxKey; settled: boolean };
+  // Several bills ("Settle all") are one mutation: one optimistic patch, one rollback, and
+  // `announce` (its toast) only once all of them are saved.
+  type Vars = { txs: Array<TxKey>; settled: boolean; announce?: () => void };
   type Context = { previous: Array<SplitRow> | undefined };
   return useMutation<void, Error, Vars, Context>({
-    mutationFn: async ({ tx, settled }) => {
-      const { error } = await forTx(
-        supabase.from("transactions").update({
-          owed_settled: settled,
-          settled_at: settled ? new Date().toISOString() : null,
-          // Settled or reopened by hand: no longer the work of a payment, so undoing that payment
-          // leaves this bill as you set it.
-          settled_by_account: null,
-          settled_by_ref: null,
-        }),
-        tx,
-      );
-      if (error) throw error;
-    },
-    onMutate: async ({ tx, settled }) => {
+    mutationFn: ({ txs, settled }) =>
+      updateTxs(txs, {
+        owed_settled: settled,
+        settled_at: settled ? new Date().toISOString() : null,
+        // Settled or reopened by hand: no longer the work of a payment, so undoing that payment
+        // leaves this bill as you set it.
+        settled_by_account: null,
+        settled_by_ref: null,
+      }),
+    onMutate: async ({ txs, settled }) => {
       await queryClient.cancelQueries({ queryKey: ["splits"] });
       const previous = queryClient.getQueryData<Array<SplitRow>>(["splits"]);
+      const ids = new Set(txs.map(txId));
       queryClient.setQueryData<Array<SplitRow>>(["splits"], (old) =>
-        old?.map((r) => (txId(r) === txId(tx) ? { ...r, owed_settled: settled } : r)),
+        old?.map((r) => (ids.has(txId(r)) ? { ...r, owed_settled: settled } : r)),
       );
       return { previous };
     },
+    onSuccess: (_data, vars) => vars.announce?.(),
     onError: (error, _vars, context) => {
       if (context?.previous) queryClient.setQueryData(["splits"], context.previous);
       saveFailed("Couldn't save", error);

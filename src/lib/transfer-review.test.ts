@@ -109,15 +109,26 @@ describe("reviewGroups", () => {
 
 describe("fetchReviewRows", () => {
   // Regression: .limit(2000) was silently cut to the server's 1000-row page.
-  it("reads page after page until a short one", async () => {
+  it("reads page after page until an empty one", async () => {
     ranges.length = 0;
     pages.push({ data: Array(1000).fill(row({})), error: null });
     pages.push({ data: [row({})], error: null });
+    pages.push({ data: [], error: null });
     expect(await fetchReviewRows()).toHaveLength(1001);
     expect(ranges).toEqual([
       [0, 999],
       [1000, 1999],
+      [1001, 2000],
     ]);
+  });
+
+  // H139: on a server capped below 1000 rows the list stopped after the first short page.
+  it("keeps reading after a short page from a server capped below 1000", async () => {
+    pages.length = 0;
+    pages.push({ data: Array(500).fill(row({})), error: null });
+    pages.push({ data: Array(100).fill(row({})), error: null });
+    pages.push({ data: [], error: null });
+    expect(await fetchReviewRows()).toHaveLength(600);
   });
 
   it("throws the query's error", async () => {

@@ -73,9 +73,19 @@ interface StreamAction {
 
 // What stream_action does server-side, applied to the cached row for an instant UI update.
 function applyAction(s: Stream, { action, args }: StreamAction): Stream {
-  if (action === "dismiss") return { ...s, user_status: "dismissed" };
+  // dismiss remembers the status (a second remove keeps the first), undismiss puts it back.
+  if (action === "dismiss")
+    return {
+      ...s,
+      user_status: "dismissed",
+      prev_user_status: s.user_status === "dismissed" ? s.prev_user_status : s.user_status,
+    };
   if (action === "undismiss")
-    return { ...s, user_status: s.detected_status == null ? "confirmed" : null };
+    return {
+      ...s,
+      user_status: s.prev_user_status ?? (s.detected_status == null ? "confirmed" : null),
+      prev_user_status: null,
+    };
   if (action === "confirm") return { ...s, user_status: "confirmed" };
   return {
     ...s,
@@ -391,7 +401,8 @@ function SubscriptionsPage() {
           )}
 
           {/* The first-run empty state only when nothing at all is listed; otherwise a plain line. */}
-          {!query.isPending &&
+          {/* Not on a failed load: the alert says it failed, not that there are none. */}
+          {query.data !== undefined &&
             active.length === 0 &&
             (toReview.length + stopped.length + dismissed.length === 0 ? (
               <EmptyState

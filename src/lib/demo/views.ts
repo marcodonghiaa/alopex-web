@@ -36,6 +36,7 @@ export function deriveViews(db: DemoDb): Derived {
     credit_debit_indicator: t.credit_debit_indicator,
     // Like the real view: a name the user gave wins over the bank's.
     creditor_name: t.custom_name ?? t.creditor_name,
+    bank_creditor_name: t.creditor_name,
     currency: t.currency,
     entry_reference: t.entry_reference,
     flow_type: t.flow_type,

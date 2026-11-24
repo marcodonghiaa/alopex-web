@@ -15,8 +15,9 @@ const salary: StatementRow = {
   direction: "CRDT",
 };
 
-// Fake client: serves `existing` in pages of 1000 like PostgREST, and records each request.
-function client(existing: Array<Record<string, unknown>>, failOn?: string) {
+// Fake client: serves `existing` in pages of 1000 like PostgREST (or `cap`, a server set lower),
+// and records each request.
+function client(existing: Array<Record<string, unknown>>, failOn?: string, cap = 1000) {
   const rpc = vi.fn(async (_fn: string, args: Record<string, unknown>) =>
     args["p_description"] === failOn
       ? { data: null, error: { message: "boom" } }
@@ -24,6 +25,16 @@ function client(existing: Array<Record<string, unknown>>, failOn?: string) {
   );
   const requests: Array<{ from: string; to: string; deleted: unknown; page: [number, number] }> =
     [];
+  const orders: Array<string> = [];
+  let page = async (_a: number, _b: number) => ({
+    data: [] as Array<Record<string, unknown>>,
+    error: null,
+  });
+  // Each order() call records its column and allows another one after it.
+  const ordered = (col: string) => {
+    orders.push(col);
+    return { order: ordered, range: page };
+  };
   const c: StatementClient = {
     rpc,
     from: () => ({
@@ -31,19 +42,20 @@ function client(existing: Array<Record<string, unknown>>, failOn?: string) {
         is: (_col: string, deleted: null) => ({
           gte: (_c: string, from: string) => ({
             lte: (_c2: string, to: string) => ({
-              order: () => ({
-                range: async (a: number, b: number) => {
+              order: (col: string) => {
+                page = async (a: number, b: number) => {
                   requests.push({ from, to, deleted, page: [a, b] });
-                  return { data: existing.slice(a, b + 1), error: null };
-                },
-              }),
+                  return { data: existing.slice(a, Math.min(b + 1, a + cap)), error: null };
+                };
+                return ordered(col);
+              },
             }),
           }),
         }),
       }),
     }),
   };
-  return { c, rpc, requests };
+  return { c, rpc, requests, orders };
 }
 
 const inApp = (row: StatementRow, description = row.description) => ({
@@ -54,12 +66,29 @@ const inApp = (row: StatementRow, description = row.description) => ({
 });
 
 describe("newRows", () => {
+  // H139: a server capped below 1000 rows ended the duplicate check after its first short page,
+  // so importing the same statement again added rows that were already there.
+  it("reads every page when the server caps a response below 1000 rows", async () => {
+    const existing = [...Array(600).fill(inApp(salary)), inApp(coffee)];
+    const { c } = client(existing, undefined, 500);
+    expect(await newRows(c, [coffee])).toEqual([]);
+  });
+
+  // Batch H review: entry_reference repeats across accounts, so paging by it alone can read one
+  // row twice and skip another where a page ends.
+  it("pages in a total order: account, then reference", async () => {
+    const { c, orders } = client([inApp(coffee)]);
+    await newRows(c, [coffee]);
+    expect(orders.slice(0, 2)).toEqual(["account_uid", "entry_reference"]);
+  });
+
   it("polish-3 #13 asks the app once per date range when given a cache", async () => {
     const { c, requests } = client([inApp(coffee)]);
     const cache = new Map();
     expect(await newRows(c, [coffee, salary], cache)).toEqual([salary]);
     expect(await newRows(c, [salary, coffee], cache)).toEqual([salary]);
-    expect(requests).toHaveLength(1);
+    // One read (its first page, then the empty page that ends it), not two.
+    expect(requests).toHaveLength(2);
   });
 
   it("only treats a row as already there when the currency matches too", async () => {
@@ -89,6 +118,7 @@ describe("newRows", () => {
     expect(requests.map((r) => r.page)).toEqual([
       [0, 999],
       [1000, 1999],
+      [1001, 2000],
     ]);
   });
 });

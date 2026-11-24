@@ -18,7 +18,7 @@ vi.mock("sonner", () => ({ toast }));
 
 // A small in-memory PostgREST: filters, order and range really apply, so a wrong date range or
 // a missing filter in the page shows up as wrong figures, and the 1000-row cap is real.
-const CAP = 1000;
+let CAP = 1000;
 const cmp = (a: unknown, b: unknown) => String(a).localeCompare(String(b));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
@@ -564,6 +564,35 @@ describe("Budgets page", () => {
     // October's figures, never September-to-November's under October's name.
     expect(container.querySelector(".animate-pulse")).not.toBeNull();
     expect(await screen.findByText(whole("€20.00 over"))).toBeTruthy();
+  });
+
+  // H139: a server capped below 1000 rows ended fetchBudgets/fetchSpend after one short page,
+  // so the live budget and its spend were never read.
+  it("reads every budget and spend row on a server capped below 1000", async () => {
+    CAP = 500;
+    db["category_budgets"] = [
+      ...Array.from({ length: 600 }, (_, i) => ({
+        category: `Old ${String(i).padStart(4, "0")}`,
+        month: "2026-11-01",
+        amount: 0,
+        rollover: false,
+      })),
+      { category: "Zz Groceries", month: "2026-11-01", amount: 300, rollover: false },
+    ];
+    db["v_spend_by_category_monthly"] = [
+      ...Array.from({ length: 600 }, (_, i) => ({
+        month: "2026-11-01",
+        category: `Old ${String(i).padStart(4, "0")}`,
+        spend_eur: 0,
+      })),
+      { month: "2026-11-01", category: "Zz Groceries", spend_eur: 120 },
+    ];
+    try {
+      renderPage();
+      expect(await screen.findByText(whole("€180.00 left"))).toBeTruthy();
+    } finally {
+      CAP = 1000;
+    }
   });
 
   // protects=P1-2 budgets past the 1000-row cap are all read;

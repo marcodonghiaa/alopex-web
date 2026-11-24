@@ -21,6 +21,8 @@ interface Result {
 }
 
 const DISABLED = { message: "Disabled in the demo." };
+// Primary keys an upsert without onConflict matches on (user_id is always the demo user's).
+const PRIMARY_KEYS: Record<string, Array<string>> = { user_categories: ["name"] };
 // Tables a write can change a view of.
 const FEEDS_VIEWS = new Set([
   "transactions",
@@ -631,10 +633,14 @@ class Store {
     if (!row) return { data: null, error: { message: "stream not found" } };
     const bad = (message: string): Result => ({ data: null, error: { message } });
     if (action === "confirm") row["user_status"] = "confirmed";
-    else if (action === "dismiss") row["user_status"] = "dismissed";
-    else if (action === "undismiss")
-      row["user_status"] = row["detected_status"] == null ? "confirmed" : null;
-    else if (action === "set_cadence") {
+    else if (action === "dismiss") {
+      if (row["user_status"] !== "dismissed") row["prev_user_status"] = row["user_status"];
+      row["user_status"] = "dismissed";
+    } else if (action === "undismiss") {
+      row["user_status"] =
+        row["prev_user_status"] ?? (row["detected_status"] == null ? "confirmed" : null);
+      row["prev_user_status"] = null;
+    } else if (action === "set_cadence") {
       const cadence = args["cadence"] as string | undefined;
       const unit = args["custom_unit"];
       const value = args["custom_value"];
@@ -895,7 +901,8 @@ class Query implements PromiseLike<Result> {
   upsert(rows: Row | Array<Row>, opts?: { onConflict?: string; ignoreDuplicates?: boolean }) {
     this.mode = "upsert";
     this.payload = [rows].flat();
-    this.conflict = opts?.onConflict?.split(",") ?? [];
+    // Like Postgres: without onConflict an upsert matches on the primary key.
+    this.conflict = opts?.onConflict?.split(",") ?? PRIMARY_KEYS[this.table] ?? [];
     this.ignoreDuplicates = !!opts?.ignoreDuplicates;
     return this;
   }

@@ -60,7 +60,12 @@ export function ChangePasswordForm() {
       if (!email) throw new Error("You're signed out. Sign in again, then retry.");
       const { error: verifyError } = await checkPassword(email, current);
       if (verifyError) throw verifyError;
-      const { error: updateError } = await supabase.auth.updateUser({ password: next });
+      // Sent too so the server checks it, where Supabase Auth requires the current password
+      // (Settings can't prove it otherwise: a copied session token could skip the check above).
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: next,
+        current_password: current,
+      });
       if (updateError) throw updateError;
       setCurrent("");
       setNext("");

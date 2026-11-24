@@ -70,7 +70,11 @@ describe("ChangePasswordForm", () => {
     fill("oldpassword", "newpassword1", "newpassword1");
     expect(await screen.findByRole("status")).toHaveTextContent(/Password changed/);
     expect(checkPassword).toHaveBeenCalledWith("me@example.com", "oldpassword");
-    expect(updateUser).toHaveBeenCalledWith({ password: "newpassword1" });
+    // H115: the server checks it too, where "Require current password" is on in Supabase Auth.
+    expect(updateUser).toHaveBeenCalledWith({
+      password: "newpassword1",
+      current_password: "oldpassword",
+    });
     expect(screen.getByLabelText("Current password")).toHaveValue("");
     expect(screen.getByLabelText("New password")).toHaveValue("");
     expect(screen.getByLabelText("Confirm new password")).toHaveValue("");

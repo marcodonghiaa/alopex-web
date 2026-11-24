@@ -1,6 +1,7 @@
 // Writes a read statement: leaves out what is already in the app, then adds the rest one by one
 // with the database function add_manual_transaction.
 import type { Database } from "@/integrations/supabase/types";
+import { readPages } from "@/lib/read-pages";
 import { dedupeKey, type StatementRow } from "./statement";
 
 type ManualTransactionArgs = Database["public"]["Functions"]["add_manual_transaction"]["Args"];
@@ -24,9 +25,7 @@ export interface StatementClient {
             col: string,
             value: string,
           ): {
-            order(col: string): {
-              range(from: number, to: number): Result<Array<Record<string, unknown>>>;
-            };
+            order(col: string): Ordered;
           };
         };
       };
@@ -34,7 +33,11 @@ export interface StatementClient {
   };
 }
 
-const PAGE = 1000; // PostgREST returns at most 1000 rows per request
+// A query that can be ordered by more columns, then paged.
+interface Ordered {
+  order(col: string): Ordered;
+  range(from: number, to: number): Result<Array<Record<string, unknown>>>;
+}
 
 /** How many transactions the app has per dedupe key between two days. */
 async function keysInApp(
@@ -42,28 +45,30 @@ async function keysInApp(
   first: string,
   last: string,
 ): Promise<Map<string, number>> {
-  const inApp = new Map<string, number>();
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await client
+  const rows = await readPages<Record<string, unknown>>((from, to) =>
+    client
       .from("transactions")
       .select("booking_date,amount,currency,credit_debit_indicator,creditor_name")
       .is("deleted_at", null)
       .gte("booking_date", first)
       .lte("booking_date", last)
+      // A total order (the primary key): references repeat across accounts.
+      .order("account_uid")
       .order("entry_reference")
-      .range(from, from + PAGE - 1);
-    if (error) throw new Error(error.message);
-    for (const t of data ?? []) {
-      const key = dedupeKey({
-        date: String(t["booking_date"]),
-        description: String(t["creditor_name"] ?? ""),
-        amount: Math.abs(Number(t["amount"])),
-        direction: t["credit_debit_indicator"] === "DBIT" ? "DBIT" : "CRDT",
-        currency: String(t["currency"] ?? "EUR"),
-      });
-      inApp.set(key, (inApp.get(key) ?? 0) + 1);
-    }
-    if (!data || data.length < PAGE) break;
+      .range(from, to),
+  ).catch((error: { message: string }) => {
+    throw new Error(error.message);
+  });
+  const inApp = new Map<string, number>();
+  for (const t of rows) {
+    const key = dedupeKey({
+      date: String(t["booking_date"]),
+      description: String(t["creditor_name"] ?? ""),
+      amount: Math.abs(Number(t["amount"])),
+      direction: t["credit_debit_indicator"] === "DBIT" ? "DBIT" : "CRDT",
+      currency: String(t["currency"] ?? "EUR"),
+    });
+    inApp.set(key, (inApp.get(key) ?? 0) + 1);
   }
   return inApp;
 }
