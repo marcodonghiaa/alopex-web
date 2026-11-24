@@ -756,6 +756,7 @@ function demoStreams(
     is_direct_debit: false,
     detected_at: stamp(iso(todayNum)),
     user_status: null,
+    prev_user_status: null,
     user_cadence: null,
     custom_interval_value: null,
     custom_interval_unit: null,

@@ -1219,6 +1219,14 @@ describe("fake client: stream_action", () => {
     expect((await grouped(c)).active.some((s) => s.id === toReview.id)).toBe(true);
     await act(c, toReview.id, "dismiss");
     expect((await grouped(c)).dismissed.some((s) => s.id === toReview.id)).toBe(true);
+    // H127: undismiss puts back the status from before the dismiss, here confirmed.
+    await act(c, toReview.id, "undismiss");
+    expect((await grouped(c)).active.some((s) => s.id === toReview.id)).toBe(true);
+  });
+
+  it("undismiss of a suggestion never confirmed puts it back to review", async () => {
+    const { c, toReview } = await setup();
+    await act(c, toReview.id, "dismiss");
     await act(c, toReview.id, "undismiss");
     expect((await grouped(c)).toReview.some((s) => s.id === toReview.id)).toBe(true);
   });

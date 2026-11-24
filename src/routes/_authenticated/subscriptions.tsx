@@ -73,9 +73,19 @@ interface StreamAction {
 
 // What stream_action does server-side, applied to the cached row for an instant UI update.
 function applyAction(s: Stream, { action, args }: StreamAction): Stream {
-  if (action === "dismiss") return { ...s, user_status: "dismissed" };
+  // dismiss remembers the status (a second remove keeps the first), undismiss puts it back.
+  if (action === "dismiss")
+    return {
+      ...s,
+      user_status: "dismissed",
+      prev_user_status: s.user_status === "dismissed" ? s.prev_user_status : s.user_status,
+    };
   if (action === "undismiss")
-    return { ...s, user_status: s.detected_status == null ? "confirmed" : null };
+    return {
+      ...s,
+      user_status: s.prev_user_status ?? (s.detected_status == null ? "confirmed" : null),
+      prev_user_status: null,
+    };
   if (action === "confirm") return { ...s, user_status: "confirmed" };
   return {
     ...s,

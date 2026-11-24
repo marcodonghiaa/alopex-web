@@ -942,6 +942,7 @@ export type Database = {
           updated_at: string | null;
           user_cadence: string | null;
           user_id: string;
+          prev_user_status: string | null;
           user_status: string | null;
         };
         Insert: {
@@ -968,6 +969,7 @@ export type Database = {
           updated_at?: string | null;
           user_cadence?: string | null;
           user_id: string;
+          prev_user_status?: string | null;
           user_status?: string | null;
         };
         Update: {
@@ -994,6 +996,7 @@ export type Database = {
           updated_at?: string | null;
           user_cadence?: string | null;
           user_id?: string;
+          prev_user_status?: string | null;
           user_status?: string | null;
         };
         Relationships: [];

@@ -633,10 +633,14 @@ class Store {
     if (!row) return { data: null, error: { message: "stream not found" } };
     const bad = (message: string): Result => ({ data: null, error: { message } });
     if (action === "confirm") row["user_status"] = "confirmed";
-    else if (action === "dismiss") row["user_status"] = "dismissed";
-    else if (action === "undismiss")
-      row["user_status"] = row["detected_status"] == null ? "confirmed" : null;
-    else if (action === "set_cadence") {
+    else if (action === "dismiss") {
+      if (row["user_status"] !== "dismissed") row["prev_user_status"] = row["user_status"];
+      row["user_status"] = "dismissed";
+    } else if (action === "undismiss") {
+      row["user_status"] =
+        row["prev_user_status"] ?? (row["detected_status"] == null ? "confirmed" : null);
+      row["prev_user_status"] = null;
+    } else if (action === "set_cadence") {
       const cadence = args["cadence"] as string | undefined;
       const unit = args["custom_unit"];
       const value = args["custom_value"];
