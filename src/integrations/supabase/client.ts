@@ -85,6 +85,11 @@ export function pauseRealClient(): void {
   void realClient.auth.stopAutoRefresh();
 }
 
+/** Called when leaving the demo: a real sign-in in this tab refreshes its token again. */
+export function resumeRealClient(): void {
+  void realClient.auth.startAutoRefresh();
+}
+
 let probe: ReturnType<typeof createClient> | null = null;
 
 /**

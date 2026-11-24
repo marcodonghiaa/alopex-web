@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { KeyRound, Loader2 } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
-import { openedFromRecoveryLink, supabase } from "@/integrations/supabase/client";
+import { openedFromRecoveryLink, resumeRealClient, supabase } from "@/integrations/supabase/client";
 import { exitDemoMode } from "@/lib/demo/mode";
 import { MIN_PASSWORD_LENGTH, passwordErrorMessage, validateNewPassword } from "@/lib/password";
 import { needsMfaCode, verifyMfaCode } from "@/lib/mfa";
@@ -15,7 +15,7 @@ export const Route = createFileRoute("/reset-password")({
   ssr: false,
   // The recovery link signs in for real, so a demo visit in this tab ends here.
   beforeLoad: ({ context }) => {
-    exitDemoMode();
+    if (exitDemoMode()) resumeRealClient();
     context.queryClient.clear();
   },
   head: () => ({

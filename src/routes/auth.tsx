@@ -4,7 +4,7 @@ import { Github, Loader2, LockKeyhole } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { TrustNote } from "@/components/trust-note";
 import { CodeInput } from "@/components/ui/field";
-import { supabase } from "@/integrations/supabase/client";
+import { resumeRealClient, supabase } from "@/integrations/supabase/client";
 import { exitDemoMode } from "@/lib/demo/mode";
 import { resetPasswordUrl } from "./reset-password";
 import { needsMfaCode, verifyMfaCode } from "@/lib/mfa";
@@ -17,6 +17,7 @@ export const Route = createFileRoute("/auth")({
   // leftDemo: a login stored in this browser must not open straight from "Exit demo".
   beforeLoad: ({ context }) => {
     const leftDemo = exitDemoMode();
+    if (leftDemo) resumeRealClient();
     context.queryClient.clear();
     return { leftDemo };
   },

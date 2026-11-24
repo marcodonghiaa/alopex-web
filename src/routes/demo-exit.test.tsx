@@ -6,7 +6,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 // browser and opened that account's dashboard. The demo now only links out to the setup steps,
 // and /auth reached from a demo tab still stops at the sign-in form.
 
-const { navigate, signOut, getSession, routeContext } = vi.hoisted(() => ({
+const { navigate, signOut, getSession, routeContext, resumeRealClient } = vi.hoisted(() => ({
+  resumeRealClient: vi.fn(),
   navigate: vi.fn(() => Promise.resolve()),
   signOut: vi.fn(() => Promise.resolve({ error: null })),
   getSession: vi.fn(() =>
@@ -31,6 +32,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 vi.mock("@/integrations/supabase/client", () => ({
   loadDemoClient: vi.fn(),
+  resumeRealClient,
   openedFromRecoveryLink: () => false,
   supabase: {
     auth: {
@@ -85,6 +87,18 @@ describe("leaving the demo", () => {
     enterDemoMode();
     expect(authBeforeLoad({ context }).leftDemo).toBe(true);
     expect(authBeforeLoad({ context }).leftDemo).toBe(false);
+  });
+
+  // H353: entering the demo stops the real client's token refresh; nothing started it again, so a
+  // real sign-in in the same tab ran without background refresh until a reload.
+  it("leaving the demo restarts the real client's token refresh", () => {
+    const context = { queryClient: new QueryClient() };
+    resumeRealClient.mockClear();
+    authBeforeLoad({ context });
+    expect(resumeRealClient).not.toHaveBeenCalled();
+    enterDemoMode();
+    authBeforeLoad({ context });
+    expect(resumeRealClient).toHaveBeenCalledTimes(1);
   });
 
   it("after the demo, a stored login does not open the dashboard", async () => {

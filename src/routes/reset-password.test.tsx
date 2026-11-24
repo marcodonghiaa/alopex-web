@@ -16,6 +16,7 @@ let fromRecoveryLink = true;
 let emit: ((event: string) => void) | null = null;
 vi.mock("@/integrations/supabase/client", () => ({
   openedFromRecoveryLink: () => fromRecoveryLink,
+  resumeRealClient: () => {},
   supabase: {
     auth: {
       getSession: async () => ({ data: { session } }),
