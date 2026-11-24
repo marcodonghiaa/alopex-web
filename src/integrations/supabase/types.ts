@@ -1456,6 +1456,10 @@ export type Database = {
           status: string;
         }>;
       };
+      claim_push_subscription: {
+        Args: { p_auth: string; p_endpoint: string; p_p256dh: string };
+        Returns: undefined;
+      };
       register_dashboard_origin: {
         Args: Record<PropertyKey, never>;
         Returns: string;

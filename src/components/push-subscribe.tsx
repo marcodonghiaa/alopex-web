@@ -122,14 +122,12 @@ export function PushSubscribeButton({ onSubscribed }: { onSubscribed?: () => voi
       // H018: the endpoint is unique per browser, so a plain insert failed when another
       // account had subscribed here first. The RPC moves the endpoint to this user.
       const json = subscription.toJSON();
-      const { error } = await supabase.rpc(
-        "claim_push_subscription" as never,
-        {
-          p_endpoint: json.endpoint,
-          p_p256dh: json.keys?.["p256dh"],
-          p_auth: json.keys?.["auth"],
-        } as never,
-      );
+      // A subscription always has these; a missing one is refused by the function.
+      const { error } = await supabase.rpc("claim_push_subscription", {
+        p_endpoint: json.endpoint as string,
+        p_p256dh: json.keys?.["p256dh"] as string,
+        p_auth: json.keys?.["auth"] as string,
+      });
       if (error) throw error;
 
       setSubscribed(true);
