@@ -20,12 +20,13 @@ export function connectSrc(supabaseUrl: string | undefined): string {
 // script-src allows 'unsafe-inline' because TanStack Start SSR injects a per-request inline
 // hydration script whose content (and therefore hash) varies every render -- a nonce would need
 // framework-level SSR changes. Still blocks remote script inclusion, framing, and MIME-sniffing.
+// form-action 'self': every form is handled in script; none posts to another site.
 export function contentSecurityPolicy(supabaseUrl: string | undefined): string {
   return (
     "default-src 'self'; script-src 'self' 'unsafe-inline'; " +
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     `img-src 'self' data: https:; connect-src ${connectSrc(supabaseUrl)}; ` +
-    "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+    "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
   );
 }

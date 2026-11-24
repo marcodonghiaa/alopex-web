@@ -59,4 +59,13 @@ describe("contentSecurityPolicy", () => {
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).toContain("object-src 'none'");
   });
+
+  // H356: no form-action, and default-src doesn't cover it, so an injected form could post
+  // anywhere. Sign-in, bank links and Supabase redirects are navigations, not form posts.
+  it("lets forms submit only to the dashboard itself", () => {
+    const csp = contentSecurityPolicy("https://own.supabase.co");
+    const directives = csp.split(/;\s*/);
+    expect(directives).toContain("form-action 'self'");
+    expect(directives.filter((d) => d.startsWith("form-action"))).toHaveLength(1);
+  });
 });
