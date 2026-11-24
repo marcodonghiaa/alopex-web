@@ -25,6 +25,16 @@ function client(existing: Array<Record<string, unknown>>, failOn?: string, cap =
   );
   const requests: Array<{ from: string; to: string; deleted: unknown; page: [number, number] }> =
     [];
+  const orders: Array<string> = [];
+  let page = async (_a: number, _b: number) => ({
+    data: [] as Array<Record<string, unknown>>,
+    error: null,
+  });
+  // Each order() call records its column and allows another one after it.
+  const ordered = (col: string) => {
+    orders.push(col);
+    return { order: ordered, range: page };
+  };
   const c: StatementClient = {
     rpc,
     from: () => ({
@@ -32,19 +42,20 @@ function client(existing: Array<Record<string, unknown>>, failOn?: string, cap =
         is: (_col: string, deleted: null) => ({
           gte: (_c: string, from: string) => ({
             lte: (_c2: string, to: string) => ({
-              order: () => ({
-                range: async (a: number, b: number) => {
+              order: (col: string) => {
+                page = async (a: number, b: number) => {
                   requests.push({ from, to, deleted, page: [a, b] });
                   return { data: existing.slice(a, Math.min(b + 1, a + cap)), error: null };
-                },
-              }),
+                };
+                return ordered(col);
+              },
             }),
           }),
         }),
       }),
     }),
   };
-  return { c, rpc, requests };
+  return { c, rpc, requests, orders };
 }
 
 const inApp = (row: StatementRow, description = row.description) => ({
@@ -61,6 +72,14 @@ describe("newRows", () => {
     const existing = [...Array(600).fill(inApp(salary)), inApp(coffee)];
     const { c } = client(existing, undefined, 500);
     expect(await newRows(c, [coffee])).toEqual([]);
+  });
+
+  // Batch H review: entry_reference repeats across accounts, so paging by it alone can read one
+  // row twice and skip another where a page ends.
+  it("pages in a total order: account, then reference", async () => {
+    const { c, orders } = client([inApp(coffee)]);
+    await newRows(c, [coffee]);
+    expect(orders.slice(0, 2)).toEqual(["account_uid", "entry_reference"]);
   });
 
   it("polish-3 #13 asks the app once per date range when given a cache", async () => {

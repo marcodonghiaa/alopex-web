@@ -61,7 +61,7 @@ export function decodeCsv(bytes: ArrayBuffer | Uint8Array): string {
  * to be under MAX_CHARS characters (at most 4 bytes each) before loading it into memory. */
 export async function readCsvFile(file: Blob): Promise<string> {
   if (file.size > MAX_CHARS * 4) {
-    throw new Error("The file is too large (limit is 2 MB). Is it the right file?");
+    throw new Error("The file is too large (limit is 8 MB). Is it the right file?");
   }
   return decodeCsv(await file.arrayBuffer());
 }

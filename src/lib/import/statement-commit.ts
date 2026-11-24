@@ -25,14 +25,18 @@ export interface StatementClient {
             col: string,
             value: string,
           ): {
-            order(col: string): {
-              range(from: number, to: number): Result<Array<Record<string, unknown>>>;
-            };
+            order(col: string): Ordered;
           };
         };
       };
     };
   };
+}
+
+// A query that can be ordered by more columns, then paged.
+interface Ordered {
+  order(col: string): Ordered;
+  range(from: number, to: number): Result<Array<Record<string, unknown>>>;
 }
 
 /** How many transactions the app has per dedupe key between two days. */
@@ -48,6 +52,8 @@ async function keysInApp(
       .is("deleted_at", null)
       .gte("booking_date", first)
       .lte("booking_date", last)
+      // A total order (the primary key): references repeat across accounts.
+      .order("account_uid")
       .order("entry_reference")
       .range(from, to),
   ).catch((error: { message: string }) => {
