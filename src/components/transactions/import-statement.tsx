@@ -23,7 +23,7 @@ import {
   type StatementOptions,
   type StatementRow,
 } from "@/lib/import/statement";
-import { decodeCsv, parseCsv, MAX_CHARS } from "@/lib/import/parse-csv";
+import { parseCsv, readCsvFile } from "@/lib/import/parse-csv";
 import { formatDay } from "@/lib/date";
 import { importStatement, newRows, type StatementClient } from "@/lib/import/statement-commit";
 import { readStatementPdf } from "@/lib/import/statement-pdf";
@@ -144,12 +144,8 @@ export function ImportStatement({ label }: { label?: string } = {}) {
       setError("Use a CSV or PDF. Excel files: File → Save as → CSV first.");
       return;
     }
-    // At most 4 bytes a character: anything bigger is over the limit, so don't load it.
-    if (file.size > MAX_CHARS * 4) {
-      setError("The file is too large (limit is 2 MB). Is it the right file?");
-      return;
-    }
-    const csv = decodeCsv(await file.arrayBuffer());
+    const csv = await readCsvFile(file).catch((err: Error) => (setError(err.message), null));
+    if (csv === null) return;
     setText(csv);
     // Headers for the column pickers, even when the columns can't be guessed.
     try {
@@ -203,8 +199,7 @@ export function ImportStatement({ label }: { label?: string } = {}) {
       }
     } finally {
       // Rows saved before an error are in the app too, maybe on a new account.
-      for (const k of TRANSACTION_QUERIES)
-        void queryClient.invalidateQueries({ queryKey: [k] });
+      for (const k of TRANSACTION_QUERIES) void queryClient.invalidateQueries({ queryKey: [k] });
     }
   }
 

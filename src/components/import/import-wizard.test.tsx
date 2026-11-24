@@ -54,6 +54,17 @@ describe("ImportWizard", () => {
     expect(cells.join(" ")).not.toMatch(/0000/);
   });
 
+  // H144: a Windows-1252 export was read as UTF-8, so "100 €" became "100 \uFFFD" and every
+  // amount was skipped as not valid.
+  it("reads a Windows-1252 file with euro signs", async () => {
+    setup();
+    const bytes = [...new TextEncoder().encode("Month,Total\n2024-02,100 "), 0x80, 0x0a];
+    fireEvent.change(document.querySelector("input[type=file]") as HTMLInputElement, {
+      target: { files: [new File([new Uint8Array(bytes)], "h.csv", { type: "text/csv" })] },
+    });
+    expect(await screen.findByText(/1 row ready/)).toBeTruthy();
+  });
+
   // Issue #148: "Import 1 rows". fails_when=one row is counted with a plural
   it("says 1 row, not 1 rows", async () => {
     setup();
@@ -90,7 +101,7 @@ describe("ImportWizard", () => {
   it("rejects an oversized file without reading it", async () => {
     setup();
     const big = new File(["x"], "big.csv", { type: "text/csv" });
-    Object.defineProperty(big, "size", { value: 3_000_000 });
+    Object.defineProperty(big, "size", { value: 9_000_000 });
     fireEvent.change(document.querySelector("input[type=file]") as HTMLInputElement, {
       target: { files: [big] },
     });

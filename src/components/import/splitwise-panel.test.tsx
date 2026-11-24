@@ -233,7 +233,7 @@ describe("SplitwisePanel", () => {
   it("rejects an oversized file without reading it", async () => {
     render(<SplitwisePanel />);
     const big = new File(["x"], "big.csv");
-    Object.defineProperty(big, "size", { value: 3_000_000 });
+    Object.defineProperty(big, "size", { value: 9_000_000 });
     fireEvent.change(document.querySelector("input[type=file]") as HTMLInputElement, {
       target: { files: [big] },
     });

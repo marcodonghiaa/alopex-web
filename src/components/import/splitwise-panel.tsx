@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, FileUp, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { MAX_CHARS } from "@/lib/import/parse-csv";
+import { readCsvFile } from "@/lib/import/parse-csv";
 import { SplitwiseReview, type ImportDone } from "@/components/import/splitwise-review";
 import { CTA, Group, LINK, Steps } from "@/components/import/splitwise-ui";
 import { money as amount } from "@/lib/import/splitwise-format";
@@ -83,9 +83,7 @@ export function SplitwisePanel({
     setMe(null);
     if (!file) return;
     try {
-      if (file.size > MAX_CHARS)
-        throw new Error("The file is too large (limit is 2 MB). Is it the right file?");
-      const parsed = parseSplitwiseCsv(await file.text());
+      const parsed = parseSplitwiseCsv(await readCsvFile(file));
       setMe(null);
       setLoaded({ name: file.name, file: parsed, issues: validateSplitwise(parsed) });
       setNewName("");

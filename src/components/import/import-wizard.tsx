@@ -14,7 +14,7 @@ import {
   type LastImport,
 } from "@/lib/import/last-import";
 import { guessColumns, type Role } from "@/lib/import/guess-columns";
-import { MAX_CHARS, parseCsv, type ParsedCsv } from "@/lib/import/parse-csv";
+import { parseCsv, readCsvFile, type ParsedCsv } from "@/lib/import/parse-csv";
 import { CATEGORIES } from "@/lib/categories";
 import { planNetWorth, planSpend } from "@/lib/import/plan";
 import type { AppCategory } from "@/lib/import/suggest-category";
@@ -108,10 +108,7 @@ export function ImportWizard() {
     setError(null);
     if (!file) return;
     try {
-      // Check the size before reading it all into memory.
-      if (file.size > MAX_CHARS)
-        throw new Error("The file is too large (limit is 2 MB). Is it the right file?");
-      const parsed = parseCsv(await file.text());
+      const parsed = parseCsv(await readCsvFile(file));
       setOverrides({});
       setCsv(parsed);
       setMapping(guessColumns(parsed.headers));
