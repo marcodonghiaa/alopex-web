@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { toast } from "sonner";
+
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 const { rows, review, reviewCalls, reviewError, path, search } = vi.hoisted(() => ({
   rows: { current: [] as Array<unknown> },
@@ -12,8 +15,14 @@ const { rows, review, reviewCalls, reviewError, path, search } = vi.hoisted(() =
   path: { current: "/" },
   search: { current: {} as Record<string, unknown> },
 }));
-// H018: what sign-out did, in order.
+// H018: what sign-out did, in order. H135: what signOut was asked, what it answers, and whether a
+// session is still stored afterwards.
 const signOutSteps = vi.hoisted(() => [] as string[]);
+const auth = vi.hoisted(() => ({
+  args: [] as Array<unknown>,
+  error: null as null | { message: string },
+  sessionLeft: false,
+}));
 vi.mock("@/components/push-subscribe", () => ({
   PushSubscribeButton: () => null,
   pushSupport: () => "unsupported",
@@ -65,9 +74,15 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     auth: {
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: vi.fn() } } }),
-      signOut: async () => {
+      signOut: async (opts?: unknown) => {
         signOutSteps.push("sign out");
+        auth.args.push(opts);
+        return { error: auth.error };
       },
+      getSession: async () => ({
+        data: { session: auth.sessionLeft ? { access_token: "t" } : null },
+        error: null,
+      }),
     },
     rpc: () => Promise.resolve({ error: null }),
     from: (table: string) =>
@@ -212,6 +227,38 @@ describe("sign out", () => {
     const aside = document.querySelector("aside")!;
     fireEvent.click(within(aside).getByRole("button", { name: /Sign out/ }));
     await waitFor(() => expect(signOutSteps).toEqual(["forget push", "sign out"]));
+  });
+
+  // H135: sign-out used the default global scope (every device signed out, and an offline
+  // sign-out kept the session) and ignored the error, so the user was bounced back in.
+  it("signs out this device only", async () => {
+    auth.args.length = 0;
+    rows.current = [];
+    renderLayout();
+    fireEvent.click(
+      within(document.querySelector("aside")!).getByRole("button", { name: /Sign out/ }),
+    );
+    await waitFor(() => expect(auth.args).toEqual([{ scope: "local" }]));
+  });
+
+  it("says so and lets the user try again when the session could not be removed", async () => {
+    auth.error = { message: "Network down" };
+    auth.sessionLeft = true;
+    try {
+      rows.current = [];
+      renderLayout();
+      const aside = document.querySelector("aside")!;
+      fireEvent.click(within(aside).getByRole("button", { name: /Sign out/ }));
+      await waitFor(() =>
+        expect(within(aside).getByRole("button", { name: /Sign out/ })).not.toBeDisabled(),
+      );
+      expect(toast.error).toHaveBeenCalledWith("Couldn't sign out", {
+        description: "Network down",
+      });
+    } finally {
+      auth.error = null;
+      auth.sessionLeft = false;
+    }
   });
 });
 

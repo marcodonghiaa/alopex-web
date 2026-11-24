@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { LogOut, Download, MoreHorizontal, ChevronRight } from "lucide-react";
+import { toast } from "sonner";
 import { Icon, iconOf, type IconComponent } from "@/components/icons/icon";
 import { useCategories } from "@/lib/use-categories";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -278,7 +279,15 @@ function AuthenticatedLayout() {
   async function handleSignOut() {
     setSigningOut(true);
     await forgetThisBrowserPush();
-    await supabase.auth.signOut();
+    // This device only, and its stored session goes before the network call, so signing out
+    // offline still works. The default (global) would also sign out the user's other devices.
+    const { error } = await supabase.auth.signOut({ scope: "local" });
+    // Still signed in: /auth would only send the user back here.
+    if (error && (await supabase.auth.getSession()).data.session) {
+      setSigningOut(false);
+      toast.error("Couldn't sign out", { description: error.message });
+      return;
+    }
     await navigate({ to: "/auth", replace: true });
   }
 
