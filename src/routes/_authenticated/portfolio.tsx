@@ -40,6 +40,7 @@ import {
   TradesImport,
 } from "@/components/performance/performance-section";
 import { formatDay } from "@/lib/date";
+import { tinted } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/portfolio")({
   head: () => ({
@@ -257,10 +258,7 @@ function PortfolioPage() {
                     <span
                       aria-hidden
                       className="flex size-10 shrink-0 items-center justify-center rounded-full"
-                      style={{
-                        color,
-                        backgroundColor: `color-mix(in oklab, ${color} 16%, var(--color-card))`,
-                      }}
+                      style={tinted(color)}
                     >
                       <TypeIcon className="size-[1.125rem]" strokeWidth={2} />
                     </span>

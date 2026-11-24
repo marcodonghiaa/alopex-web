@@ -22,6 +22,7 @@ import {
 import { formatEur } from "@/lib/transactions";
 import { ASSET_COLORS } from "@/lib/asset-colors";
 import type { ReactNode } from "react";
+import { tinted } from "@/lib/utils";
 
 // Each class leads to the page that explains it. The stocks row is everything in the portfolio
 // that isn't a bond (stocks, ETFs, funds), so it reads as the sum of those rows on Portfolio.
@@ -164,10 +165,7 @@ export function AllocationChart({
               <span
                 aria-hidden
                 className="flex size-10 shrink-0 items-center justify-center rounded-full"
-                style={{
-                  color,
-                  backgroundColor: `color-mix(in oklab, ${color} 16%, var(--color-card))`,
-                }}
+                style={tinted(color)}
               >
                 <Icon className="size-[1.125rem]" strokeWidth={2} />
               </span>
