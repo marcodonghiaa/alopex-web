@@ -31,6 +31,22 @@ describe("linkedMessage", () => {
     expect(linkedMessage(new URLSearchParams("bank_link_error=x"))).toBeNull();
   });
 
+  // H354: the URL can be crafted, so only a bank-like name, ISO codes and a count are shown.
+  it("shows no crafted text from the URL in the success toast", () => {
+    const crafted = (bank: string, currencies = "EUR") =>
+      linkedMessage(new URLSearchParams({ bank_linked: "1", bank, currencies }));
+    expect(crafted("Your account is locked, call +39 000 000")).toBe("1 account connected");
+    expect(crafted("Revolut", "EUR,call us now")).toBe("1 account connected");
+    expect(crafted("A".repeat(81))).toBe("1 account connected");
+    expect(crafted("Banca Monte dei Paschi di Siena S.p.A.", "EUR,USD")).toBe(
+      "Banca Monte dei Paschi di Siena S.p.A.: EUR, USD",
+    );
+    expect(crafted("Crédit Mutuel (CM-CIC) & Co's 1st")).toBe(
+      "Crédit Mutuel (CM-CIC) & Co's 1st: EUR",
+    );
+    expect(linkedMessage(new URLSearchParams("bank_linked=Call+us"))).toBe("Accounts connected");
+  });
+
   it("keeps a bank name with spaces and accents through the URL", () => {
     const sent = new URLSearchParams({
       bank_linked: "2",
