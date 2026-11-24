@@ -14,6 +14,9 @@ export const CATEGORIES = [
   "Others",
 ] as const;
 
+/** What the spending views call a missing category. */
+export const UNCATEGORIZED_LABEL = "Uncategorized";
+
 export const TRANSACTION_TYPES = ["Subscription", "One-time"] as const;
 
 // Categories are one hue ordered by lightness, not a rainbow: a colour is a RANK. Rank 0 is
@@ -83,7 +86,7 @@ export function setCategoryLooks(rows: ReadonlyArray<{ name: string } & Category
 
 /** The icon name for a category: yours, else the built-in one; null for none (shows a letter). */
 export function categoryIconName(category: string | null | undefined): string | null {
-  if (!category || category === "Uncategorized") return null;
+  if (!category || category === UNCATEGORIZED_LABEL) return null;
   const picked = looks.get(category)?.icon;
   if (picked) return picked;
   // A built-in's icon is its name in kebab case (names from the Alopex icon set).
@@ -100,8 +103,7 @@ export function pickedColor(category: string): PaletteColor | null {
 
 /** The category's colour: the one you picked, else the built-in one, else one hashed from the name. */
 export function categoryColor(category: string | null | undefined): string {
-  // "Uncategorized" is what the spending views call a missing category.
-  if (!category || category === "Uncategorized") return UNKNOWN_CATEGORY_COLOR;
+  if (!category || category === UNCATEGORIZED_LABEL) return UNKNOWN_CATEGORY_COLOR;
   const picked = pickedColor(category);
   if (picked) return CATEGORY_PALETTE[picked];
   // Own keys only, so a category called "constructor" isn't read off Object.prototype.

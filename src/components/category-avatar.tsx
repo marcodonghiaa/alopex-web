@@ -5,6 +5,7 @@ import {
   categoryIconName,
   isPaletteColor,
   type CategoryLook,
+  UNCATEGORIZED_LABEL,
 } from "@/lib/categories";
 
 /**
@@ -22,7 +23,7 @@ export function CategoryAvatar({
   /** Draw this icon and colour instead of the saved ones (the editor's preview). */
   look?: CategoryLook;
 }) {
-  const missing = !category || category === "Uncategorized";
+  const missing = !category || category === UNCATEGORIZED_LABEL;
   const name = missing ? "uncategorized" : look ? (look.icon ?? null) : categoryIconName(category);
   const color = isPaletteColor(look?.color)
     ? CATEGORY_PALETTE[look.color]

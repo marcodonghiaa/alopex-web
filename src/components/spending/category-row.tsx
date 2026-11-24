@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ChevronRight } from "lucide-react";
 import { CategoryAvatar } from "@/components/category-avatar";
-import { UNCATEGORIZED_LABEL } from "@/lib/spending";
+import { UNCATEGORIZED_LABEL } from "@/lib/categories";
 import { UNCATEGORIZED, formatEur, monthParam } from "@/lib/transactions";
 
 // One category of the month: what, how much, its share; opens Activity on that category and month.

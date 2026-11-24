@@ -81,6 +81,7 @@ import { WorthItSpotlight } from "@/components/transactions/worth-it";
 import { MonthSwitcher } from "@/components/month-switcher";
 import { FilterSheet } from "@/components/transactions/filter-sheet";
 import { RECURRING_KEY, refreshRecurring } from "@/lib/use-recurring-streams";
+import { UNCATEGORIZED_LABEL } from "@/lib/categories";
 
 export const Route = createFileRoute("/_authenticated/transactions")({
   head: () => ({
@@ -556,7 +557,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
     clearSheetFilters();
   }
   const filterSummary = [
-    category === "all" ? null : category === UNCATEGORIZED ? "Uncategorized" : category,
+    category === "all" ? null : category === UNCATEGORIZED ? UNCATEGORIZED_LABEL : category,
     day ? formatDayHeading(day) : null,
     bank === "all" ? null : bank,
     tag ? `#${tag}` : null,

@@ -8,7 +8,7 @@ import { CategoryRow } from "@/components/spending/category-row";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDay, formatISODate, monthBounds } from "@/lib/date";
 import { cleanMerchantName } from "@/lib/merchant-name";
-import { categoryColor } from "@/lib/categories";
+import { categoryColor, UNCATEGORIZED_LABEL } from "@/lib/categories";
 import { shareSummary } from "@/lib/chart-summary";
 import { categorySpend, sharePercent, spendChange, type MonthlySpendRow } from "@/lib/spending";
 import { TONE_TEXT } from "@/lib/tone";
@@ -102,7 +102,7 @@ async function fetchRegretSpend(month: Date): Promise<Array<RegretGroup>> {
   if (error) throw error;
   const byCategory = new Map<string, RegretGroup>();
   for (const row of (data ?? []) as Array<RegretRow>) {
-    const category = row.category ?? "Uncategorized";
+    const category = row.category ?? UNCATEGORIZED_LABEL;
     const amount = personalAmountEur(row);
     const purchase = {
       ref: row.entry_reference,
@@ -283,7 +283,9 @@ function RegretCard({ groups, month }: { groups: Array<RegretGroup>; month: Date
                   onClick={() => setOpen(isOpen ? null : g.category)}
                   className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-accent/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:px-5"
                 >
-                  <CategoryAvatar category={g.category === "Uncategorized" ? null : g.category} />
+                  <CategoryAvatar
+                    category={g.category === UNCATEGORIZED_LABEL ? null : g.category}
+                  />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium text-foreground">{g.category}</span>
                     <span className="block text-xs text-muted-foreground">

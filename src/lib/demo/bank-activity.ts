@@ -12,6 +12,7 @@ import {
   type DemoDb,
   type Tx,
 } from "./helpers";
+import { UNCATEGORIZED_LABEL } from "@/lib/categories";
 
 // Transactions and the views derived from them (subscriptions, monthly spend and income).
 
@@ -394,7 +395,7 @@ export function buildMonthly(
     const mineIn = t.personal_signed_amount_eur ?? 0;
     if (t.flow_type === "income" && mineIn > 0) cell.income += mineIn;
     if (isMySpend(t)) {
-      const category = t.category ?? "Uncategorized";
+      const category = t.category ?? UNCATEGORIZED_LABEL;
       const key = `${month}|${category}`;
       const row = spendByKey.get(key) ?? { month, category, spend: 0 };
       row.spend -= t.personal_signed_amount_eur!;
@@ -411,7 +412,7 @@ export function buildMonthly(
     spendByKey.set(key, row);
   };
   for (const s of shares)
-    addSpend(monthStart(s.booking_date!), s.category ?? "Uncategorized", s.amount_eur!);
+    addSpend(monthStart(s.booking_date!), s.category ?? UNCATEGORIZED_LABEL, s.amount_eur!);
   for (const h of history) {
     if (!spendMonths.has(h.month)) addSpend(h.month, h.category, h.spend_eur);
   }

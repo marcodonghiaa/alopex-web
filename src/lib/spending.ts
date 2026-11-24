@@ -1,3 +1,4 @@
+import { UNCATEGORIZED_LABEL } from "@/lib/categories";
 import { formatPercent } from "@/lib/locale";
 import { toneOf, type Tone } from "@/lib/tone";
 
@@ -11,9 +12,6 @@ export interface CategorySpend {
   category: string;
   spend_eur: number;
 }
-
-/** The label the views' null category gets on screen. */
-export const UNCATEGORIZED_LABEL = "Uncategorized";
 
 /** A month's spend per category, largest first. Empty and net-refund (≤ 0) rows are left out. */
 export function categorySpend(rows: Array<MonthlySpendRow>): Array<CategorySpend> {

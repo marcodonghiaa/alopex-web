@@ -7,7 +7,8 @@ import { formatISODate } from "@/lib/date";
 import type { IncomeExpenseRow } from "@/lib/income-expenses";
 import { formatPercent } from "@/lib/locale";
 import { formatEur, incomeTitle } from "@/lib/transactions";
-import { UNCATEGORIZED_LABEL, type MonthlySpendRow } from "@/lib/spending";
+import { UNCATEGORIZED_LABEL } from "@/lib/categories";
+import type { MonthlySpendRow } from "@/lib/spending";
 
 /** How much time one cash-flow view covers. */
 export type Period = "month" | "quarter" | "year";

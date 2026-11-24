@@ -32,6 +32,7 @@ import { Input, Select } from "@/components/ui/field";
 import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isMissingTable } from "@/lib/pg-errors";
+import { UNCATEGORIZED_LABEL } from "@/lib/categories";
 
 export const Route = createFileRoute("/_authenticated/budgets")({
   head: () => ({
@@ -85,7 +86,7 @@ async function fetchSpend(
   });
   return rows.map((r) => ({
     month: String(r.month),
-    category: r.category ?? "Uncategorized",
+    category: r.category ?? UNCATEGORIZED_LABEL,
     spend_eur: Number(r.spend_eur ?? 0),
   }));
 }
@@ -394,7 +395,7 @@ function BudgetsPage() {
                     >
                       <span className="flex min-w-0 items-center gap-2 font-medium text-foreground">
                         <CategoryAvatar
-                          category={s.category === "Uncategorized" ? null : s.category}
+                          category={s.category === UNCATEGORIZED_LABEL ? null : s.category}
                         />
                         <span className="truncate" title={s.category}>
                           {s.category}
@@ -434,7 +435,7 @@ function BudgetsPage() {
                   ))}
                 </ul>
               </GroupedList>
-              {unbudgeted.some((s) => s.category === "Uncategorized") && (
+              {unbudgeted.some((s) => s.category === UNCATEGORIZED_LABEL) && (
                 <p className="mt-2 px-4 text-[0.8125rem] text-muted-foreground sm:px-5">
                   Uncategorized spending can't have a budget: give it a category first.
                 </p>

@@ -3,7 +3,7 @@
 // With rollover on, a month's leftover (or overspend) moves into the next month:
 // carried into next = carried in + budget − spent. Turning rollover on or off in a month changes
 // what that month passes on to the next; what it received stays.
-import { ALWAYS_SHOWN } from "@/lib/categories";
+import { ALWAYS_SHOWN, UNCATEGORIZED_LABEL } from "@/lib/categories";
 import { parseAmount as parseTypedAmount } from "@/lib/trades";
 
 export interface BudgetRow {
@@ -143,7 +143,7 @@ export const NOT_SPENDING: ReadonlySet<string> = new Set(ALWAYS_SHOWN);
 
 /** Whether a category can have a budget: real spending, and not the Uncategorized leftovers. */
 export const canBudget = (category: string): boolean =>
-  !NOT_SPENDING.has(category) && category !== "Uncategorized";
+  !NOT_SPENDING.has(category) && category !== UNCATEGORIZED_LABEL;
 
 /**
  * A starting budget per category: the average monthly spend over those of the 6 months before
