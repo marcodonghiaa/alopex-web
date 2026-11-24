@@ -1,6 +1,7 @@
 import { BROKERS } from "@/lib/brokers";
 import type { BrokerParser, CsvResult, ParseContext } from "@/lib/brokers";
 import { csvLines, parseDate, splitLine } from "@/lib/brokers/csv";
+import { MAX_CHARS } from "@/lib/import/parse-csv";
 import { netShares, parseAmount } from "@/lib/trades";
 import type { Trade } from "@/lib/trades";
 
@@ -29,6 +30,14 @@ export function detectBroker(text: string): BrokerParser | undefined {
  */
 export function parseTradesCsv(text: string, ctx: ParseContext, from?: BrokerParser): CsvResult {
   const { kind, knownKeys, today } = ctx;
+  // Same limit as every other import: a wrong, huge file would freeze the tab while it splits.
+  if (text.length > MAX_CHARS) {
+    return {
+      trades: [],
+      errors: ["The file is too large (limit is 2 MB). Is it the right file?"],
+      notes: [],
+    };
+  }
   const lines = csvLines(text);
   if (lines.length === 0) return { trades: [], errors: ["The file is empty."], notes: [] };
 

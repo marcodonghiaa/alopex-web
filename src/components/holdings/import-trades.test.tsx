@@ -340,6 +340,31 @@ describe("ImportTrades", () => {
     );
   });
 
+  // H375: no size check and no catch, so a huge file froze the tab and a failed read stayed on
+  // Reading… for good.
+  it("refuses an oversized file without reading it", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const big = new File(["x"], "big.csv", { type: "text/csv" });
+    Object.defineProperty(big, "size", { value: 9_000_000 });
+    const read = vi.spyOn(big, "arrayBuffer");
+    fireEvent.change(screen.getByLabelText("CSV file"), { target: { files: [big] } });
+    expect((await screen.findByRole("alert")).textContent).toMatch(/too large/);
+    expect(read).not.toHaveBeenCalled();
+    expect(screen.queryByText("Reading…")).toBeNull();
+  });
+
+  it("says when a file can't be read, instead of Reading… for good", async () => {
+    open("stock");
+    fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));
+    const bad = new File(["x"], "gone.csv", { type: "text/csv" });
+    bad.arrayBuffer = () => Promise.reject(new Error("The file could not be read."));
+    bad.text = () => Promise.reject(new Error("The file could not be read."));
+    fireEvent.change(screen.getByLabelText("CSV file"), { target: { files: [bad] } });
+    expect((await screen.findByRole("alert")).textContent).toMatch(/could not be read/);
+    expect(screen.queryByText("Reading…")).toBeNull();
+  });
+
   it("a picked file shows its name and how many trades it holds, and hides the how-to", async () => {
     open("stock");
     fireEvent.click(screen.getByRole("button", { name: /Trade Republic/ }));

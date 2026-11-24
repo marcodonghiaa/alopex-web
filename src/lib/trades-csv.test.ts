@@ -1,11 +1,20 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { setLocaleOverride } from "./locale";
 import { newTrades, parseTradesCsv, shareUpdates, summarizeImport } from "./trades-csv";
+import { MAX_CHARS } from "./import/parse-csv";
 
 const opts = { kind: "stock" as const, knownKeys: new Set(["IE00B4L5Y983"]), today: "2026-10-31" };
 
 describe("parseTradesCsv", () => {
   afterEach(() => setLocaleOverride(""));
+
+  // H375: a wrong, huge file was split on the main thread and could freeze the tab.
+  it("refuses text past the import size limit, like every other import", () => {
+    const header = "date,side,isin,shares,price\n";
+    const { trades, errors } = parseTradesCsv(header + "x".repeat(MAX_CHARS), opts);
+    expect(trades).toEqual([]);
+    expect(errors).toEqual(["The file is too large (limit is 2 MB). Is it the right file?"]);
+  });
 
   it("polish-5 #4 audit: a file reads the same whatever format the viewer picked", () => {
     setLocaleOverride("it-IT");
