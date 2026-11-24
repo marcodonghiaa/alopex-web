@@ -16,7 +16,7 @@ import { loadDemoClient, recoverySignIn, supabase } from "@/integrations/supabas
 import { isDemoMode } from "@/lib/demo/mode";
 import { needsMfaCode } from "@/lib/mfa";
 import { backHereSearch } from "@/lib/next-url";
-import { registerDashboardOrigin } from "@/lib/register-origin";
+import { originStatusQuery } from "@/lib/register-origin";
 import { MadeWith } from "@/components/made-with";
 import { forgetThisBrowserPush } from "@/components/push-subscribe";
 import { cn } from "@/lib/utils";
@@ -259,10 +259,9 @@ function AuthenticatedLayout() {
     0,
   );
 
-  // Once per page load: tells the backend this address is the dashboard (setup no longer asks for it).
-  useEffect(() => {
-    void registerDashboardOrigin(() => supabase.rpc("register_dashboard_origin"));
-  }, []);
+  // Once per page load: tells the backend this address is the dashboard (setup no longer asks for
+  // it). Health shows the answer.
+  useQuery(originStatusQuery(() => supabase.rpc("register_dashboard_origin")));
 
   // Keep route data in sync with auth transitions (e.g. token expiry).
   useEffect(() => {

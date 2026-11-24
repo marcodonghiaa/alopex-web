@@ -191,19 +191,36 @@ export function pushRow(
       };
 }
 
-/** Whether the backend knows this dashboard's address. Null when the table isn't readable. */
-export function originRow(registered: number | null): HealthRow | null {
-  if (registered === null) return null;
+/**
+ * Whether the backend knows this dashboard's address, from what register_dashboard_origin answered
+ * when this page loaded. Null when there is nothing to say (not the owner, no answer, demo).
+ */
+export function originRow(status: string | null): HealthRow | null {
   const title = "Dashboard address";
-  return registered > 0
-    ? { id: "origin", title, state: "ok", detail: "The backend knows this dashboard's address." }
-    : {
-        id: "origin",
-        title,
-        state: "warn",
-        detail:
-          "No address registered yet. Sign in from the dashboard's own address to register it.",
-      };
+  if (status === "added" || status === "exists")
+    return {
+      id: "origin",
+      title,
+      state: "ok",
+      detail: "The backend knows this dashboard's address.",
+    };
+  if (status === "full")
+    return {
+      id: "origin",
+      title,
+      state: "warn",
+      detail:
+        "The backend already keeps 5 dashboard addresses, so it didn't add this one, and bank linking may not bring you back here. Delete old rows from the dashboard_origins table in Supabase, then reload.",
+    };
+  if (status === "rejected")
+    return {
+      id: "origin",
+      title,
+      state: "warn",
+      detail:
+        "The backend doesn't accept this address, so bank linking may not bring you back here. Use an https address (or localhost) that stays the same, not a per-deployment Vercel one.",
+    };
+  return null;
 }
 
 // A page of this dashboard's own Supabase project ("https://<ref>.supabase.co") in its dashboard.

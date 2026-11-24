@@ -178,11 +178,21 @@ describe("pushRow", () => {
   });
 });
 
+// H110: built from what register_dashboard_origin answered; the table was never readable.
 describe("originRow", () => {
-  it("is absent when the table isn't readable", () => expect(originRow(null)).toBeNull());
-  it("warns on none, passes on some", () => {
-    expect(originRow(0)?.state).toBe("warn");
-    expect(originRow(1)?.state).toBe("ok");
+  it.each([null, "not_owner", "no_origin", "something new"])("is absent for %s", (status) =>
+    expect(originRow(status)).toBeNull(),
+  );
+  it("passes when the address is registered", () => {
+    expect(originRow("added")?.state).toBe("ok");
+    expect(originRow("exists")?.state).toBe("ok");
+  });
+  it("warns when the backend is full or refuses the address", () => {
+    expect(originRow("full")).toMatchObject({ state: "warn", detail: expect.stringMatching(/5/) });
+    expect(originRow("rejected")).toMatchObject({
+      state: "warn",
+      detail: expect.stringMatching(/https/),
+    });
   });
 });
 
@@ -285,7 +295,7 @@ describe("groupByBank", () => {
   });
 
   it("keeps checks without a bank as single rows, after banks of the same state", () => {
-    const origin = originRow(1)!;
+    const origin = originRow("exists")!;
     const items = groupByBank([origin, ...rows]);
     expect(items.map((i) => ("rows" in i ? i.bank : i.id))).toEqual([
       "Fineco",

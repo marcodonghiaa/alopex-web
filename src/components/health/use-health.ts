@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { pushSupport } from "@/components/push-subscribe";
 import { isDemoMode } from "@/lib/demo/mode";
 import { supabase } from "@/integrations/supabase/client";
+import { originStatusQuery } from "@/lib/register-origin";
 import {
   accessRows,
   aiRow,
@@ -20,16 +21,6 @@ async function fetchAccounts(): Promise<Array<HealthAccount>> {
   const { data, error } = await supabase.from("v_bank_accounts_latest").select("*");
   if (error) throw error;
   return (data ?? []) as Array<HealthAccount>;
-}
-
-// Not in the generated types and not a screen section, so no demo data: the demo skips the row.
-const ORIGINS_TABLE = "dashboard_origins";
-
-// The row is skipped (null) when this database doesn't let the owner read the table.
-async function fetchOriginCount(): Promise<number | null> {
-  if (isDemoMode()) return null;
-  const { data, error } = await supabase.from(ORIGINS_TABLE as never).select("*");
-  return error || !Array.isArray(data) ? null : data.length;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -64,7 +55,7 @@ async function fetchPushSubscribed(): Promise<boolean> {
 /** Everything Settings needs from the health checks: the rows, split so push shows under Notifications. */
 export function useHealth() {
   const accounts = useQuery({ queryKey: ["bank-accounts-latest"], queryFn: fetchAccounts });
-  const origin = useQuery({ queryKey: ["dashboard-origins"], queryFn: fetchOriginCount });
+  const origin = useQuery(originStatusQuery(() => supabase.rpc("register_dashboard_origin")));
   const ai = useQuery({ queryKey: ["ai-categorized"], queryFn: fetchAiCounts });
   // Client-only: pushSupport() reads window, and SSR must render the same first pass.
   const [support, setSupport] = useState<ReturnType<typeof pushSupport> | null>(null);
@@ -82,7 +73,8 @@ export function useHealth() {
     return [
       ...accessRows(list, now),
       ...syncRows(list, now, projectUrl),
-      origin.data === undefined ? null : originRow(origin.data),
+      // The demo's answer says nothing about a real backend.
+      isDemoMode() ? null : originRow(origin.data ?? null),
       ai.data === undefined ? null : aiRow(ai.data, supabaseSecretsUrl(projectUrl)),
     ]
       .filter((r): r is HealthRow => r !== null)
