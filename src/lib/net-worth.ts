@@ -193,7 +193,11 @@ export function allocationHistory(
   reconstructed: Array<ReconstructedRow> = [],
 ): Array<HistoryRow> {
   const base = periodBaseline(snapshots, start);
-  const live = base ? snapshots.filter((s) => s.snapshot_date >= base.snapshot_date) : [];
+  // The same partial first days the chart skips (withHistory), so both agree day by day (H156).
+  const live = skipPartialStart(
+    base ? snapshots.filter((s) => s.snapshot_date >= base.snapshot_date) : [],
+    reconstructed,
+  );
   const firstLive = live.at(0)?.snapshot_date;
   const past = history.filter((h) => !firstLive || h.snapshot_date < firstLive);
   const imported = new Set(past.map((h) => h.snapshot_date));
