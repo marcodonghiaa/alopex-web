@@ -425,12 +425,15 @@ describe("Activity page", () => {
     await screen.findAllByText("€999.00");
     await userEvent.type(screen.getByLabelText("Search by merchant or note"), "rent");
     expect(await screen.findByText("All months")).toBeInTheDocument();
-    expect(ors).toContainEqual({
-      table: "v_transactions_eur",
-      expr: "creditor_name.ilike.*rent*,note.ilike.*rent*",
+    // The search query fires after typing settles, so on a slow runner it can land after the label.
+    await waitFor(() => {
+      expect(ors).toContainEqual({
+        table: "v_transactions_eur",
+        expr: "creditor_name.ilike.*rent*,note.ilike.*rent*",
+      });
+      expect(ors).toContainEqual({ table: "v_splitwise_eur", expr: "description.ilike.*rent*" });
+      expect(limits).toContainEqual({ table: "v_transactions_eur", n: 500 });
     });
-    expect(ors).toContainEqual({ table: "v_splitwise_eur", expr: "description.ilike.*rent*" });
-    expect(limits).toContainEqual({ table: "v_transactions_eur", n: 500 });
     // In/Out add up what was found, not the month's figures.
     expect(await screen.findByText("€50.00")).toBeInTheDocument();
     expect(screen.queryByText("€888.00")).toBeNull();
