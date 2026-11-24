@@ -30,7 +30,7 @@ import { GroupedList } from "@/components/ui/grouped-list";
 import { localToday } from "@/lib/trades";
 import type { Trade } from "@/lib/trades";
 import { BROKERS, NEW_BROKER_URL } from "@/lib/brokers";
-import { saveQuantity } from "@/lib/holding-quantity";
+import { invalidateHoldings, saveQuantity } from "@/lib/holding-quantity";
 import type { HoldingTarget } from "@/lib/holding-quantity";
 import { AlreadyHeld, callAddHolding } from "@/lib/add-holding";
 import { cutChars } from "@/lib/transactions";
@@ -487,14 +487,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   // Matched bank rows change name, type and category on every money page.
   const bankRowsChanged = () => void queryClient.invalidateQueries();
   function refresh() {
-    void queryClient.invalidateQueries({ queryKey: ["holding-trades"] });
-    void queryClient.invalidateQueries({ queryKey: ["investment-events"] });
+    invalidateHoldings(queryClient, kind, { events: true });
     void queryClient.invalidateQueries({ queryKey: ["holding-keys", kind] });
-    void queryClient.invalidateQueries({ queryKey: ["holding-performance"] });
-    void queryClient.invalidateQueries({
-      queryKey: [kind === "stock" ? "portfolio-latest" : "crypto-latest"],
-    });
-    void queryClient.invalidateQueries({ queryKey: ["net-worth-daily"] });
   }
 
   // Choosing a source or a file removes the control you used: focus goes on to the next step.

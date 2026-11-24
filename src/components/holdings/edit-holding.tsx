@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { parseQuantity } from "@/lib/holdings";
-import { saveQuantity, type HoldingTarget } from "@/lib/holding-quantity";
+import { invalidateHoldings, saveQuantity, type HoldingTarget } from "@/lib/holding-quantity";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { formatISODate } from "@/lib/date";
@@ -78,23 +78,14 @@ export function EditHolding({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [asTrade, setAsTrade] = useState(true);
 
-  const refresh = () => {
-    void queryClient.invalidateQueries({
-      queryKey: [target.kind === "stock" ? "portfolio-latest" : "crypto-latest"],
-    });
-    void queryClient.invalidateQueries({ queryKey: ["net-worth-daily"] });
-    // Returns compare trades with the quantity held; delete also removes the trades.
-    void queryClient.invalidateQueries({ queryKey: ["holding-performance"] });
-    void queryClient.invalidateQueries({ queryKey: ["holding-trades"] });
-  };
+  const refresh = () => invalidateHoldings(queryClient, target.kind);
 
   const remove = useMutation({
     mutationFn: () => deleteHolding(target),
     onSuccess: () => {
       toast.success(`${name} deleted`);
-      refresh();
-      // Delete also removes its dividends and other events.
-      void queryClient.invalidateQueries({ queryKey: ["investment-events"] });
+      // Delete also removes its trades, dividends and other events.
+      invalidateHoldings(queryClient, target.kind, { events: true });
       setOpen(false);
     },
     onError: (err) => setError(err instanceof Error ? err.message : "Couldn't delete"),
