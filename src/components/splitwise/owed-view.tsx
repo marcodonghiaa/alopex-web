@@ -15,8 +15,14 @@ import { cleanMerchantName } from "@/lib/merchant-name";
 
 const eur = (value: number) => money(value, "EUR");
 
+// A date-only string parses as UTC midnight; read it as the local day instead.
 const day = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleDateString(dateLocale(), { day: "numeric", month: "short" }) : "—";
+  iso
+    ? new Date(`${iso}T00:00:00`).toLocaleDateString(dateLocale(), {
+        day: "numeric",
+        month: "short",
+      })
+    : "—";
 
 const bills = (n: number) => `${n} open ${n === 1 ? "bill" : "bills"}`;
 
