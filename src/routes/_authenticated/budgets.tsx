@@ -5,6 +5,7 @@ import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { formatISODate } from "@/lib/date";
+import { inList } from "@/lib/in-list";
 import { readPages } from "@/lib/read-pages";
 import { formatEur, startOfMonth } from "@/lib/transactions";
 import {
@@ -79,7 +80,7 @@ async function fetchSpend(
       .select("month,category,spend_eur")
       .gte("month", from)
       .lte("month", to);
-    if (categories) q = q.in("category", [...categories]);
+    if (categories) q = q.filter("category", "in", inList(categories));
     return q.order("month").order("category").range(start, end);
   });
   return rows.map((r) => ({

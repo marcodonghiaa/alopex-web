@@ -33,7 +33,15 @@ vi.mock("@/integrations/supabase/client", () => ({
       q["gte"] = (c: string, v: unknown) => (filters.push((r) => cmp(r[c], v) >= 0), q);
       q["lte"] = (c: string, v: unknown) => (filters.push((r) => cmp(r[c], v) <= 0), q);
       q["lt"] = (c: string, v: unknown) => (filters.push((r) => cmp(r[c], v) < 0), q);
-      q["in"] = (c: string, v: Array<unknown>) => (filters.push((r) => v.includes(r[c])), q);
+      // filter(c, "in", '("a","b \\"c\\"")'): read the quoted list back as PostgREST does.
+      q["filter"] = (c: string, op: string, list: string) => {
+        if (op !== "in") throw new Error(`unexpected filter ${op}`);
+        const v = [...list.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) =>
+          m[1]!.replace(/\\(.)/g, "$1"),
+        );
+        filters.push((r) => v.includes(r[c] as string));
+        return q;
+      };
       q["order"] = (c: string) => (sorts.push(c), q);
       q["range"] = (a: number, b: number) => ((from = a), (to = b), q);
       q["upsert"] = (rows: Array<Row>, opts: unknown) => {
