@@ -408,9 +408,7 @@ export function useFlowMutation(queryClient: QueryClient, monthKey: string) {
 
   return useMutation<void, Error, Vars, Context>({
     mutationFn: async ({ tx }) => {
-      // `as never`: category_source is not in the generated types.
-      const patch = restorePatch(tx) as never;
-      const { error } = await forTx(supabase.from("transactions").update(patch), tx);
+      const { error } = await forTx(supabase.from("transactions").update(restorePatch(tx)), tx);
       if (error) throw error;
     },
     onMutate: async ({ tx }) => {

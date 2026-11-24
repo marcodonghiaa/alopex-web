@@ -1038,6 +1038,9 @@ export type Database = {
           bank_transaction_code: string | null;
           booking_date: string | null;
           category: string | null;
+          category_source: string | null;
+          broker_ref: string | null;
+          broker_label: string | null;
           created_at: string | null;
           credit_debit_indicator: string | null;
           creditor_name: string | null;
@@ -1076,6 +1079,9 @@ export type Database = {
           bank_transaction_code?: string | null;
           booking_date?: string | null;
           category?: string | null;
+          category_source?: string | null;
+          broker_ref?: string | null;
+          broker_label?: string | null;
           created_at?: string | null;
           credit_debit_indicator?: string | null;
           creditor_name?: string | null;
@@ -1114,6 +1120,9 @@ export type Database = {
           bank_transaction_code?: string | null;
           booking_date?: string | null;
           category?: string | null;
+          category_source?: string | null;
+          broker_ref?: string | null;
+          broker_label?: string | null;
           created_at?: string | null;
           credit_debit_indicator?: string | null;
           creditor_name?: string | null;
