@@ -78,13 +78,12 @@ export function useHealth() {
   const rows = useMemo(() => {
     const now = new Date();
     const list = accounts.data ?? [];
+    const projectUrl = import.meta.env["VITE_SUPABASE_URL"];
     return [
       ...accessRows(list, now),
-      ...syncRows(list, now),
+      ...syncRows(list, now, projectUrl),
       origin.data === undefined ? null : originRow(origin.data),
-      ai.data === undefined
-        ? null
-        : aiRow(ai.data, supabaseSecretsUrl(import.meta.env["VITE_SUPABASE_URL"])),
+      ai.data === undefined ? null : aiRow(ai.data, supabaseSecretsUrl(projectUrl)),
     ]
       .filter((r): r is HealthRow => r !== null)
       .sort(bySeverity);
