@@ -209,6 +209,15 @@
     overscroll-behavior-y: none;
   }
 
+  /* Phone taps: no grey flash over tapped rows and buttons (each has its own pressed state),
+     and no wait for a possible double-tap zoom before the tap counts. */
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  :where(button, a, [role="button"], summary, label, input, select, textarea) {
+    touch-action: manipulation;
+  }
+
   /* One visible keyboard focus style for every custom control; components with their own ring win. */
   :where(button, a, [role="button"], summary):focus-visible {
     outline: 2px solid var(--color-ring);

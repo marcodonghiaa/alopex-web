@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { axisDateFormatter, formatISODate } from "@/lib/date";
 
@@ -8,6 +9,18 @@ interface ValueChartProps<T extends { ts: number; snapshot_date: string }> {
   // Dashed line drawn across gaps in the history, when the series carries one.
   estimateKey?: keyof T & string;
   onScrub: (index: number | null) => void;
+}
+
+/** Once a vertical swipe, always one: the finger went further up/down than sideways, past a few px. */
+export function isVerticalSwipe(
+  from: { x: number; y: number; scroll: boolean },
+  x: number,
+  y: number,
+) {
+  if (from.scroll) return true;
+  const dx = Math.abs(x - from.x);
+  const dy = Math.abs(y - from.y);
+  return dy > 6 && dy > dx;
 }
 
 /** Marks the latest value only: an Ember dot in a soft Ember halo. */
@@ -32,12 +45,29 @@ export function ValueChart<T extends { ts: number; snapshot_date: string }>({
   onScrub,
 }: ValueChartProps<T>) {
   const formatTick = axisDateFormatter(data.at(0)?.snapshot_date, data.at(-1)?.snapshot_date);
+  // A finger moving mostly up or down is scrolling the page past the chart, not scrubbing it.
+  const touch = useRef<{ x: number; y: number; scroll: boolean } | null>(null);
   return (
     // A lifted finger ends the scrub: recharts' touch end never calls onMouseLeave.
     <div
       className="h-full w-full"
-      onTouchEnd={() => onScrub(null)}
-      onTouchCancel={() => onScrub(null)}
+      onTouchStartCapture={(e) => {
+        const t = e.touches[0];
+        touch.current = t ? { x: t.clientX, y: t.clientY, scroll: false } : null;
+      }}
+      onTouchMoveCapture={(e) => {
+        const t = e.touches[0];
+        if (t && touch.current && isVerticalSwipe(touch.current, t.clientX, t.clientY))
+          touch.current.scroll = true;
+      }}
+      onTouchEnd={() => {
+        touch.current = null;
+        onScrub(null);
+      }}
+      onTouchCancel={() => {
+        touch.current = null;
+        onScrub(null);
+      }}
     >
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
@@ -45,7 +75,7 @@ export function ValueChart<T extends { ts: number; snapshot_date: string }>({
           margin={{ top: 8, right: 24, bottom: 0, left: 24 }}
           onMouseMove={(state) =>
             onScrub(
-              state?.isTooltipActive && state.activeTooltipIndex != null
+              !touch.current?.scroll && state?.isTooltipActive && state.activeTooltipIndex != null
                 ? state.activeTooltipIndex
                 : null,
             )
