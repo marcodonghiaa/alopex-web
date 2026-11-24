@@ -59,12 +59,8 @@ export const incomeTitle = (
 export function nameRefunds(rows: Array<TransactionRow>): Array<TransactionRow> {
   const byRef = new Map(rows.map((r) => [r.entry_reference, r]));
   return rows.map((r) => {
-    if (r.flow_type !== "refunded" || r.creditor_name || !r.refund_of) {
-      // Only the credit names a charge it reverses; the charge itself isn't a refund.
-      return r.flow_type === "refunded" && !r.creditor_name && r.refund_of
-        ? { ...r, creditor_name: "Refund" }
-        : r;
-    }
+    // Only the credit names a charge it reverses; the charge itself isn't a refund.
+    if (r.flow_type !== "refunded" || r.creditor_name || !r.refund_of) return r;
     const original = byRef.get(r.refund_of)?.creditor_name;
     return { ...r, creditor_name: original ? `Refund: ${cleanMerchantName(original)}` : "Refund" };
   });
