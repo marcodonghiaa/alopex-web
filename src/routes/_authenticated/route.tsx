@@ -41,7 +41,7 @@ export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async ({ location }) => {
     // Sign-in sends the user back here, so a bank redirect (#bank_code=…) survives an expired
-    // session. The hash stays in `next`: the browser never sends it to the server.
+    // session. The hash waits in sessionStorage, not in `next`, so it never reaches the server.
     const toAuth = () => redirect({ to: "/auth", search: backHereSearch(location) });
     // A reloaded demo tab needs the fake client (its own chunk) before anything asks for data.
     if (isDemoMode()) await loadDemoClient();

@@ -18,6 +18,7 @@ vi.mock("@/lib/demo/mode", async (importOriginal) => ({
 }));
 
 import { Route } from "./route";
+import { withSavedHash } from "@/lib/next-url";
 
 const beforeLoad = (
   location: { pathname: string; searchStr: string; hash?: string } = {
@@ -93,12 +94,14 @@ describe("authenticated layout guard", () => {
     });
   });
 
-  it("keeps the fragment too: the code travels there, never to the server", async () => {
+  // H316: the fragment waits in sessionStorage, so /auth's URL never carries the code.
+  it("keeps the fragment out of next, and gives it back after sign-in", async () => {
     getSession.mockResolvedValue({ data: { session: null }, error: null });
     const location = { pathname: "/accounts", searchStr: "", hash: "bank_code=x&bank_state=y" };
     await expect(beforeLoad(location)).rejects.toMatchObject({
-      options: { to: "/auth", search: { next: "/accounts#bank_code=x&bank_state=y" } },
+      options: { to: "/auth", search: { next: "/accounts" } },
     });
+    expect(withSavedHash("/accounts")).toBe("/accounts#bank_code=x&bank_state=y");
   });
 
   it("adds no next for the home page", async () => {

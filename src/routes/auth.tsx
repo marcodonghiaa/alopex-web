@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { exitDemoMode } from "@/lib/demo/mode";
 import { resetPasswordUrl } from "./reset-password";
 import { needsMfaCode, verifyMfaCode } from "@/lib/mfa";
-import { safeNext } from "@/lib/next-url";
+import { safeNext, withSavedHash } from "@/lib/next-url";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -50,7 +50,7 @@ function AuthPage() {
   const goNext = useCallback(
     (replace = true) => {
       if (next) {
-        window.location.replace(next);
+        window.location.replace(withSavedHash(next));
         return Promise.resolve();
       }
       return navigate({ to: "/", replace });
