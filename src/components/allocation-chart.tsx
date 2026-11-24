@@ -81,7 +81,8 @@ function Row({ to, children }: { to: RowTarget; children: ReactNode }) {
 
 // What net worth is made of: a donut of the mix with each class's share and value beside it,
 // for today or for `asOf` (the day being scrubbed on the chart above).
-// Shares are of what you hold; debts follow as a negative line, so the values add up to net worth.
+// Shares are of what you hold; debts (and a class below zero) follow as negative lines, so the
+// values add up to net worth.
 export function AllocationChart({
   history,
   snapshots,
@@ -102,7 +103,10 @@ export function AllocationChart({
   const before = !shown;
   const row = shown ?? rows[0];
   if (!row) return null;
-  const slices = CLASSES.map((c) => ({ ...c, value: row[c.key] ?? 0 })).filter((s) => s.value > 0);
+  const classes = CLASSES.map((c) => ({ ...c, value: row[c.key] ?? 0 }));
+  const slices = classes.filter((s) => s.value > 0);
+  // A class below zero (overdrawn cash) is a negative line like Debts, out of the donut and shares.
+  const below = classes.filter((s) => s.value < 0);
   const gross = slices.reduce((sum, s) => sum + s.value, 0);
   if (gross <= 0) return null;
   const debts = row.liabilities_eur ?? 0;
@@ -155,7 +159,7 @@ export function AllocationChart({
         </div>
 
         <ul className="w-full flex-1 divide-y divide-hairline">
-          {slices.map(({ key, label, color, icon: Icon, value, to }) => (
+          {[...slices, ...below].map(({ key, label, color, icon: Icon, value, to }) => (
             <Row key={key} to={to}>
               <span
                 aria-hidden
@@ -169,9 +173,11 @@ export function AllocationChart({
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-foreground">{label}</p>
-                <p className="font-figure text-xs text-muted-foreground">
-                  {formatPercent(value / gross)}
-                </p>
+                {value > 0 && (
+                  <p className="font-figure text-xs text-muted-foreground">
+                    {formatPercent(value / gross)}
+                  </p>
+                )}
               </div>
               <p className="font-figure text-sm text-foreground">{format(value)}</p>
             </Row>
