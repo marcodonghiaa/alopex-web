@@ -86,3 +86,49 @@ describe("service worker notification click", () => {
     expect(opened).toBeUndefined();
   });
 });
+
+// H352: a push that isn't JSON threw before waitUntil, so no notification was shown.
+describe("service worker push", () => {
+  function pushed(data: { json: () => unknown; text: () => string } | null) {
+    const handlers: Record<string, (event: unknown) => void> = {};
+    const showNotification = vi.fn();
+    const fakeSelf = {
+      location: { origin: ORIGIN },
+      registration: { showNotification },
+      addEventListener: (type: string, fn: (event: unknown) => void) => {
+        handlers[type] = fn;
+      },
+    };
+    new Function("self", source)(fakeSelf);
+    handlers["push"]!({ data, waitUntil: vi.fn() });
+    return showNotification.mock.calls[0] as [string, { body: string; data: { url: string } }];
+  }
+
+  it("shows a JSON payload's title, text and page", () => {
+    const [title, options] = pushed({
+      json: () => ({ title: "Big spend", body: "€500 at Shop", url: "/transactions" }),
+      text: () => "",
+    });
+    expect(title).toBe("Big spend");
+    expect(options.body).toBe("€500 at Shop");
+    expect(options.data.url).toBe("/transactions");
+  });
+
+  it("shows a plain-text payload as the notification's text", () => {
+    const [title, options] = pushed({
+      json: () => {
+        throw new SyntaxError("Unexpected token");
+      },
+      text: () => "Sync finished",
+    });
+    expect(title).toBe("Alopex");
+    expect(options.body).toBe("Sync finished");
+    expect(options.data.url).toBe("/");
+  });
+
+  it("shows the app name for an empty push", () => {
+    const [title, options] = pushed(null);
+    expect(title).toBe("Alopex");
+    expect(options.body).toBe("");
+  });
+});
