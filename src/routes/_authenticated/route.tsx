@@ -368,7 +368,10 @@ function AuthenticatedLayout() {
 
       {/* Mobile top bar: padded for the notch (safe-area-inset-top is 0 in a normal tab).
           Page titles are large titles inside each page; this bar only names the app. */}
-      <div className="glass fixed inset-x-0 top-0 z-30 flex h-[calc(2.75rem+env(safe-area-inset-top))] items-center justify-center border-b pt-[env(safe-area-inset-top)] md:hidden">
+      <div
+        data-phone-bar="top"
+        className="glass fixed inset-x-0 top-0 z-30 flex h-[calc(2.75rem+env(safe-area-inset-top))] items-center justify-center border-b pt-[env(safe-area-inset-top)] md:hidden"
+      >
         <BrandMark className="mr-2 size-5" />
         <span className="font-sans text-[0.9375rem] font-semibold text-foreground">Alopex</span>
         <DemoBadge className="absolute left-3 top-[calc(0.5625rem+env(safe-area-inset-top))]" />
@@ -377,6 +380,7 @@ function AuthenticatedLayout() {
       {/* Mobile bottom tab bar: max 5 items, icon + label, current tab marked by an Ember top rule. */}
       <nav
         aria-label="Primary"
+        data-phone-bar="bottom"
         className="glass fixed inset-x-0 bottom-0 z-30 grid h-[calc(3.25rem+env(safe-area-inset-bottom))] grid-cols-5 border-t pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         {TAB_BAR_ITEMS.map((item) => {

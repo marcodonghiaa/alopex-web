@@ -512,7 +512,7 @@ function AccountsPage() {
                       href="https://enablebanking.com/cp/applications"
                       target="_blank"
                       rel="noreferrer"
-                      className="font-medium text-primary hover:underline"
+                      className="inline-flex min-h-11 items-center gap-1 font-medium text-primary hover:underline"
                     >
                       Approve in Enable Banking <span aria-hidden="true">↗</span>
                       <span className="sr-only">(opens in new tab)</span>
