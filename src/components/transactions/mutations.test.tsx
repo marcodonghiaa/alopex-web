@@ -84,6 +84,7 @@ import {
   useIncomeCategoryMutation,
   useManualAmountMutation,
   restorePatch,
+  categoryPatch,
   useRenameMerchantMutation,
   useResolvePairMutation,
   useReviewGroupMutation,
@@ -577,6 +578,7 @@ describe("transaction mutations are scoped to one account", () => {
     );
     expect(calls[0]?.update).toEqual({
       category: "Transfer",
+      category_source: "manual",
       flow_type: "transfer",
       flow_source: "user",
     });
@@ -596,7 +598,7 @@ describe("transaction mutations are scoped to one account", () => {
         value: "Health",
       }),
     );
-    expect(calls[0]?.update).toEqual({ category: "Health" });
+    expect(calls[0]?.update).toEqual({ category: "Health", category_source: "manual" });
     await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ["transfer-review"] }));
   });
 
@@ -630,6 +632,7 @@ describe("transaction mutations are scoped to one account", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(calls[0]?.update).toEqual({
       category: "Transfer",
+      category_source: "manual",
       flow_type: "transfer",
       flow_source: "user",
     });
@@ -648,6 +651,7 @@ describe("transaction mutations are scoped to one account", () => {
     );
     expect(calls[0]?.update).toEqual({
       category: "Transfer",
+      category_source: "manual",
       flow_type: "transfer",
       flow_source: "user",
     });
@@ -666,7 +670,7 @@ describe("transaction mutations are scoped to one account", () => {
         category: "Income",
       }),
     );
-    expect(calls[0]?.update).toEqual({ category: "Income" });
+    expect(calls[0]?.update).toEqual({ category: "Income", category_source: "manual" });
   });
 
   it("a manual row's new amount is written to that row only and the totals refetch", async () => {
@@ -861,6 +865,26 @@ describe("Moving a transfer back to spend or income", () => {
 
 // Regression: counting a transfer again left its "Transfer" label on a row that now counted as
 // spend, and picking Transfer again did nothing (same category).
+// H371: picking the category the AI set must claim it, or a rule or Apply to past still changes it.
+describe("categoryPatch", () => {
+  it("marks a picked category as yours", () => {
+    expect(categoryPatch("Groceries")).toEqual({
+      category: "Groceries",
+      category_source: "manual",
+    });
+    expect(categoryPatch("Transfer")).toEqual({
+      category: "Transfer",
+      category_source: "manual",
+      flow_type: "transfer",
+      flow_source: "user",
+    });
+  });
+
+  it("leaves the source alone when the category is cleared", () => {
+    expect(categoryPatch(null)).toEqual({ category: null });
+  });
+});
+
 describe("restorePatch", () => {
   it("clears the Transfer label so the next sync categorizes the row", () => {
     expect(restorePatch({ credit_debit_indicator: "DBIT", category: "Transfer" })).toEqual({

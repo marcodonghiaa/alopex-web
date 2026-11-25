@@ -139,8 +139,9 @@ function withMark(body: string, decimal: DecimalMark): number | null {
   if (parts.length > 2) return null;
   const thousands = decimal === "," ? "." : ",";
   const raw = parts[0] ?? "";
-  // "3.99" in a decimal-comma file is not 399: thousands marks must split groups of three.
-  if (raw.includes(thousands) && !new RegExp(`^\\d{1,3}(\\${thousands}\\d{3})+$`).test(raw)) {
+  // "3.99" in a decimal-comma file is not 399: thousands marks must split groups of three,
+  // and a first group never starts with 0 ("0,125" is not 125).
+  if (raw.includes(thousands) && !new RegExp(`^[1-9]\\d{0,2}(\\${thousands}\\d{3})+$`).test(raw)) {
     return null;
   }
   const whole = raw.split(thousands).join("");

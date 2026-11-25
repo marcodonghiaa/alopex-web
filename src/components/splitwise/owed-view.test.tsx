@@ -70,4 +70,18 @@ describe("OwedView", () => {
     await userEvent.click(screen.getByRole("button", { name: "Settle all 2 with Luca M" }));
     expect(onAll).toHaveBeenCalledWith("Luca M", [a, b]);
   });
+
+  // protects=bill day as booked; fails_when=a date-only day is read as UTC midnight
+  it("shows a bill's own day west of UTC, not the day before", () => {
+    const tz = process.env["TZ"];
+    process.env["TZ"] = "America/New_York";
+    try {
+      view([row({ booking_date: "2026-11-01" })]);
+      expect(screen.getByRole("button", { name: /Settle: .*1 Nov/ })).toBeTruthy();
+      expect(screen.queryByText(/31 Oct/)).toBeNull();
+    } finally {
+      if (tz === undefined) delete process.env["TZ"];
+      else process.env["TZ"] = tz;
+    }
+  });
 });

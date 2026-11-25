@@ -12,8 +12,10 @@ const tables: {
   fx_rates: Answer;
   splitwise_expenses: Answer;
   category_rules: Answer;
+  user_categories: Answer;
 } = {
   category_rules: { data: [], error: null },
+  user_categories: { data: [], error: null },
   transactions: { data: [], error: null },
   fx_rates: { data: [], error: null },
   splitwise_expenses: { data: [], error: null },
@@ -22,6 +24,7 @@ const tables: {
 // Every query method returns the same chain; awaiting it gives the table's canned answer.
 const rpc = vi.fn();
 const insertRule = vi.fn();
+const orders: Array<string> = [];
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
@@ -30,8 +33,11 @@ vi.mock("@/integrations/supabase/client", () => ({
     from: (table: string) => {
       const chain: { [method: string]: unknown } = {};
       let slice: [number, number] | null = null;
-      for (const m of ["select", "gte", "lte", "in", "is", "limit", "eq", "order"])
-        chain[m] = () => chain;
+      for (const m of ["select", "gte", "lte", "in", "is", "limit", "eq"]) chain[m] = () => chain;
+      chain["order"] = (column: string) => {
+        orders.push(`${table}.${column}`);
+        return chain;
+      };
       chain["range"] = (a: number, b: number) => {
         slice = [a, b + 1];
         return chain;
@@ -107,6 +113,7 @@ beforeEach(() => {
   };
   tables.splitwise_expenses = { data: [], error: null };
   tables.category_rules = { data: [], error: null };
+  tables.user_categories = { data: [], error: null };
   insertRule.mockReset();
   onImported.mockReset();
   loadRates.mockReset();
@@ -162,6 +169,40 @@ describe("SplitwiseReview", () => {
     expect(screen.getByText(/Skipped: not counted/)).toBeInTheDocument();
     expect(screen.getByText(/Your share US\$15.00/)).toBeInTheDocument();
     expect(((await importButton()) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  // protects=the headline agrees with the list; fails_when=it says "0 expenses" and an empty
+  // "Your share" while an expense waits for a decision
+  it("counts an expense waiting for a decision in the headline", async () => {
+    tables.transactions = { data: [], error: null };
+    const taxiOnly = classifyRows(
+      parseSplitwiseCsv(
+        [
+          "Date,Description,Category,Cost,Currency,Ann,Bob",
+          "2026-08-17,Taxi,Taxi,20.00,USD,10.00,-10.00",
+        ].join("\n"),
+      ),
+      0,
+    );
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <SplitwiseReview rows={taxiOnly} group="berkeley" onBack={onBack} onImported={onImported} />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByRole("heading", { name: "1 expense" })).toBeInTheDocument();
+    expect(screen.queryByText(/Your share/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Decide on 1 expense to continue" })).toBeTruthy();
+  });
+
+  // H372: two rules with the same priority must apply in the Rules page's order, oldest first.
+  it("applies rules in the Rules page's order", async () => {
+    orders.length = 0;
+    show();
+    await importButton();
+    expect(orders.filter((o) => o.startsWith("category_rules."))).toEqual([
+      "category_rules.priority",
+      "category_rules.created_at",
+    ]);
   });
 
   // protects=nothing is blocked silently; fails_when=a missing exchange rate is not shown
@@ -297,6 +338,26 @@ describe("SplitwiseReview", () => {
     expect(((await screen.findByLabelText("Category for Dinner")) as HTMLSelectElement).value).toBe(
       "Housing",
     );
+  });
+
+  // Regression: a rule setting one of your own categories was ignored, and the picker offered
+  // only the built-in ones.
+  it("applies a rule that sets one of your own categories, and sends it on Import", async () => {
+    tables.category_rules = {
+      data: [{ match_text: "dinner", set_category: "Date night", priority: 100 }],
+      error: null,
+    };
+    tables.user_categories = { data: [{ name: "Date night", hidden: false }], error: null };
+    show();
+    const select = (await screen.findByLabelText("Category for Dinner")) as HTMLSelectElement;
+    await waitFor(() => expect(select.value).toBe("Date night"));
+    expect([...select.options].map((o) => o.value)).toContain("Date night");
+    await clickImport();
+    await waitFor(() => expect(rpc).toHaveBeenCalledTimes(1));
+    const shares = (
+      rpc.mock.calls[0]?.[1] as { p_shares: Array<{ description: string; category: string }> }
+    ).p_shares;
+    expect(shares.find((s) => s.description === "Dinner")?.category).toBe("Date night");
   });
 
   it("lets a category be changed and sends the chosen one on Import", async () => {

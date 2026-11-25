@@ -11,18 +11,23 @@ async function fetchBalances(): Promise<Array<BalanceRow>> {
   return (data ?? []) as Array<BalanceRow>;
 }
 
-// Latest rate per currency; fx_rates holds a row per day, newest first here.
+// Latest rate per currency, read one currency at a time: in one newest-first window a currency
+// whose rates stopped updating would fall behind the others' newer rows and get no rate.
 async function fetchLatestRates(currencies: Array<string>): Promise<Record<string, number>> {
-  if (currencies.length === 0) return {};
-  const { data, error } = await supabase
-    .from("fx_rates")
-    .select("currency,rate_to_eur,date")
-    .in("currency", currencies)
-    .order("date", { ascending: false })
-    .limit(500);
-  if (error) throw error;
   const latest: Record<string, number> = {};
-  for (const r of data ?? []) if (!(r.currency in latest)) latest[r.currency] = r.rate_to_eur;
+  await Promise.all(
+    currencies.map(async (currency) => {
+      const { data, error } = await supabase
+        .from("fx_rates")
+        .select("rate_to_eur")
+        .eq("currency", currency)
+        .order("date", { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      const row = data?.[0];
+      if (row) latest[currency] = row.rate_to_eur;
+    }),
+  );
   return latest;
 }
 

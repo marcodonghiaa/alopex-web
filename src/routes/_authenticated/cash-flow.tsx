@@ -56,9 +56,11 @@ export const Route = createFileRoute("/_authenticated/cash-flow")({
     ],
   }),
   // ?month=YYYY-MM: the month to open on (Reports links here with the month it shows).
-  validateSearch: (s: Record<string, unknown>): { month?: string } => {
+  // ?period=quarter|year: the period shown (month when left out).
+  validateSearch: (s: Record<string, unknown>): { month?: string; period?: Period } => {
     const { month } = parseTransactionsSearch(s);
-    return month ? { month } : {};
+    const period = s["period"] === "quarter" || s["period"] === "year" ? s["period"] : undefined;
+    return { ...(month ? { month } : {}), ...(period ? { period } : {}) };
   },
   component: CashFlowPage,
 });
@@ -112,9 +114,30 @@ async function fetchIncomeRows(from: string, to: string): Promise<Array<IncomeTx
 }
 
 function CashFlowPage() {
-  const [period, setPeriod] = useState<Period>("month");
   const search = Route.useSearch();
-  const [start, setStart] = useState<Date>(() => monthFromParam(search.month));
+  const navigate = Route.useNavigate();
+  // The period and month live in the URL, so reload, Back and a link keep them.
+  const urlPeriod = search.period ?? "month";
+  const urlStart = periodStart(monthFromParam(search.month), urlPeriod);
+  const urlKey = `${urlPeriod} ${monthParam(urlStart)}`;
+  const [view, setView] = useState({ period: urlPeriod, start: urlStart });
+  // Back, Forward or the sidebar link changed the URL: follow it.
+  const [seen, setSeen] = useState(urlKey);
+  if (seen !== urlKey) {
+    setSeen(urlKey);
+    setView({ period: urlPeriod, start: urlStart });
+  }
+  const { period, start } = view;
+  const show = (nextStart: Date, nextPeriod: Period = period) => {
+    setView({ period: nextPeriod, start: nextStart });
+    void navigate({
+      search: {
+        month: monthParam(nextStart),
+        ...(nextPeriod === "month" ? {} : { period: nextPeriod }),
+      },
+    });
+  };
+  const setStart = (next: Date) => show(next);
   const locale = dateLocale();
 
   const { from, to } = periodRange(start, period);
@@ -181,8 +204,7 @@ function CashFlowPage() {
   const flowPending = pending || spendQuery.isPending || incomeQuery.isPending;
 
   function changePeriod(next: Period) {
-    setPeriod(next);
-    setStart(switchPeriod(start, period, next, new Date()));
+    show(switchPeriod(start, period, next, new Date()), next);
   }
 
   return (

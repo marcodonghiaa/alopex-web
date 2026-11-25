@@ -8,6 +8,8 @@ export const MAX_CHARS = 2_000_000;
 export interface ParsedCsv {
   headers: Array<string>;
   rows: Array<Array<string>>;
+  /** Each row's line in the file (1-based), counting the blank lines that were dropped. */
+  lines: Array<number>;
 }
 
 /** Reads CSV text in the browser. Throws an Error with a plain-language message on a bad file. */
@@ -18,17 +20,30 @@ export function parseCsv(text: string): ParsedCsv {
   const clean = text.replace(/^\uFEFF/, "");
   if (clean.trim() === "") throw new Error("The file is empty.");
 
-  const result = Papa.parse<Array<string>>(clean, {
+  // Guess the delimiter with blank lines skipped (they would read as one-column rows), then
+  // read every line with it.
+  const { delimiter } = Papa.parse<Array<string>>(clean, {
     delimitersToGuess: [",", ";", "\t", "|"],
     skipEmptyLines: "greedy",
-  });
+    preview: 50,
+  }).meta;
+  const result = Papa.parse<Array<string>>(clean, { delimiter });
 
   const brokenQuote = result.errors.find((e) => e.type === "Quotes");
   if (brokenQuote) {
     throw new Error(`The file has a broken quote near line ${(brokenQuote.row ?? 0) + 1}.`);
   }
 
-  const [headerRow, ...body] = result.data;
+  // Blank lines are dropped here, not by the parser, so each row keeps its line in the file
+  // (a quoted cell spanning lines counts each of them).
+  const kept: Array<{ row: Array<string>; line: number }> = [];
+  let line = 1;
+  for (const row of result.data) {
+    if (row.some((c) => c.trim() !== "")) kept.push({ row, line });
+    line += 1 + row.reduce((n, c) => n + (c.match(/\n/g)?.length ?? 0), 0);
+  }
+  const [header, ...body] = kept;
+  const headerRow = header?.row;
   if (!headerRow || body.length === 0) throw new Error("The file has no data rows, only a header.");
   if (body.length > MAX_ROWS) {
     throw new Error(`The file has too many rows (limit is ${MAX_ROWS}).`);
@@ -36,7 +51,8 @@ export function parseCsv(text: string): ParsedCsv {
 
   return {
     headers: headerRow.map((h) => h.trim()),
-    rows: body.map((row) => row.map((cell) => cell.trim())),
+    rows: body.map(({ row }) => row.map((cell) => cell.trim())),
+    lines: body.map((r) => r.line),
   };
 }
 

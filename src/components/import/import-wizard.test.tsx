@@ -15,6 +15,7 @@ import { ImportWizard, SAMPLE_CSV } from "./import-wizard";
 import { guessColumns } from "@/lib/import/guess-columns";
 import { parseCsv } from "@/lib/import/parse-csv";
 import { planNetWorth, planSpend } from "@/lib/import/plan";
+import { queryWrapper } from "@/test/query-wrapper";
 
 beforeEach(() => localStorage.clear());
 
@@ -132,6 +133,28 @@ describe("ImportWizard", () => {
     expect(upsert.mock.calls[0]?.[0]).toEqual([
       expect.objectContaining({ category: "Services", spend_eur: 9.99 }),
     ]);
+  });
+
+  // H374: the picker offered the built-in list, so your own categories could not be picked and
+  // hidden ones still could.
+  it("offers your own categories and leaves out the ones you hid", async () => {
+    upsert.mockClear();
+    render(<ImportWizard />, {
+      wrapper: queryWrapper([
+        { name: "Gym", hidden: false },
+        { name: "Services", hidden: true },
+      ]),
+    });
+    fireEvent.click(screen.getByRole("radio", { name: "Spending by month" }));
+    upload("Month,Category,Amount\n2024-02,Subscriptions,9.99\n");
+    const pick = (await screen.findByLabelText("Subscriptions")) as HTMLSelectElement;
+    const options = [...pick.options].map((o) => o.value);
+    expect(options).toContain("Gym");
+    expect(options).not.toContain("Services");
+    fireEvent.change(pick, { target: { value: "Gym" } });
+    fireEvent.click(await screen.findByRole("button", { name: /Import 1 row\b/ }));
+    await waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
+    expect(upsert.mock.calls[0]?.[0]).toEqual([expect.objectContaining({ category: "Gym" })]);
   });
 
   it("asks for the required column when none was guessed", async () => {

@@ -11,7 +11,17 @@ describe("parseCsv", () => {
         ["2024-03", "100"],
         ["2024-04", "200"],
       ],
+      lines: [2, 3],
     });
+  });
+
+  it("gives each row its line in the file, counting blank lines it skips", () => {
+    const parsed = parseCsv("\nmonth,total\n2024-03,1\n\n , \n2024-04,2\n");
+    expect(parsed.rows).toEqual([
+      ["2024-03", "1"],
+      ["2024-04", "2"],
+    ]);
+    expect(parsed.lines).toEqual([3, 6]);
   });
 
   it("reads a semicolon separated file (Excel in Italian)", () => {

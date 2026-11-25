@@ -52,9 +52,12 @@ const saveFailed = (title: string, error: unknown) => {
 
 export const TRANSFER_CATEGORY = "Transfer";
 export function categoryPatch(category: string | null): TablesUpdate<"transactions"> {
+  // A pick is yours, the same category too: the server marks it only when the category changes,
+  // and that is how you claim a category the AI set (rules and Apply to past then leave it).
+  const picked = category === null ? { category } : { category, category_source: "manual" };
   return category === TRANSFER_CATEGORY
-    ? { category, flow_type: "transfer", flow_source: "user" }
-    : { category };
+    ? { ...picked, flow_type: "transfer", flow_source: "user" }
+    : picked;
 }
 
 // Lists and totals a move into or out of the transfers changes.

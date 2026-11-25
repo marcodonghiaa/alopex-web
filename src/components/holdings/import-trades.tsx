@@ -42,7 +42,9 @@ import {
   parseTradesCsv,
   shareUpdates,
   summarizeImport,
+  type CsvResult,
 } from "@/lib/trades-csv";
+import { readCsvFile } from "@/lib/import/parse-csv";
 import { newEvents } from "@/lib/investment-events";
 import { fetchEvents } from "@/lib/use-performance";
 import { formatIncome, incomeAndCosts, incomeRows } from "@/components/holdings/investment-income";
@@ -159,6 +161,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   const [fileName, setFileName] = useState<string | null>(null);
   // A chosen file's text is on its way: until then the card says Reading….
   const [reading, setReading] = useState(false);
+  // Why the chosen file couldn't be read (too large, or the browser failed to read it).
+  const [readError, setReadError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   // Where the file comes from: a broker's id, "spreadsheet" for your own columns, or "other".
   const [from, setFrom] = useState<string | null>(null);
@@ -206,9 +210,13 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   // Prices in dollars (a Ledger file): load that currency's daily rates, then read it again.
   const firstPass = useMemo(
     // A chosen file that turns out blank is read too: the parser says it's empty.
-    () =>
-      (text.trim() || (fileName && !reading)) && ctx ? parseTradesCsv(text, ctx, broker) : null,
-    [text, ctx, broker, fileName, reading],
+    (): CsvResult | null =>
+      readError
+        ? { trades: [], errors: [readError], notes: [] }
+        : (text.trim() || (fileName && !reading)) && ctx
+          ? parseTradesCsv(text, ctx, broker)
+          : null,
+    [text, ctx, broker, fileName, reading, readError],
   );
   const need = firstPass?.needsRates;
   const rates = useQuery({
@@ -527,6 +535,7 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   function reset() {
     readId.current++;
     setText("");
+    setReadError(null);
     setFileName(null);
     setReading(false);
     setFrom(null);
@@ -538,11 +547,21 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     setFileName(file.name);
     setReading(true);
     const id = ++readId.current;
-    void file.text().then((t) => {
-      if (id !== readId.current) return;
-      setText(t);
-      setReading(false);
-    });
+    setReadError(null);
+    // readCsvFile refuses a file too large to be an export before reading it.
+    readCsvFile(file).then(
+      (t) => {
+        if (id !== readId.current) return;
+        setText(t);
+        setReading(false);
+      },
+      (e: unknown) => {
+        if (id !== readId.current) return;
+        setText("");
+        setReadError(e instanceof Error ? e.message : "The file could not be read.");
+        setReading(false);
+      },
+    );
   }
 
   const correctedId = useId();

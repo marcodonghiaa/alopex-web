@@ -44,6 +44,7 @@ vi.mock("recharts", async (orig) => ({
 import { Route } from "./cash-flow";
 const Page = Route.options.component as () => React.JSX.Element;
 vi.spyOn(Route, "useSearch").mockImplementation((() => ({})) as never);
+vi.spyOn(Route, "useNavigate").mockImplementation((() => vi.fn()) as never);
 
 const row = (l: string) => screen.getByText(l).closest("li") as HTMLElement;
 const monthly = [

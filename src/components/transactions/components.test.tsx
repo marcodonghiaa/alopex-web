@@ -60,7 +60,7 @@ describe("WorthItSpotlight", () => {
 });
 
 describe("pickers", () => {
-  it("CategoryPicker reports a new category and ignores the current one", async () => {
+  it("CategoryPicker reports a new category and the current one too (to claim it)", async () => {
     const onSelect = vi.fn();
     render(<CategoryPicker tx={tx()} onSelect={onSelect} saving={false} />);
 
@@ -70,7 +70,8 @@ describe("pickers", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /Change category for Amazon/ }));
     await userEvent.click(await screen.findByRole("button", { name: "Shopping" }));
-    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledTimes(2);
+    expect(onSelect).toHaveBeenLastCalledWith("Shopping");
   });
 
   // polish-4 #3b: locked with aria-disabled (it keeps focus), not native disabled: a click opens

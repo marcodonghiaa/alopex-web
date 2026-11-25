@@ -64,7 +64,9 @@ async function load(rows: Array<ClassifiedRow>, group: string): Promise<Loaded> 
     supabase
       .from("category_rules")
       .select("match_text, match_mode, set_category, priority")
-      .order("priority", { ascending: true }),
+      // The Rules page's order: on a tie the older rule wins.
+      .order("priority", { ascending: true })
+      .order("created_at", { ascending: true }),
   ]);
 
   const failed = stored.error ?? rules.error;
@@ -451,12 +453,20 @@ export function SplitwiseReview({
                 : `Into ${group.trim()}`}
             </p>
             <h2 className="mt-0.5 font-figure text-[2.75rem] leading-none font-semibold tracking-tight">
-              {expenses(plan.shares.length)}
+              {/* An expense still waiting for a decision is one of them, like in the list below. */}
+              {expenses(plan.shares.length + undecided)}
             </h2>
-            <p className="mt-2 text-[0.9375rem] text-muted-foreground">
-              Your share {total}
-              {split.checkpoint ? " · already-imported ones stay as they are" : ""}
-            </p>
+            {(total || split.checkpoint) && (
+              <p className="mt-2 text-[0.9375rem] text-muted-foreground">
+                {[
+                  total && `Your share ${total}`,
+                  split.checkpoint &&
+                    (total ? "already" : "Already") + "-imported ones stay as they are",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            )}
           </>
         )}
       </div>
