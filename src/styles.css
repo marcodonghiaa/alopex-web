@@ -6,6 +6,19 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Touch has no hover, so on a phone a tap showed nothing until the finger lifted. Every hover
+   look doubles as the pressed look: the row or button answers the moment a finger lands. */
+@custom-variant hover {
+  @media (hover: hover) {
+    &:hover {
+      @slot;
+    }
+  }
+  &:active {
+    @slot;
+  }
+}
+
 /*
  * Alopex design system.
  * "Arctic Ledger": words and figures in Geist (figures with even-width digits); codes in Fragment Mono.
@@ -217,6 +230,15 @@
   }
   :where(button, a, [role="button"], summary, label, input, select, textarea) {
     touch-action: manipulation;
+  }
+
+  /* Holding a finger on a button, tab or link selected its label or popped the iOS link callout;
+     native controls never do. Content text stays selectable. Labels are left out: Safari can
+     refuse typing in an input whose ancestor is unselectable. */
+  :where(button, a, [role="button"], [role="tab"], summary) {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
 
   /* One visible keyboard focus style for every custom control; components with their own ring win. */
