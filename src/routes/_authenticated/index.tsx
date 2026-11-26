@@ -83,6 +83,11 @@ function NetWorthPage() {
     staleTime: 5 * 60_000,
   });
 
+  // Everything on this page waits for all three sources, so no figure shows from one source and
+  // then changes when the next lands (the breakdown used to show older months, then jump).
+  const settled =
+    !netWorthQuery.isPending && !historyQuery.isPending && !reconstructedQuery.isPending;
+
   const snapshots = useMemo(() => netWorthQuery.data ?? [], [netWorthQuery.data]);
   const chartData = useMemo(() => inRange(chartPoints(allRows), range), [allRows, range]);
   const chartFirst = chartData.at(0);
@@ -150,7 +155,7 @@ function NetWorthPage() {
       {/* Headline: the number is the screen */}
       <section aria-label="Net worth today" className="mb-6">
         <div className="min-h-12">
-          {netWorthQuery.isPending || (currency !== "EUR" && fxQuery.isPending) ? (
+          {!settled || (currency !== "EUR" && fxQuery.isPending) ? (
             <Skeleton className="h-12 w-72" />
           ) : latest == null ? (
             <p className="text-sm text-muted-foreground">
@@ -212,7 +217,7 @@ function NetWorthPage() {
               : "Net worth over time"
           }
         >
-          {netWorthQuery.isPending ? (
+          {!settled ? (
             <Skeleton className="h-full w-full" />
           ) : chartData.length === 0 ? (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -267,15 +272,19 @@ function NetWorthPage() {
         </div>
       </section>
 
-      <AllocationChart
-        history={historyQuery.data ?? []}
-        snapshots={snapshots}
-        reconstructed={reconstructedQuery.data ?? []}
-        asOf={scrubbed?.snapshot_date}
-        format={(eur) =>
-          rateToEur != null ? formatMoney(eur / rateToEur, currency) : formatMoney(eur, "EUR")
-        }
-      />
+      {!settled ? (
+        <Skeleton aria-label="Loading breakdown" className="h-72 w-full rounded-lg" />
+      ) : (
+        <AllocationChart
+          history={historyQuery.data ?? []}
+          snapshots={snapshots}
+          reconstructed={reconstructedQuery.data ?? []}
+          asOf={scrubbed?.snapshot_date}
+          format={(eur) =>
+            rateToEur != null ? formatMoney(eur / rateToEur, currency) : formatMoney(eur, "EUR")
+          }
+        />
+      )}
     </div>
   );
 }

@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 let failTable: string | null = null;
+// Reads of this table never answer: the next month still on its way.
+let hangTable: string | null = null;
 // Rows the mocked views return (empty unless a test sets them).
 const rows: Record<string, Array<Record<string, unknown>>> = {};
 let tableData: Record<string, unknown> = {};
@@ -63,6 +65,7 @@ vi.mock("@/integrations/supabase/client", () => ({
         return q;
       };
       q["then"] = (resolve: (v: unknown) => void) => {
+        if (table === hangTable) return;
         const data = table in tableData ? tableData[table] : (rows[table] ?? []);
         return resolve(
           table === failTable
@@ -1312,5 +1315,35 @@ describe("Type save and subscriptions", () => {
       await advance(10_000);
       expect(invoke).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+// Native feel batch 5: switching month used to drop the list to skeletons, then fill it.
+// fails_when=the list empties or stays tappable while the next month loads
+describe("Month switch while the next month loads", () => {
+  it("keeps this month's rows on screen, dimmed and not tappable", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    rows["v_transactions_eur"] = [
+      {
+        account_uid: "a",
+        booking_date: today,
+        category: "Travel",
+        currency: "EUR",
+        amount: 10,
+        signed_amount_eur: -10,
+        credit_debit_indicator: "DBIT",
+        flow_type: "spend",
+        entry_reference: "1",
+        creditor_name: "Hotel Alpha",
+      },
+    ];
+    renderPage();
+    const row = (await screen.findAllByText("Hotel Alpha"))[0]!;
+    expect(row.closest("[aria-busy]")).toBeNull();
+    hangTable = "v_transactions_eur";
+    await userEvent.click(screen.getAllByRole("button", { name: "Previous month" })[0]!);
+    const stale = (await screen.findAllByText("Hotel Alpha"))[0]!.closest("[aria-busy]");
+    hangTable = null;
+    expect(stale).toHaveClass("opacity-50", "pointer-events-none");
   });
 });
