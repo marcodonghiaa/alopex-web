@@ -509,33 +509,6 @@ export type Database = {
         };
         Relationships: [];
       };
-      price_history: {
-        Row: {
-          currency: string;
-          fetched_at: string;
-          price: number;
-          price_date: string;
-          provider: string;
-          symbol: string;
-        };
-        Insert: {
-          currency: string;
-          fetched_at?: string;
-          price: number;
-          price_date: string;
-          provider: string;
-          symbol: string;
-        };
-        Update: {
-          currency?: string;
-          fetched_at?: string;
-          price?: number;
-          price_date?: string;
-          provider?: string;
-          symbol?: string;
-        };
-        Relationships: [];
-      };
       portfolio_holdings: {
         Row: {
           asset_type: string | null;
