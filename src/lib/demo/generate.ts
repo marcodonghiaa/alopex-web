@@ -621,7 +621,6 @@ export function generateDemoData(now: Date = new Date()): DemoDb {
     investment_events,
     portfolio_holdings,
     portfolio_snapshots,
-    price_history: [],
     push_subscriptions: [],
     recurring_streams: [],
     net_worth_reconstructed,
