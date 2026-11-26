@@ -33,6 +33,7 @@ export function CategoryPicker({
         <button
           type="button"
           aria-label={`Change category for ${cleanMerchantName(tx.creditor_name) ?? "transaction"}`}
+          data-quick="category"
           aria-disabled={saving || undefined}
           aria-busy={saving || undefined}
           className="-m-2 inline-flex min-h-11 cursor-pointer items-center p-2 aria-disabled:cursor-default aria-disabled:opacity-60"

@@ -287,6 +287,19 @@ describe("phone tabs and More", () => {
     expect(labels).toEqual(["Net Worth", "Activity", "Spending", "Investing", "More"]);
   });
 
+  // Marco (native feel): the tab bar floats as a pill above the home indicator, and the current
+  // tab sits in a soft fill. fails_when=the bar is full width again or the page ends under it
+  it("floats as a pill clear of the screen edges, with room left under the page", () => {
+    rows.current = [];
+    path.current = "/";
+    renderLayout();
+    expect(tabBar()).toHaveClass("rounded-full", "inset-x-3.5");
+    expect(tabBar().className).toContain("bottom-[calc(0.625rem+env(safe-area-inset-bottom))]");
+    expect(document.querySelector("main")?.className).toContain(
+      "pb-[calc(5.25rem+env(safe-area-inset-bottom))]",
+    );
+  });
+
   it("lights Investing on both Portfolio and Crypto", () => {
     rows.current = [];
     for (const p of ["/portfolio", "/crypto"]) {

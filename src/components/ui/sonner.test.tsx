@@ -20,7 +20,7 @@ describe("Toaster", () => {
     act(() => void toast("Marked as regular"));
     await screen.findByText("Marked as regular");
     const list = document.querySelector("[data-sonner-toaster]") as HTMLElement;
-    expect(list.style.getPropertyValue("--offset-bottom")).toContain("3.25rem");
+    expect(list.style.getPropertyValue("--offset-bottom")).toContain("5.125rem");
   });
 
   it("uses the default bottom offset on desktop", async () => {
@@ -28,7 +28,7 @@ describe("Toaster", () => {
     act(() => void toast("Saved"));
     await screen.findByText("Saved");
     const list = document.querySelector("[data-sonner-toaster]") as HTMLElement;
-    expect(list.style.getPropertyValue("--offset-bottom")).not.toContain("3.25rem");
+    expect(list.style.getPropertyValue("--offset-bottom")).not.toContain("5.125rem");
   });
 
   // Polish pass 4 #3: the toast's button ("Make a rule") was 24px tall, too small to tap.
@@ -63,7 +63,7 @@ describe("Toaster", () => {
     const list = document.querySelector("[data-sonner-toaster]") as HTMLElement;
     expect(list).toHaveAttribute("data-y-position", "bottom");
     expect(list).toHaveAttribute("data-x-position", "center");
-    expect(list.style.getPropertyValue("--mobile-offset-bottom")).toContain("3.25rem");
+    expect(list.style.getPropertyValue("--mobile-offset-bottom")).toContain("5.125rem");
   });
 
   // polish-1 #3: on a phone the edit sheet fills the bottom of the screen; a bottom toast covered

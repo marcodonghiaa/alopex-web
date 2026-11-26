@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render as rtlRender, screen, within } from "@testing-library/react";
+import { act, fireEvent, render as rtlRender, screen, within } from "@testing-library/react";
 import { queryWrapper } from "@/test/query-wrapper";
 import userEvent from "@testing-library/user-event";
 import { shareToRow } from "@/lib/transactions";
@@ -606,5 +606,118 @@ describe("Desktop day heading row", () => {
     const th = screen.getByRole("columnheader", { name: "No date" });
     expect(th).toHaveAttribute("colspan", "4");
     expect(th).toHaveAttribute("scope", "colgroup");
+  });
+});
+
+// Native feel batches 2+3 (Marco's Revolut recording): a phone row swipes left to Split / Category,
+// and a long press opens the same actions as a menu. fails_when=a swipe or long press does nothing,
+// opens the row by accident, starts from the iOS back-gesture edge, or offers Split on a share
+describe("Row swipe and long press", () => {
+  const bank = (): TransactionViewProps => {
+    const base = props();
+    return {
+      ...base,
+      tx: { ...base.tx, entry_reference: "bank-9", creditor_name: "Uber", signed_amount_eur: -13 },
+      accountLabel: "Revolut",
+    };
+  };
+  const pt = (x: number, y = 100) => {
+    const p = { clientX: x, clientY: y };
+    return { touches: [p], changedTouches: [p] };
+  };
+  // The click a browser may send after the touch is fired too: the gesture must swallow it.
+  const swipe = (el: HTMLElement, from: number, to: number, thenClick = true) => {
+    fireEvent.touchStart(el, pt(from));
+    fireEvent.touchMove(el, pt((from + to) / 2));
+    fireEvent.touchMove(el, pt(to));
+    fireEvent.touchEnd(el, { touches: [], changedTouches: [{ clientX: to, clientY: 100 }] });
+    if (thenClick) fireEvent.click(el);
+  };
+  const face = () => screen.getByRole("button", { name: /Uber/ });
+
+  it("swipes left to show Split and Category without opening the row", () => {
+    render(
+      <ul>
+        <TransactionCardView {...bank()} />
+      </ul>,
+    );
+    expect(screen.queryByRole("button", { name: "Split" })).toBeNull();
+    swipe(face(), 300, 150);
+    expect(screen.getByRole("button", { name: "Split" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Category" })).toBeInTheDocument();
+    expect(face().style.transform).toBe("translateX(-144px)");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("leaves a swipe from the left screen edge to the system back gesture", () => {
+    render(
+      <ul>
+        <TransactionCardView {...bank()} />
+      </ul>,
+    );
+    swipe(face(), 10, 200, false);
+    swipe(face(), 12, -100, false);
+    expect(screen.queryByRole("button", { name: "Split" })).toBeNull();
+  });
+
+  it("opens the sheet straight on the split editor from the swipe action", async () => {
+    render(
+      <ul>
+        <TransactionCardView {...bank()} />
+      </ul>,
+    );
+    swipe(face(), 300, 150);
+    await userEvent.click(screen.getByRole("button", { name: "Split" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Split in 2", {}, { timeout: 2000 })).toBeInTheDocument();
+  });
+
+  it("opens a menu on a long press, and its Category opens the category picker", async () => {
+    vi.useFakeTimers();
+    render(
+      <ul>
+        <TransactionCardView {...bank()} />
+      </ul>,
+    );
+    fireEvent.touchStart(face(), pt(200));
+    act(() => vi.advanceTimersByTime(500));
+    vi.useRealTimers();
+    const menu = screen.getByRole("menu", { name: "Actions for Uber" });
+    expect(
+      within(menu)
+        .getAllByRole("menuitem")
+        .map((b) => b.textContent),
+    ).toEqual(["Split", "Category", "Details"]);
+    await userEvent.click(within(menu).getByRole("menuitem", { name: "Category" }));
+    expect(screen.queryByRole("menu")).toBeNull();
+    // The category list (with every category) opens over the sheet.
+    expect(
+      await screen.findByRole("button", { name: "Groceries" }, { timeout: 2000 }),
+    ).toBeInTheDocument();
+  });
+
+  it("a finger that moves before the press time scrolls instead of opening the menu", () => {
+    vi.useFakeTimers();
+    render(
+      <ul>
+        <TransactionCardView {...bank()} />
+      </ul>,
+    );
+    fireEvent.touchStart(face(), pt(200, 100));
+    fireEvent.touchMove(face(), pt(200, 140));
+    act(() => vi.advanceTimersByTime(500));
+    vi.useRealTimers();
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("offers only Category on a Splitwise share", () => {
+    render(
+      <ul>
+        <TransactionCardView {...props()} />
+      </ul>,
+    );
+    swipe(screen.getByRole("button", { name: /Dinner/ }), 300, 150);
+    expect(screen.queryByRole("button", { name: "Split" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Category" })).toBeInTheDocument();
   });
 });

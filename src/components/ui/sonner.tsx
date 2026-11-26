@@ -16,7 +16,8 @@ const palette = {
 } as React.CSSProperties;
 
 // The phone tab bar (52px + safe area) and a gap.
-const aboveTabBar = { bottom: "calc(3.25rem + env(safe-area-inset-bottom) + 0.5rem)" };
+// Clear of the floating tab bar: its 0.625rem gap + 4rem height, plus 0.5rem.
+const aboveTabBar = { bottom: "calc(5.125rem + env(safe-area-inset-bottom))" };
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const sheetSide = useOpenSheetSide();
