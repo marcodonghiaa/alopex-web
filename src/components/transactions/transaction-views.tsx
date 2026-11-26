@@ -1,7 +1,7 @@
 import { useId, useState, type ReactNode } from "react";
 import { ChevronRight, MoreHorizontal, ThumbsDown, ThumbsUp, Users } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { categoryColor } from "@/lib/categories";
+import { categoryColor, UNCATEGORIZED_LABEL } from "@/lib/categories";
 import { cleanMerchantName } from "@/lib/merchant-name";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -361,7 +361,7 @@ export function TransactionRowView(props: TransactionViewProps) {
   // A Splitwise share lives in its own table: nothing here can edit, select or delete it.
   const share = isSplitwiseShare(tx);
   const notes = [
-    tx.category ?? "Uncategorized",
+    tx.category ?? UNCATEGORIZED_LABEL,
     tx.transaction_type,
     splitNote(tx),
     tagLine(tx) || null,
@@ -465,7 +465,7 @@ export function TransactionCardView(props: TransactionViewProps) {
           )}
           <span className="truncate">
             {[
-              tx.category ?? "Uncategorized",
+              tx.category ?? UNCATEGORIZED_LABEL,
               tx.flow_type === "refunded" ? "Refunded" : null,
               splitNote(tx),
               tagLine(tx) || null,

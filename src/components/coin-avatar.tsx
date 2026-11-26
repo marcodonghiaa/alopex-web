@@ -3,6 +3,7 @@
 // a white glyph on the brand colour, clipped to a circle here. Coins without a file show their
 // first letter in the coin's allocation colour.
 import { useState } from "react";
+import { tinted } from "@/lib/utils";
 
 // prettier-ignore
 export const COINS: ReadonlySet<string> = new Set([
@@ -37,16 +38,12 @@ export function CoinAvatar({ symbol, color }: { symbol: string; color: string | 
       />
     );
   }
-  const tint = color ?? "var(--color-muted-foreground)";
   return (
     <span
       aria-hidden
       data-testid="coin-letter"
       className="flex size-10 shrink-0 items-center justify-center rounded-full font-figure text-sm font-medium"
-      style={{
-        color: tint,
-        backgroundColor: `color-mix(in oklab, ${tint} 16%, var(--color-card))`,
-      }}
+      style={tinted(color ?? "var(--color-muted-foreground)")}
     >
       {symbol.trim().slice(0, 1).toUpperCase() || "?"}
     </span>

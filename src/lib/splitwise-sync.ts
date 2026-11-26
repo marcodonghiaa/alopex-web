@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { functionErrorBody } from "@/lib/function-error";
 import type { ClassifiedRow } from "@/lib/import/splitwise-classify";
-import { matchBank, type BankTx, type RateToEur } from "@/lib/import/splitwise-match";
+import { matchBank, txKey, type BankTx, type RateToEur } from "@/lib/import/splitwise-match";
 import { refreshKeys } from "@/lib/import/last-import";
 import { numberFormat } from "@/lib/locale";
 import { isMissingFunction, isMissingTable } from "@/lib/pg-errors";
@@ -193,7 +193,6 @@ export const canCount = (kind: ReviewKind) => kind === "paid_by_me" || kind === 
 export const directionOf = (kind: ReviewKind): BankTx["direction"] =>
   kind === "settle_in" ? "CRDT" : "DBIT";
 
-/** The newest pending items (at most 500), and how many are pending in all. */
 /** For the nav badge: how many expenses wait on To link, as a head-only count (no rows). */
 export const REVIEW_COUNT_KEY = [...REVIEW_KEY, "count"];
 
@@ -211,6 +210,7 @@ export async function fetchReviewCount(): Promise<number> {
   return count ?? 0;
 }
 
+/** The newest pending items (at most 500), and how many are pending in all. */
 export async function fetchReview(): Promise<{ items: Array<ReviewItem>; total: number }> {
   const { data, error, count } = await supabase
     .from("splitwise_review")
@@ -275,7 +275,7 @@ export function suggestMatches(
   rate: RateToEur,
 ): Map<string, Suggestion> {
   const rows = items.map(reviewRow);
-  const byKey = new Map(bank.map((t) => [`${t.accountUid}|${t.entryReference}`, t]));
+  const byKey = new Map(bank.map((t) => [txKey(t), t]));
   const rejected = (r: ClassifiedRow, tx: BankTx) =>
     items[r.row - 1]!.rejected_entry_references.includes(tx.entryReference);
   const names = items.map((i) => words(i.counterparty ?? ""));
@@ -287,7 +287,7 @@ export function suggestMatches(
   };
   const out = new Map<string, Suggestion>();
   for (const m of matchBank(rows, bank, rate, rejected, named)) {
-    const tx = byKey.get(`${m.accountUid}|${m.entryReference}`);
+    const tx = byKey.get(txKey(m));
     if (tx) out.set(items[m.row - 1]!.id, { tx, confidence: m.confidence });
   }
   return out;

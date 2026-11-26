@@ -10,8 +10,9 @@ import { ambiguousNumberHint } from "@/lib/locale";
 import { callAddHolding } from "@/lib/add-holding";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
+import { invalidateHoldings } from "@/lib/holding-quantity";
 
-export type HoldingKind = "stock" | "crypto";
+type HoldingKind = "stock" | "crypto";
 
 interface Candidate {
   id: string;
@@ -24,21 +25,19 @@ const ISIN = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
 
 const COPY: Record<
   HoldingKind,
-  { title: string; placeholder: string; nothingFound: string; quantity: string; queryKey: string }
+  { title: string; placeholder: string; nothingFound: string; quantity: string }
 > = {
   stock: {
     title: "Add an investment",
     placeholder: "Name, ticker or ISIN",
     nothingFound: "Nothing found. Try the ISIN or a shorter name.",
     quantity: "Shares",
-    queryKey: "portfolio-latest",
   },
   crypto: {
     title: "Add a coin",
     placeholder: "Name or symbol, e.g. Bitcoin or ETH",
     nothingFound: "Nothing found. Try the full name or the ticker.",
     quantity: "Amount",
-    queryKey: "crypto-latest",
   },
 };
 
@@ -148,11 +147,7 @@ export function AddHoldingPanel({
           ? `${input.candidate.name} added`
           : `${input.candidate.name} added; its value shows after the next price sync`,
       );
-      void queryClient.invalidateQueries({ queryKey: [copy.queryKey] });
-      void queryClient.invalidateQueries({ queryKey: ["net-worth-daily"] });
-      // Returns compare trades with the quantity held, so they need the new holding too.
-      void queryClient.invalidateQueries({ queryKey: ["holding-performance"] });
-      void queryClient.invalidateQueries({ queryKey: ["holding-trades"] });
+      invalidateHoldings(queryClient, kind);
       setQuery("");
       setResults(null);
       setPicked(null);

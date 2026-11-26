@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 // The few pieces the Splitwise import steps share, so both screens read as one flow.
 
-export const PILL =
+const PILL =
   "inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-[0.9375rem] font-medium transition-colors motion-safe:active:scale-[0.98] disabled:opacity-45 disabled:active:scale-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
 export const PRIMARY = `${PILL} bg-primary text-primary-foreground hover:bg-primary/90`;
 export const TINTED = `${PILL} bg-foreground/[0.07] hover:bg-foreground/10`;

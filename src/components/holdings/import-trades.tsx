@@ -30,7 +30,7 @@ import { GroupedList } from "@/components/ui/grouped-list";
 import { localToday } from "@/lib/trades";
 import type { Trade } from "@/lib/trades";
 import { BROKERS, NEW_BROKER_URL } from "@/lib/brokers";
-import { saveQuantity } from "@/lib/holding-quantity";
+import { invalidateHoldings, saveQuantity } from "@/lib/holding-quantity";
 import type { HoldingTarget } from "@/lib/holding-quantity";
 import { AlreadyHeld, callAddHolding } from "@/lib/add-holding";
 import { cutChars } from "@/lib/transactions";
@@ -42,8 +42,8 @@ import {
   parseTradesCsv,
   shareUpdates,
   summarizeImport,
-  type CsvResult,
 } from "@/lib/trades-csv";
+import type { CsvResult } from "@/lib/brokers";
 import { readCsvFile } from "@/lib/import/parse-csv";
 import { newEvents } from "@/lib/investment-events";
 import { fetchEvents } from "@/lib/use-performance";
@@ -487,14 +487,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
   // Matched bank rows change name, type and category on every money page.
   const bankRowsChanged = () => void queryClient.invalidateQueries();
   function refresh() {
-    void queryClient.invalidateQueries({ queryKey: ["holding-trades"] });
-    void queryClient.invalidateQueries({ queryKey: ["investment-events"] });
+    invalidateHoldings(queryClient, kind, { events: true });
     void queryClient.invalidateQueries({ queryKey: ["holding-keys", kind] });
-    void queryClient.invalidateQueries({ queryKey: ["holding-performance"] });
-    void queryClient.invalidateQueries({
-      queryKey: [kind === "stock" ? "portfolio-latest" : "crypto-latest"],
-    });
-    void queryClient.invalidateQueries({ queryKey: ["net-worth-daily"] });
   }
 
   // Choosing a source or a file removes the control you used: focus goes on to the next step.
@@ -601,9 +595,6 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
     toAdd.length === 0;
   // Without the holdings or the rates the file can't be read: no spinner next to the error.
   const stuck = !parsed && (keys.isError || (rates.isError && !retrying));
-  // Counts in the reader's locale (1,234).
-  const counted = (n: number, word: string) =>
-    `${numberFormat().format(n)} ${word}${n === 1 ? "" : "s"}`;
   const title =
     from === null
       ? "Import trades"
@@ -992,8 +983,8 @@ export function ImportTrades({ kind, saved }: { kind: "stock" | "crypto"; saved:
                   <span className="flex-1">Already saved, skipped</span>
                   <span className="font-figure">
                     {[
-                      skippedTrades > 0 && counted(skippedTrades, "trade"),
-                      skippedEvents > 0 && counted(skippedEvents, "row"),
+                      skippedTrades > 0 && plural(skippedTrades, "trade"),
+                      skippedEvents > 0 && plural(skippedEvents, "row"),
                     ]
                       .filter(Boolean)
                       .join(", ")}

@@ -65,12 +65,17 @@ export function defaultCountry(languages: readonly string[]): string {
 
 // Toast text after the bank-consent-callback redirect or the complete-bank-consent reply:
 // "Revolut: EUR, GBP, USD" when it names the bank and currencies, else the account count.
+// The URL can be crafted, so only a bank-like name, ISO currency codes and a number are shown.
+const BANK_NAME = /^[\p{L}\p{N} .&'()/-]{1,80}$/u;
+const CURRENCIES = /^[A-Z]{3}(,[A-Z]{3}){0,19}$/;
 export function linkedMessage(params: URLSearchParams): string | null {
   const linked = params.get("bank_linked");
   if (!linked) return null;
   const bank = params.get("bank");
   const currencies = params.get("currencies"); // unique and sorted by the callback
-  if (bank && currencies) return `${bank}: ${currencies.split(",").join(", ")}`;
+  if (bank && currencies && BANK_NAME.test(bank) && CURRENCIES.test(currencies))
+    return `${bank}: ${currencies.split(",").join(", ")}`;
+  if (!/^\d{1,4}$/.test(linked)) return "Accounts connected";
   return `${linked} account${linked === "1" ? "" : "s"} connected`;
 }
 
@@ -92,6 +97,10 @@ const LINK_ERRORS = new Set([
   "Invalid or expired consent request",
   "Consent request expired, please try again",
   "Not signed in",
+  "Sign-in check is unavailable, please try again",
+  "Couldn't finish linking the bank, please try again",
+  "Enter your authenticator code first",
+  "Server update incomplete: apply the latest database migration",
   "Enable Banking didn't share any accounts. Link this bank once on enablebanking.com → API applications → your app → Link accounts, then try again.",
 ]);
 

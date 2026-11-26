@@ -1,5 +1,5 @@
 import { bankOf } from "@/components/bank-badge";
-import { consentAlerts } from "@/lib/consent-expiry";
+import { accessText, consentAlerts } from "@/lib/consent-expiry";
 import { plural } from "@/lib/plural";
 import { maskIban } from "@/lib/iban";
 import { syncErrorKind, syncErrorMessage } from "@/lib/sync-error";
@@ -78,17 +78,16 @@ export function accessRows(accounts: Array<HealthAccount>, today: Date): Array<H
         title,
         bank,
         state: "bad",
-        detail: "Bank access has expired, so it no longer syncs.",
+        detail: accessText(daysLeft),
         fix,
       };
     }
-    const when = daysLeft === 0 ? "today" : `in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`;
     return {
       id: `access:${bank}`,
       title,
       bank,
       state: daysLeft === 0 ? "bad" : "warn",
-      detail: `Bank access ends ${when}.`,
+      detail: accessText(daysLeft),
       fix,
     };
   });

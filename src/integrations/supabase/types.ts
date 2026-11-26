@@ -1033,7 +1033,7 @@ export type Database = {
       };
       transactions: {
         Row: {
-          account_uid: string | null;
+          account_uid: string;
           amount: number;
           bank_transaction_code: string | null;
           booking_date: string | null;
@@ -1455,6 +1455,10 @@ export type Database = {
           end_price_eur: number | null;
           status: string;
         }>;
+      };
+      claim_push_subscription: {
+        Args: { p_auth: string; p_endpoint: string; p_p256dh: string };
+        Returns: undefined;
       };
       register_dashboard_origin: {
         Args: Record<PropertyKey, never>;

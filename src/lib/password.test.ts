@@ -3,16 +3,16 @@ import { MIN_PASSWORD_LENGTH, passwordErrorMessage, validateNewPassword } from "
 
 describe("validateNewPassword", () => {
   it("rejects a password shorter than the minimum", () => {
-    expect(validateNewPassword("a".repeat(MIN_PASSWORD_LENGTH - 1))).toMatch(/at least 8/i);
+    expect(validateNewPassword("a".repeat(MIN_PASSWORD_LENGTH - 1))).toMatch(/at least 12/i);
   });
   it("accepts exactly the minimum", () => {
     expect(validateNewPassword("a".repeat(MIN_PASSWORD_LENGTH))).toBeNull();
   });
   it("rejects a confirmation that differs", () => {
-    expect(validateNewPassword("longenough1", "longenough2")).toMatch(/don't match/);
+    expect(validateNewPassword("long-enough-1", "long-enough-2")).toMatch(/don't match/);
   });
   it("accepts a matching confirmation", () => {
-    expect(validateNewPassword("longenough1", "longenough1")).toBeNull();
+    expect(validateNewPassword("long-enough-1", "long-enough-1")).toBeNull();
   });
 });
 

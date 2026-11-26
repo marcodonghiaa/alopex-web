@@ -3,12 +3,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Github, Loader2, LockKeyhole } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { TrustNote } from "@/components/trust-note";
-import { CodeInput } from "@/components/ui/field";
-import { supabase } from "@/integrations/supabase/client";
+import { CodeInput, LARGE_FIELD_CLASS } from "@/components/ui/field";
+import { resumeRealClient, supabase } from "@/integrations/supabase/client";
 import { exitDemoMode } from "@/lib/demo/mode";
 import { resetPasswordUrl } from "./reset-password";
 import { needsMfaCode, verifyMfaCode } from "@/lib/mfa";
-import { safeNext } from "@/lib/next-url";
+import { safeNext, withSavedHash } from "@/lib/next-url";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -17,6 +17,7 @@ export const Route = createFileRoute("/auth")({
   // leftDemo: a login stored in this browser must not open straight from "Exit demo".
   beforeLoad: ({ context }) => {
     const leftDemo = exitDemoMode();
+    if (leftDemo) resumeRealClient();
     context.queryClient.clear();
     return { leftDemo };
   },
@@ -50,7 +51,7 @@ function AuthPage() {
   const goNext = useCallback(
     (replace = true) => {
       if (next) {
-        window.location.replace(next);
+        window.location.replace(withSavedHash(next));
         return Promise.resolve();
       }
       return navigate({ to: "/", replace });
@@ -76,14 +77,9 @@ function AuthPage() {
       return;
     }
     let cancelled = false;
-    let sessionPromise: ReturnType<typeof supabase.auth.getSession>;
-    try {
-      sessionPromise = supabase.auth.getSession();
-    } catch {
-      setCheckingSession(false);
-      return;
-    }
-    sessionPromise
+    // beforeLoad left the demo, so the client can't throw "still loading" here.
+    supabase.auth
+      .getSession()
       .then(({ data }) => {
         if (cancelled) return;
         if (data.session) {
@@ -194,7 +190,7 @@ function AuthPage() {
                     spellCheck={false}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/60 focus:ring-2 focus:ring-ring"
+                    className={LARGE_FIELD_CLASS}
                     placeholder="you@example.com"
                   />
                 </div>
@@ -223,7 +219,7 @@ function AuthPage() {
                     autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/60 focus:ring-2 focus:ring-ring"
+                    className={LARGE_FIELD_CLASS}
                     placeholder="••••••••"
                   />
                 </div>

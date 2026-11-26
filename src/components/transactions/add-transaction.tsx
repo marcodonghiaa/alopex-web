@@ -17,11 +17,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCategories } from "@/lib/use-categories";
 import { parseQuantity } from "@/lib/holdings";
 import { TRANSACTION_QUERIES } from "@/lib/transactions";
-import { MAX_AMOUNT } from "@/lib/import/statement";
+import { MAX_AMOUNT, type Direction } from "@/lib/import/statement";
 import { ambiguousNumberHint, numberFormat } from "@/lib/locale";
 import { isMissingFunction } from "@/lib/pg-errors";
-
-type Direction = "DBIT" | "CRDT";
 
 type NewTransaction = {
   date: string;

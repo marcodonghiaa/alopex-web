@@ -16,6 +16,7 @@ let fromRecoveryLink = true;
 let emit: ((event: string) => void) | null = null;
 vi.mock("@/integrations/supabase/client", () => ({
   openedFromRecoveryLink: () => fromRecoveryLink,
+  resumeRealClient: () => {},
   supabase: {
     auth: {
       getSession: async () => ({ data: { session } }),
@@ -170,7 +171,7 @@ describe("ResetPasswordPage", () => {
     });
     render(<ResetPasswordPage />);
     fireEvent.change(await screen.findByLabelText("New password"), {
-      target: { value: "password123" },
+      target: { value: "password12345" },
     });
     const save = screen.getByRole("button", { name: "Save and sign in" });
     await waitFor(() => expect(save).toHaveProperty("disabled", false));
@@ -187,7 +188,7 @@ describe("ResetPasswordPage", () => {
     const save = screen.getByRole("button", { name: "Save and sign in" });
     await waitFor(() => expect(save).toHaveProperty("disabled", false));
     fireEvent.submit(save.closest("form")!);
-    expect((await screen.findByRole("alert")).textContent).toBe("Use at least 8 characters.");
+    expect((await screen.findByRole("alert")).textContent).toBe("Use at least 12 characters.");
     expect(updateUser).not.toHaveBeenCalled();
   });
 

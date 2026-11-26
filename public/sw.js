@@ -1,5 +1,11 @@
 self.addEventListener("push", (event) => {
-  const data = event.data ? event.data.json() : {};
+  // A payload that isn't JSON (another backend version) still shows, as plain text.
+  let data = {};
+  try {
+    data = (event.data && event.data.json()) || {};
+  } catch {
+    data = { body: event.data.text() };
+  }
   event.waitUntil(
     self.registration.showNotification(data.title || "Alopex", {
       body: data.body || "",

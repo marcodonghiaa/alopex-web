@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Database } from "@/integrations/supabase/types";
-import { syncAlerts, syncErrorMessage } from "./sync-error";
+import { syncAlerts, syncErrorKind, syncErrorMessage } from "./sync-error";
 
 const texts = (...args: Parameters<typeof syncAlerts>) => syncAlerts(...args).map((a) => a.text);
 
@@ -76,6 +76,18 @@ describe("syncErrorMessage", () => {
     );
     // It gives a next step, so it can't also say there is nothing to do.
     expect(syncErrorMessage("SAVE_FAILED", "N26")).not.toMatch(/Nothing to do/);
+  });
+
+  // The backend sends PAGING_LOOP for a repeated page and for more than 500 pages (bank-sync.ts):
+  // the text must fit both, not claim the same page came back.
+  it("says plainly that the bank's pages didn't end, and that the next sync retries", () => {
+    const text = syncErrorMessage("PAGING_LOOP", "N26");
+    expect(text).toMatch(
+      /^N26 sent more pages of transactions than one sync reads, or the same page again/,
+    );
+    expect(text).toMatch(/Nothing to do: Alopex tries again at the next sync/);
+    expect(text).not.toMatch(/PAGING_LOOP/);
+    expect(syncErrorKind("PAGING_LOOP")).toBe("retry");
   });
 
   it("names an unknown code instead of hiding it", () => {

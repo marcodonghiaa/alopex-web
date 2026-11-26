@@ -85,7 +85,7 @@ export const foldText = (s: string) =>
     .replace(/[’']/g, "")
     .toLowerCase();
 
-export type RuleLike = {
+type RuleLike = {
   match_field: string;
   match_text: string;
   match_mode: string | null;

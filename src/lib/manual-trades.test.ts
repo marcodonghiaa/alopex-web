@@ -48,6 +48,7 @@ const client = (rows: unknown, error: unknown = null) => {
   const q = {
     select: vi.fn(() => q),
     eq: vi.fn(() => q),
+    gt: vi.fn(() => q),
     order: vi.fn(() => q),
     limit: vi.fn(async () => ({ data: rows, error })),
     insert: vi.fn(async () => ({ error })),
@@ -70,6 +71,24 @@ describe("latestPriceEur", () => {
     const c = client([{ value_eur: 160_000, amount: 2 }]);
     expect(await latestPriceEur(c, "crypto", "BTC")).toBe(80_000);
     expect(c.q.eq).toHaveBeenCalledWith("asset_symbol", "BTC");
+  });
+
+  // H394: the newest snapshot of the coin from any source was used; a sold-out source's 0-amount
+  // row gave no price, so an edit saved no trade, and a failed read passed for "no price".
+  it("for a coin reads only snapshots that hold some", async () => {
+    const c = client([{ value_eur: 160_000, amount: 2 }]);
+    await latestPriceEur(c, "crypto", "BTC");
+    expect(c.q.gt).toHaveBeenCalledWith("amount", 0);
+  });
+
+  it("throws when the snapshots can't be read", async () => {
+    const c = client(null, { message: "permission denied" });
+    await expect(latestPriceEur(c, "crypto", "BTC")).rejects.toMatchObject({
+      message: "permission denied",
+    });
+    await expect(latestPriceEur(c, "stock", "IE00X")).rejects.toMatchObject({
+      message: "permission denied",
+    });
   });
 
   it("is null without a priced snapshot", async () => {

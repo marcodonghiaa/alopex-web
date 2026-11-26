@@ -40,6 +40,7 @@ import {
   TradesImport,
 } from "@/components/performance/performance-section";
 import { formatDay } from "@/lib/date";
+import { tinted } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/portfolio")({
   head: () => ({
@@ -75,6 +76,11 @@ interface PortfolioRow {
 }
 
 const UNCLASSIFIED = "Other";
+
+const sharesText = (row: PortfolioRow) =>
+  row.shares != null ? formatQuantity(row.shares, 3) : "—";
+const priceText = (row: PortfolioRow) =>
+  row.price != null && row.currency ? formatMoney(row.price, row.currency) : "—";
 
 const TYPE_ICONS: Record<string, LucideIcon> = {
   Stock: Building2,
@@ -252,10 +258,7 @@ function PortfolioPage() {
                     <span
                       aria-hidden
                       className="flex size-10 shrink-0 items-center justify-center rounded-full"
-                      style={{
-                        color,
-                        backgroundColor: `color-mix(in oklab, ${color} 16%, var(--color-card))`,
-                      }}
+                      style={tinted(color)}
                     >
                       <TypeIcon className="size-[1.125rem]" strokeWidth={2} />
                     </span>
@@ -316,12 +319,10 @@ function PortfolioPage() {
                                     </div>
                                   </td>
                                   <td className="px-4 py-3 font-figure text-foreground sm:px-5">
-                                    {row.shares != null ? formatQuantity(row.shares, 3) : "—"}
+                                    {sharesText(row)}
                                   </td>
                                   <td className="px-4 py-3 font-figure text-foreground sm:px-5">
-                                    {row.price != null && row.currency
-                                      ? formatMoney(row.price, row.currency)
-                                      : "—"}
+                                    {priceText(row)}
                                   </td>
                                   <td className="px-4 py-3 text-right sm:px-5">
                                     <ReturnDetail
@@ -372,21 +373,15 @@ function PortfolioPage() {
                             title={row.name ?? undefined}
                             amount={
                               <>
-                                <span className="font-figure">
-                                  {row.shares != null ? formatQuantity(row.shares, 3) : "—"}
-                                </span>{" "}
-                                shares{row.broker_label ? ` · ${row.broker_label}` : ""}
+                                <span className="font-figure">{sharesText(row)}</span> shares
+                                {row.broker_label ? ` · ${row.broker_label}` : ""}
                               </>
                             }
                             value={formatEur(row.value_eur ?? 0)}
                             returnText={<ReturnText perf={perf} holdingKey={row.isin} />}
                           >
                             <DetailRow label="Price">
-                              <span className="font-figure">
-                                {row.price != null && row.currency
-                                  ? formatMoney(row.price, row.currency)
-                                  : "—"}
-                              </span>
+                              <span className="font-figure">{priceText(row)}</span>
                             </DetailRow>
                             <DetailRow label="Return">
                               <ReturnDetail
@@ -397,9 +392,7 @@ function PortfolioPage() {
                               />
                             </DetailRow>
                             <DetailRow label="Shares">
-                              <span className="font-figure">
-                                {row.shares != null ? formatQuantity(row.shares, 3) : "—"}
-                              </span>
+                              <span className="font-figure">{sharesText(row)}</span>
                             </DetailRow>
                             {row.isin && (
                               <DetailRow label="ISIN">

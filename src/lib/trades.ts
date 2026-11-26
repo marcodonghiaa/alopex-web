@@ -1,6 +1,7 @@
 import { RETURN_NOISE_BAND } from "@/lib/performance";
 import type { PerformanceRow } from "@/lib/performance";
 import { normalizeNumber } from "@/lib/locale";
+import { formatISODate } from "@/lib/date";
 
 // Total return the way a broker works it out, from your trades:
 //   gain   = value now + everything sold - everything bought (so profit already taken counts)
@@ -153,7 +154,7 @@ export function summarizeTrades(rows: Array<MeasuredRow>, topN = 2): TradeSummar
 }
 
 /** Today in the browser's own timezone, as YYYY-MM-DD. */
-export const localToday = () => new Date().toLocaleDateString("en-CA");
+export const localToday = () => formatISODate(new Date());
 
 /**
  * A number from a file: "12,5", "12.5", "1.234,56" and "1,234.56" all read as you'd expect, the same

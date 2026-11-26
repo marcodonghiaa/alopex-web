@@ -21,12 +21,9 @@ export type SavedTrade = Trade & { id: string };
 export async function fetchPerformance(
   client: SupabaseClient<Database>,
   from: string,
-  lastMove: boolean,
 ): Promise<Array<PerformanceRow>> {
-  const { data, error } = await client.rpc("holding_performance", {
-    p_from: from,
-    p_last_move: lastMove,
-  });
+  // p_last_move is left at its default (false).
+  const { data, error } = await client.rpc("holding_performance", { p_from: from });
   if (error) throw error;
   return data ?? [];
 }
@@ -76,7 +73,7 @@ const EARLIEST = "1970-01-01";
 export function usePerformance(lastIso: string | undefined, kind: "stock" | "crypto") {
   const prices = useQuery({
     queryKey: ["holding-performance", lastIso ?? null],
-    queryFn: () => fetchPerformance(supabase, EARLIEST, false),
+    queryFn: () => fetchPerformance(supabase, EARLIEST),
     // The latest prices stay on screen while the next day's load, so returns never flash to "…".
     placeholderData: keepPreviousData,
   });
@@ -151,7 +148,7 @@ export function usePerformance(lastIso: string | undefined, kind: "stock" | "cry
 export function useStartPrices(from: string | undefined, kind: "stock" | "crypto") {
   const query = useQuery({
     queryKey: ["holding-performance-from", from],
-    queryFn: () => fetchPerformance(supabase, from!, false),
+    queryFn: () => fetchPerformance(supabase, from!),
     enabled: from != null,
   });
   return useMemo(
@@ -172,7 +169,7 @@ export function useDayPrices(
   return useQueries({
     queries: dates.map((from) => ({
       queryKey: ["holding-performance-from", from],
-      queryFn: () => fetchPerformance(supabase, from, false),
+      queryFn: () => fetchPerformance(supabase, from),
     })),
     combine: (results) =>
       results.map(({ data }) => (data ? startPricesOf(data, kind, true) : undefined)),

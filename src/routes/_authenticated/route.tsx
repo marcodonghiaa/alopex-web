@@ -41,7 +41,7 @@ export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async ({ location }) => {
     // Sign-in sends the user back here, so a bank redirect (#bank_code=…) survives an expired
-    // session. The hash stays in `next`: the browser never sends it to the server.
+    // session. The hash waits in sessionStorage, not in `next`, so it never reaches the server.
     const toAuth = () => redirect({ to: "/auth", search: backHereSearch(location) });
     // A reloaded demo tab needs the fake client (its own chunk) before anything asks for data.
     if (isDemoMode()) await loadDemoClient();
@@ -249,13 +249,13 @@ function AuthenticatedLayout() {
     retry: false,
   });
   const badges: Record<string, number> = {
-    Subscriptions: streams ? groupStreams(streams, romeToday()).toReview.length : 0,
-    "Who owes you": review.data ?? 0,
+    "/subscriptions": streams ? groupStreams(streams, romeToday()).toReview.length : 0,
+    "/splitwise": review.data ?? 0,
   };
   // The More tab sums what waits on the pages it holds that carry a badge.
   // A page hidden in Settings › App has no row in More, so its count stays out too.
   const inMore = MORE_GROUPS.flatMap((g) => shown(g.items)).reduce(
-    (sum, i) => sum + (badges[i.label] ?? 0),
+    (sum, i) => sum + (badges[i.to] ?? 0),
     0,
   );
 
@@ -328,7 +328,7 @@ function AuthenticatedLayout() {
                     >
                       <item.icon className="size-[1.125rem] shrink-0" />
                       {item.label}
-                      <NavBadge count={badges[item.label]} />
+                      <NavBadge count={badges[item.to]} />
                     </Link>
                   ))}
                 </div>
@@ -443,10 +443,10 @@ function AuthenticatedLayout() {
                     >
                       <item.icon className="size-5 shrink-0" />
                       {item.label}
-                      <NavBadge count={badges[item.label]} />
+                      <NavBadge count={badges[item.to]} />
                       <ChevronRight
                         aria-hidden
-                        className={`size-4 shrink-0 text-muted-foreground ${badges[item.label] ? "" : "ml-auto"}`}
+                        className={`size-4 shrink-0 text-muted-foreground ${badges[item.to] ? "" : "ml-auto"}`}
                       />
                     </Link>
                   ))}

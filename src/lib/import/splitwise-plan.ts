@@ -1,22 +1,23 @@
+import { addDays } from "@/lib/date";
 import { cutChars } from "@/lib/transactions";
 import type { ClassifiedRow } from "./splitwise-classify";
 import {
   diffStored,
+  euros,
   isShareRow,
+  MAX_DESCRIPTION,
+  MAX_FINGERPRINT,
+  MAX_GROUP,
   missingRates,
   type EditedRow,
   type FileRow,
   type StoredShare,
 } from "./splitwise-corrections";
-import type { BankMatch, RateToEur } from "./splitwise-match";
+import { txKey, type BankMatch, type RateToEur } from "./splitwise-match";
 
 // Turns a reviewed Splitwise import into exactly what will be written: my shares, and the
 // confirmed changes to bank transactions. Pure; the caller sends the result to the database.
-// Limits mirror the database checks so a bad plan is reported here, in plain words.
-
-const MAX_GROUP = 100;
-const MAX_DESCRIPTION = 300;
-const MAX_FINGERPRINT = 500;
+// Limits (from splitwise-corrections) mirror the database checks so a bad plan is reported here.
 
 export interface ShareRow {
   fingerprint: string;
@@ -49,7 +50,7 @@ export interface WritePlan {
   problems: Array<string>;
 }
 
-export interface CheckpointSplit {
+interface CheckpointSplit {
   /** The newest date stored for the group; null on a first import. */
   checkpoint: string | null;
   /** The rows this import may touch, and their ids. */
@@ -119,10 +120,7 @@ export function splitAtCheckpoint(
   return split;
 }
 
-const nextDay = (iso: string) =>
-  new Date(Date.parse(`${iso}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
-
-export interface PlanInput {
+interface PlanInput {
   group: string;
   /** The whole file. */
   rows: Array<ClassifiedRow>;
@@ -141,9 +139,6 @@ const ACTION_FOR_KIND: Record<string, LinkRow["action"] | undefined> = {
   settle_out: "mark_transfer",
   settle_in: "mark_transfer",
 };
-
-const euros = (cents: number) => cents / 100;
-const txKey = (m: BankMatch) => `${m.accountUid}|${m.entryReference}`;
 
 function checkMatches(
   rows: Array<ClassifiedRow>,
@@ -231,7 +226,7 @@ export function planWrite(input: PlanInput): WritePlan {
   // After a checkpoint the range starts the next day, so the delete step cannot reach a stored
   // row; a checkpoint-day addition is inserted regardless, since inserts ignore the range.
   const dates = rows.map((r) => r.date).sort();
-  const from = checkpoint === null ? (dates[0] ?? "") : nextDay(checkpoint);
+  const from = checkpoint === null ? (dates[0] ?? "") : addDays(checkpoint, 1);
   const last = dates[dates.length - 1] ?? "";
   return {
     group,

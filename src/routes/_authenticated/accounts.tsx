@@ -22,7 +22,7 @@ import {
   renewTarget,
 } from "@/lib/bank-link";
 import { functionErrorMessage } from "@/lib/function-error";
-import { consentAlerts, type ConsentAlert } from "@/lib/consent-expiry";
+import { accessText, consentAlerts, type ConsentAlert } from "@/lib/consent-expiry";
 import { syncAlerts, type SyncAlert } from "@/lib/sync-error";
 import { asOf, countsInTotal, formatISODate } from "@/lib/date";
 import { AccountBadge, accountName, bankOf } from "@/components/bank-badge";
@@ -30,6 +30,7 @@ import { formatEur, formatMoney } from "@/lib/transactions";
 import { HeadlineFigure } from "@/components/headline-figure";
 import { AccountMenu, AddDebt, type MenuAccount } from "@/components/accounts/account-menu";
 import { accountTypeLabel, debtEur, isDebt } from "@/lib/account-types";
+import { fetchBankAccounts } from "@/components/health/use-health";
 
 export const Route = createFileRoute("/_authenticated/accounts")({
   head: () => ({
@@ -76,19 +77,11 @@ interface BankGroup {
   bank: string;
   main: BankAccountRow;
   subAccounts: Array<BankAccountRow>;
+  // Every account at the bank, zero balances too: the menu is the only place to set their type.
+  menuAccounts: Array<BankAccountRow>;
   subtotalEur: number;
   // The part of the subtotal in the bank total (balances under 30 days old): its share.
   countedEur: number;
-}
-
-async function fetchBankAccounts(): Promise<Array<BankAccountRow>> {
-  const { data, error } = await supabase
-    .from("v_bank_accounts_latest")
-    // "*" rather than a column list, so the page still loads on a database without bank_name/bank_logo.
-    .select("*")
-    .order("amount_eur", { ascending: false });
-  if (error) throw error;
-  return (data ?? []) as Array<BankAccountRow>;
 }
 
 const menuAccount = (a: BankAccountRow): MenuAccount => ({
@@ -99,17 +92,11 @@ const menuAccount = (a: BankAccountRow): MenuAccount => ({
   amount: a.amount,
 });
 
-function consentMessage({ bank, daysLeft }: ConsentAlert): string {
-  if (daysLeft < 0) return `Bank access to ${bank} has expired, so it no longer syncs.`;
-  if (daysLeft === 0) return `Bank access to ${bank} ends today.`;
-  return `Bank access to ${bank} ends in ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`;
-}
-
 function AccountsPage() {
   const queryClient = useQueryClient();
   const bankQuery = useQuery({
     queryKey: ["bank-accounts-latest"],
-    queryFn: fetchBankAccounts,
+    queryFn: () => fetchBankAccounts<BankAccountRow>(),
   });
 
   // Landed here from the bank-consent-callback redirect after connecting a bank. The redirect
@@ -242,7 +229,12 @@ function AccountsPage() {
         const countedEur = [main, ...subAccounts]
           .filter(counted)
           .reduce((sum, a) => sum + (a.amount_eur ?? 0), 0);
-        return { bank, main, subAccounts, subtotalEur, countedEur };
+        const menuAccounts = [
+          main,
+          ...subAccounts,
+          ...accountsForBank.filter((a) => a.uid !== main.uid && !subAccounts.includes(a)),
+        ];
+        return { bank, main, subAccounts, menuAccounts, subtotalEur, countedEur };
       })
       .sort((a, b) => b.subtotalEur - a.subtotalEur);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `counted` only changes with `today`
@@ -358,7 +350,7 @@ function AccountsPage() {
               role="status"
               className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-warning/10 px-4 py-3 text-sm text-foreground"
             >
-              <span>{consentMessage(renew)}</span>
+              <span>{accessText(renew.daysLeft, renew.bank)}</span>
               <Button
                 variant="ghost"
                 onClick={() => connectAgain(renew.bank)}
@@ -445,7 +437,7 @@ function AccountsPage() {
                       </div>
                       <AccountMenu
                         title={group.bank}
-                        accounts={[group.main, ...group.subAccounts].map(menuAccount)}
+                        accounts={group.menuAccounts.map(menuAccount)}
                       />
                     </div>
 

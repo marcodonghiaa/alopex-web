@@ -14,6 +14,9 @@ export const CATEGORIES = [
   "Others",
 ] as const;
 
+/** What the spending views call a missing category. */
+export const UNCATEGORIZED_LABEL = "Uncategorized";
+
 export const TRANSACTION_TYPES = ["Subscription", "One-time"] as const;
 
 // Categories are one hue ordered by lightness, not a rainbow: a colour is a RANK. Rank 0 is
@@ -22,24 +25,6 @@ export function categoryTone(rank: number): string {
   const step = Math.min(Math.max(Math.floor(rank), 0), 4) + 1;
   return `var(--color-chart-${step})`;
 }
-
-// One fixed colour per category, reused by the spending chart, its rows, avatars and pills so a
-// category reads the same everywhere. A better-tuned palette is still to be chosen (2026-11-09).
-const CATEGORY_COLORS: Record<(typeof CATEGORIES)[number], string> = {
-  Shopping: "#ec4899",
-  Entertainment: "#8b5cf6",
-  Groceries: "#6366f1",
-  "Dine Out": "#f97316",
-  Services: "#3b82f6",
-  Housing: "#14b8a6",
-  Transports: "#eab308",
-  Experiences: "#06b6d4",
-  Income: "#84cc16",
-  Health: "#d946ef",
-  Transfer: "#64748b",
-  Taxes: "#a16207",
-  Others: "#94a3b8",
-};
 
 const UNKNOWN_CATEGORY_COLOR = "var(--color-muted-foreground)";
 
@@ -68,26 +53,27 @@ export const CATEGORY_PALETTE = {
 export type PaletteColor = keyof typeof CATEGORY_PALETTE;
 export const PALETTE_COLORS = Object.keys(CATEGORY_PALETTE) as Array<PaletteColor>;
 
+// One fixed colour per category, reused by the spending chart, its rows, avatars and pills so a
+// category reads the same everywhere. A better-tuned palette is still to be chosen (2026-11-09).
+const CATEGORY_COLORS: Record<(typeof CATEGORIES)[number], PaletteColor> = {
+  Shopping: "pink",
+  Entertainment: "violet",
+  Groceries: "indigo",
+  "Dine Out": "orange",
+  Services: "blue",
+  Housing: "teal",
+  Transports: "yellow",
+  Experiences: "cyan",
+  Income: "lime",
+  Health: "fuchsia",
+  Transfer: "slate",
+  Taxes: "brown",
+  Others: "gray",
+};
+
 export function isPaletteColor(name: unknown): name is PaletteColor {
   return typeof name === "string" && Object.hasOwn(CATEGORY_PALETTE, name);
 }
-
-// The icon each built-in category starts with (names from the Alopex icon set).
-const BUILT_IN_ICONS: Record<(typeof CATEGORIES)[number], string> = {
-  Shopping: "shopping",
-  Entertainment: "entertainment",
-  Groceries: "groceries",
-  "Dine Out": "dine-out",
-  Services: "services",
-  Housing: "housing",
-  Transports: "transports",
-  Experiences: "experiences",
-  Income: "income",
-  Health: "health",
-  Transfer: "transfer",
-  Taxes: "taxes",
-  Others: "others",
-};
 
 export type CategoryLook = { icon?: string | null | undefined; color?: string | null | undefined };
 
@@ -100,11 +86,12 @@ export function setCategoryLooks(rows: ReadonlyArray<{ name: string } & Category
 
 /** The icon name for a category: yours, else the built-in one; null for none (shows a letter). */
 export function categoryIconName(category: string | null | undefined): string | null {
-  if (!category || category === "Uncategorized") return null;
+  if (!category || category === UNCATEGORIZED_LABEL) return null;
   const picked = looks.get(category)?.icon;
   if (picked) return picked;
-  return Object.hasOwn(BUILT_IN_ICONS, category)
-    ? (BUILT_IN_ICONS as Record<string, string>)[category]!
+  // A built-in's icon is its name in kebab case (names from the Alopex icon set).
+  return (CATEGORIES as ReadonlyArray<string>).includes(category)
+    ? category.toLowerCase().replace(/ /g, "-")
     : null;
 }
 
@@ -116,13 +103,12 @@ export function pickedColor(category: string): PaletteColor | null {
 
 /** The category's colour: the one you picked, else the built-in one, else one hashed from the name. */
 export function categoryColor(category: string | null | undefined): string {
-  // "Uncategorized" is what the spending views call a missing category.
-  if (!category || category === "Uncategorized") return UNKNOWN_CATEGORY_COLOR;
+  if (!category || category === UNCATEGORIZED_LABEL) return UNKNOWN_CATEGORY_COLOR;
   const picked = pickedColor(category);
   if (picked) return CATEGORY_PALETTE[picked];
   // Own keys only, so a category called "constructor" isn't read off Object.prototype.
   if (Object.hasOwn(CATEGORY_COLORS, category))
-    return (CATEGORY_COLORS as Record<string, string>)[category]!;
+    return CATEGORY_PALETTE[(CATEGORY_COLORS as Record<string, PaletteColor>)[category]!];
   let hash = 0;
   for (const ch of category) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
   return CUSTOM_COLORS[hash % CUSTOM_COLORS.length]!;

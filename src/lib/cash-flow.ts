@@ -7,7 +7,8 @@ import { formatISODate } from "@/lib/date";
 import type { IncomeExpenseRow } from "@/lib/income-expenses";
 import { formatPercent } from "@/lib/locale";
 import { formatEur, incomeTitle } from "@/lib/transactions";
-import { UNCATEGORIZED_LABEL, type MonthlySpendRow } from "@/lib/spending";
+import { UNCATEGORIZED_LABEL } from "@/lib/categories";
+import type { MonthlySpendRow } from "@/lib/spending";
 
 /** How much time one cash-flow view covers. */
 export type Period = "month" | "quarter" | "year";
@@ -426,14 +427,14 @@ export function fitLabel(name: string, max: number): string {
 /** Gap between a Sankey band and its label. */
 export const SANKEY_LAYOUT_GAP = 8;
 
-/**
- * Sankey label room. The svg clips past its edge, so each side's margin holds the longest label
- * (`chars` capitals). On a phone the payers' labels sit on their band instead of outside it.
- */
 /** Viewport width (px) from which the desktop labels fit beside a usable diagram; below it,
  * tablets included, the phone layout is used. */
 export const SANKEY_WIDE_FROM = 1024;
 
+/**
+ * Sankey label room. The svg clips past its edge, so each side's margin holds the longest label
+ * (`chars` capitals). On a phone the payers' labels sit on their band instead of outside it.
+ */
 export const SANKEY_LAYOUT = {
   desktop: { chars: 26, left: 204, right: 212, outsideLeft: true },
   phone: { chars: 12, left: 4, right: 104, outsideLeft: false },

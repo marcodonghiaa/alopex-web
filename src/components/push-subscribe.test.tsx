@@ -22,7 +22,11 @@ vi.mock("@/lib/demo/mode", () => ({ isDemoMode: () => demo.on }));
 import { PushSubscribeButton, forgetThisBrowserPush } from "./push-subscribe";
 
 const unsubscribe = vi.fn(async () => true);
-let current: { endpoint: string; unsubscribe: typeof unsubscribe } | null = null;
+let current: {
+  endpoint: string;
+  unsubscribe: typeof unsubscribe;
+  options?: { applicationServerKey: ArrayBuffer | null };
+} | null = null;
 const fresh = {
   endpoint: "https://push.example/abc",
   unsubscribe,
@@ -80,6 +84,24 @@ describe("PushSubscribeButton", () => {
     fireEvent.click(await screen.findByRole("button"));
     await waitFor(() => expect(rpc).toHaveBeenCalled());
     expect(screen.queryByText("Check-ins enabled")).not.toBeInTheDocument();
+  });
+
+  it("replaces a subscription made with an old VAPID key", async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+    current = { ...fresh, options: { applicationServerKey: new Uint8Array([1, 2, 3]).buffer } };
+    render(<PushSubscribeButton />);
+    fireEvent.click(await screen.findByRole("button"));
+    await waitFor(() => expect(rpc).toHaveBeenCalled());
+    expect(unsubscribe).toHaveBeenCalled();
+  });
+
+  it("keeps the subscription when the browser hides its key", async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+    current = { ...fresh, options: { applicationServerKey: null } };
+    render(<PushSubscribeButton />);
+    fireEvent.click(await screen.findByRole("button"));
+    await waitFor(() => expect(rpc).toHaveBeenCalled());
+    expect(unsubscribe).not.toHaveBeenCalled();
   });
 });
 

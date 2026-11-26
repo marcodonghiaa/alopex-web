@@ -2,10 +2,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { readPages } from "@/lib/read-pages";
 import { restoredFlow, txId, type TxKey } from "@/lib/transactions";
 
-// Who decided a row's flow_type. "user", "rule", "pair" and "own_account" are decisions to keep;
-// "legacy" is history from before flow_source, which automation also leaves alone.
-export type FlowSource = "user" | "rule" | "own_account" | "pair" | "bank" | "default" | "legacy";
-
 // A pair of rows the bank sync guessed is one move between your own accounts.
 export interface TransferPair {
   id: string;

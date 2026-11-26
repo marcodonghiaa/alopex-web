@@ -1,6 +1,6 @@
 import type { ClassifiedRow } from "@/lib/import/splitwise-classify";
 import { ruleTextFor } from "@/lib/import/splitwise-categorize";
-import { money, shortDate } from "@/lib/import/splitwise-format";
+import { moneyFromCents, shortDate } from "@/lib/import/splitwise-format";
 import { useCategories } from "@/lib/use-categories";
 
 interface Props {
@@ -50,7 +50,7 @@ export function CategoryTable({
               </span>
               <span className="flex shrink-0 flex-col items-end gap-1">
                 <span className="font-figure text-[0.9375rem]">
-                  {money(r.shareCents ?? 0, r.currency)}
+                  {moneyFromCents(r.shareCents ?? 0, r.currency)}
                 </span>
                 <select
                   aria-label={`Category for ${r.description.trim()}`}

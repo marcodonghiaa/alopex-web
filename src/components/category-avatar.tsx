@@ -5,7 +5,9 @@ import {
   categoryIconName,
   isPaletteColor,
   type CategoryLook,
+  UNCATEGORIZED_LABEL,
 } from "@/lib/categories";
+import { tinted } from "@/lib/utils";
 
 /**
  * 40px circle with the category's line icon, tinted in the category colour, so rows scan by
@@ -22,7 +24,7 @@ export function CategoryAvatar({
   /** Draw this icon and colour instead of the saved ones (the editor's preview). */
   look?: CategoryLook;
 }) {
-  const missing = !category || category === "Uncategorized";
+  const missing = !category || category === UNCATEGORIZED_LABEL;
   const name = missing ? "uncategorized" : look ? (look.icon ?? null) : categoryIconName(category);
   const color = isPaletteColor(look?.color)
     ? CATEGORY_PALETTE[look.color]
@@ -32,7 +34,7 @@ export function CategoryAvatar({
       aria-hidden
       data-category={category ?? ""}
       className={`flex shrink-0 items-center justify-center rounded-full ${size === "sm" ? "size-8" : size === "lg" ? "size-14" : "size-10"}`}
-      style={{ color, backgroundColor: `color-mix(in oklab, ${color} 16%, var(--color-card))` }}
+      style={tinted(color)}
     >
       {isIconName(name) ? (
         <Icon

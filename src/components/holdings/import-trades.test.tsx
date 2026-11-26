@@ -1140,14 +1140,17 @@ describe("ImportTrades", () => {
     const invalidate = vi.spyOn(client, "invalidateQueries");
     fireEvent.click(await pickTradeRepublic());
     await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(6));
-    expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
-      ["holding-trades"],
-      ["investment-events"],
-      ["holding-keys", "stock"],
-      ["holding-performance"],
-      ["portfolio-latest"],
-      ["net-worth-daily"],
-    ]);
+    // In any order: they all refetch at once.
+    expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual(
+      expect.arrayContaining([
+        ["holding-trades"],
+        ["investment-events"],
+        ["holding-keys", "stock"],
+        ["holding-performance"],
+        ["portfolio-latest"],
+        ["net-worth-daily"],
+      ]),
+    );
   });
 
   it("a slow save shows a spinner, disables Save, and a double click saves once", async () => {

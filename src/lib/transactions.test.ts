@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   monthFromParam,
   monthParam,
+  monthSearch,
   parseTransactionsSearch,
   withoutHighlight,
   UNCATEGORIZED,
@@ -490,6 +491,12 @@ describe("transactions deep-link params", () => {
     expect(parseTransactionsSearch({ category: 3, month: 202610 })).toEqual({});
     expect(parseTransactionsSearch({ highlight: " " })).toEqual({});
     expect(parseTransactionsSearch({ highlight: 7 })).toEqual({});
+  });
+
+  it("keeps only a well-formed month for a month page", () => {
+    expect(monthSearch({ month: "2026-10", category: "Housing" })).toEqual({ month: "2026-10" });
+    expect(monthSearch({ month: "2026-13" })).toEqual({});
+    expect(monthSearch({})).toEqual({});
   });
 
   // Regression: clearing the highlight also dropped ?month, which remounted Activity on the

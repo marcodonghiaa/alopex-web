@@ -3,7 +3,7 @@
 import type { StatementColumns } from "./statement";
 import type { DecimalMark } from "./normalize";
 
-export interface StatementPreset {
+interface StatementPreset {
   name: string;
   /** Lower-cased header names that must all be there. Strict: two presets never match one file. */
   requires: Array<string>;
@@ -29,7 +29,7 @@ export interface StatementPreset {
  * Matches a row by a column's lower-cased value: one of `when`, anything but `unless`, or one
  * that fits `match`.
  */
-export interface RowRule {
+interface RowRule {
   column: string;
   when?: Array<string>;
   unless?: Array<string>;

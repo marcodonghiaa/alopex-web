@@ -43,6 +43,19 @@ describe("AllocationChart", () => {
     expect(screen.getByText("40.0%")).toBeInTheDocument();
   });
 
+  // H391: an overdrawn total cash was dropped, so the rows added up to more than net worth.
+  it("lists negative cash as a negative line, out of the shares", () => {
+    render(
+      <AllocationChart
+        history={[]}
+        snapshots={[{ ...live(), bank_total_eur: -200, total_eur: 400 }]}
+      />,
+    );
+    expect(screen.getByRole("link", { name: /^Cash/ })).toHaveTextContent("-€200.00");
+    expect(screen.getByRole("link", { name: /^Cash/ })).not.toHaveTextContent("%");
+    expect(screen.getByText("100.0%")).toBeInTheDocument(); // Stocks: all that is held
+  });
+
   it("has no debts line without debts", () => {
     render(<AllocationChart history={[]} snapshots={[live()]} />);
     expect(screen.queryByText("Debts")).not.toBeInTheDocument();

@@ -1683,6 +1683,20 @@ describe("fake client: move_category", () => {
     expect(data![0]).toMatchObject({ hidden: false, icon: "pets" });
   });
 
+  // H349: the category editor upserts {name, look} on "user_id,name" with no user_id (the
+  // database fills it); the demo matched only on payload values, so each edit added a copy.
+  it("an upsert on user_id,name without user_id updates the signed-in user's row", async () => {
+    const c = fresh();
+    const look = { name: "Pets", hidden: false, icon: "dog", color: "#123456" };
+    await c.from("user_categories").upsert(look, { onConflict: "user_id,name" });
+    await c
+      .from("user_categories")
+      .upsert({ ...look, icon: "cat" }, { onConflict: "user_id,name" });
+    const { data } = await c.from("user_categories").select("name,icon,user_id").eq("name", "Pets");
+    expect(data).toHaveLength(1);
+    expect(data![0]).toMatchObject({ icon: "cat", user_id: DEMO_USER_ID });
+  });
+
   it("refuses what the database refuses", async () => {
     const c = fresh();
     expect((await move(c, "Transfer", "Others")).error?.message).toMatch(/Transfer and Income/);

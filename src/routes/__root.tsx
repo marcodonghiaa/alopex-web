@@ -13,6 +13,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { listenForNotificationNav } from "@/lib/notification-nav";
+import { ogImageUrl, siteOrigin } from "@/lib/site-origin";
 
 function NotFoundComponent() {
   return (
@@ -91,6 +92,7 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
+    // og:image needs an absolute URL: this copy's own address, read from the request.
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
@@ -107,11 +109,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "A personal finance dashboard to track net worth, spending, and portfolio over time.",
       },
       { property: "og:type", content: "website" },
-      { property: "og:image", content: "https://app.alopex.finance/og-image.png" },
+      { property: "og:image", content: ogImageUrl(siteOrigin()) },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:image", content: "https://app.alopex.finance/og-image.png" },
+      { name: "twitter:image", content: ogImageUrl(siteOrigin()) },
       { name: "theme-color", content: "#fafafa", media: "(prefers-color-scheme: light)" },
       { name: "theme-color", content: "#000000", media: "(prefers-color-scheme: dark)" },
       { name: "mobile-web-app-capable", content: "yes" },

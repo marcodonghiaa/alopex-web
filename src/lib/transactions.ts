@@ -1,5 +1,6 @@
 import { dateLocale, numberFormat } from "@/lib/locale";
 import { capitaliseName, cleanMerchantName } from "@/lib/merchant-name";
+import { formatDay } from "@/lib/date";
 
 export interface TransactionRow {
   entry_reference: string;
@@ -29,7 +30,7 @@ export interface TransactionRow {
 export type TransferRow = Omit<TransactionRow, "note" | "tags">;
 
 // The euro columns of v_transactions_eur; `amount` and `personal_amount` are in the card's own currency.
-export interface EurRow {
+interface EurRow {
   personal_signed_amount_eur: number | null;
   signed_amount_eur: number | null;
 }
@@ -59,12 +60,8 @@ export const incomeTitle = (
 export function nameRefunds(rows: Array<TransactionRow>): Array<TransactionRow> {
   const byRef = new Map(rows.map((r) => [r.entry_reference, r]));
   return rows.map((r) => {
-    if (r.flow_type !== "refunded" || r.creditor_name || !r.refund_of) {
-      // Only the credit names a charge it reverses; the charge itself isn't a refund.
-      return r.flow_type === "refunded" && !r.creditor_name && r.refund_of
-        ? { ...r, creditor_name: "Refund" }
-        : r;
-    }
+    // Only the credit names a charge it reverses; the charge itself isn't a refund.
+    if (r.flow_type !== "refunded" || r.creditor_name || !r.refund_of) return r;
     const original = byRef.get(r.refund_of)?.creditor_name;
     return { ...r, creditor_name: original ? `Refund: ${cleanMerchantName(original)}` : "Refund" };
   });
@@ -196,6 +193,12 @@ export function parseTransactionsSearch(raw: Record<string, unknown>): Transacti
   return out;
 }
 
+/** validateSearch for a month page: only a well-formed ?month= is kept. */
+export function monthSearch(raw: Record<string, unknown>): { month?: string } {
+  const { month } = parseTransactionsSearch(raw);
+  return month ? { month } : {};
+}
+
 /** The query string with the one-shot `highlight` removed and every other param kept. */
 export function withoutHighlight(search: string): string {
   const params = new URLSearchParams(search);
@@ -284,15 +287,8 @@ export function formatBookingDateShort(bookingDate: string | null, now: Date = n
   });
 }
 
-export function formatBookingDate(bookingDate: string | null): string {
-  return bookingDate
-    ? new Date(`${bookingDate}T00:00:00`).toLocaleDateString(dateLocale(), {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    : "—";
-}
+export const formatBookingDate = (bookingDate: string | null): string =>
+  bookingDate ? formatDay(bookingDate) : "—";
 
 export const UNCATEGORIZED = "__uncategorized__";
 
@@ -309,7 +305,7 @@ export function listCategories(transactions: Array<TransactionRow>) {
   };
 }
 
-export type TransactionFilters = {
+type TransactionFilters = {
   /** Bank name to keep, or "all". */
   bank?: string;
   /** Bank name of an account uid; needed only with a bank filter. */

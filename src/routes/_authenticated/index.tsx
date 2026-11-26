@@ -16,6 +16,7 @@ import { TONE_TEXT, toneOf } from "@/lib/tone";
 import { Alert } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSyncStatus } from "@/components/health/use-health";
+import { RETURN_NOISE_BAND } from "@/lib/performance";
 
 type FxRate = { date: string; currency: string; rate_to_eur: number };
 
@@ -164,7 +165,7 @@ function NetWorthPage() {
                   ? {
                       value: rangeDeltaEur / rateToEur,
                       percent: rangeChange,
-                      className: TONE_TEXT[toneOf(rangeChange ?? 0, NOISE_BAND)],
+                      className: TONE_TEXT[toneOf(rangeChange ?? 0, RETURN_NOISE_BAND)],
                     }
                   : undefined
               }
@@ -297,6 +298,3 @@ function LegendDot({ color, label, dashed }: { color: string; label: string; das
     </span>
   );
 }
-
-// Moves under half a percent are noise: show them without alarm colour.
-const NOISE_BAND = 0.005;

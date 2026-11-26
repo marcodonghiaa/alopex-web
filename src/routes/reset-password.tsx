@@ -2,11 +2,11 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { KeyRound, Loader2 } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
-import { openedFromRecoveryLink, supabase } from "@/integrations/supabase/client";
+import { openedFromRecoveryLink, resumeRealClient, supabase } from "@/integrations/supabase/client";
 import { exitDemoMode } from "@/lib/demo/mode";
 import { MIN_PASSWORD_LENGTH, passwordErrorMessage, validateNewPassword } from "@/lib/password";
 import { needsMfaCode, verifyMfaCode } from "@/lib/mfa";
-import { CodeInput } from "@/components/ui/field";
+import { CodeInput, LARGE_FIELD_CLASS } from "@/components/ui/field";
 
 /** Where the recovery email sends the user: this page, on the dashboard's own origin. */
 export const resetPasswordUrl = (origin: string) => `${origin}/reset-password`;
@@ -15,7 +15,7 @@ export const Route = createFileRoute("/reset-password")({
   ssr: false,
   // The recovery link signs in for real, so a demo visit in this tab ends here.
   beforeLoad: ({ context }) => {
-    exitDemoMode();
+    if (exitDemoMode()) resumeRealClient();
     context.queryClient.clear();
   },
   head: () => ({
@@ -119,7 +119,7 @@ export function ResetPasswordPage() {
                   autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/60 focus:ring-2 focus:ring-ring"
+                  className={LARGE_FIELD_CLASS}
                 />
                 <p className="text-xs text-muted-foreground">
                   At least {MIN_PASSWORD_LENGTH} characters.

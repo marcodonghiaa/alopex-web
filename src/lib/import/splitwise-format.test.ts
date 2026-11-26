@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { importedMessage, money, moneyAmount, shortDate } from "./splitwise-format";
+import { importedMessage, moneyFromCents, moneyAmount, shortDate } from "./splitwise-format";
 
 // issue #12: the button said 61, the toast 70; the toast now says what the 70 are
 describe("importedMessage", () => {
@@ -38,9 +38,9 @@ describe("shortDate", () => {
   });
 });
 
-describe("money", () => {
+describe("moneyFromCents", () => {
   it("shows cents with two decimals and the currency", () => {
-    expect(money(2730, "USD")).toBe("US$27.30");
+    expect(moneyFromCents(2730, "USD")).toBe("US$27.30");
   });
 });
 

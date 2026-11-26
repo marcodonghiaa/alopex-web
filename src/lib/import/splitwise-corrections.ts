@@ -6,8 +6,12 @@ import type { RpcClient } from "./splitwise-commit";
 // Compares a Splitwise file with what earlier imports stored, inside the dates the file covers,
 // and turns the rows the user ticks into one database call. Pure except runCorrections.
 
-const MAX_DESCRIPTION = 300;
-const MAX_FINGERPRINT = 500;
+// Limits mirror the database checks (splitwise_expenses), so a bad row is reported in plain words.
+export const MAX_GROUP = 100;
+export const MAX_DESCRIPTION = 300;
+export const MAX_FINGERPRINT = 500;
+
+export const euros = (cents: number) => cents / 100;
 
 /** A row an earlier import stored for this group. */
 export interface StoredShare {
@@ -32,7 +36,7 @@ export interface EditedRow extends FileRow {
   stored: StoredShare;
 }
 
-export interface StoredDiff {
+interface StoredDiff {
   edited: Array<EditedRow>;
   /** Stored rows gone from the file, inside its dates, with no sure replacement. */
   removed: Array<StoredShare>;
@@ -142,14 +146,14 @@ interface RemoveItem {
   old_fingerprint: string;
 }
 
-export interface CorrectionPlan {
+interface CorrectionPlan {
   add: Array<AddItem>;
   edit: Array<EditItem>;
   remove: Array<RemoveItem>;
   problems: Array<string>;
 }
 
-export interface CorrectionInput {
+interface CorrectionInput {
   older: Array<FileRow>;
   edited: Array<EditedRow>;
   removed: Array<StoredShare>;
@@ -158,8 +162,6 @@ export interface CorrectionInput {
   rate: RateToEur;
   categoryFor: (row: ClassifiedRow) => string | null;
 }
-
-const euros = (cents: number) => cents / 100;
 
 /** Builds the database call for the ticked rows only. */
 export function planCorrections(input: CorrectionInput): CorrectionPlan {
@@ -211,7 +213,7 @@ export function planCorrections(input: CorrectionInput): CorrectionPlan {
   return { add, edit, remove, problems: [...problems, ...missingRates(noRate)] };
 }
 
-export interface CorrectionCounts {
+interface CorrectionCounts {
   added: number;
   edited: number;
   removed: number;

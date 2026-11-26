@@ -38,6 +38,16 @@ export function monthBounds(month: Date): { start: string; end: string } {
   };
 }
 
+/** A day without its year, "3 Mar", or "—" for none. */
+export function formatDayMonth(iso: string | null): string {
+  return iso
+    ? new Date(`${iso}T00:00:00`).toLocaleDateString(dateLocale(), {
+        day: "numeric",
+        month: "short",
+      })
+    : "—";
+}
+
 export function formatDay(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString(dateLocale(), {
     day: "numeric",

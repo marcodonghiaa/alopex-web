@@ -15,7 +15,7 @@ import {
   romeToday,
 } from "@/lib/recurring";
 import { RECURRING_KEY, refreshRecurring, useRecurringStreams } from "@/lib/use-recurring-streams";
-import { formatBookingDateShort, formatMoney } from "@/lib/transactions";
+import { formatBookingDateShort, formatMoney, monthParam } from "@/lib/transactions";
 import { CategoryAvatar } from "@/components/category-avatar";
 import { RevealDialog } from "@/components/subscriptions/reveal-dialog";
 import { RecurringCalendar } from "@/components/subscriptions/recurring-calendar";
@@ -342,7 +342,7 @@ function SubscriptionsPage() {
                 void navigate({
                   search: (s: SubscriptionsSearch) => ({
                     ...s,
-                    month: `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`,
+                    month: monthParam(m),
                   }),
                   // Paging months isn't worth a Back step each.
                   replace: true,

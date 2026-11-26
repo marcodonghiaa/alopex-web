@@ -65,6 +65,22 @@ describe("ember text for small counts", () => {
     expect(contrast(text, "oklch(0.955 0.004 230)")).toBeGreaterThanOrEqual(4.5);
   });
 
+  // H329: the focus ring was --ember, 2.92:1 on the light page (WCAG 1.4.11 asks 3:1).
+  it("draws the focus ring at 3:1 or more on the page, cards and sidebar, light and dark", () => {
+    const value = (block: string, name: string): string => {
+      const v = token(block, name);
+      const ref = v.match(/^var\(--([\w-]+)\)$/)?.[1];
+      return ref ? value(block === dark && !token(dark, ref) ? light : block, ref) : v;
+    };
+    for (const theme of [light, dark]) {
+      for (const ring of ["ring", "sidebar-ring"]) {
+        for (const ground of ["background", "card", "sidebar"]) {
+          expect(contrast(value(theme, ring), value(theme, ground))).toBeGreaterThanOrEqual(3);
+        }
+      }
+    }
+  });
+
   it("leaves the global ember and the dark theme as they were", () => {
     expect(token(light, "ember")).toBe("oklch(0.68 0.16 50)");
     expect(token(dark, "ember-text")).toBe("var(--ember)");

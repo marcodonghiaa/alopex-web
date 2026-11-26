@@ -38,3 +38,11 @@ export function consentAlerts(accounts: Array<ConsentAccount>, today: Date): Arr
     .map(([bank, daysLeft]) => ({ bank, daysLeft }))
     .sort((x, y) => x.daysLeft - y.daysLeft);
 }
+
+/** How long bank access lasts, in words: "Bank access to Revolut ends in 3 days." */
+export function accessText(daysLeft: number, bank?: string): string {
+  const access = bank ? `Bank access to ${bank}` : "Bank access";
+  if (daysLeft < 0) return `${access} has expired, so it no longer syncs.`;
+  if (daysLeft === 0) return `${access} ends today.`;
+  return `${access} ends in ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`;
+}

@@ -1,3 +1,10 @@
+/** The 500 page as a Response. */
+export const errorResponse = (): Response =>
+  new Response(renderErrorPage(), {
+    status: 500,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
+
 export function renderErrorPage(): string {
   return `<!doctype html>
 <html lang="en">

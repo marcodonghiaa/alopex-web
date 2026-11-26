@@ -9,6 +9,7 @@ import { GroupedList } from "@/components/ui/grouped-list";
 import { plural } from "@/lib/plural";
 import { previewLine } from "@/lib/rules";
 import { invalidateAfterReapply, reapply } from "@/lib/reapply-rules";
+import { UNCATEGORIZED_LABEL } from "@/lib/categories";
 
 // Rules run on new transactions only; this re-runs them on the past ones, after a preview that
 // starts as soon as the panel opens. A change to the rules is a new preview (ruleIds in the key).
@@ -102,7 +103,7 @@ export function ApplyToPast({ ruleIds, onDone }: { ruleIds: string; onDone: () =
                   {s.name || "No name"}
                 </span>
                 <span className="flex items-center gap-1.5 text-muted-foreground">
-                  {s.from ?? "Uncategorized"}
+                  {s.from ?? UNCATEGORIZED_LABEL}
                   <ArrowRight aria-label="to" className="size-3.5" />
                   <span className="text-foreground">{s.to}</span>
                 </span>

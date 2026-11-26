@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Check, ChevronRight, Loader2 } from "lucide-react";
 import { PRIMARY, TINTED } from "@/components/import/splitwise-ui";
-import { money, moneyAmount, shortDate } from "@/lib/import/splitwise-format";
+import { moneyFromCents, moneyAmount, shortDate } from "@/lib/import/splitwise-format";
 import { supabase } from "@/integrations/supabase/client";
 import type { ClassifiedRow } from "@/lib/import/splitwise-classify";
 import type { RpcClient } from "@/lib/import/splitwise-commit";
@@ -16,7 +16,7 @@ import {
 } from "@/lib/import/splitwise-corrections";
 import type { RateToEur } from "@/lib/import/splitwise-match";
 
-const fmt = (cents: number, currency: string) => money(Math.abs(cents), currency);
+const fmt = (cents: number, currency: string) => moneyFromCents(Math.abs(cents), currency);
 
 function Tick({
   id,

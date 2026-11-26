@@ -30,6 +30,7 @@ import {
   type MatchField,
   type MatchMode,
 } from "@/lib/rules";
+import { patchCache, rollback } from "@/components/transactions/mutations";
 
 // "Make a rule" from a transaction's category opens this page with the form filled in.
 type RulesSearch = { text?: string | undefined; category?: string | undefined };
@@ -480,17 +481,14 @@ function RuleList({ rules, previewKey = 0 }: { rules: RuleRow[]; previewKey?: nu
       const { error } = await supabase.from("category_rules").delete().eq("id", id);
       if (error) throw error;
     },
-    onMutate: async (id) => {
+    onMutate: (id) => {
       setChecking(false); // its count would include the rule being deleted
-      await queryClient.cancelQueries({ queryKey: ["category-rules"] });
-      const previous = queryClient.getQueryData<RuleRow[]>(["category-rules"]);
-      queryClient.setQueryData<RuleRow[]>(["category-rules"], (old) =>
+      return patchCache<RuleRow>(queryClient, ["category-rules"], (old) =>
         old?.filter((r) => r.id !== id),
       );
-      return { previous };
     },
     onError: (_err, _id, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(["category-rules"], ctx.previous);
+      rollback(queryClient, ["category-rules"], ctx);
       toast.error("Couldn't delete the rule. Try again.");
     },
     onSuccess: (_data, id, ctx) => {

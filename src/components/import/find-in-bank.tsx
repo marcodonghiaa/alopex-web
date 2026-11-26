@@ -1,16 +1,15 @@
 import { useEffect, useState } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { CTA, Group } from "@/components/import/splitwise-ui";
-import { money, shortDate } from "@/lib/import/splitwise-format";
+import { moneyFromCents, shortDate } from "@/lib/import/splitwise-format";
 import type { ClassifiedRow } from "@/lib/import/splitwise-classify";
 import {
   manualSplit,
   nearbyPayments,
   type BankTx,
+  txKey as key,
   type RateToEur,
 } from "@/lib/import/splitwise-match";
-
-const key = (t: BankTx) => `${t.accountUid}|${t.entryReference}`;
 
 /**
  * A sheet listing the payments around an expense I paid, so the user can say which one it was
@@ -111,7 +110,7 @@ export function FindInBank({
                       </span>
                       <span className="shrink-0 font-figure text-[0.9375rem]">
                         {out ? "−" : "+"}
-                        {money(t.amountCents, t.currency)}
+                        {moneyFromCents(t.amountCents, t.currency)}
                       </span>
                       <span
                         aria-hidden
@@ -138,15 +137,15 @@ export function FindInBank({
               <dl className="divide-y divide-border font-figure text-[0.9375rem]">
                 <div className="flex min-h-11 items-center justify-between px-4">
                   <dt className="text-muted-foreground">Paid from your bank</dt>
-                  <dd>{money(tx.amountCents, tx.currency)}</dd>
+                  <dd>{moneyFromCents(tx.amountCents, tx.currency)}</dd>
                 </div>
                 <div className="flex min-h-11 items-center justify-between px-4">
                   <dt className="text-muted-foreground">Others owe you (Splitwise)</dt>
-                  <dd>−{money(split.othersOweCents, tx.currency)}</dd>
+                  <dd>−{moneyFromCents(split.othersOweCents, tx.currency)}</dd>
                 </div>
                 <div className="flex min-h-11 items-center justify-between px-4 font-semibold">
                   <dt>Counts as your spending</dt>
-                  <dd>{money(split.personalAmountCents, tx.currency)}</dd>
+                  <dd>{moneyFromCents(split.personalAmountCents, tx.currency)}</dd>
                 </div>
               </dl>
             </Group>

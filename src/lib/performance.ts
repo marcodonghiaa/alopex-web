@@ -3,11 +3,6 @@ import { formatPercent } from "@/lib/locale";
 // The database picks each holding's prices for a range (holding_performance); lib/trades turns them
 // and your trades into a return.
 
-// ok: start price is within a week before the range start. since: first price is after the range
-// start, so measured from start_date. stale: a hole in the prices, no honest number.
-// no_price: nothing priced, or no exchange rate for its currency.
-export type PerformanceStatus = "ok" | "since" | "stale" | "no_price";
-
 export interface PerformanceRow {
   kind: string;
   key: string;
@@ -17,6 +12,9 @@ export interface PerformanceRow {
   start_price_eur: number | null;
   end_date: string | null;
   end_price_eur: number | null;
+  // ok: start price is within a week before the range start. since: first price is after the range
+  // start, so measured from start_date. stale: a hole in the prices, no honest number.
+  // no_price: nothing priced, or no exchange rate for its currency.
   status: string;
 }
 

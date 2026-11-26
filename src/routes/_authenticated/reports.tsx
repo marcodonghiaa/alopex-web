@@ -168,9 +168,7 @@ function ReportsPage() {
   );
 
   const monthLabel = month.toLocaleDateString(dateLocale(), { month: "long", year: "numeric" });
-  const canGoNext =
-    startOfMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1)) <=
-    startOfMonth(new Date());
+  const canGoNext = month < startOfMonth(new Date());
 
   const net = netAfterSpending(incomeExpensesQuery.data);
   const spendTotal = categorySpend(spendQuery.data ?? []).reduce((s, r) => s + r.spend_eur, 0);

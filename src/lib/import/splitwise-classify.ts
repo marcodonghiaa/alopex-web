@@ -57,7 +57,7 @@ export function classifyRows(file: SplitwiseFile, meIndex: number): Array<Classi
   });
 }
 
-export interface Summary {
+interface Summary {
   paidByOther: { count: number; shareCents: number };
   paidByMe: { count: number; costCents: number; shareCents: number };
   notInvolved: { count: number };

@@ -7,8 +7,6 @@ const Popover = PopoverPrimitive.Root;
 
 const PopoverTrigger = PopoverPrimitive.Trigger;
 
-const PopoverAnchor = PopoverPrimitive.Anchor;
-
 type Padding = number | Partial<Record<"top" | "right" | "bottom" | "left", number>>;
 
 /** A 16px gap from the screen edge (the page's phone gutter), plus room for the phone
@@ -50,4 +48,4 @@ const PopoverContent = React.forwardRef<
 });
 PopoverContent.displayName = PopoverPrimitive.Content.displayName;
 
-export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor };
+export { Popover, PopoverTrigger, PopoverContent };

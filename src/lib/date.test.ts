@@ -1,5 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { asOf, axisDateFormatter, addDays, countsInTotal, isDay, monthBounds } from "./date";
+import {
+  asOf,
+  axisDateFormatter,
+  addDays,
+  countsInTotal,
+  formatDayMonth,
+  isDay,
+  monthBounds,
+} from "./date";
+
+describe("formatDayMonth", () => {
+  it("reads a date-only string as the local day, without the year", () => {
+    expect(formatDayMonth("2025-03-01")).toBe("1 Mar");
+  });
+
+  it("shows a dash for no date", () => {
+    expect(formatDayMonth(null)).toBe("—");
+  });
+});
 
 describe("axisDateFormatter", () => {
   it("shows day and month on a short range, so daily ticks stay distinct", () => {

@@ -114,22 +114,26 @@ export function PushSubscribeButton({ onSubscribed }: { onSubscribed?: () => voi
       // register() can resolve before the worker is actually active -- pushManager.subscribe
       // needs an active worker, so wait for the ready promise rather than the raw registration.
       const registration = await navigator.serviceWorker.ready;
+      const key = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+      // A subscription made with an older VAPID key makes subscribe() throw, so drop it.
+      // Some browsers don't expose the key (null): leave those alone.
+      const old = await registration.pushManager.getSubscription();
+      const oldKey = old?.options.applicationServerKey;
+      if (oldKey && new Uint8Array(oldKey).join() !== key.join()) await old.unsubscribe();
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        applicationServerKey: key,
       });
 
       // H018: the endpoint is unique per browser, so a plain insert failed when another
       // account had subscribed here first. The RPC moves the endpoint to this user.
       const json = subscription.toJSON();
-      const { error } = await supabase.rpc(
-        "claim_push_subscription" as never,
-        {
-          p_endpoint: json.endpoint,
-          p_p256dh: json.keys?.["p256dh"],
-          p_auth: json.keys?.["auth"],
-        } as never,
-      );
+      // A subscription always has these; a missing one is refused by the function.
+      const { error } = await supabase.rpc("claim_push_subscription", {
+        p_endpoint: json.endpoint as string,
+        p_p256dh: json.keys?.["p256dh"] as string,
+        p_auth: json.keys?.["auth"] as string,
+      });
       if (error) throw error;
 
       setSubscribed(true);

@@ -650,6 +650,29 @@ describe("phone layout", () => {
     expect(edit.querySelector(".lucide-pencil")).toBeNull();
   });
 
+  // H390: a second account at the bank with a zero balance was left out of the menu, the only
+  // place its type is set, so an emptied card couldn't be marked as a debt.
+  it("lists a bank's zero-balance account in its menu", async () => {
+    const row = (uid: string, currency: string, amount: number) => ({
+      uid,
+      label: `Demo Bank ${currency}`,
+      iban: null,
+      currency,
+      snapshot_date: "2026-10-19",
+      amount,
+      amount_eur: amount,
+      consent_valid_until: null,
+      bank_name: "Demo Bank",
+      account_type: null,
+      manual: false,
+    });
+    rows.v_bank_accounts_latest = [row("a1", "EUR", 1000), row("a2", "USD", 0)];
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Demo Bank" }));
+    expect(await screen.findByText("Demo Bank USD: account type")).toBeInTheDocument();
+    expect(screen.getByText("Demo Bank EUR: account type")).toBeInTheDocument();
+  });
+
   it("says linking in Enable Banking is needed once per bank", async () => {
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Connect a bank" }));

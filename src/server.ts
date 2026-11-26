@@ -2,7 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { contentSecurityPolicy } from "./lib/csp";
-import { renderErrorPage } from "./lib/error-page";
+import { errorResponse } from "./lib/error-page";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -30,10 +30,7 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   if (!isH3SwallowedErrorBody(body)) return response;
 
   console.error(consumeLastCapturedError() ?? new Error(`h3 swallowed SSR error: ${body}`));
-  return new Response(renderErrorPage(), {
-    status: 500,
-    headers: { "content-type": "text/html; charset=utf-8" },
-  });
+  return errorResponse();
 }
 
 function isH3SwallowedErrorBody(body: string): boolean {
@@ -56,7 +53,9 @@ function withSecurityHeaders(response: Response): Response {
   headers.set("X-Frame-Options", "DENY");
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  // This host only: includeSubDomains would pin every subdomain of a self-hoster's domain (a NAS
+  // or router page on plain http) to HTTPS for a year. Browsers ignore it over plain http.
+  headers.set("Strict-Transport-Security", "max-age=31536000");
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -72,12 +71,7 @@ export default {
       return withSecurityHeaders(await normalizeCatastrophicSsrResponse(response));
     } catch (error) {
       console.error(error);
-      return withSecurityHeaders(
-        new Response(renderErrorPage(), {
-          status: 500,
-          headers: { "content-type": "text/html; charset=utf-8" },
-        }),
-      );
+      return withSecurityHeaders(errorResponse());
     }
   },
 };
