@@ -91,6 +91,7 @@ export function SplitEditor({
         <button
           type="button"
           aria-label={`Split ${cleanMerchantName(tx.creditor_name) ?? "transaction"}`}
+          data-quick="split"
           disabled={saving}
           className="-m-2 inline-flex min-h-11 cursor-pointer items-center p-2 disabled:opacity-60"
         >

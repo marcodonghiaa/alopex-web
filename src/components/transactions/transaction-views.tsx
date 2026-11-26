@@ -1,5 +1,13 @@
-import { useId, useState, type ReactNode } from "react";
-import { ChevronRight, MoreHorizontal, ThumbsDown, ThumbsUp, Users } from "lucide-react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {
+  ChevronRight,
+  MoreHorizontal,
+  PanelBottomOpen,
+  Tag,
+  ThumbsDown,
+  ThumbsUp,
+  Users,
+} from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { categoryColor, UNCATEGORIZED_LABEL } from "@/lib/categories";
 import { cleanMerchantName } from "@/lib/merchant-name";
@@ -29,6 +37,8 @@ import { SplitEditor } from "./split-editor";
 import { WorthItPrompt } from "./worth-it";
 import { AmountEditor } from "./amount-editor";
 import { NoteEditor, TagEditor } from "./note-tags-editor";
+import { RowMenu, type RowMenuItem } from "./row-menu";
+import { useRowGestures } from "@/components/ui/row-gestures";
 
 export interface TransactionViewProps {
   tx: TransactionRow;
@@ -126,12 +136,30 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** Every editor for one bank transaction: a bottom sheet on a phone, a side panel on desktop. */
+// A row's quick action opens the sheet straight on that editor.
+type QuickAction = "split" | "category";
+
 function TransactionEditSheet({
   open,
   onOpenChange,
+  quick,
   ...p
-}: TransactionViewProps & { open: boolean; onOpenChange: (open: boolean) => void }) {
+}: TransactionViewProps & {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  quick?: QuickAction | null;
+}) {
   const isMobile = useIsMobile();
+  const fields = useRef<HTMLDivElement>(null);
+  // Once the sheet has slid in (350ms), open the asked-for editor as if its button were tapped.
+  useEffect(() => {
+    if (!open || !quick) return;
+    const t = setTimeout(
+      () => fields.current?.querySelector<HTMLElement>(`[data-quick="${quick}"]`)?.click(),
+      380,
+    );
+    return () => clearTimeout(t);
+  }, [open, quick]);
   const { tx } = p;
   const name = cleanMerchantName(tx.creditor_name) ?? "—";
   const share = isSplitwiseShare(tx);
@@ -173,7 +201,7 @@ function TransactionEditSheet({
             {formatBookingDate(tx.booking_date)} · {p.accountLabel}
           </p>
         </SheetHeader>
-        <div className="space-y-4 px-4 pb-4">
+        <div ref={fields} className="space-y-4 px-4 pb-4">
           {askWorthIt && (
             <div
               role="group"
@@ -440,15 +468,44 @@ export function TransactionRowView(props: TransactionViewProps) {
   );
 }
 
-/** Phone row: a clean read-only line under its day heading; every editor lives in the sheet that a tap opens. */
+/** Phone row: a clean read-only line under its day heading; every editor lives in the sheet that a tap opens.
+ * Like an iOS list row it also swipes left to reveal quick actions, and a long press opens them as a menu. */
 export function TransactionCardView(props: TransactionViewProps) {
   const { tx, selected, highlighted } = props;
   const [open, setOpen] = useState(false);
-  const show = (o: boolean) => {
+  const [quick, setQuick] = useState<QuickAction | null>(null);
+  const [menuAt, setMenuAt] = useState<DOMRect | null>(null);
+  const surface = useRef<HTMLLIElement>(null);
+  const face = useRef<HTMLButtonElement>(null);
+  const show = (o: boolean, action: QuickAction | null = null) => {
+    setQuick(o ? action : null);
     setOpen(o);
     props.onOpenChange?.(o);
   };
   const share = isSplitwiseShare(tx);
+  const name = cleanMerchantName(tx.creditor_name) ?? "transaction";
+
+  // A Splitwise share is already split there: only its category can change here.
+  const quickActions: Array<{ action: QuickAction; label: string; icon: typeof Tag }> = [
+    ...(share ? [] : [{ action: "split" as const, label: "Split", icon: Users }]),
+    { action: "category", label: "Category", icon: Tag },
+  ];
+  const actions: Array<RowMenuItem & { action: QuickAction }> = quickActions.map((a) => ({
+    ...a,
+    onSelect: () => run(a.action),
+  }));
+  const ACTION_W = 72;
+  const swipe = useRowGestures({
+    surface,
+    content: face,
+    width: actions.length * ACTION_W,
+    onLongPress: () => face.current && setMenuAt(face.current.getBoundingClientRect()),
+  });
+  function run(action: QuickAction) {
+    swipe.close();
+    setMenuAt(null);
+    show(true, action);
+  }
 
   const summary = (
     <>
@@ -485,18 +542,64 @@ export function TransactionCardView(props: TransactionViewProps) {
     </>
   );
 
-  const rowClass = `${selected ? "bg-primary/10" : ""} ${highlighted ? "ring-2 ring-inset ring-primary" : ""}`;
+  // The face is opaque so the actions behind it only show where it slides away.
+  const faceBg = selected
+    ? "bg-[color-mix(in_oklab,var(--color-primary)_10%,var(--color-card))]"
+    : "bg-card";
 
   return (
-    <li data-entry-ref={tx.entry_reference} className={rowClass}>
+    <li
+      ref={surface}
+      data-entry-ref={tx.entry_reference}
+      className={`relative overflow-hidden ${highlighted ? "ring-2 ring-inset ring-primary" : ""}`}
+    >
+      <div
+        aria-hidden={!swipe.open}
+        className="absolute inset-y-0 right-0 flex items-center justify-end"
+      >
+        {actions.map((a, i) => (
+          <button
+            key={a.action}
+            type="button"
+            tabIndex={swipe.open ? 0 : -1}
+            onClick={a.onSelect}
+            className="flex w-[72px] flex-col items-center gap-1 text-[0.6875rem] font-medium text-muted-foreground"
+          >
+            <span
+              className={`flex size-11 items-center justify-center rounded-full ${i === 0 ? "bg-foreground text-background" : "bg-accent text-foreground"}`}
+            >
+              <a.icon className="size-5" aria-hidden />
+            </span>
+            {a.label}
+          </button>
+        ))}
+      </div>
       <button
+        ref={face}
         type="button"
         onClick={() => show(true)}
-        className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left active:bg-accent"
+        style={{ touchAction: "pan-y" }}
+        className={`relative flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left active:bg-accent ${faceBg}`}
       >
         {summary}
       </button>
-      <TransactionEditSheet {...props} open={open} onOpenChange={show} />
+      {menuAt && (
+        <RowMenu
+          title={`Actions for ${name}`}
+          rect={menuAt}
+          preview={summary}
+          items={[
+            ...actions,
+            {
+              label: "Details",
+              icon: PanelBottomOpen,
+              onSelect: () => (setMenuAt(null), show(true)),
+            },
+          ]}
+          onClose={() => setMenuAt(null)}
+        />
+      )}
+      <TransactionEditSheet {...props} open={open} onOpenChange={(o) => show(o)} quick={quick} />
     </li>
   );
 }

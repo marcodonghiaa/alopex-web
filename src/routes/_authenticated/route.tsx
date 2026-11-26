@@ -159,11 +159,11 @@ export const MORE_GROUPS: Array<NavGroup> = (() => {
   return [{ label: "", items: pages }, ...tools].filter((g) => g.items.length > 0);
 })();
 
-// Mobile tab bar: icon + sans label; the active tab carries a 2px Ember rule on top.
+// Mobile tab bar: a floating pill (Marco, native feel); icon + sans label, the current tab sits in a soft fill.
 const TAB_LINK =
-  "flex flex-col items-center justify-center gap-0.5 border-t-2 border-transparent text-muted-foreground transition-opacity active:opacity-60";
+  "flex flex-col items-center justify-center gap-0.5 rounded-full text-muted-foreground transition-[opacity,background-color] active:opacity-60";
 const TAB_LINK_ACTIVE =
-  "flex flex-col items-center justify-center gap-0.5 border-t-2 border-ember text-foreground transition-opacity active:opacity-60";
+  "flex flex-col items-center justify-center gap-0.5 rounded-full bg-accent text-foreground transition-[opacity,background-color] active:opacity-60";
 const TAB_LABEL = "text-[0.6875rem] font-medium";
 
 // More sheet rows: 44px+ grouped-list rows; the current page takes the accent fill and weight 500.
@@ -377,11 +377,11 @@ function AuthenticatedLayout() {
         <DemoBadge className="absolute left-3 top-[calc(0.5625rem+env(safe-area-inset-top))]" />
       </div>
 
-      {/* Mobile bottom tab bar: max 5 items, icon + label, current tab marked by an Ember top rule. */}
+      {/* Mobile bottom tab bar: a floating pill above the home indicator, max 5 items, icon + label. */}
       <nav
         aria-label="Primary"
         data-phone-bar="bottom"
-        className="glass fixed inset-x-0 bottom-0 z-30 grid h-[calc(3.25rem+env(safe-area-inset-bottom))] grid-cols-5 border-t pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="glass fixed inset-x-3.5 bottom-[calc(0.625rem+env(safe-area-inset-bottom))] z-30 grid h-16 grid-cols-5 rounded-full border p-1.5 shadow-[0_10px_30px_rgb(0_0_0/0.28)] md:hidden"
       >
         {TAB_BAR_ITEMS.map((item) => {
           const active = item.owns.includes(pathname);
@@ -498,7 +498,7 @@ function AuthenticatedLayout() {
       </Sheet>
 
       {/* Main content */}
-      <main className="min-w-0 flex-1 pt-[calc(2.75rem+env(safe-area-inset-top))] pb-[calc(3.25rem+env(safe-area-inset-bottom))] md:pt-0 md:pb-0 md:pl-64">
+      <main className="min-w-0 flex-1 pt-[calc(2.75rem+env(safe-area-inset-top))] pb-[calc(5.25rem+env(safe-area-inset-bottom))] md:pt-0 md:pb-0 md:pl-64">
         <Outlet />
         <footer className="mx-auto max-w-5xl px-4 pb-8 sm:px-8 md:pb-12">
           <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-start sm:justify-between">
