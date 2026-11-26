@@ -5,7 +5,7 @@ import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router"
 import { makeRuleAction } from "@/lib/rules";
 import { rulesQuery } from "@/lib/rules-query";
 import { accountName, bankOf } from "@/components/bank-badge";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Input, Select } from "@/components/ui/field";
 import { SectionTitle } from "@/components/ui/grouped-list";
 import { Alert } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { readPages } from "@/lib/read-pages";
 import { formatISODate, monthBounds } from "@/lib/date";
@@ -322,12 +323,16 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
     queryKey: ["transactions", listKey],
     queryFn: () => fetchList<TransactionRow>(scope, false),
     staleTime: 60_000,
+    // The month on screen stays (dimmed) until the next one lands, instead of a skeleton flash.
+    placeholderData: keepPreviousData,
   });
 
   const transfersQuery = useQuery({
     queryKey: ["transfers", listKey],
     queryFn: () => fetchList<TransferRow>(scope, true),
     staleTime: 60_000,
+    // The month on screen stays (dimmed) until the next one lands, instead of a skeleton flash.
+    placeholderData: keepPreviousData,
   });
   const transfers = transfersQuery.data ?? [];
 
@@ -357,13 +362,22 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
     queryKey: ["splitwise-shares", listKey],
     queryFn: () => fetchShares(scope),
     staleTime: 60_000,
+    // The month on screen stays (dimmed) until the next one lands, instead of a skeleton flash.
+    placeholderData: keepPreviousData,
   });
 
   const inOutQuery = useQuery({
     queryKey: ["income-vs-expenses", monthKey],
     queryFn: () => fetchInOut(monthKey),
     staleTime: 60_000,
+    // The month on screen stays (dimmed) until the next one lands, instead of a skeleton flash.
+    placeholderData: keepPreviousData,
   });
+
+  // Another month's rows still on screen while this one loads: shown dimmed and not tappable,
+  // and nothing that looks for a row (a linked transaction, "no results") reads them.
+  const stale = txQuery.isPlaceholderData || sharesQuery.isPlaceholderData;
+  const txLoading = txQuery.isPending || stale;
 
   const extraError = [sharesQuery, accountsQuery, transfersQuery].find((q) => q.isError)?.error;
 
@@ -394,19 +408,19 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
   // Act on a link once (it can take a refetch to find its row), so later toggles don't redo it.
   const handledLink = useRef<string | null>(null);
   useEffect(() => {
-    if (!highlightRef || txQuery.isPending || handledLink.current === highlightRef) return;
+    if (!highlightRef || txLoading || handledLink.current === highlightRef) return;
     const tx = transactions.find((t) => t.entry_reference === highlightRef);
     if (!tx) return;
     handledLink.current = highlightRef;
     // A row others owe all of isn't my spending: open its section, ask nothing.
     if (isPaidForOthers(tx)) setShowForOthers(true);
     else if (isWorthItEligible(tx)) setSpotlightTx(tx);
-  }, [highlightRef, txQuery.isPending, transactions]);
+  }, [highlightRef, txLoading, transactions]);
 
   // Scroll once the row is on screen (an opened section renders it a beat later), then unring it.
   const scrolledLink = useRef<string | null>(null);
   useEffect(() => {
-    if (!highlightRef || txQuery.isPending || scrolledLink.current === highlightRef) return;
+    if (!highlightRef || txLoading || scrolledLink.current === highlightRef) return;
     // Each row has a desktop and a phone copy, one of them hidden: scroll to the one on screen.
     const el = [
       ...document.querySelectorAll(`[data-entry-ref="${CSS.escape(highlightRef)}"]`),
@@ -418,12 +432,12 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
       el.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 100);
     return () => clearTimeout(timer);
-  }, [highlightRef, txQuery.isPending, transactions, showForOthers]);
+  }, [highlightRef, txLoading, transactions, showForOthers]);
   useEffect(() => {
-    if (!highlightRef || txQuery.isPending) return;
+    if (!highlightRef || txLoading) return;
     const timer = setTimeout(() => setHighlightRef(null), 3000);
     return () => clearTimeout(timer);
-  }, [highlightRef, txQuery.isPending]);
+  }, [highlightRef, txLoading]);
 
   const categories = useMemo(() => listCategories(transactions), [transactions]);
   // Only tags on this month's rows, so every option matches something.
@@ -436,7 +450,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
   const tagNow = tags.find((t) => sameTag(t, tag));
   // A day picked while searching every month may not be in this month: back on the month, drop it.
   if (!query && day && day.slice(0, 7) !== monthKey.slice(0, 7)) setDay("");
-  if (tag && !txQuery.isPending && tagNow !== tag) setTag(tagNow ?? "");
+  if (tag && !txLoading && tagNow !== tag) setTag(tagNow ?? "");
 
   const accounts = useMemo(() => accountsQuery.data ?? {}, [accountsQuery.data]);
   const bankFor = useCallback(
@@ -674,7 +688,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
       };
 
   const emptyList =
-    query && transactions.length === 0 && !txQuery.isPending ? (
+    query && transactions.length === 0 && !txLoading ? (
       <EmptyState
         title={`Nothing matches “${query}” in any month.`}
         action={
@@ -764,8 +778,13 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
           canGoNext={canGoNext}
         />
       )}
-      <p className="mt-0.5 mb-4 min-h-5 text-sm text-muted-foreground">
-        {inOut && !(query && txQuery.isPending) && (
+      <p
+        className={cn(
+          "mt-0.5 mb-4 min-h-5 text-sm text-muted-foreground transition-opacity",
+          inOutQuery.isPlaceholderData && "opacity-50",
+        )}
+      >
+        {inOut && !(query && txLoading) && (
           <>
             In{" "}
             <span className="font-figure text-foreground">{formatEur(inOut.income_eur ?? 0)}</span>
@@ -929,7 +948,13 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
         ) : txQuery.isError ? null : filtered.length === 0 ? (
           <div className="rounded-lg bg-card">{emptyList}</div>
         ) : (
-          <div className="space-y-5">
+          <div
+            aria-busy={stale || undefined}
+            className={cn(
+              "space-y-5 transition-opacity",
+              stale && "pointer-events-none opacity-50",
+            )}
+          >
             {groupByDay(mine).map((group) => (
               <section key={group.day ?? "none"}>
                 <SectionTitle variant="label">{formatDayHeading(group.day)}</SectionTitle>
@@ -967,7 +992,10 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody
+              aria-busy={stale || undefined}
+              className={cn("transition-opacity", stale && "pointer-events-none opacity-50")}
+            >
               {txQuery.isPending ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i} className="border-b last:border-0">

@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/demo/mode", () => ({ isDemoMode: () => false }));
 
-import { SettingsPageFrame, SettingsSidebar } from "./settings-nav";
+import { SettingsPageFrame, SettingsSidebar, settingsTitle } from "./settings-nav";
 
 // The real router, so active states (aria-current) are what users get.
 async function at(url: string, ui: React.ReactNode) {
@@ -77,10 +77,17 @@ describe("SettingsSidebar", () => {
   });
 });
 
-describe("SettingsPageFrame", () => {
-  // polish-4 A3: the phone back link goes to the list; it is never the page you are on.
-  it("doesn't mark the back link to Settings as the current page", async () => {
-    await at("/settings/app", <SettingsPageFrame title="App">x</SettingsPageFrame>);
-    expect(screen.getByRole("link", { name: "Settings" })).not.toHaveAttribute("aria-current");
+describe("settingsTitle", () => {
+  // Phone top bar: a settings page names itself; Back moved there from the page.
+  it("names Settings and each section, and nothing outside Settings", () => {
+    expect(settingsTitle("/settings")).toBe("Settings");
+    expect(settingsTitle("/settings/security")).toBe("Security");
+    expect(settingsTitle("/accounts")).toBeUndefined();
+  });
+
+  it("leaves Back to the top bar: the page has no back link of its own", () => {
+    render(<SettingsPageFrame title="App">x</SettingsPageFrame>);
+    expect(screen.getByRole("heading", { name: "App" })).toBeTruthy();
+    expect(screen.queryByRole("link")).toBeNull();
   });
 });

@@ -4,10 +4,11 @@ import {
   Link,
   redirect,
   useNavigate,
+  useRouter,
   useRouterState,
 } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { LogOut, Download, MoreHorizontal, ChevronRight } from "lucide-react";
+import { LogOut, Download, MoreHorizontal, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Icon, iconOf, type IconComponent } from "@/components/icons/icon";
 import { useCategories } from "@/lib/use-categories";
@@ -30,8 +31,10 @@ import { useRecurringStreams } from "@/lib/use-recurring-streams";
 import { useQuery } from "@tanstack/react-query";
 import { fetchReviewCount, REVIEW_COUNT_KEY } from "@/lib/splitwise-sync";
 import { useHiddenPages } from "@/lib/hidden-pages";
+import { useEdgeSwipeBack } from "@/components/ui/edge-swipe-back";
 import {
   isSettingsPath,
+  settingsTitle,
   SettingsSidebar,
   SIDEBAR_LINK,
   SIDEBAR_LINK_ACTIVE,
@@ -134,6 +137,30 @@ export const TAB_BAR_ITEMS: Array<{
 ];
 
 const TAB_PATHS = new Set(TAB_BAR_ITEMS.flatMap((t) => t.owns));
+/** A tab's own page: a phone shows it without Back, and tabs swap without a slide. */
+export const isTabPath = (pathname: string) => TAB_PATHS.has(pathname);
+
+// Pages reached from elsewhere than the menus (Reports, Settings, Health in General).
+const OTHER_TITLES: Record<string, string> = {
+  "/cash-flow": "Cash flow",
+  "/health": "Health",
+  "/rules": "Rules",
+};
+
+/** The phone top bar's title: the tab's name on a tab, else the page's menu name. */
+export function phoneTitle(pathname: string) {
+  const tab = TAB_BAR_ITEMS.find((t) => t.owns.includes(pathname));
+  if (tab) return tab.label;
+  const item = NAV_GROUPS.flatMap((g) => g.items).find((i) => i.to === pathname);
+  return item?.label ?? OTHER_TITLES[pathname] ?? settingsTitle(pathname) ?? "Alopex";
+}
+
+/** Where Back goes on a page opened with no in-app history behind it (a link, a reload). */
+export function phoneParent(pathname: string) {
+  if (pathname === "/rules") return "/settings/personalization";
+  if (pathname.startsWith("/settings/")) return "/settings";
+  return "/";
+}
 
 // The pages people open most from More come first; the rest keep their sidebar order.
 const MORE_FIRST = ["/accounts", "/subscriptions", "/splitwise"];
@@ -232,6 +259,37 @@ function AuthenticatedLayout() {
       [...(links ?? [])].find((a) => a.getAttribute("aria-current") === "page") ?? links?.[0]
     )?.focus();
   }, [inSettings]);
+  // Phone Back (top bar and edge swipe) on any page that isn't a tab: the previous page when the
+  // app has one, else the page's parent (Settings comes back to the last app page).
+  const router = useRouter();
+  const pushed = !isTabPath(pathname);
+  const goBack = () => {
+    // A home-screen app starts with one entry, so more means an app page sits behind this one.
+    if (window.history.length > 1) {
+      router.history.back();
+      return;
+    }
+    if (pathname === "/settings") {
+      void navigate({ ...lastAppPage.current, replace: true });
+      return;
+    }
+    void navigate({ to: phoneParent(pathname), replace: true });
+  };
+  const page = useRef<HTMLElement>(null);
+  useEdgeSwipeBack(page, pushed && !menuOpen, goBack, pathname);
+  // iOS large titles: the top bar names the page only once its own large title has scrolled under.
+  const [largeTitleShown, setLargeTitleShown] = useState(false);
+  useEffect(() => {
+    const title = page.current?.querySelector("h1.ios-large-title");
+    setLargeTitleShown(!!title);
+    if (!title || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setLargeTitleShown(!!e?.isIntersecting), {
+      rootMargin: "-56px 0px 0px 0px",
+    });
+    io.observe(title);
+    return () => io.disconnect();
+  }, [pathname]);
+
   // A More link to the page you're on only closes the sheet: navigating would replace the
   // sheet's history entry with the same page and leave a Back that does nothing.
   const closeMenuTo = (e: React.MouseEvent, to: string) => {
@@ -294,7 +352,7 @@ function AuthenticatedLayout() {
   }
 
   return (
-    <div className="flex min-h-dvh bg-background">
+    <div className="flex min-h-dvh overflow-x-clip bg-background">
       {/* Sidebar */}
       <aside
         ref={sidebar}
@@ -366,15 +424,35 @@ function AuthenticatedLayout() {
         </div>
       </aside>
 
-      {/* Mobile top bar: padded for the notch (safe-area-inset-top is 0 in a normal tab).
-          Page titles are large titles inside each page; this bar only names the app. */}
+      {/* Mobile top bar (iOS navigation bar): padded for the notch (safe-area-inset-top is 0 in a
+          normal tab). Back on pages that aren't a tab; the page's name, unless its large title
+          is still on screen. */}
       <div
         data-phone-bar="top"
-        className="glass fixed inset-x-0 top-0 z-30 flex h-[calc(2.75rem+env(safe-area-inset-top))] items-center justify-center border-b pt-[env(safe-area-inset-top)] md:hidden"
+        className="glass fixed inset-x-0 top-0 z-30 grid h-[calc(2.75rem+env(safe-area-inset-top))] grid-cols-[1fr_auto_1fr] items-center border-b px-1 pt-[env(safe-area-inset-top)] md:hidden"
       >
-        <BrandMark className="mr-2 size-5" />
-        <span className="font-sans text-[0.9375rem] font-semibold text-foreground">Alopex</span>
-        <DemoBadge className="absolute left-3 top-[calc(0.5625rem+env(safe-area-inset-top))]" />
+        <div>
+          {pushed && (
+            <button
+              type="button"
+              onClick={goBack}
+              aria-label="Back"
+              className="flex size-11 items-center justify-center rounded-full text-primary active:opacity-60"
+            >
+              <ChevronLeft className="size-7" strokeWidth={2.25} aria-hidden />
+            </button>
+          )}
+        </div>
+        <span
+          aria-hidden
+          className={cn(
+            "truncate text-[1.0625rem] font-semibold text-foreground transition-opacity duration-200",
+            largeTitleShown && "opacity-0",
+          )}
+        >
+          {phoneTitle(pathname)}
+        </span>
+        <DemoBadge className="mr-2 justify-self-end" />
       </div>
 
       {/* Mobile bottom tab bar: a floating pill above the home indicator, max 5 items, icon + label. */}
@@ -498,7 +576,10 @@ function AuthenticatedLayout() {
       </Sheet>
 
       {/* Main content */}
-      <main className="min-w-0 flex-1 pt-[calc(2.75rem+env(safe-area-inset-top))] pb-[calc(5.25rem+env(safe-area-inset-bottom))] md:pt-0 md:pb-0 md:pl-64">
+      <main
+        ref={page}
+        className="min-w-0 flex-1 pt-[calc(2.75rem+env(safe-area-inset-top))] pb-[calc(5.25rem+env(safe-area-inset-bottom))] md:pt-0 md:pb-0 md:pl-64"
+      >
         <Outlet />
         <footer className="mx-auto max-w-5xl px-4 pb-8 sm:px-8 md:pb-12">
           <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-start sm:justify-between">

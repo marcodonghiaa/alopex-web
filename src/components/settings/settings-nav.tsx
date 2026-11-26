@@ -66,6 +66,12 @@ const SETTINGS_SECTIONS: Array<SettingsSection> = [
 export const settingsSections = () =>
   isDemoMode() ? SETTINGS_SECTIONS.filter((s) => !s.account) : SETTINGS_SECTIONS;
 
+/** A settings page's name, for the phone top bar; undefined outside Settings. */
+export function settingsTitle(pathname: string) {
+  if (pathname === "/settings") return "Settings";
+  return SETTINGS_SECTIONS.find((s) => s.to === pathname)?.label;
+}
+
 /** Paths that show the settings sidebar instead of the app's (Rules is part of Personalization). */
 export const isSettingsPath = (pathname: string) =>
   pathname === "/settings" || pathname.startsWith("/settings/") || pathname === "/rules";
@@ -157,7 +163,7 @@ export function SettingsMenuList() {
   );
 }
 
-/** A settings page: phone back link to the list, then the large title and its sections. */
+/** A settings page: the large title, then its sections (the phone top bar has Back). */
 export function SettingsPageFrame({
   title,
   children,
@@ -167,18 +173,7 @@ export function SettingsPageFrame({
 }) {
   return (
     <div className="mx-auto max-w-5xl space-y-10 px-4 py-8 sm:px-8 md:py-12">
-      <div>
-        <Link
-          to="/settings"
-          // Not "current" on its own sub-pages: it leads back to the list.
-          activeOptions={{ exact: true }}
-          className="-ml-1 mb-2 inline-flex min-h-11 items-center gap-1 text-[0.9375rem] text-primary md:hidden"
-        >
-          <ArrowLeft className="size-4" aria-hidden />
-          Settings
-        </Link>
-        <h1 className="ios-large-title">{title}</h1>
-      </div>
+      <h1 className="ios-large-title">{title}</h1>
       {children}
     </div>
   );

@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 let failTable: string | null = null;
+// A source still on its way: its read never answers.
+let hangTable: string | null = null;
 // Someone who imported a spreadsheet but has no bank yet: history rows, no live snapshots.
 let historyOnly = false;
 // Per-test rows for a table, in place of the defaults below.
@@ -35,6 +37,7 @@ vi.mock("@/integrations/supabase/client", () => ({
       q["range"] = (from: number) => ((offset = from), q);
       q["then"] = (resolve: (v: unknown) => void) => {
         if (offset > 0) return resolve({ data: [], error: null });
+        if (table === hangTable) return;
         // The exchange rates never arrive: the page must say it is waiting, not that there are none.
         if (rowsFor[table]) return resolve({ data: rowsFor[table], error: null });
         if (table === "fx_rates") return;
@@ -234,5 +237,26 @@ describe("Net worth page: sync freshness", () => {
     await screen.findByRole("radio", { name: "USD" });
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.queryByText(/Synced/)).toBeNull();
+  });
+});
+
+// Native feel batch 5: the breakdown used to show older months while the headline still loaded,
+// then change. fails_when=any figure shows before all three net worth sources have landed
+describe("Net worth page: one reveal", () => {
+  it("keeps headline, chart and breakdown as placeholders until every source lands", async () => {
+    hangTable = "net_worth_reconstructed";
+    const { unmount } = renderPage();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByLabelText("Loading breakdown")).toBeTruthy();
+    expect(screen.queryByText("Breakdown")).toBeNull();
+    expect(screen.queryByText(/€1,000/)).toBeNull();
+    unmount();
+    hangTable = null;
+  });
+
+  it("shows them all once everything is in", async () => {
+    renderPage();
+    expect(await screen.findByText("Breakdown")).toBeTruthy();
+    expect(screen.queryByLabelText("Loading breakdown")).toBeNull();
   });
 });

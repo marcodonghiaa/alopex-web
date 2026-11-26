@@ -1332,15 +1332,3 @@ describe("re-sorting what a deleted rule filed", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 });
-
-// polish-1 #5: Rules is part of Settings › Personalization; on a phone it had no way back there.
-// fails_when=the phone back control is missing or goes elsewhere
-describe("Rules back to Settings (phone)", () => {
-  // polish-3 #5: a real link (address, long-press, open in new tab), like the other settings pages.
-  it("offers a phone-only link back to Personalization", async () => {
-    renderPage();
-    const back = await screen.findByRole("link", { name: "Personalization" });
-    expect(back).toHaveAttribute("href", "/settings/personalization");
-    expect(back.closest(".md\\:hidden")).not.toBeNull();
-  });
-});

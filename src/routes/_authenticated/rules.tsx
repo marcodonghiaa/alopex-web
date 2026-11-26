@@ -1,7 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Loader2, Plus, Trash2, X } from "lucide-react";
+import { ArrowRight, Loader2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ApplyToPast } from "@/components/rules/apply-to-past";
@@ -90,16 +90,6 @@ function RulesPage() {
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8 md:py-12">
       <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          {/* Rules belongs to Settings › Personalization; desktop has the settings menu instead. */}
-          <div className="md:hidden">
-            <Link
-              to="/settings/personalization"
-              className="-ml-1 mb-2 inline-flex min-h-11 items-center gap-1 text-[0.9375rem] text-primary"
-            >
-              <ArrowLeft className="size-4" aria-hidden />
-              Personalization
-            </Link>
-          </div>
           <h1 className="ios-large-title">Rules</h1>
           <p className="mt-0.5 max-w-prose text-sm text-muted-foreground">
             Rules set the category or type of new transactions that match, before the AI guesses. If

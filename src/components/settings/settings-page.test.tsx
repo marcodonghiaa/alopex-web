@@ -102,12 +102,6 @@ describe("settings pages", () => {
     expect(screen.getAllByRole("link")[0]).toHaveTextContent(/^General/);
   });
 
-  it("each section page has a phone back link to the list", () => {
-    demo.current = false;
-    render(<AppSettingsPage />);
-    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
-  });
-
   // polish-4 V3: DESIGN.md's 32px top padding, same as Rules, so the title doesn't jump
   // between Personalization and Rules. fails_when=a settings page goes back to py-6
   it("uses the standard 32px top padding, like Rules", () => {
