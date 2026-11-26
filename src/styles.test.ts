@@ -15,6 +15,25 @@ describe("global styles", () => {
     expect(rule).toMatch(/-webkit-appearance:\s*none/);
   });
 
+  // Native feel batch 1: touch has no hover, so taps showed nothing until the finger lifted.
+  // fails_when=hover looks stop doubling as the pressed look, or only apply on mouse devices
+  it("gives every hover look a pressed (:active) twin", () => {
+    const variant = css.match(/@custom-variant hover \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    expect(variant).toMatch(/@media \(hover: hover\)\s*\{\s*&:hover/);
+    expect(variant).toMatch(/&:active\s*\{\s*@slot;/);
+  });
+
+  // fails_when=long-press on a control selects its label, or content/inputs become unselectable
+  it("stops long-press selecting control labels, not content", () => {
+    const rule =
+      css.match(
+        /:where\(button, a, \[role="button"\], \[role="tab"\], summary\)\s*\{([^}]*)\}/,
+      )?.[1] ?? "";
+    expect(rule).toMatch(/-webkit-user-select:\s*none/);
+    expect(rule).toMatch(/-webkit-touch-callout:\s*none/);
+    expect(css).not.toMatch(/body\s*\{[^}]*user-select:\s*none/);
+  });
+
   // iOS view (fonts, Marco): every number in Geist, like Net Worth's figure. Even-width digits keep
   // amount columns aligned without a monospace font.
   it("sets figures in Geist with even-width digits", () => {

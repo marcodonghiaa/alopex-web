@@ -23,6 +23,8 @@ export const getRouter = () => {
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
+    // Start loading a page's code when a finger lands on its link, not when it lifts.
+    defaultPreload: "intent",
     defaultPreloadStaleTime: 0,
   });
 

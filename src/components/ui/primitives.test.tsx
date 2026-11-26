@@ -18,6 +18,15 @@ describe("Button", () => {
     expect(b.className).not.toContain("rounded-full");
   });
 
+  // Native feel batch 1: a phone button answered only when the finger lifted.
+  // fails_when=the button has no pressed shrink
+  it("shrinks slightly while pressed, so a tap answers at once", () => {
+    render(<Button>Save</Button>);
+    const b = screen.getByRole("button", { name: "Save" });
+    expect(b.className).toContain("active:scale-[0.97]");
+    expect(b.className).toContain("duration-100");
+  });
+
   it("supports quiet, ghost, destructive and icon variants", () => {
     render(
       <>

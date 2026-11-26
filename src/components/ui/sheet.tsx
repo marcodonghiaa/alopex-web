@@ -52,7 +52,8 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
-  "fixed z-50 gap-4 bg-background p-6 transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
+  // iOS sheet timing: a fast start that settles softly (350ms in, 250ms out), not a slow ease-in-out.
+  "fixed z-50 gap-4 bg-background p-6 transition ease-[cubic-bezier(0.32,0.72,0,1)] data-[state=closed]:duration-250 data-[state=open]:duration-350 data-[state=open]:animate-in data-[state=closed]:animate-out",
   {
     variants: {
       side: {

@@ -37,6 +37,16 @@ describe("Sheet", () => {
     expect(screen.getByRole("button", { name: "Close" })).toHaveClass("z-10");
   });
 
+  // Native feel batch 1: sheets opened in a slow 500ms ease-in-out. fails_when=the sheet
+  // loses the iOS curve or goes back to the slow timing
+  it("slides with iOS sheet timing", () => {
+    renderSheet();
+    const sheet = screen.getByRole("dialog");
+    expect(sheet.className).toContain("ease-[cubic-bezier(0.32,0.72,0,1)]");
+    expect(sheet.className).toContain("data-[state=open]:duration-350");
+    expect(sheet.className).not.toContain("duration-500");
+  });
+
   it("stays open when a toast is touched", async () => {
     const onOpenChange = renderSheet();
     await tick();

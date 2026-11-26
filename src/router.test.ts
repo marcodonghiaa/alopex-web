@@ -29,6 +29,12 @@ describe("getRouter", () => {
     expect(queryClient.getMutationCache().config.onError).toBeTypeOf("function");
   });
 
+  // Native feel batch 1: a page's code began loading only after the tap ended.
+  // fails_when=links stop preloading on touch/hover
+  it("preloads a page when a finger lands on its link", () => {
+    expect(getRouter().options.defaultPreload).toBe("intent");
+  });
+
   it("sends a refused session from a page to the code step, back to that page", async () => {
     window.history.replaceState(null, "", "/accounts");
     const router = getRouter();
