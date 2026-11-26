@@ -347,3 +347,55 @@ select {
   background-size: 1rem;
   padding-right: 2.25rem;
 }
+
+/* Phone page slides (iOS navigation push/pop), set by the router as view transition types.
+   The opening page comes in from the right over the old one, which drifts left and dims; Back
+   runs it in reverse. The top bar and tab bar have their own names, so they stay put. */
+[data-phone-bar="top"] {
+  view-transition-name: phone-top-bar;
+}
+[data-phone-bar="bottom"] {
+  view-transition-name: phone-tab-bar;
+}
+html:active-view-transition-type(push, pop)::view-transition-old(root),
+html:active-view-transition-type(push, pop)::view-transition-new(root) {
+  animation-duration: 350ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  animation-fill-mode: both;
+  mix-blend-mode: normal;
+}
+html:active-view-transition-type(push)::view-transition-old(root) {
+  animation-name: page-under-out;
+}
+html:active-view-transition-type(push)::view-transition-new(root) {
+  animation-name: page-over-in;
+}
+html:active-view-transition-type(pop)::view-transition-old(root) {
+  z-index: 1;
+  animation-name: page-over-out;
+}
+html:active-view-transition-type(pop)::view-transition-new(root) {
+  animation-name: page-under-in;
+}
+@keyframes page-over-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+@keyframes page-over-out {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes page-under-out {
+  to {
+    transform: translateX(-30%);
+    filter: brightness(0.7);
+  }
+}
+@keyframes page-under-in {
+  from {
+    transform: translateX(-30%);
+    filter: brightness(0.7);
+  }
+}

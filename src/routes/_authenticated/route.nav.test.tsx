@@ -17,6 +17,8 @@ const { rows, review, reviewCalls, reviewError, path, search } = vi.hoisted(() =
 }));
 // H018: what sign-out did, in order. H135: what signOut was asked, what it answers, and whether a
 // session is still stored afterwards.
+// The layout's navigate and the router's history Back, for the phone Back button.
+const nav = vi.hoisted(() => ({ navigate: vi.fn(), back: vi.fn() }));
 const signOutSteps = vi.hoisted(() => [] as string[]);
 const auth = vi.hoisted(() => ({
   args: [] as Array<unknown>,
@@ -62,7 +64,8 @@ vi.mock("@tanstack/react-router", () => ({
   ),
   Outlet: () => null,
   redirect: vi.fn(),
-  useNavigate: () => vi.fn(),
+  useNavigate: () => nav.navigate,
+  useRouter: () => ({ history: { back: nav.back } }),
   useRouterState: ({
     select,
   }: {
@@ -105,7 +108,7 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 
-import { Route, MORE_GROUPS, TAB_BAR_ITEMS } from "./route";
+import { Route, MORE_GROUPS, TAB_BAR_ITEMS, isTabPath, phoneParent, phoneTitle } from "./route";
 
 const Layout = Route.options.component as () => React.JSX.Element;
 const suggested = (id: string) => ({
@@ -649,5 +652,74 @@ describe("More sheet Settings row", () => {
     } finally {
       path.current = "/";
     }
+  });
+});
+
+// Native feel batch 4: the phone top bar is an iOS navigation bar.
+describe("phone top bar", () => {
+  const bar = () => within(document.querySelector<HTMLElement>('[data-phone-bar="top"]')!);
+  const historyLength = (n: number) => vi.spyOn(window.history, "length", "get").mockReturnValue(n);
+
+  it("names the page: a tab by its tab name, a More page by its menu name", () => {
+    expect(phoneTitle("/")).toBe("Net Worth");
+    expect(phoneTitle("/transactions")).toBe("Activity");
+    expect(phoneTitle("/crypto")).toBe("Investing");
+    expect(phoneTitle("/accounts")).toBe("Accounts");
+    expect(phoneTitle("/rules")).toBe("Rules");
+    expect(phoneTitle("/settings/security")).toBe("Security");
+    expect(phoneTitle("/somewhere")).toBe("Alopex");
+  });
+
+  it("treats only the tabs' own pages as tabs", () => {
+    expect(isTabPath("/portfolio")).toBe(true);
+    expect(isTabPath("/accounts")).toBe(false);
+  });
+
+  it("has no Back on a tab", () => {
+    path.current = "/";
+    renderLayout();
+    expect(bar().queryByRole("button", { name: "Back" })).toBeNull();
+    expect(bar().getByText("Net Worth")).toBeTruthy();
+  });
+
+  it("goes Back through history on a page opened inside the app", () => {
+    path.current = "/accounts";
+    const spy = historyLength(3);
+    nav.back.mockClear();
+    renderLayout();
+    fireEvent.click(bar().getByRole("button", { name: "Back" }));
+    expect(nav.back).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+    path.current = "/";
+  });
+
+  it("goes to the page's parent when the app opened straight on it", () => {
+    const spy = historyLength(1);
+    expect(phoneParent("/rules")).toBe("/settings/personalization");
+    expect(phoneParent("/settings/app")).toBe("/settings");
+    expect(phoneParent("/accounts")).toBe("/");
+    path.current = "/rules";
+    nav.navigate.mockClear();
+    renderLayout();
+    fireEvent.click(bar().getByRole("button", { name: "Back" }));
+    expect(nav.navigate).toHaveBeenCalledWith({ to: "/settings/personalization", replace: true });
+    spy.mockRestore();
+    path.current = "/";
+  });
+
+  it("brings Settings back to the last app page", () => {
+    const spy = historyLength(1);
+    path.current = "/accounts";
+    const { unmount } = renderLayout();
+    unmount();
+    path.current = "/settings";
+    nav.navigate.mockClear();
+    renderLayout();
+    fireEvent.click(bar().getByRole("button", { name: "Back" }));
+    expect(nav.navigate).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "/accounts", replace: true }),
+    );
+    spy.mockRestore();
+    path.current = "/";
   });
 });

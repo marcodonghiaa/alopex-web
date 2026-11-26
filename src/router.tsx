@@ -3,6 +3,8 @@ import { createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 import { onMfaRequired, retryUnlessRefused } from "@/lib/mfa";
 import { backHereSearch } from "@/lib/next-url";
+import { routerViewTransition } from "@/lib/page-motion";
+import { isTabPath } from "./routes/_authenticated/route";
 
 export const getRouter = () => {
   // The database refuses a session that skipped the authenticator code: send it to the code step,
@@ -26,6 +28,8 @@ export const getRouter = () => {
     // Start loading a page's code when a finger lands on its link, not when it lifts.
     defaultPreload: "intent",
     defaultPreloadStaleTime: 0,
+    // iOS slide when a phone opens a page or goes Back (none between tabs).
+    defaultViewTransition: routerViewTransition(isTabPath),
   });
 
   return router;

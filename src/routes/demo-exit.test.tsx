@@ -28,6 +28,7 @@ vi.mock("@tanstack/react-router", () => ({
   Outlet: () => null,
   redirect: vi.fn(),
   useNavigate: () => navigate,
+  useRouter: () => ({ history: { back: vi.fn() } }),
   useRouterState: () => "/",
 }));
 vi.mock("@/integrations/supabase/client", () => ({
