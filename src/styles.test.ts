@@ -26,7 +26,9 @@ describe("global styles", () => {
   // fails_when=long-press on a control selects its label, or content/inputs become unselectable
   it("stops long-press selecting control labels, not content", () => {
     const rule =
-      css.match(/:where\(button, a, \[role="button"\], \[role="tab"\], summary\)\s*\{([^}]*)\}/)?.[1] ?? "";
+      css.match(
+        /:where\(button, a, \[role="button"\], \[role="tab"\], summary\)\s*\{([^}]*)\}/,
+      )?.[1] ?? "";
     expect(rule).toMatch(/-webkit-user-select:\s*none/);
     expect(rule).toMatch(/-webkit-touch-callout:\s*none/);
     expect(css).not.toMatch(/body\s*\{[^}]*user-select:\s*none/);
