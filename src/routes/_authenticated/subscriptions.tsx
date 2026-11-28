@@ -682,7 +682,8 @@ function SubscriptionCard({
             >
               <a.icon className="size-5" aria-hidden />
             </span>
-            {a.label}
+            {/* Room for two lines on every action, so the circles line up. */}
+            <span className="h-7">{a.label}</span>
           </button>
         ))}
       </div>
