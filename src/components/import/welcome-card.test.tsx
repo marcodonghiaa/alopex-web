@@ -49,7 +49,9 @@ describe("WelcomeCard", () => {
     expect(await screen.findByText("0 of 4 done.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Connect" }).getAttribute("href")).toBe("/accounts");
     expect(screen.getByRole("link", { name: "Add" }).getAttribute("href")).toBe("/portfolio");
-    expect(screen.getByRole("link", { name: "Import" }).getAttribute("href")).toBe("/import");
+    expect(screen.getByRole("link", { name: "Import" }).getAttribute("href")).toBe(
+      "/settings/import",
+    );
   });
 
   it("ticks off the bank once one is linked, and counts imported history", async () => {

@@ -49,7 +49,7 @@ const STEP_COPY: Record<StepId, { title: string; detail: string; to?: string; ct
   history: {
     title: "Import your history",
     detail: "Past net worth or spending from a spreadsheet, so charts start earlier.",
-    to: "/import",
+    to: "/settings/import",
     cta: "Import",
   },
   notifications: {

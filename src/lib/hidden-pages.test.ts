@@ -51,10 +51,10 @@ describe("hidden pages", () => {
     act(() => void m.setPageHidden("/crypto", true));
     expect(result.current).toEqual(["/crypto"]);
     act(() => {
-      localStorage.setItem("alopex.hiddenPages", JSON.stringify(["/import"]));
+      localStorage.setItem("alopex.hiddenPages", JSON.stringify(["/income"]));
       window.dispatchEvent(new StorageEvent("storage", { key: "alopex.hiddenPages" }));
     });
-    expect(result.current).toEqual(["/import"]);
+    expect(result.current).toEqual(["/income"]);
   });
 });
 

@@ -13,6 +13,9 @@ import {
   NotificationsSection,
 } from "@/components/health/health-section";
 import { isDemoMode } from "@/lib/demo/mode";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { ImportWizard } from "@/components/import/import-wizard";
+import { ImportStatement } from "@/components/transactions/import-statement";
 
 /** /settings on a phone: the list of sections (desktop goes straight to Overview). */
 export function SettingsIndexPage() {
@@ -87,6 +90,43 @@ export function AccountSettingsPage() {
           <DeleteAccount />
         </div>
       )}
+    </SettingsPageFrame>
+  );
+}
+
+/** Every import in one place; each page links here (Activity also opens the statement import). */
+export function ImportSettingsPage() {
+  // Spending links here with #spending, so the wizard opens on spending.
+  const hash = useRouterState({ select: (st) => st.location.hash });
+  return (
+    <SettingsPageFrame title="Import">
+      <section className="rounded-2xl border bg-card p-5 card-ring">
+        <h2 className="text-lg font-semibold text-foreground">Bank statement</h2>
+        <p className="mt-1 mb-3 text-sm text-muted-foreground">
+          Transactions from a CSV or PDF your bank gives you. Duplicates are skipped.
+        </p>
+        <ImportStatement label="Import a statement" />
+      </section>
+      <section id={hash === "spending" ? "spending" : "net-worth"}>
+        <h2 className="mb-3 text-lg font-semibold text-foreground">
+          Monthly history from a spreadsheet
+        </h2>
+        <ImportWizard key={hash} initialKind={hash === "spending" ? "spend" : "net_worth"} />
+      </section>
+      <p className="text-sm text-muted-foreground">
+        Trades import on{" "}
+        <Link
+          to="/portfolio"
+          className="font-medium text-primary underline-offset-4 hover:underline"
+        >
+          Portfolio
+        </Link>{" "}
+        and{" "}
+        <Link to="/crypto" className="font-medium text-primary underline-offset-4 hover:underline">
+          Crypto
+        </Link>
+        , under your holdings. Splitwise has its own page.
+      </p>
     </SettingsPageFrame>
   );
 }

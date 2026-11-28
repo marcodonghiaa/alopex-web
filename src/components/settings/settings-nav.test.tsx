@@ -82,6 +82,7 @@ describe("settingsTitle", () => {
   it("names Settings and each section, and nothing outside Settings", () => {
     expect(settingsTitle("/settings")).toBe("Settings");
     expect(settingsTitle("/settings/security")).toBe("Security");
+    expect(settingsTitle("/settings/import")).toBe("Import");
     expect(settingsTitle("/accounts")).toBeUndefined();
   });
 
