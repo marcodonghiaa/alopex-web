@@ -44,15 +44,21 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tanstack/react-router")>()),
   Link: ({
     children,
+    to,
+    hash,
     search,
     resetScroll,
   }: {
     children: React.ReactNode;
+    to?: string;
+    hash?: string;
     search?: Record<string, string>;
     resetScroll?: boolean;
   }) => (
     <a
-      href={`/transactions?${new URLSearchParams(search).toString()}`}
+      href={
+        search ? `/transactions?${new URLSearchParams(search).toString()}` : `${to}#${hash ?? ""}`
+      }
       data-reset-scroll={String(resetScroll ?? true)}
     >
       {children}
@@ -168,12 +174,24 @@ describe("Spending page breakdown", () => {
   it("shows each category once, with its share, and no Total row", async () => {
     spendByMonth = { "2026-11-01": october };
     renderPage();
-    const links = await screen.findAllByRole("link");
+    const links = await screen.findAllByRole("link", { name: /%/ });
     expect(links.map((l) => l.textContent)).toEqual([
       "Housing80.0%€800.00",
       "Uncategorized20.0%€200.00",
     ]);
     expect(screen.queryByText("Total")).toBeNull();
+  });
+
+  // protects=spending history import is reachable from Spending, opening on spending;
+  // fails_when=the link goes away with the old Import page or lands on net worth
+  it("links to Settings › Import for past months, opened on spending", () => {
+    spendByMonth = { "2026-11-01": october };
+    renderPage();
+    expect(
+      screen
+        .getByRole("link", { name: "Import past months from a spreadsheet" })
+        .getAttribute("href"),
+    ).toBe("/settings/import#spending");
   });
 
   // iOS view (fonts): the label over the figure is set like Net Worth's "Year to date".

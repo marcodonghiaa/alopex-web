@@ -92,13 +92,19 @@ describe("settings pages", () => {
       "/settings/overview",
       "/settings/app",
       "/settings/personalization",
+      "/settings/import",
       "/settings/security",
       "/settings/account",
     ]);
     unmount();
     demo.current = true;
     render(<SettingsIndexPage />);
-    expect(labels()).toEqual(["/settings/overview", "/settings/app", "/settings/personalization"]);
+    expect(labels()).toEqual([
+      "/settings/overview",
+      "/settings/app",
+      "/settings/personalization",
+      "/settings/import",
+    ]);
     expect(screen.getAllByRole("link")[0]).toHaveTextContent(/^General/);
   });
 

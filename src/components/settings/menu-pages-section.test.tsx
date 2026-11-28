@@ -14,7 +14,7 @@ describe("MenuPagesSection", () => {
   it("lists the pages as switches, on by default, and turns one off", () => {
     render(<MenuPagesSection />);
     const budgets = screen.getByRole("switch", { name: "Budgets" });
-    expect(screen.getAllByRole("switch")).toHaveLength(7);
+    expect(screen.getAllByRole("switch")).toHaveLength(6);
     expect(budgets).toBeChecked();
     fireEvent.click(budgets);
     expect(budgets).not.toBeChecked();

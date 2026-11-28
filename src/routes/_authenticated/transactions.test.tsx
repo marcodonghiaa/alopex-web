@@ -118,6 +118,17 @@ afterEach(() => {
 
 // Polish pass 4 #1 and #14: Make a rule sits in the transaction's sheet (a phone's sheet covers
 // the toast), and isn't offered when a loaded rule already sorts the name.
+describe("Activity header", () => {
+  // protects=a phone can import a bank statement from Activity; fails_when=the button is wrapped in
+  // a desktop-only (hidden md:block) container again
+  it("shows the statement import on every screen size", async () => {
+    rows["v_transactions_eur"] = [];
+    renderPage();
+    const button = await screen.findByRole("button", { name: "Import statement" });
+    expect(button.closest(".hidden")).toBeNull();
+  });
+});
+
 describe("Make a rule in the transaction sheet", () => {
   const today = new Date().toISOString().slice(0, 10);
   const bankRow = {

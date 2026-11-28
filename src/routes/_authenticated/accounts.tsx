@@ -319,7 +319,7 @@ function AccountsPage() {
           </div>
         </div>
         <Link
-          to="/import"
+          to="/settings/import"
           aria-label="Import data"
           title="Import data"
           className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"

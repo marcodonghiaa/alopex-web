@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   ArrowLeft,
   ChevronRight,
+  FileUp,
   Gauge,
   LayoutGrid,
   Palette,
@@ -45,6 +46,12 @@ const SETTINGS_SECTIONS: Array<SettingsSection> = [
       { label: "Categories", to: "/settings/personalization", hash: "categories" },
       { label: "Rules", to: "/rules" },
     ],
+  },
+  {
+    label: "Import",
+    to: "/settings/import",
+    icon: FileUp,
+    hint: "Bank statements, past net worth and spending",
   },
   {
     label: "Security",

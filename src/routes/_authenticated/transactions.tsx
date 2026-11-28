@@ -740,10 +740,7 @@ function TransactionsPage({ category: initialCategory, month: initialMonth }: Tr
           </h1>
         </div>
         <div className="flex shrink-0 gap-2">
-          {/* A rare setup task: on a phone it lives under More › Import. */}
-          <div className="hidden md:block">
-            <ImportStatement />
-          </div>
+          <ImportStatement />
           <AddTransaction today={formatISODate(new Date())} />
         </div>
       </header>

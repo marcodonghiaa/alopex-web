@@ -52,7 +52,9 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tanstack/react-router")>()),
-  Link: ({ children }: { children: React.ReactNode }) => <a href="/health">{children}</a>,
+  Link: ({ children, to, hash }: { children: React.ReactNode; to?: string; hash?: string }) => (
+    <a href={to === "/settings/import" ? `${to}#${hash}` : "/health"}>{children}</a>
+  ),
 }));
 vi.mock("recharts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("recharts")>()),
@@ -152,6 +154,19 @@ const day = (snapshot_date: string, total_eur: number) => ({
   ...SNAPSHOT,
   snapshot_date,
   total_eur,
+});
+
+describe("Net worth page: import", () => {
+  // protects=net worth history import is reachable from Net Worth; fails_when=the link goes away
+  // with the old Import page
+  it("links to Settings › Import for past months", () => {
+    renderPage();
+    expect(
+      screen
+        .getByRole("link", { name: "Import past months from a spreadsheet" })
+        .getAttribute("href"),
+    ).toBe("/settings/import#net-worth");
+  });
 });
 
 describe("Net worth page: headline (iOS view board)", () => {

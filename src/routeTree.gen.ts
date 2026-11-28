@@ -32,6 +32,7 @@ import { Route as AuthenticatedTransactionsRouteImport } from './routes/_authent
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedSettingsAccountRouteImport } from './routes/_authenticated/settings/account'
 import { Route as AuthenticatedSettingsAppRouteImport } from './routes/_authenticated/settings/app'
+import { Route as AuthenticatedSettingsImportRouteImport } from './routes/_authenticated/settings/import'
 import { Route as AuthenticatedSettingsOverviewRouteImport } from './routes/_authenticated/settings/overview'
 import { Route as AuthenticatedSettingsPersonalizationRouteImport } from './routes/_authenticated/settings/personalization'
 import { Route as AuthenticatedSettingsSecurityRouteImport } from './routes/_authenticated/settings/security'
@@ -155,6 +156,12 @@ const AuthenticatedSettingsAppRoute =
     path: '/app',
     getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
+const AuthenticatedSettingsImportRoute =
+  AuthenticatedSettingsImportRouteImport.update({
+    id: '/import',
+    path: '/import',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
 const AuthenticatedSettingsOverviewRoute =
   AuthenticatedSettingsOverviewRouteImport.update({
     id: '/overview',
@@ -196,6 +203,7 @@ export interface FileRoutesByFullPath {
   '/transactions': typeof AuthenticatedTransactionsRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
   '/settings/app': typeof AuthenticatedSettingsAppRoute
+  '/settings/import': typeof AuthenticatedSettingsImportRoute
   '/settings/overview': typeof AuthenticatedSettingsOverviewRoute
   '/settings/personalization': typeof AuthenticatedSettingsPersonalizationRoute
   '/settings/security': typeof AuthenticatedSettingsSecurityRoute
@@ -222,6 +230,7 @@ export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
   '/settings/app': typeof AuthenticatedSettingsAppRoute
+  '/settings/import': typeof AuthenticatedSettingsImportRoute
   '/settings/overview': typeof AuthenticatedSettingsOverviewRoute
   '/settings/personalization': typeof AuthenticatedSettingsPersonalizationRoute
   '/settings/security': typeof AuthenticatedSettingsSecurityRoute
@@ -251,6 +260,7 @@ export interface FileRoutesById {
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/settings/account': typeof AuthenticatedSettingsAccountRoute
   '/_authenticated/settings/app': typeof AuthenticatedSettingsAppRoute
+  '/_authenticated/settings/import': typeof AuthenticatedSettingsImportRoute
   '/_authenticated/settings/overview': typeof AuthenticatedSettingsOverviewRoute
   '/_authenticated/settings/personalization': typeof AuthenticatedSettingsPersonalizationRoute
   '/_authenticated/settings/security': typeof AuthenticatedSettingsSecurityRoute
@@ -280,6 +290,7 @@ export interface FileRouteTypes {
     | '/transactions'
     | '/settings/account'
     | '/settings/app'
+    | '/settings/import'
     | '/settings/overview'
     | '/settings/personalization'
     | '/settings/security'
@@ -306,6 +317,7 @@ export interface FileRouteTypes {
     | '/'
     | '/settings/account'
     | '/settings/app'
+    | '/settings/import'
     | '/settings/overview'
     | '/settings/personalization'
     | '/settings/security'
@@ -334,6 +346,7 @@ export interface FileRouteTypes {
     | '/_authenticated/'
     | '/_authenticated/settings/account'
     | '/_authenticated/settings/app'
+    | '/_authenticated/settings/import'
     | '/_authenticated/settings/overview'
     | '/_authenticated/settings/personalization'
     | '/_authenticated/settings/security'
@@ -510,6 +523,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsAppRouteImport
       parentRoute: typeof AuthenticatedSettingsRoute
     }
+    '/_authenticated/settings/import': {
+      id: '/_authenticated/settings/import'
+      path: '/import'
+      fullPath: '/settings/import'
+      preLoaderRoute: typeof AuthenticatedSettingsImportRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
     '/_authenticated/settings/overview': {
       id: '/_authenticated/settings/overview'
       path: '/overview'
@@ -537,6 +557,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedSettingsRouteChildren {
   AuthenticatedSettingsAccountRoute: typeof AuthenticatedSettingsAccountRoute
   AuthenticatedSettingsAppRoute: typeof AuthenticatedSettingsAppRoute
+  AuthenticatedSettingsImportRoute: typeof AuthenticatedSettingsImportRoute
   AuthenticatedSettingsOverviewRoute: typeof AuthenticatedSettingsOverviewRoute
   AuthenticatedSettingsPersonalizationRoute: typeof AuthenticatedSettingsPersonalizationRoute
   AuthenticatedSettingsSecurityRoute: typeof AuthenticatedSettingsSecurityRoute
@@ -546,6 +567,7 @@ interface AuthenticatedSettingsRouteChildren {
 const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
   AuthenticatedSettingsAccountRoute: AuthenticatedSettingsAccountRoute,
   AuthenticatedSettingsAppRoute: AuthenticatedSettingsAppRoute,
+  AuthenticatedSettingsImportRoute: AuthenticatedSettingsImportRoute,
   AuthenticatedSettingsOverviewRoute: AuthenticatedSettingsOverviewRoute,
   AuthenticatedSettingsPersonalizationRoute:
     AuthenticatedSettingsPersonalizationRoute,

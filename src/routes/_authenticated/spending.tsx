@@ -251,6 +251,15 @@ function SpendingPage() {
       )}
 
       <RegretCard groups={regretRows} month={month} />
+      <p className="mt-6 px-1">
+        <Link
+          to="/settings/import"
+          hash="spending"
+          className="-my-2.5 inline-flex min-h-11 items-center text-xs text-primary underline-offset-2 hover:underline"
+        >
+          Import past months from a spreadsheet
+        </Link>
+      </p>
     </div>
   );
 }

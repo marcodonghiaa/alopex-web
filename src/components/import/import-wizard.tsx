@@ -101,9 +101,9 @@ function fileError(err: unknown) {
   return err instanceof Error ? err.message : "Could not read that file.";
 }
 
-export function ImportWizard() {
+export function ImportWizard({ initialKind = "net_worth" }: { initialKind?: ImportKind } = {}) {
   const queryClient = useQueryClient();
-  const [kind, setKind] = useState<ImportKind>("net_worth");
+  const [kind, setKind] = useState<ImportKind>(initialKind);
   const [csv, setCsv] = useState<ParsedCsv | null>(null);
   const [mapping, setMapping] = useState<Record<Role, number | null> | null>(null);
   const [error, setError] = useState<string | null>(null);

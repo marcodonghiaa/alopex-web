@@ -12,7 +12,6 @@ export const HIDEABLE_PAGES: Readonly<Record<string, string>> = {
   "/subscriptions": "Subscriptions",
   "/splitwise": "Who owes you",
   "/crypto": "Crypto",
-  "/import": "Import",
 };
 const PATHS = Object.keys(HIDEABLE_PAGES);
 

@@ -45,7 +45,7 @@ const sourceFromFile = (name: string) => (/^[A-Za-z]+/.exec(name)?.[0] ?? "").sl
 
 // Adds the transactions of a bank statement saved as CSV or PDF. Rows already in the app are left
 // out, so importing the same file twice adds nothing. With a label the trigger is a full button
-// (the Import page); without, an icon (the Transactions header).
+// (Settings › Import); without, an icon (the Activity header).
 export function ImportStatement({ label }: { label?: string } = {}) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);

@@ -110,10 +110,6 @@ const NAV_GROUPS: Array<NavGroup> = [
       { label: "Crypto", icon: iconOf("crypto"), to: "/crypto" },
     ],
   },
-  {
-    label: "Tools",
-    items: [{ label: "Import", icon: iconOf("import"), to: "/import" }],
-  },
 ];
 
 // iOS HIG: bottom tabs max 5, icon + label, current tab visually distinct.
@@ -171,20 +167,16 @@ const moreRank = (to: string) => {
 
 /**
  * The More sheet lists only the pages without a tab, so nothing appears twice on a phone.
- * Pages form one untitled list (most used first); Tools stays its own titled group.
+ * Pages form one untitled list (most used first). Import lives in Settings › Import.
  */
-export const MORE_GROUPS: Array<NavGroup> = (() => {
-  const untabbed = NAV_GROUPS.map((g) => ({
-    ...g,
-    items: g.items.filter((i) => !TAB_PATHS.has(i.to)),
-  }));
-  const tools = untabbed.filter((g) => g.label === "Tools");
-  const pages = untabbed
-    .filter((g) => g.label !== "Tools")
-    .flatMap((g) => g.items)
-    .sort((a, b) => moreRank(a.to) - moreRank(b.to));
-  return [{ label: "", items: pages }, ...tools].filter((g) => g.items.length > 0);
-})();
+export const MORE_GROUPS: Array<NavGroup> = [
+  {
+    label: "",
+    items: NAV_GROUPS.flatMap((g) => g.items)
+      .filter((i) => !TAB_PATHS.has(i.to))
+      .sort((a, b) => moreRank(a.to) - moreRank(b.to)),
+  },
+];
 
 // Mobile tab bar: a floating pill (Marco, native feel); icon + sans label, the current tab sits in a soft fill.
 const TAB_LINK =
