@@ -120,7 +120,7 @@ const searchOr = (query: string, columns: Array<string>) =>
   columns.map((c) => `${c}.ilike.${searchPattern(query)}`).join(",");
 
 const LIST_COLUMNS =
-  "entry_reference,account_uid,booking_date,category,transaction_type,creditor_name,bank_creditor_name,currency,amount,signed_amount_eur,credit_debit_indicator,created_at,worth_it,personal_amount,owed_by,flow_type,refund_of";
+  "entry_reference,account_uid,booking_date,category,transaction_type,creditor_name,bank_creditor_name,currency,amount,signed_amount_eur,credit_debit_indicator,created_at,worth_it,personal_amount,owed_by,flow_type,refund_of,pending";
 
 // Spending (with refunds) or transfers, for one month or a search. Transfers are left out of
 // spending and income; they are listed on request so a wrong one can be moved back.

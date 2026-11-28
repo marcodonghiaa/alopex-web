@@ -48,6 +48,7 @@ export function deriveViews(db: DemoDb): Derived {
     refund_of: t.refund_of,
     // Like the real view: who paid, or the name the user gave the row.
     payer_name: t.custom_name ?? t.debtor_name,
+    pending: t.pending,
     settled_at: t.settled_at,
     signed_amount_eur: signedEur(t),
     transaction_type: t.transaction_type,

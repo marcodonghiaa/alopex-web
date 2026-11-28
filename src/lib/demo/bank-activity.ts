@@ -106,6 +106,7 @@ function tx(
     value_date: p.booking_date,
     worth_it: null,
     worth_it_prompted_at: null,
+    pending: false,
     ...p,
     // As the sync stores money coming in: creditor_name is the payer.
     creditor_name:
@@ -299,6 +300,18 @@ export function dailyTransactions(n: number, todayNum: number): Array<Tx> {
       }),
     );
   }
+  // Today's card payment the bank hasn't booked yet: shown as Pending until it does.
+  if (n === todayNum)
+    out.push(
+      tx({
+        entry_reference: `p:demo-${date}`,
+        booking_date: date,
+        amount: 23.4,
+        category: "Dine Out",
+        creditor_name: "Trattoria Demo",
+        pending: true,
+      }),
+    );
   // Paid entirely for a friend: listed under "Paid for others", counted nowhere.
   if (n % 17 === 9) {
     out.push(

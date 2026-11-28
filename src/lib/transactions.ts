@@ -24,6 +24,8 @@ export interface TransactionRow {
   /** The user's own words and labels. Only the dashboard writes them; the bank sync never does. */
   note: string | null;
   tags: Array<string>;
+  /** Not booked by the bank yet: the sync swaps it for the booked row, so it can't be edited. */
+  pending?: boolean;
 }
 
 // A row in the Transfers list, which never shows notes or tags, so doesn't fetch them.
