@@ -182,9 +182,10 @@ describe("Subscriptions page", () => {
     // Row actions wait for the re-check (polish-3 F2), so the action in flight is an Undo from
     // an earlier visit: remove, leave, come back, tap Undo while the new re-check runs.
     const first = render(page);
-    const remove = await screen.findByRole("button", { name: "Remove Streamflix" });
+    const remove = await screen.findByRole("button", { name: "More actions for Streamflix" });
     await waitFor(() => expect(remove).toBeEnabled());
     fireEvent.click(remove);
+    fireEvent.click(await screen.findByRole("button", { name: "Not a subscription" }));
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
     const undo = (toast.success.mock.calls[0]![1] as { action: { onClick: () => void } }).action;
     await waitFor(() => expect(client.isMutating()).toBe(0));
@@ -216,7 +217,7 @@ describe("Subscriptions page", () => {
     );
     db.rows.push(stream({ id: "s3", display_name: "Oldtube", user_status: "dismissed" }));
     renderPage();
-    const remove = await screen.findByRole("button", { name: "Remove Streamflix" });
+    const remove = await screen.findByRole("button", { name: "More actions for Streamflix" });
     const confirm = screen.getByRole("button", { name: "Confirm Cloudbox" });
     // Re-audit F2b: every row action waits, Restore and the frequency picker too.
     const restore = screen.getByRole("button", { name: "Restore Oldtube" });
@@ -230,6 +231,8 @@ describe("Subscriptions page", () => {
     expect(confirm).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cloudbox is not a subscription" })).toBeDisabled();
     fireEvent.click(remove);
+    // Locked: the menu doesn't open.
+    expect(screen.queryByRole("button", { name: "Not a subscription" })).toBeNull();
     expect(rpc).not.toHaveBeenCalled();
 
     finishCheck();
@@ -237,7 +240,7 @@ describe("Subscriptions page", () => {
       expect(screen.queryByText("Checking your transactions…")).not.toBeInTheDocument(),
     );
     expect(screen.getByTestId("subscriptions-content")).toHaveAttribute("aria-busy", "false");
-    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "More actions for Streamflix" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Confirm Cloudbox" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Restore Oldtube" })).toBeEnabled();
     expect(screen.getByTitle("Monthly — auto-detected")).toBeEnabled();
@@ -257,12 +260,12 @@ describe("Subscriptions page", () => {
     finishCheck();
     await new Promise((r) => setTimeout(r, 50));
     expect(await screen.findByText("Checking your transactions…")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "More actions for Streamflix" })).toBeDisabled();
 
     openRead();
     expect(await screen.findByText("iCloud")).toBeInTheDocument();
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Remove iCloud" })).toBeEnabled(),
+      expect(screen.getByRole("button", { name: "More actions for iCloud" })).toBeEnabled(),
     );
     expect(screen.queryByText("Checking your transactions…")).not.toBeInTheDocument();
   });
@@ -275,7 +278,7 @@ describe("Subscriptions page", () => {
     await waitFor(() =>
       expect(screen.queryByText("Checking your transactions…")).not.toBeInTheDocument(),
     );
-    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "More actions for Streamflix" })).toBeEnabled();
     warn.mockRestore();
   });
 
@@ -287,7 +290,7 @@ describe("Subscriptions page", () => {
     await waitFor(() =>
       expect(screen.queryByText("Checking your transactions…")).not.toBeInTheDocument(),
     );
-    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "More actions for Streamflix" })).toBeEnabled();
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
@@ -395,7 +398,8 @@ describe("Subscriptions page", () => {
       return Promise.resolve({ error: null });
     });
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "Remove Gym" }));
+    fireEvent.click(await screen.findByRole("button", { name: "More actions for Gym" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Not a subscription" }));
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByText("Dismissed (1)")).toBeInTheDocument());
     toast.success.mock.calls[0]![1].action.onClick();
@@ -406,11 +410,117 @@ describe("Subscriptions page", () => {
 
   it("the trash button dismisses an active stream with an Undo toast", async () => {
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "Remove Streamflix" }));
+    fireEvent.click(await screen.findByRole("button", { name: "More actions for Streamflix" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Not a subscription" }));
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith("Removed Streamflix", expect.anything()),
     );
     expect(screen.queryByLabelText("Estimated monthly cost")).toBeNull();
+  });
+
+  // Swipe actions (Marco 2026-11-28): the trash icon became "Not a subscription" behind the row,
+  // next to "I cancelled it", which moves a subscription to Stopped now, with Undo.
+  // fails_when=the trash is back, I cancelled it sends nothing or doesn't move the row, or Undo is missing
+  it("has no trash button on a row any more", async () => {
+    renderPage();
+    await screen.findByRole("button", { name: "More actions for Streamflix" });
+    expect(screen.queryByRole("button", { name: /^Remove / })).toBeNull();
+  });
+
+  it("I cancelled it moves the row to Stopped, and Undo puts it back", async () => {
+    serverApplies((action) => ({
+      cancelled_on: action === "cancel" ? "2100-01-01" : null,
+    }));
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "More actions for Streamflix" }));
+    fireEvent.click(await screen.findByRole("button", { name: "I cancelled it" }));
+    await waitFor(() =>
+      expect(rpc).toHaveBeenCalledWith("stream_action", {
+        p_stream: "s1",
+        p_action: "cancel",
+        p_args: {},
+      }),
+    );
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("Streamflix moved to Stopped", expect.anything()),
+    );
+    expect(await screen.findByText("Stopped (1)")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Estimated monthly cost")).toBeNull();
+    const undo = (toast.success.mock.calls[0]![1] as { action: { onClick: () => void } }).action;
+    act(() => undo.onClick());
+    await waitFor(() =>
+      expect(rpc).toHaveBeenLastCalledWith("stream_action", {
+        p_stream: "s1",
+        p_action: "uncancel",
+        p_args: {},
+      }),
+    );
+    await waitFor(() => expect(screen.queryByText("Stopped (1)")).toBeNull());
+  });
+
+  it("a cancelled row in Stopped offers Still active; one that stopped by itself has no cancel", async () => {
+    db.rows = [
+      stream({
+        id: "c",
+        display_name: "Gym",
+        user_status: "confirmed",
+        cancelled_on: "2100-01-01",
+      }),
+      stream({ id: "o", display_name: "Oldfix", last_charged: "2020-01-01" }),
+    ];
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "More actions for Gym" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Still active" }));
+    await waitFor(() =>
+      expect(rpc).toHaveBeenCalledWith("stream_action", {
+        p_stream: "c",
+        p_action: "uncancel",
+        p_args: {},
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Oldfix" }));
+    expect(await screen.findByRole("button", { name: "Not a subscription" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "I cancelled it" })).toBeNull();
+  });
+
+  it("on a phone a row swipes left to show its actions", async () => {
+    renderPage();
+    const trigger = await screen.findByRole("button", { name: "More actions for Streamflix" });
+    await waitFor(() => expect(trigger).toBeEnabled());
+    expect(screen.queryByRole("button", { name: "I cancelled it" })).toBeNull();
+    const row = trigger.closest("li")!;
+    const pt = (x: number) => ({ touches: [{ clientX: x, clientY: 100 }] });
+    fireEvent.touchStart(row, pt(300));
+    fireEvent.touchMove(row, pt(220));
+    fireEvent.touchMove(row, pt(100));
+    fireEvent.touchEnd(row, { touches: [], changedTouches: [{ clientX: 100, clientY: 100 }] });
+    // The click the browser sends after the swipe is the gesture's, not a tap.
+    fireEvent.click(row);
+    expect(within(row).getByRole("button", { name: "Not a subscription" })).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole("button", { name: "I cancelled it" }));
+    await waitFor(() =>
+      expect(rpc).toHaveBeenCalledWith("stream_action", {
+        p_stream: "s1",
+        p_action: "cancel",
+        p_args: {},
+      }),
+    );
+  });
+
+  it("a long press opens the same actions as a menu", async () => {
+    renderPage();
+    const trigger = await screen.findByRole("button", { name: "More actions for Streamflix" });
+    await waitFor(() => expect(trigger).toBeEnabled());
+    vi.useFakeTimers();
+    fireEvent.touchStart(trigger.closest("li")!, { touches: [{ clientX: 200, clientY: 100 }] });
+    act(() => vi.advanceTimersByTime(500));
+    vi.useRealTimers();
+    const menu = screen.getByRole("menu", { name: "Actions for Streamflix" });
+    expect(
+      within(menu)
+        .getAllByRole("menuitem")
+        .map((b) => b.textContent),
+    ).toEqual(["Not a subscription", "I cancelled it"]);
   });
 
   it("a preset frequency sends the lowercase cadence", async () => {
@@ -523,8 +633,10 @@ describe("Subscriptions page", () => {
     );
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(1)); // the re-check on open
     spy.mockClear();
-    fireEvent.click(await screen.findByRole("button", { name: "Remove Aaa" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Remove Bbb" }));
+    fireEvent.click(await screen.findByRole("button", { name: "More actions for Aaa" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Not a subscription" }));
+    fireEvent.click(await screen.findByRole("button", { name: "More actions for Bbb" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Not a subscription" }));
     await waitFor(() => expect(resolvers).toHaveLength(2));
     resolvers[0]!();
     await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
@@ -659,9 +771,9 @@ describe("List / Calendar", () => {
     await screen.findByText("Streamflix");
     fireEvent.click(screen.getByRole("radio", { name: "Calendar" }));
     expect(await screen.findByRole("region", { name: "Recurring calendar" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Remove Streamflix" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "More actions for Streamflix" })).toBeNull();
     fireEvent.click(screen.getByRole("radio", { name: "List" }));
-    expect(await screen.findByRole("button", { name: "Remove Streamflix" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "More actions for Streamflix" })).toBeTruthy();
   });
 
   // Polish 4 #10: the view and month live in the URL, so Back returns to the list, a reload or a
@@ -751,7 +863,7 @@ describe("Checking status", () => {
     renderPage();
     await advance(0);
     const content = screen.getByTestId("subscriptions-content");
-    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "More actions for Streamflix" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Confirm Cloudbox" })).toBeDisabled();
     expect(content).toHaveAttribute("aria-busy", "true");
     await advance(290);
@@ -769,7 +881,7 @@ describe("Checking status", () => {
     expect(screen.getByTestId("subscriptions-content")).not.toHaveClass(
       "[&_:disabled]:!opacity-100",
     );
-    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "More actions for Streamflix" })).toBeDisabled();
   });
 
   it("sits under the List/Calendar switch, next to what it blocks", async () => {
@@ -792,7 +904,7 @@ describe("Checking status", () => {
     finish();
     await advance(50);
     expect(screen.queryByText(CHECKING)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "More actions for Streamflix" })).toBeEnabled();
     expect(screen.getByTestId("subscriptions-content")).toHaveAttribute("aria-busy", "false");
     // #1b: outside a check, controls a later action disables dim as usual (no override).
     expect(screen.getByTestId("subscriptions-content")).not.toHaveClass(
@@ -808,7 +920,7 @@ describe("Checking status", () => {
     finish();
     await advance(500);
     expect(screen.queryByText(CHECKING)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "More actions for Streamflix" })).toBeEnabled();
     expect(screen.getByTestId("subscriptions-content")).not.toHaveClass(
       "[&_:disabled]:!opacity-100",
     );
@@ -954,7 +1066,7 @@ describe("After a re-check that changed the list", () => {
     vi.useFakeTimers();
     renderPage();
     await advance(100);
-    expect(screen.getByRole("button", { name: "Remove Streamflix" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "More actions for Streamflix" })).toBeEnabled();
     expect(screen.queryByText("Updated")).not.toBeInTheDocument();
   });
 

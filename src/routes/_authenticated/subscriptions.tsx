@@ -1,8 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown, Pencil, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Ban,
+  Check,
+  ChevronDown,
+  CircleStop,
+  MoreHorizontal,
+  Pencil,
+  RotateCcw,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -10,9 +18,11 @@ import type { Tables } from "@/integrations/supabase/types";
 import {
   effectiveCadence,
   groupStreams,
+  isCancelled,
   monthlyEur,
   monthlyTotal,
   romeToday,
+  romeYmd,
 } from "@/lib/recurring";
 import { RECURRING_KEY, refreshRecurring, useRecurringStreams } from "@/lib/use-recurring-streams";
 import { formatBookingDateShort, formatMoney, monthParam } from "@/lib/transactions";
@@ -26,6 +36,8 @@ import { Input, Select } from "@/components/ui/field";
 import { GroupedList, SectionTitle } from "@/components/ui/grouped-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cleanMerchantName } from "@/lib/merchant-name";
+import { RowMenu, type RowMenuItem } from "@/components/transactions/row-menu";
+import { useRowGestures } from "@/components/ui/row-gestures";
 
 // The view and the calendar's month live in the URL: Back returns to the list, and a reload or a
 // shared link opens the same month.
@@ -64,10 +76,12 @@ type IntervalUnit = "days" | "weeks" | "months" | "years";
 const MUTATION_KEY = ["stream_action"];
 const BILLING_FREQUENCIES = ["Weekly", "Monthly", "Quarterly", "Yearly"];
 const INTERVAL_UNITS: Array<IntervalUnit> = ["days", "weeks", "months", "years"];
+// Width of one swipe action behind a row.
+const ACTION_W = 88;
 
 interface StreamAction {
   id: string;
-  action: "confirm" | "dismiss" | "undismiss" | "set_cadence";
+  action: "confirm" | "dismiss" | "undismiss" | "cancel" | "uncancel" | "set_cadence";
   args?: { cadence?: string; custom_value?: number; custom_unit?: IntervalUnit };
 }
 
@@ -87,6 +101,8 @@ function applyAction(s: Stream, { action, args }: StreamAction): Stream {
       prev_user_status: null,
     };
   if (action === "confirm") return { ...s, user_status: "confirmed" };
+  if (action === "cancel") return { ...s, cancelled_on: romeYmd() };
+  if (action === "uncancel") return { ...s, cancelled_on: null };
   return {
     ...s,
     user_status: "confirmed",
@@ -220,14 +236,16 @@ function SubscriptionsPage() {
     },
     onSuccess: (_data, vars, context) => {
       if (vars.action === "set_cadence") toast.success("Billing frequency saved");
-      if (vars.action !== "dismiss") return;
+      const action = vars.action;
+      if (action !== "dismiss" && action !== "cancel") return;
+      const undo = action === "dismiss" ? "undismiss" : "uncancel";
       const name =
         cleanMerchantName(context.previous?.find((s) => s.id === vars.id)?.display_name) ??
         "subscription";
-      toast.success(`Removed ${name}`, {
+      toast.success(action === "dismiss" ? `Removed ${name}` : `${name} moved to Stopped`, {
         action: {
           label: "Undo",
-          onClick: () => actionMutation.mutate({ id: vars.id, action: "undismiss" }),
+          onClick: () => actionMutation.mutate({ id: vars.id, action: undo }),
         },
       });
     },
@@ -256,12 +274,13 @@ function SubscriptionsPage() {
 
   const total = useMemo(() => monthlyTotal(active), [active]);
 
-  const renderCard = (s: Stream) => (
+  const renderCard = (s: Stream, inStopped = false) => (
     <SubscriptionCard
       key={s.id}
       sub={s}
+      inStopped={inStopped}
       locked={checking}
-      onDismiss={() => actionMutation.mutate({ id: s.id, action: "dismiss" })}
+      onAction={(action) => actionMutation.mutate({ id: s.id, action })}
       onSelectFrequency={(frequency) =>
         actionMutation.mutate({
           id: s.id,
@@ -395,7 +414,7 @@ function SubscriptionsPage() {
           ) : (
             active.length > 0 && (
               <GroupedList>
-                <ul className="divide-y divide-hairline">{active.map(renderCard)}</ul>
+                <ul className="divide-y divide-hairline">{active.map((s) => renderCard(s))}</ul>
               </GroupedList>
             )
           )}
@@ -426,7 +445,9 @@ function SubscriptionsPage() {
                 No recent subscription charge. Not counted.
               </p>
               <GroupedList>
-                <ul className="divide-y divide-hairline">{stopped.map(renderCard)}</ul>
+                <ul className="divide-y divide-hairline">
+                  {stopped.map((s) => renderCard(s, true))}
+                </ul>
               </GroupedList>
             </details>
           )}
@@ -554,16 +575,23 @@ function ReviewRow({
   );
 }
 
+type RowAction = RowMenuItem & { tone?: "danger" };
+
+/** A subscription row. Its actions hide behind it like an iOS list row: swipe left (or long
+ * press) on a phone, the ⋯ button on a computer. */
 function SubscriptionCard({
   sub,
+  inStopped,
   locked,
-  onDismiss,
+  onAction,
   onSelectFrequency,
   onSelectCustom,
 }: {
   sub: Stream;
+  /** Listed under Stopped: by itself (no recent charge) or because you cancelled it. */
+  inStopped: boolean;
   locked: boolean;
-  onDismiss: () => void;
+  onAction: (action: "dismiss" | "cancel" | "uncancel") => void;
   onSelectFrequency: (frequency: string) => void;
   onSelectCustom: (value: number, unit: IntervalUnit) => void;
 }) {
@@ -577,40 +605,141 @@ function SubscriptionCard({
       : null,
   ].filter(Boolean);
 
+  const surface = useRef<HTMLLIElement>(null);
+  const face = useRef<HTMLDivElement>(null);
+  const [menuAt, setMenuAt] = useState<DOMRect | null>(null);
+  const [desktopMenu, setDesktopMenu] = useState(false);
+  const cancelled = isCancelled(sub);
+  const stoppedByItself = inStopped && !cancelled;
+  const actions: Array<RowAction> = [
+    {
+      label: "Not a subscription",
+      icon: Ban,
+      tone: "danger",
+      onSelect: () => run(() => onAction("dismiss")),
+    },
+    // Already stopped by itself: nothing to cancel.
+    ...(cancelled
+      ? [
+          {
+            label: "Still active",
+            icon: RotateCcw,
+            onSelect: () => run(() => onAction("uncancel")),
+          },
+        ]
+      : stoppedByItself
+        ? []
+        : [
+            {
+              label: "I cancelled it",
+              icon: CircleStop,
+              onSelect: () => run(() => onAction("cancel")),
+            },
+          ]),
+  ];
+  const swipe = useRowGestures({
+    surface,
+    content: face,
+    width: locked ? 0 : actions.length * ACTION_W,
+    ...(locked
+      ? {}
+      : { onLongPress: () => face.current && setMenuAt(face.current.getBoundingClientRect()) }),
+  });
+  function run(action: () => void) {
+    swipe.close();
+    setMenuAt(null);
+    setDesktopMenu(false);
+    action();
+  }
+
+  const summary = (
+    <>
+      <CategoryAvatar category={sub.category} />
+      <div className="min-w-0 flex-1">
+        <h2 className="truncate text-[0.9375rem] font-medium text-foreground">{name}</h2>
+        <p className="truncate text-[0.8125rem] text-muted-foreground">{details.join(" · ")}</p>
+      </div>
+      <MonthlyAmount stream={sub} />
+    </>
+  );
+
   return (
-    <li className="px-4 py-3">
-      <div className="flex items-center gap-3">
-        <CategoryAvatar category={sub.category} />
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-[0.9375rem] font-medium text-foreground">{name}</h2>
-          <p className="truncate text-[0.8125rem] text-muted-foreground">{details.join(" · ")}</p>
+    <li ref={surface} className="relative overflow-hidden">
+      <div
+        aria-hidden={!swipe.open}
+        className="absolute inset-y-0 right-0 flex items-center justify-end"
+      >
+        {actions.map((a) => (
+          <button
+            key={a.label}
+            type="button"
+            tabIndex={swipe.open ? 0 : -1}
+            onClick={a.onSelect}
+            className="flex w-[88px] flex-col items-center gap-1 text-center text-[0.6875rem] leading-tight font-medium text-muted-foreground"
+          >
+            <span
+              className={`flex size-11 items-center justify-center rounded-full ${a.tone === "danger" ? "bg-negative text-white" : "bg-accent text-foreground"}`}
+            >
+              <a.icon className="size-5" aria-hidden />
+            </span>
+            {/* Room for two lines on every action, so the circles line up. */}
+            <span className="h-7">{a.label}</span>
+          </button>
+        ))}
+      </div>
+      <div ref={face} style={{ touchAction: "pan-y" }} className="relative bg-card px-4 py-3">
+        <div className="flex items-center gap-3">{summary}</div>
+        <div className="mt-1 grid grid-cols-[7rem_minmax(0,1fr)_auto] items-center gap-3 pl-[3.25rem]">
+          <FrequencyPicker
+            frequency={effectiveCadence(sub)}
+            isManual={sub.user_cadence != null}
+            customValue={sub.custom_interval_value}
+            customUnit={sub.custom_interval_unit as IntervalUnit | null}
+            locked={locked}
+            onSelect={onSelectFrequency}
+            onSelectCustom={onSelectCustom}
+          />
+          <span className="truncate text-[0.8125rem] text-muted-foreground">
+            {lastCharged ? `Last ${lastCharged}` : ""}
+          </span>
+          {/* Phones swipe instead; a computer has no swipe, so its actions sit behind ⋯. */}
+          <Popover open={desktopMenu} onOpenChange={setDesktopMenu}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={locked}
+                aria-label={`More actions for ${name}`}
+                className="-my-2 -mr-3 hidden md:inline-flex"
+              >
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-52 p-1">
+              {actions.map((a) => (
+                <button
+                  key={a.label}
+                  type="button"
+                  onClick={a.onSelect}
+                  className={`flex min-h-11 w-full items-center justify-between rounded-sm px-2.5 py-1.5 text-left text-sm hover:bg-accent ${a.tone === "danger" ? "text-negative" : "text-foreground"}`}
+                >
+                  {a.label}
+                  <a.icon className="size-4" aria-hidden />
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
         </div>
-        <MonthlyAmount stream={sub} />
       </div>
-      <div className="mt-1 grid grid-cols-[7rem_minmax(0,1fr)_auto] items-center gap-3 pl-[3.25rem]">
-        <FrequencyPicker
-          frequency={effectiveCadence(sub)}
-          isManual={sub.user_cadence != null}
-          customValue={sub.custom_interval_value}
-          customUnit={sub.custom_interval_unit as IntervalUnit | null}
-          locked={locked}
-          onSelect={onSelectFrequency}
-          onSelectCustom={onSelectCustom}
+      {menuAt && (
+        <RowMenu
+          title={`Actions for ${name}`}
+          rect={menuAt}
+          preview={<div className="flex w-full items-center gap-3">{summary}</div>}
+          items={actions}
+          onClose={() => setMenuAt(null)}
         />
-        <span className="truncate text-[0.8125rem] text-muted-foreground">
-          {lastCharged ? `Last ${lastCharged}` : ""}
-        </span>
-        <Button
-          variant="ghost"
-          size="icon"
-          disabled={locked}
-          onClick={onDismiss}
-          aria-label={`Remove ${name}`}
-          className="-my-2 -mr-3 hover:text-negative"
-        >
-          <Trash2 className="size-4" />
-        </Button>
-      </div>
+      )}
     </li>
   );
 }
