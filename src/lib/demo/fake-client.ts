@@ -646,7 +646,9 @@ class Store {
       row["user_status"] =
         row["prev_user_status"] ?? (row["detected_status"] == null ? "confirmed" : null);
       row["prev_user_status"] = null;
-    } else if (action === "set_cadence") {
+    } else if (action === "cancel") row["cancelled_on"] = this.latestDay();
+    else if (action === "uncancel") row["cancelled_on"] = null;
+    else if (action === "set_cadence") {
       const cadence = args["cadence"] as string | undefined;
       const unit = args["custom_unit"];
       const value = args["custom_value"];

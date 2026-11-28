@@ -894,6 +894,7 @@ export type Database = {
         Row: {
           account_uid: string | null;
           cadence: string | null;
+          cancelled_on: string | null;
           category: string | null;
           charge_count: number | null;
           currency: string;
@@ -921,6 +922,7 @@ export type Database = {
         Insert: {
           account_uid?: string | null;
           cadence?: string | null;
+          cancelled_on?: string | null;
           category?: string | null;
           charge_count?: number | null;
           currency: string;
@@ -948,6 +950,7 @@ export type Database = {
         Update: {
           account_uid?: string | null;
           cadence?: string | null;
+          cancelled_on?: string | null;
           category?: string | null;
           charge_count?: number | null;
           currency?: string;

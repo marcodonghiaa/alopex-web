@@ -755,6 +755,7 @@ function demoStreams(
     user_status: null,
     prev_user_status: null,
     user_cadence: null,
+    cancelled_on: null,
     custom_interval_value: null,
     custom_interval_unit: null,
     source: "bank",

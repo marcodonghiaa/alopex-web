@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Tables } from "@/integrations/supabase/types";
-import { effectiveCadence, groupStreams, monthlyEur, monthlyTotal, romeToday } from "./recurring";
+import {
+  effectiveCadence,
+  groupStreams,
+  isCancelled,
+  monthlyEur,
+  monthlyTotal,
+  romeToday,
+  romeYmd,
+} from "./recurring";
 
 type Stream = Tables<"recurring_streams">;
 
@@ -25,6 +33,7 @@ const stream = (over: Partial<Stream> = {}): Stream => ({
   detected_at: null,
   user_status: null,
   prev_user_status: null,
+  cancelled_on: null,
   user_cadence: null,
   custom_interval_value: null,
   custom_interval_unit: null,
@@ -84,6 +93,22 @@ describe("groupStreams", () => {
   it.each(["confirmed", "dismissed"] as const)("hides a gone stream (user_status %s)", (u) => {
     const g = group(stream({ detected_status: "gone", user_status: u }));
     expect([g.toReview, g.active, g.stopped, g.dismissed].flat()).toEqual([]);
+  });
+
+  // "I cancelled it": stopped from the day you said so, until a charge after that day.
+  it("puts a stream you cancelled in stopped, even if it would still be active", () => {
+    expect(
+      group(stream({ cancelled_on: "2026-11-08", last_charged: "2026-11-01" })).stopped,
+    ).toHaveLength(1);
+  });
+  it("puts it back in active when a charge comes after the day you cancelled it", () => {
+    expect(
+      group(stream({ cancelled_on: "2026-10-01", last_charged: "2026-11-01" })).active,
+    ).toHaveLength(1);
+  });
+  it("isCancelled holds with no charge at all, and not without a cancel date", () => {
+    expect(isCancelled(stream({ cancelled_on: "2026-11-08", last_charged: null }))).toBe(true);
+    expect(isCancelled(stream({ cancelled_on: null }))).toBe(false);
   });
 
   it("puts a detected-active stream in active", () => {
@@ -193,5 +218,13 @@ describe("monthlyTotal", () => {
         stream({ cadence: null, typical_amount_eur: -10 }),
       ]),
     ).toEqual({ sum: 15.5, known: 2, unknown: 1 });
+  });
+});
+
+describe("romeYmd", () => {
+  it("is today's date in Rome as YYYY-MM-DD, the same day romeToday gives", () => {
+    const ymd = romeYmd();
+    expect(ymd).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(romeToday().getDate()).toBe(Number(ymd.slice(8)));
   });
 });

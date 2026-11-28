@@ -40,9 +40,17 @@ function isStaleSuggestion(s: Stream, today: Date): boolean {
 
 /** Local-midnight Date of today's calendar date in Europe/Rome (council fix 15). */
 export function romeToday(): Date {
-  const ymd = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome" }).format(new Date());
-  return new Date(`${ymd}T00:00:00`);
+  return new Date(`${romeYmd()}T00:00:00`);
 }
+
+/** Today's date in Europe/Rome as YYYY-MM-DD. */
+export function romeYmd(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome" }).format(new Date());
+}
+
+/** You marked it cancelled, and no charge came after that day (one that does means it runs again). */
+export const isCancelled = (s: Stream): boolean =>
+  s.cancelled_on != null && (s.last_charged == null || s.last_charged <= s.cancelled_on);
 
 export function groupStreams(streams: Array<Stream>, today = new Date()) {
   const out = {
@@ -56,7 +64,7 @@ export function groupStreams(streams: Array<Stream>, today = new Date()) {
     if (s.detected_status === "gone") continue;
     if (s.user_status === "dismissed") out.dismissed.push(s);
     else if (s.user_status === "confirmed" || s.detected_status === "active")
-      (isStopped(asChargeable(s), today) ? out.stopped : out.active).push(s);
+      (isCancelled(s) || isStopped(asChargeable(s), today) ? out.stopped : out.active).push(s);
     else if (s.detected_status === "suggested" && !isStaleSuggestion(s, today))
       out.toReview.push(s);
   }
