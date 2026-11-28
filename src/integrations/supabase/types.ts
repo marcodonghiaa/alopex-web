@@ -1031,6 +1031,7 @@ export type Database = {
           flow_source: string | null;
           own_counterparty: boolean | null;
           owed_by: string | null;
+          pending: boolean;
           owed_settled: boolean;
           personal_amount: number | null;
           raw: Json | null;
@@ -1072,6 +1073,7 @@ export type Database = {
           flow_source?: string | null;
           own_counterparty?: boolean | null;
           owed_by?: string | null;
+          pending?: boolean;
           owed_settled?: boolean;
           personal_amount?: number | null;
           raw?: Json | null;
@@ -1113,6 +1115,7 @@ export type Database = {
           flow_source?: string | null;
           own_counterparty?: boolean | null;
           owed_by?: string | null;
+          pending?: boolean;
           owed_settled?: boolean;
           personal_amount?: number | null;
           raw?: Json | null;
@@ -1337,6 +1340,7 @@ export type Database = {
           owed_by: string | null;
           owed_settled: boolean | null;
           payer_name: string | null;
+          pending: boolean | null;
           personal_amount: number | null;
           personal_signed_amount_eur: number | null;
           refund_of: string | null;

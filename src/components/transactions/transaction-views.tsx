@@ -107,7 +107,7 @@ function AmountText({ tx, large = false }: { tx: TransactionRow; large?: boolean
     <div className={large ? "text-center" : "shrink-0 text-right"}>
       <div
         className={`font-figure whitespace-nowrap ${large ? "text-3xl" : "text-[0.9375rem]"} ${
-          positive ? "text-positive" : "text-foreground"
+          tx.pending ? "text-muted-foreground" : positive ? "text-positive" : "text-foreground"
         }`}
       >
         {formatSignedMoney(shown, currency)}
@@ -179,7 +179,9 @@ function TransactionEditSheet({
         />
         {/* Revolut-style header (iOS view board): initial, name, the amount large, then the day. */}
         <SheetHeader className="relative items-center px-12 pt-4 pb-5 text-center md:pt-8">
-          {!share && <SheetMoreMenu selected={p.selected} onToggleSelect={p.onToggleSelect} />}
+          {!share && !tx.pending && (
+            <SheetMoreMenu selected={p.selected} onToggleSelect={p.onToggleSelect} />
+          )}
           <span
             data-testid="merchant-initial"
             aria-hidden
@@ -201,121 +203,128 @@ function TransactionEditSheet({
             {formatBookingDate(tx.booking_date)} · {p.accountLabel}
           </p>
         </SheetHeader>
-        <div ref={fields} className="space-y-4 px-4 pb-4">
-          {askWorthIt && (
-            <div
-              role="group"
-              aria-label="Worth it?"
-              className="flex items-center justify-between gap-3 rounded-lg bg-card px-4 py-3"
-            >
-              <span className="text-[0.9375rem] font-medium text-foreground">Worth it?</span>
-              <span className="flex gap-2">
-                <Button variant="secondary" onClick={() => p.onAnswerWorthIt("yes")}>
-                  <ThumbsUp /> Yes
-                </Button>
-                <Button variant="secondary" onClick={() => p.onAnswerWorthIt("no")}>
-                  <ThumbsDown /> No
-                </Button>
-              </span>
-            </div>
-          )}
-          <GroupedList>
-            <Field label="Name">
-              <NameEditor
-                name={name === "—" ? null : name}
-                onSave={p.onRename}
-                saving={p.savingRename}
-                scoped={!share}
-              />
-            </Field>
-            {p.onSaveAmount && (
-              <Field label="Amount">
-                <AmountEditor
-                  amount={Math.abs(tx.amount ?? 0)}
-                  currency={tx.currency ?? "EUR"}
-                  onSave={p.onSaveAmount}
-                  saving={p.savingAmount ?? false}
+        {tx.pending ? (
+          <p className="px-6 pb-6 text-center text-sm text-muted-foreground">
+            Pending: the bank hasn't confirmed this payment yet. You can edit it once it does,
+            usually within a few days.
+          </p>
+        ) : (
+          <div ref={fields} className="space-y-4 px-4 pb-4">
+            {askWorthIt && (
+              <div
+                role="group"
+                aria-label="Worth it?"
+                className="flex items-center justify-between gap-3 rounded-lg bg-card px-4 py-3"
+              >
+                <span className="text-[0.9375rem] font-medium text-foreground">Worth it?</span>
+                <span className="flex gap-2">
+                  <Button variant="secondary" onClick={() => p.onAnswerWorthIt("yes")}>
+                    <ThumbsUp /> Yes
+                  </Button>
+                  <Button variant="secondary" onClick={() => p.onAnswerWorthIt("no")}>
+                    <ThumbsDown /> No
+                  </Button>
+                </span>
+              </div>
+            )}
+            <GroupedList>
+              <Field label="Name">
+                <NameEditor
+                  name={name === "—" ? null : name}
+                  onSave={p.onRename}
+                  saving={p.savingRename}
+                  scoped={!share}
                 />
               </Field>
-            )}
-            <Field label="Category">
-              <CategoryPicker
-                tx={tx}
-                onSelect={(c) => p.onSelectCategory(c, { inSheet: true })}
-                saving={p.savingCategory}
-              />
-            </Field>
-            {p.makeRule && (
-              <button
-                type="button"
-                onClick={p.makeRule.onClick}
-                className="flex min-h-12 w-full items-center px-4 text-left text-sm font-medium hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-              >
-                {p.makeRule.label}
-              </button>
-            )}
-            {!share && (
-              <>
-                <Field label="Type">
-                  <TypePicker tx={tx} onSelect={p.onSelectType} saving={p.savingType} />
-                </Field>
-                <Field label="Split">
-                  <SplitEditor
-                    tx={tx}
-                    onSave={p.onSaveSplit}
-                    saving={p.savingSplit}
-                    contacts={p.splitContacts}
+              {p.onSaveAmount && (
+                <Field label="Amount">
+                  <AmountEditor
+                    amount={Math.abs(tx.amount ?? 0)}
+                    currency={tx.currency ?? "EUR"}
+                    onSave={p.onSaveAmount}
+                    saving={p.savingAmount ?? false}
                   />
                 </Field>
-              </>
-            )}
-          </GroupedList>
-          {!share && (p.onSaveNote || p.onSaveTags) && (
-            <GroupedList>
-              {p.onSaveNote && (
-                <div className="space-y-1.5 px-4 py-3">
-                  <label
-                    htmlFor={`${fieldId}-note`}
-                    className="block text-sm text-muted-foreground"
-                  >
-                    Note
-                  </label>
-                  <NoteEditor
-                    id={`${fieldId}-note`}
-                    note={tx.note}
-                    onSave={p.onSaveNote}
-                    saving={p.savingNote ?? false}
-                  />
-                </div>
               )}
-              {p.onSaveTags && (
-                <div className="space-y-1.5 px-4 py-3">
-                  <label
-                    htmlFor={`${fieldId}-tags`}
-                    className="block text-sm text-muted-foreground"
-                  >
-                    Tags
-                  </label>
-                  <TagEditor
-                    id={`${fieldId}-tags`}
-                    tags={tx.tags}
-                    onSave={p.onSaveTags}
-                    saving={p.savingTags ?? false}
-                    suggestions={p.tagSuggestions}
-                  />
-                </div>
-              )}
-            </GroupedList>
-          )}
-          {!share && tx.worth_it != null && (
-            <GroupedList>
-              <Field label="Worth it">
-                <WorthItPrompt tx={tx} />
+              <Field label="Category">
+                <CategoryPicker
+                  tx={tx}
+                  onSelect={(c) => p.onSelectCategory(c, { inSheet: true })}
+                  saving={p.savingCategory}
+                />
               </Field>
+              {p.makeRule && (
+                <button
+                  type="button"
+                  onClick={p.makeRule.onClick}
+                  className="flex min-h-12 w-full items-center px-4 text-left text-sm font-medium hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                >
+                  {p.makeRule.label}
+                </button>
+              )}
+              {!share && (
+                <>
+                  <Field label="Type">
+                    <TypePicker tx={tx} onSelect={p.onSelectType} saving={p.savingType} />
+                  </Field>
+                  <Field label="Split">
+                    <SplitEditor
+                      tx={tx}
+                      onSave={p.onSaveSplit}
+                      saving={p.savingSplit}
+                      contacts={p.splitContacts}
+                    />
+                  </Field>
+                </>
+              )}
             </GroupedList>
-          )}
-          <RefundedBadge flowType={tx.flow_type} />
-        </div>
+            {!share && (p.onSaveNote || p.onSaveTags) && (
+              <GroupedList>
+                {p.onSaveNote && (
+                  <div className="space-y-1.5 px-4 py-3">
+                    <label
+                      htmlFor={`${fieldId}-note`}
+                      className="block text-sm text-muted-foreground"
+                    >
+                      Note
+                    </label>
+                    <NoteEditor
+                      id={`${fieldId}-note`}
+                      note={tx.note}
+                      onSave={p.onSaveNote}
+                      saving={p.savingNote ?? false}
+                    />
+                  </div>
+                )}
+                {p.onSaveTags && (
+                  <div className="space-y-1.5 px-4 py-3">
+                    <label
+                      htmlFor={`${fieldId}-tags`}
+                      className="block text-sm text-muted-foreground"
+                    >
+                      Tags
+                    </label>
+                    <TagEditor
+                      id={`${fieldId}-tags`}
+                      tags={tx.tags}
+                      onSave={p.onSaveTags}
+                      saving={p.savingTags ?? false}
+                      suggestions={p.tagSuggestions}
+                    />
+                  </div>
+                )}
+              </GroupedList>
+            )}
+            {!share && tx.worth_it != null && (
+              <GroupedList>
+                <Field label="Worth it">
+                  <WorthItPrompt tx={tx} />
+                </Field>
+              </GroupedList>
+            )}
+            <RefundedBadge flowType={tx.flow_type} />
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   );
@@ -388,7 +397,10 @@ export function TransactionRowView(props: TransactionViewProps) {
   };
   // A Splitwise share lives in its own table: nothing here can edit, select or delete it.
   const share = isSplitwiseShare(tx);
+  // Pending: the next sync swaps it for the booked row, so nothing on it can change.
+  const pending = !!tx.pending;
   const notes = [
+    pending ? "Pending" : null,
     tx.category ?? UNCATEGORIZED_LABEL,
     tx.transaction_type,
     splitNote(tx),
@@ -401,7 +413,7 @@ export function TransactionRowView(props: TransactionViewProps) {
       className={`border-b transition-colors last:border-0 hover:bg-accent ${selected ? "bg-primary/10" : ""} ${highlighted ? "ring-2 ring-inset ring-primary" : ""}`}
     >
       <td className="px-4 py-3">
-        {!share && (
+        {!share && !pending && (
           <label className="-m-3.5 inline-flex size-11 cursor-pointer items-center justify-center p-3.5">
             <input
               type="checkbox"
@@ -415,20 +427,28 @@ export function TransactionRowView(props: TransactionViewProps) {
       </td>
       <td className="w-full max-w-0 px-2 py-3 lg:px-4">
         <div className="flex items-center gap-3">
-          <CategoryPicker
-            tx={tx}
-            onSelect={props.onSelectCategory}
-            saving={props.savingCategory}
-            variant="icon"
-          />
+          {pending ? (
+            <CategoryAvatar category={tx.category} />
+          ) : (
+            <CategoryPicker
+              tx={tx}
+              onSelect={props.onSelectCategory}
+              saving={props.savingCategory}
+              variant="icon"
+            />
+          )}
           <div className="min-w-0">
             <div className="truncate font-medium text-foreground">
-              <NameEditor
-                name={cleanMerchantName(tx.creditor_name)}
-                onSave={props.onRename}
-                saving={props.savingRename}
-                scoped={!share}
-              />
+              {pending ? (
+                (cleanMerchantName(tx.creditor_name) ?? "—")
+              ) : (
+                <NameEditor
+                  name={cleanMerchantName(tx.creditor_name)}
+                  onSave={props.onRename}
+                  saving={props.savingRename}
+                  scoped={!share}
+                />
+              )}
             </div>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="truncate">{(share ? notes.slice(0, 1) : notes).join(" · ")}</span>
@@ -450,7 +470,7 @@ export function TransactionRowView(props: TransactionViewProps) {
         </div>
       </td>
       <td className="w-12 px-2 py-3 text-right">
-        {!share && (
+        {!share && !pending && (
           <>
             <Button
               variant="ghost"
@@ -469,8 +489,46 @@ export function TransactionRowView(props: TransactionViewProps) {
 }
 
 /** Phone row: a clean read-only line under its day heading; every editor lives in the sheet that a tap opens.
- * Like an iOS list row it also swipes left to reveal quick actions, and a long press opens them as a menu. */
+ * Like an iOS list row it also swipes left to reveal quick actions, and a long press opens them as a menu.
+ * A pending row has neither: the next sync swaps it for the booked row, so nothing on it can change. */
 export function TransactionCardView(props: TransactionViewProps) {
+  return props.tx.pending ? <PendingCardView {...props} /> : <BookedCardView {...props} />;
+}
+
+function PendingCardView(props: TransactionViewProps) {
+  const { tx, highlighted } = props;
+  const [open, setOpen] = useState(false);
+  const show = (o: boolean) => {
+    setOpen(o);
+    props.onOpenChange?.(o);
+  };
+  return (
+    <li
+      data-entry-ref={tx.entry_reference}
+      className={highlighted ? "ring-2 ring-inset ring-primary" : ""}
+    >
+      <button
+        type="button"
+        onClick={() => show(true)}
+        className="flex min-h-16 w-full items-center gap-3 bg-card px-4 py-3 text-left active:bg-accent"
+      >
+        <CategoryAvatar category={tx.category} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[0.9375rem] font-medium text-foreground">
+            {cleanMerchantName(tx.creditor_name) ?? "—"}
+          </p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            Pending · {tx.category ?? UNCATEGORIZED_LABEL}
+          </p>
+        </div>
+        <AmountText tx={tx} />
+      </button>
+      <TransactionEditSheet {...props} open={open} onOpenChange={show} />
+    </li>
+  );
+}
+
+function BookedCardView(props: TransactionViewProps) {
   const { tx, selected, highlighted } = props;
   const [open, setOpen] = useState(false);
   const [quick, setQuick] = useState<QuickAction | null>(null);

@@ -721,3 +721,64 @@ describe("Row swipe and long press", () => {
     expect(screen.getByRole("button", { name: "Category" })).toBeInTheDocument();
   });
 });
+
+// Pending card payments (shown before the bank books them): the next sync replaces the row with
+// the booked one, so an edit made now would be lost. fails_when=a pending row looks booked, or
+// offers an editor, a swipe action or the bulk checkbox
+describe("Pending rows", () => {
+  const pending = (): TransactionViewProps => {
+    const base = props();
+    return {
+      ...base,
+      tx: {
+        ...base.tx,
+        entry_reference: "p:abc",
+        creditor_name: "Chipotle",
+        signed_amount_eur: -11,
+        pending: true,
+      },
+      accountLabel: "Revolut",
+    };
+  };
+  const pt = (x: number) => ({
+    touches: [{ clientX: x, clientY: 100 }],
+    changedTouches: [{ clientX: x, clientY: 100 }],
+  });
+
+  it("phone row says Pending, swipes to nothing, and its sheet has no editors", async () => {
+    render(
+      <ul>
+        <TransactionCardView {...pending()} />
+      </ul>,
+    );
+    const face = screen.getByRole("button", { name: /Chipotle/ });
+    expect(within(face).getByText(/Pending/)).toBeInTheDocument();
+    fireEvent.touchStart(face, pt(300));
+    fireEvent.touchMove(face, pt(200));
+    fireEvent.touchMove(face, pt(100));
+    fireEvent.touchEnd(face, { touches: [], changedTouches: [{ clientX: 100, clientY: 100 }] });
+    expect(screen.queryByRole("button", { name: "Split" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Category" })).toBeNull();
+
+    await userEvent.click(face);
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByText(/hasn't confirmed this payment yet/)).toBeInTheDocument();
+    expect(
+      within(sheet).queryByRole("button", { name: /Rename|Change category|Split/ }),
+    ).toBeNull();
+    expect(within(sheet).queryByRole("button", { name: "More actions" })).toBeNull();
+  });
+
+  it("table row says Pending, with no checkbox, category picker or editor", () => {
+    render(
+      <table>
+        <tbody>
+          <TransactionRowView {...pending()} />
+        </tbody>
+      </table>,
+    );
+    expect(screen.getByText(/Pending/)).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Rename|Edit|category/i })).toBeNull();
+  });
+});
